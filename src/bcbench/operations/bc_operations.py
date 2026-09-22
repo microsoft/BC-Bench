@@ -181,9 +181,9 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
                 timeout=timeout,
             )
         except subprocess.CalledProcessError as e:
-            logger.debug(f"Build failed for {project_path}")
-            logger.debug(f"Full command output: {e.stdout}")
-            raise BuildError(project_path, e.stdout) from None
+            output = "\n".join(part.strip() for part in (e.stdout, e.stderr) if part and part.strip())
+            logger.exception(f"Build failed for {project_path}\n{output or '(compiler produced no captured output)'}")
+            raise BuildError(project_path, output) from None
         except subprocess.TimeoutExpired:
             logger.exception(f"Build timed out for {project_path} after {timeout} seconds")
             raise BuildTimeoutExpired(project_path, timeout) from None
