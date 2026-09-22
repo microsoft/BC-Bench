@@ -46,15 +46,15 @@ collect the following files in order, skipping any that do not exist, and assemb
 
 6. **Expand Context — follow the call graph when it matters.** Use judgment to decide whether reading related files (callers/callees) would change feasibility or rule evaluation. Find callers with a scoped `grep` for the procedure name under `CODE_ROOT`; find callees from the calls in the already-read file, then `glob`/`read` those objects selectively. Limit depth to what is directly relevant — stop when you have enough context.
 
-7. **Progressive Rule Evaluation:** Apply the assembled `RULES` in order against the full file content. Short-circuit on the first blocker.
+7. **Progressive Rule Evaluation:** Apply the assembled `RULES` in order to the requested change, using the full file content only as context. A rule must NOT be raised solely because its condition already exists in the source. Rules that explicitly evaluate existing implementation, nearby alternatives, or target-source state may use the source condition they name. Short-circuit on the first blocker.
 
 8. **Evaluate Rules:**
   - **`blockers`** — stop on first match; outcome: `auto-reject`
   - **`alternative_suggestions`** — if any match; outcome: `missing-info`
-  - **`warnings`** — if any rule condition matches in code; outcome: `missing-info`
+  - **`warnings`** — if the requested change triggers any rule condition; outcome: `missing-info`
   - **`implementation`** — only if nothing matched above; generate `SUGGESTED_IMPLEMENTATION`
 
-  **Important:** For `warnings`, do not override the rule with personal judgment. If the condition matches, flag it unless the author already addressed it in comments.
+  **Important:** For `warnings`, do not override the rule with personal judgment. If the requested change triggers the condition, flag it unless the author already addressed it in comments.
 
   **`SUGGESTED_IMPLEMENTATION` format:** Produce an AL code snippet — not prose — showing exactly what to add or change. Include 3–5 lines of unchanged surrounding code before and after the insertion point so a developer can locate the exact position. Mark each newly added implementation line with `// NEW`. If a new publisher procedure is added, include its full definition at the end of the snippet, but do **not** mark the event signature line itself with `// NEW`.
 
