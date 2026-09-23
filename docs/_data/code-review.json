@@ -18238,7 +18238,8 @@
         "custom_agent": null,
         "plugins": [
           "BCQuality@1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549"
-        ]
+        ],
+        "reasoning_effort": "max"
       },
       "benchmark_version": "0.11.0",
       "judge_model": "gpt-5.3-codex",
@@ -18447,7 +18448,8 @@
         "custom_agent": null,
         "plugins": [
           "BCQuality@1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549"
-        ]
+        ],
+        "reasoning_effort": "max"
       },
       "benchmark_version": "0.11.0",
       "judge_model": "gpt-5.3-codex",
@@ -18653,7 +18655,8 @@
         "custom_agent": null,
         "plugins": [
           "BCQuality@1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549"
-        ]
+        ],
+        "reasoning_effort": "max"
       },
       "benchmark_version": "0.11.0",
       "judge_model": "gpt-5.3-codex",
@@ -18859,7 +18862,8 @@
         "custom_agent": null,
         "plugins": [
           "BCQuality@1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549"
-        ]
+        ],
+        "reasoning_effort": "max"
       },
       "benchmark_version": "0.11.0",
       "judge_model": "gpt-5.3-codex",
@@ -19063,7 +19067,8 @@
         "custom_agent": null,
         "plugins": [
           "BCQuality@1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549"
-        ]
+        ],
+        "reasoning_effort": "max"
       },
       "benchmark_version": "0.11.0",
       "judge_model": "gpt-5.3-codex",
@@ -20130,7 +20135,8 @@
         "custom_agent": null,
         "plugins": [
           "BCQuality@1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549"
-        ]
+        ],
+        "reasoning_effort": "max"
       },
       "total": 145,
       "num_runs": 5,
