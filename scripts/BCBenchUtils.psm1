@@ -517,6 +517,8 @@ function Get-BCBenchDatasetPath {
     using parameter names accepted by Get-BCArtifactUrl.
 .PARAMETER Category
     The evaluation category requesting a BC artifact.
+.PARAMETER Version
+    BC version requested by the entry. Insider versions use the insider artifact feed.
 .OUTPUTS
     Hashtable of additional Get-BCArtifactUrl parameters.
 #>
@@ -525,16 +527,21 @@ function Get-BCBenchArtifactConfig {
     [OutputType([hashtable])]
     param(
         [Parameter(Mandatory = $true)]
-        [string] $Category
+        [string] $Category,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Version
     )
 
-    [hashtable] $categoryConfig = @{
-        # Add opt-in category overrides here. For example:
-        # "category" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
-        "data-query" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
+    if ($Category -eq "data-query") {
+        return @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
     }
 
-    return $categoryConfig[$Category] ?? @{}
+    if ($Version -and ($Category -in @("bug-fix", "test-generation")) -and ([Version]$Version).Major -ge 29) {
+        return @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
+    }
+
+    return @{}
 }
 
 <#

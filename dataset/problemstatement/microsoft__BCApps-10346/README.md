@@ -2,7 +2,7 @@
 
 ## Repro Steps
 
-You don't have permission to perform this action.  
+You don't have permission to perform this action.
 
 Details: submit ExpenseReport: Your license does not grant you the following permissions on TableData 7100 Expense Activity Log Entry: IndirectInsert. To view details about your permissions, see the Effective Permissions page. To report a problem, refer to the following server session ID: '1007'.
 

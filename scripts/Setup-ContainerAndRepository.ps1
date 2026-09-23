@@ -98,12 +98,15 @@ if (-not $SkipContainer) {
         version = $Version
         Country = $Country
     }
-    [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category
+    [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category -Version $Version
     foreach ($key in $categoryArtifactConfig.Keys) {
         $artifactParameters[$key] = $categoryArtifactConfig[$key]
     }
 
     [string] $url = Get-BCArtifactUrl @artifactParameters
+    if (-not $url) {
+        throw "No BC artifact URL resolved for version $Version ($Country) in category $Category"
+    }
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
     # Create container synchronously with NAV folder shared

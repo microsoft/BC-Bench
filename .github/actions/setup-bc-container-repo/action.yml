@@ -82,7 +82,7 @@ runs:
         Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
         $version = Get-BCBenchEntryVersion -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}"
         $alToolDotNetVersion = if (([System.Version]$version).Major -lt 29) { "8.0" } else { "10.0" }
-        $artifactConfig = Get-BCBenchArtifactConfig -Category "${{ inputs.category }}"
+        $artifactConfig = Get-BCBenchArtifactConfig -Category "${{ inputs.category }}" -Version $version
         $cacheKey = "bcartifacts-$version"
         if ($artifactConfig.storageAccount) {
           $cacheKey += "-$($artifactConfig.storageAccount)"

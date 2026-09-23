@@ -18,7 +18,7 @@ Repro steps – Service Contract invoicing issue (BC
 ![Image](./image_1.png)
 
 1. Create three
-   Service Items for Customer 10000, all using Item No. S‑100.  
+   Service Items for Customer 10000, all using Item No. S‑100.
    These will later be referred to as Service Item A, B, and C.
 
 ![Image](./image_2.png)
@@ -29,7 +29,7 @@ Work Date = 01/01/2026.
 ![Image](./image_3.png)
 
 1. Create a new
-   Service Contract for Customer 10000 using template TEMPL0002.  
+   Service Contract for Customer 10000 using template TEMPL0002.
    Add Service Item A to the Service Contract Lines with the
    specified values.
 
@@ -136,14 +136,14 @@ new Service Invoice from being created correctly (see screenshot below).
 
 ![Image](./image_23.png)
 
-  
-**Expected Outcome:**  
-when this second unposted Service Invoice is also deleted, the values on the Service Contract should reset  
-  
-**Actual Outcome:**  
-when this second unposted Service Invoice is deleted, the values on the Service Contract are no longer reset. The "Invoiced to Date" field remains stuck at 3/31/2026 for Service Item B and Service Item C, which then prevents a new Service Invoice from being created correctly   
-  
-**Troubleshooting Actions Taken:**  
-Issue has been reproduced.  
-  
+
+**Expected Outcome:**
+when this second unposted Service Invoice is also deleted, the values on the Service Contract should reset
+
+**Actual Outcome:**
+when this second unposted Service Invoice is deleted, the values on the Service Contract are no longer reset. The "Invoiced to Date" field remains stuck at 3/31/2026 for Service Item B and Service Item C, which then prevents a new Service Invoice from being created correctly
+
+**Troubleshooting Actions Taken:**
+Issue has been reproduced.
+
 **Did the partner reproduce the issue in a Sandbox without extensions?** Yes

@@ -56,17 +56,17 @@
 
 14) This issue doesn't occur when we set 'VAT Calculation Type' to 'Normal VAT'.
 
-**Expected Outcome:**  
+**Expected Outcome:**
 
 The customer expects the Non-Deductible VAT to get calculated properly when the 'VAT Calculation Type' is set to 'Full VAT'.
 
-  
-**Actual Outcome:**  
+
+**Actual Outcome:**
 
 The Non-Deductible VAT doesn't work when 'VAT Calculation Type' is set to 'Full VAT'.
 
-  
-**Troubleshooting Actions Taken:**  
-Tried the same flow in an extension free environment and faced the same outcome.  
-  
+
+**Troubleshooting Actions Taken:**
+Tried the same flow in an extension free environment and faced the same outcome.
+
 **Did the partner reproduce the issue in a Sandbox without extensions?** Yes

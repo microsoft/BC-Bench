@@ -12,6 +12,6 @@ Navigate to ILE
 
 you can see that Purch Order and Order and Prod Order are all populated.
 
-But actions are not available. I think it should be [(OrderType=prod)AND(Order NO <>empty) OR (PRod Order No <> empty)] and the logic that finds prod order should check both fields  
-  
+But actions are not available. I think it should be [(OrderType=prod)AND(Order NO <>empty) OR (PRod Order No <> empty)] and the logic that finds prod order should check both fields
+
 ![Image](./image_1.png)

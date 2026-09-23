@@ -14,7 +14,7 @@ Create Item with Tracking**
 Configure Location & Bins**
 
 1. Ensure the Location (WHITE) is
-   configured with below Bins  
+   configured with below Bins
    ![Picture2.png](./image_1.png)
 2. Pick According to FEFO = Enabled
 
@@ -38,7 +38,7 @@ Create Initial Inventory (200 Qty)**
 
 * Item: Created Item
 * Bin Code: W-01-0001 (Pick Bin)
-* Quantity: 200  
+* Quantity: 200
   ![Picture4.png](./image_2.png)
 
 3. Open Line → Item Tracking
@@ -46,7 +46,7 @@ Create Initial Inventory (200 Qty)**
 
 * Assign LOT number (e.g.,
   LOT0001)
-* Define expiration date and Quantity(Base)  
+* Define expiration date and Quantity(Base)
   ![Picture5.png](./image_3.png)
 
 4. Register the Warehouse Item
@@ -61,7 +61,7 @@ Sync Inventory via Adjustment**
 2. Run Calculate Warehouse
    Adjustment:
 
-* Filter on the created Item  
+* Filter on the created Item
   ![Picture6.png](./image_4.png)
 
 3. Post the journal.
@@ -76,7 +76,7 @@ Create First Sales Order (160 Qty)**
 * Customer: Any
 * Item: Created Item
 * Location: WHITE
-* Quantity: 160  
+* Quantity: 160
   ![Picture7.png](./image_5.png)
 
 2. Create Warehouse Shipment.
@@ -87,12 +87,12 @@ Create First Sales Order (160 Qty)**
 Modify Bin**
 
 1. Open the created Warehouse
-   Shipment.  
+   Shipment.
    ![Picture8.png](./image_6.png)
 2. Change Shipment Bin Code:
 
 * From: W-09-0001
-* To: W-09-0002   
+* To: W-09-0002
   ![Picture9.png](./image_7.png)
 
 ---
@@ -101,7 +101,7 @@ Modify Bin**
 Create and Register Pick**
 
 1. Create Pick.
-2. Open Pick Lines   
+2. Open Pick Lines
    ![Picture10.png](./image_8.png)
 3. **Register the Pick.**
 
@@ -114,7 +114,7 @@ Create Second Sales Order (40 Qty)**
 
 * Same Item & Customer
 * Location: WHITE
-* Quantity: 40  
+* Quantity: 40
   ![Picture11.png](./image_9.png)
 
 2. Create Warehouse Shipment.
@@ -154,7 +154,7 @@ Error
 message 
 
 "Nothing
-to handle." or   
+to handle." or
 "Nothing to handle. The quantity to be picked is in bin W-09-0002, which is not set up for picking.
 Try the "Show Summary (Directed Put-away and Pick)" option when creating pick to inspect the error."
 

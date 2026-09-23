@@ -6,9 +6,9 @@ Reproduced in CRONUS at W1 level and local versions 28.4
 
 (next repro tested in ES 28.4)
 
-**REPRO STEPS:**  
-  
-Local Currency = EUR  
+**REPRO STEPS:**
+
+Local Currency = EUR
 
 1-Go to Currencies and select USD
 
@@ -22,23 +22,23 @@ Currency Exchange Rates
 
 ![Image](./image_1.png)
 
-Also fill the Unrealized Gains Acc. / Unrealized Losses Acc.  
-  
+Also fill the Unrealized Gains Acc. / Unrealized Losses Acc.
+
 ![Image](./image_2.png)
 
-2.Go to Purchase Invoices and create a new one:  
--Vendor 5000  
+2.Go to Purchase Invoices and create a new one:
+-Vendor 5000
 -Posting Date = 04/07/2026
 
 -Currency Code: USD
 
--VAT Prod. Posting Group: NO VAT  
+-VAT Prod. Posting Group: NO VAT
 -USD Amount = 3.300  (EUR Amount = 2.863,34)
 
-Post it.  
+Post it.
 ![Image](./image_3.png)
 
-3.Go to Exchange Rate Adjustment:  
+3.Go to Exchange Rate Adjustment:
 -Starting Date, Ending Date, Posting Date: 05/31/2025
 
 -Document No.: ADJ001
@@ -51,10 +51,10 @@ Entry No. 612 on the Detailed Ledger Entries.
 
 ![Image](./image_4.png)
 
-4. Go to the Exch. Rate Adjmt. Ledger Entries page and check the entry created:  
-  
-SOME ISSUES in RED:  
-  
+4. Go to the Exch. Rate Adjmt. Ledger Entries page and check the entry created:
+
+SOME ISSUES in RED:
+
 ![Image](./image_5.png)
 
 - “No.”
@@ -65,7 +65,7 @@ Therefore the caption of “No.” should be changed or clarified.
 
 - “Detailed Ledger Entry No.”
 
-This value appears as a decimal, but should appear as an integer (without decimal places).  
+This value appears as a decimal, but should appear as an integer (without decimal places).
 Check Detailed Ledger Entries in previous step. It is just 612, not 612,00
 
 - “Currency Factor”
@@ -74,10 +74,10 @@ The currency factor should be shown with 4 or 5 decimals, like it is shown in pa
 
 Adjustment Amount 25.36 is okey!
 
-Also the Exchange Rate Adjustment Register is okey:  
+Also the Exchange Rate Adjustment Register is okey:
 ![Image](./image_6.png)
 
-4.Go to Exchange Rate Adjustment again:  
+4.Go to Exchange Rate Adjustment again:
 -Starting Date, Ending Date, Posting Date: 07/31/2025
 
 -Document No.: ADJ002
@@ -86,8 +86,8 @@ Also the Exchange Rate Adjustment Register is okey:
 
 ![Image](./image_7.png)
 
-Unrealized Loss           26.11  (25.36 + 0.75)  
-  
+Unrealized Loss           26.11  (25.36 + 0.75)
+
 ![Image](./image_8.png)
 
 Entry Nos. 613 and 614 on the Detailed Ledger Entries.
@@ -100,7 +100,7 @@ The Detailed Vendor Ledger Entry and also the G/L Entries are correct !!!
 
 5. Go to the Exch. Rate Adjmt. Ledger Entries page.
 
-=================  
+=================
 ACTUAL RESULTS
 
 =================
@@ -115,7 +115,7 @@ The issue here is, that the first Exchange Rate Adjustment Ledger Entry of the s
 
 ![Image](./image_11.png)
 
-=================  
+=================
 EXPECTED RESULTS
 
 =================
