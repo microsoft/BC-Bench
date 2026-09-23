@@ -89,7 +89,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
         ) as mock_run,
     ):
-        run_copilot_agent(
+        _, experiment = run_copilot_agent(
             entry=create_dataset_entry(),
             model="copilot-test-model",
             category=EvaluationCategory.BUG_FIX,
@@ -106,8 +106,10 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
         "--model=copilot-test-model",
         "--log-level=debug",
         f"--log-dir={output_dir.resolve()}",
+        "--effort=max",
         "--prompt=line one line two",
     ]
+    assert experiment.reasoning_effort == "max"
     assert mock_run.call_args.kwargs["capture_output"] is True
     assert mock_run.call_args.kwargs["text"] is True
     assert "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS" not in mock_run.call_args.kwargs["env"]

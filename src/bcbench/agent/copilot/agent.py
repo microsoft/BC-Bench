@@ -71,6 +71,7 @@ def run_copilot_agent(
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
         plugins=[plugin.record for plugin, _ in plugins] or None,
+        reasoning_effort=copilot_config.get("reasoning_effort"),
     )
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
@@ -91,6 +92,8 @@ def run_copilot_agent(
         # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
         # silently widen the agent's sandbox access.
         extra_args.extend(f"--add-dir={plugin_dir}" for plugin, plugin_dir in plugins if plugin.grant_dir_access)
+        if config.reasoning_effort:
+            extra_args.append(f"--effort={config.reasoning_effort}")
         if custom_agent:
             extra_args.append(f"--agent={custom_agent}")
 

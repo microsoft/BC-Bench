@@ -1,5 +1,8 @@
 """Test ExperimentConfiguration dataclass."""
 
+import pytest
+from pydantic import ValidationError
+
 from bcbench.types import ExperimentConfiguration
 
 
@@ -12,6 +15,7 @@ class TestExperimentConfiguration:
         assert config.custom_instructions is False
         assert config.skills_enabled is False
         assert config.custom_agent is None
+        assert config.reasoning_effort is None
 
     def test_with_mcp_servers(self):
         mcp_servers = ["mcp-server-1", "mcp-server-2"]
@@ -96,6 +100,16 @@ class TestExperimentConfiguration:
 
         assert config.plugins == plugins
         assert not config.is_empty()
+
+    def test_with_reasoning_effort(self):
+        config = ExperimentConfiguration(reasoning_effort="max")
+
+        assert config.reasoning_effort == "max"
+        assert not config.is_empty()
+
+    def test_rejects_unknown_reasoning_effort(self):
+        with pytest.raises(ValidationError):
+            ExperimentConfiguration(reasoning_effort="ultra")  # ty: ignore[invalid-argument-type]
 
     def test_empty_plugins_list_is_not_empty_config(self):
         config = ExperimentConfiguration(plugins=[])

@@ -153,6 +153,9 @@ agents:
   enabled: false
   name: ALTest
 
+# Explicitly request maximum reasoning effort from Copilot CLI for this experiment.
+reasoning_effort: max
+
 # controls loading agent plugins for the run, only enabled entries are validated and loaded.
 # Each plugin gets its own entry, and is passed to the CLI via `--plugin-dir` (session-scoped).
 #   name:     plugin name; also how it is recorded on the result as "<name>@<revision|local>"

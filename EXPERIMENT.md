@@ -26,6 +26,7 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 | `agents.enabled` and `agents.name` | `false` | Copy **only** `instructions/<profile>/agents/` and pass `--agent=<name>` to the CLI |
 | `mcp.servers` | _(none)_ | List of MCP servers to register |
 | `plugins` | _(all disabled)_ | List of agent plugins to load for the run — one entry per plugin, local or cloned from GitHub at a revision, passed to the CLI via `--plugin-dir` |
+| `reasoning_effort` | _(default)_ | Explicit Copilot CLI reasoning effort (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`) |
 
 Note: `instructions.enabled: true` is a superset — you don't also need to enable `skills` or `agents` to get them. Use `skills`/`agents` when you want to isolate the effect of just that piece.
 

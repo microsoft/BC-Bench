@@ -171,7 +171,7 @@ class TestCategorySerialization:
         assert data["experiment"] is None
 
     def test_some_experiment_saves_as_dict(self, tmp_path, sample_result_bug_fix):
-        sample_result_bug_fix.experiment = ExperimentConfiguration(custom_agent="custom-agent", custom_instructions=True)
+        sample_result_bug_fix.experiment = ExperimentConfiguration(custom_agent="custom-agent", custom_instructions=True, reasoning_effort="max")
 
         output_file = tmp_path / "result.jsonl"
         sample_result_bug_fix.save(tmp_path, "result.jsonl")
@@ -184,6 +184,7 @@ class TestCategorySerialization:
         assert data["experiment"]["custom_agent"] == "custom-agent"
         assert data["experiment"]["custom_instructions"] is True
         assert data["experiment"]["mcp_servers"] is None
+        assert data["experiment"]["reasoning_effort"] == "max"
 
     def test_tool_usage_saves_as_dict(self, tmp_path):
         tool_usage = {"bash": 5, "view": 3, "search": 2}

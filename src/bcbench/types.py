@@ -34,6 +34,7 @@ __all__ = [
     "JudgeCalibrationReport",
     "PRReviewMetrics",
     "PluginConfig",
+    "ReasoningEffort",
     "RepoSlug",
 ]
 
@@ -118,6 +119,9 @@ class AgentMetricsContract:
             raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
 
 
+type ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+
 class ExperimentConfiguration(BaseModel):
     """Configuration for agent experiment execution.
 
@@ -145,13 +149,24 @@ class ExperimentConfiguration(BaseModel):
     # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
+    # Reasoning effort explicitly requested from the agent harness
+    reasoning_effort: ReasoningEffort | None = None
+
     def is_empty(self) -> bool:
         """Check if this configuration has all default/empty values.
 
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+        return (
+            self.mcp_servers is None
+            and self.al_lsp_enabled is False
+            and self.custom_instructions is False
+            and self.skills_enabled is False
+            and self.custom_agent is None
+            and self.plugins is None
+            and self.reasoning_effort is None
+        )
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
