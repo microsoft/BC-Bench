@@ -469,7 +469,7 @@ function Get-RepoCloneInfo {
         return @{
             Url                 = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
             Token               = $env:ADO_TOKEN
-            SparseCheckoutPaths = @('App/Apps', 'App/Layers')
+            SparseCheckoutPaths = @('App/Apps', 'App/Internal/Apps', 'App/Layers')
         }
     }
 }
