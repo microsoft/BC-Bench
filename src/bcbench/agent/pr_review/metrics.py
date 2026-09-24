@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from bcbench.agent.pr_review.run_manifest import RunManifest
 from bcbench.exceptions import AgentError
 from bcbench.types import PRReviewMetrics
 
@@ -215,27 +216,51 @@ def _load_bcquality_identity(engine_root: Path, bcquality_root: Path) -> tuple[s
     return repository, commit, version
 
 
-def build_pr_review_metrics(output_dir: Path, bcquality_root: Path, execution_time: float, engine_root: Path | None = None) -> PRReviewMetrics:
+def build_pr_review_metrics(
+    output_dir: Path,
+    bcquality_root: Path,
+    execution_time: float,
+    *,
+    manifest: RunManifest | None = None,
+    engine_root: Path | None = None,
+) -> PRReviewMetrics:
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
     report = _load_filter_report(bcquality_root / FILTER_REPORT_FILE_NAME)
     engine = _load_engine_diagnostics(output_dir / FINDINGS_FILE_NAME)
     bcquality_identity = _load_bcquality_identity(engine_root, bcquality_root) if engine_root is not None else None
+
+    if manifest:
+        expected_models = {manifest.configuration.root_model, manifest.configuration.leaf_model}
+        if (
+            run.cli_version != manifest.configuration.copilot_cli_version
+            or not run.usage_complete
+            or run.malformed_records != 0
+            or len(run.models) != len(set(run.models))
+            or set(run.models) != expected_models
+        ):
+            raise AgentError("Engine aggregate metrics do not match the validated run manifest.")
+        if manifest.bcquality.commit is None:
+            raise AgentError("Validated run manifest is missing the BCQuality commit.")
+        if bcquality_identity is not None and bcquality_identity[1].lower() != manifest.bcquality.commit.lower():
+            raise AgentError("BCQuality checkout does not match the validated run manifest.")
+
     usage_values_available = run.malformed_records == 0
-    token_values_available = usage_values_available and run.usage_complete
     return PRReviewMetrics(
         execution_time=execution_time,
-        prompt_tokens=run.prompt_tokens if token_values_available else None,
-        completion_tokens=run.completion_tokens if token_values_available else None,
-        total_tokens=run.total_tokens if token_values_available else None,
-        ai_credits=run.ai_credits if usage_values_available else None,
-        cached_tokens=run.cached_tokens,
-        cache_creation_tokens=run.cache_creation_tokens,
-        reasoning_tokens=run.reasoning_tokens,
+        prompt_tokens=run.prompt_tokens if usage_values_available else None,
+        cached_tokens=run.cached_tokens if usage_values_available else None,
+        cache_creation_tokens=run.cache_creation_tokens if usage_values_available else None,
+        completion_tokens=run.completion_tokens if usage_values_available else None,
+        reasoning_tokens=run.reasoning_tokens if usage_values_available else None,
+        total_tokens=run.total_tokens if usage_values_available else None,
         api_calls=run.api_calls,
         failed_api_calls=run.failed_api_calls,
         usage_api_calls=run.usage_api_calls,
+        ai_credits=run.ai_credits if usage_values_available else None,
+        premium_requests=run.premium_requests if usage_values_available else None,
+        models=run.models,
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
         knowledge_files=_count_available_knowledge(bcquality_root.resolve()),
@@ -246,6 +271,11 @@ def build_pr_review_metrics(output_dir: Path, bcquality_root: Path, execution_ti
         sub_skills_skipped=engine.sub_skills_skipped,
         copilot_cli_version=run.cli_version,
         bcquality_repository=bcquality_identity[0] if bcquality_identity else None,
-        bcquality_commit=bcquality_identity[1] if bcquality_identity else None,
+        bcquality_commit=manifest.bcquality.commit if manifest else (bcquality_identity[1] if bcquality_identity else None),
         bcquality_version=bcquality_identity[2] if bcquality_identity else None,
+        leaf_model=manifest.configuration.leaf_model if manifest else None,
+        leaf_execution=manifest.configuration.leaf_execution if manifest else None,
+        max_leaf_concurrency=manifest.configuration.max_leaf_concurrency if manifest else None,
+        bcquality_source_snapshot=manifest.bcquality.source_snapshot if manifest else None,
+        review_process_count=len(manifest.processes) if manifest else None,
     )

@@ -4,7 +4,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -166,6 +166,7 @@ def run_pr_review(
         repo_path=repo_path,
         category=category,
         output_dir=output_dir,
+        agent_version=get_pr_review_version(engine_path, require_clean=False),
         engine_path=engine_path,
         min_severity=min_severity,
     )

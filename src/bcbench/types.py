@@ -84,7 +84,6 @@ class AgentMetrics(BaseModel):
     # Token usage from LLM calls
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
-
     total_tokens: int | None = None
 
     # Tool usage statistics from agent logs
@@ -100,6 +99,8 @@ class PRReviewMetrics(AgentMetrics):
     api_calls: int | None = Field(default=None, ge=0)
     failed_api_calls: int | None = Field(default=None, ge=0)
     usage_api_calls: int | None = Field(default=None, ge=0)
+    premium_requests: float | None = Field(default=None, ge=0)
+    models: list[str] = Field(default_factory=list)
     usage_complete: bool | None = None
     malformed_records: int | None = Field(default=None, ge=0)
     knowledge_files: int | None = Field(default=None, ge=0)
@@ -112,6 +113,11 @@ class PRReviewMetrics(AgentMetrics):
     bcquality_repository: RepoSlug | None = None
     bcquality_commit: CommitSha | None = None
     bcquality_version: str | None = None
+    leaf_model: str | None = None
+    leaf_execution: Literal["serial", "parallel"] | None = None
+    max_leaf_concurrency: int | None = Field(default=None, ge=1)
+    bcquality_source_snapshot: str | None = None
+    review_process_count: int | None = Field(default=None, ge=1)
 
 
 type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]

@@ -20,6 +20,8 @@ def _metrics(*, duration: float, scale: int) -> PRReviewMetrics:
         api_calls=10 * scale,
         failed_api_calls=scale - 1,
         usage_api_calls=9 * scale,
+        premium_requests=0.5 * scale,
+        models=["claude-sonnet-5", "gpt-5.4"],
         usage_complete=True,
         malformed_records=0,
         knowledge_files=40 * scale,
@@ -28,10 +30,15 @@ def _metrics(*, duration: float, scale: int) -> PRReviewMetrics:
         knowledge_suppressed=2 * scale,
         sub_skills_executed=3 * scale,
         sub_skills_skipped=scale,
-        copilot_cli_version="1.0.82",
+        copilot_cli_version="1.0.83",
         bcquality_repository="microsoft/BCQuality",
         bcquality_commit="a" * 40,
         bcquality_version="1.6",
+        leaf_model="gpt-5.4",
+        leaf_execution="serial",
+        max_leaf_concurrency=4,
+        bcquality_source_snapshot="b" * 64,
+        review_process_count=2,
     )
 
 
@@ -75,7 +82,7 @@ def test_summary_aggregates_public_pr_review_metrics() -> None:
     assert summary.credit_coverage_rate == 1.0
     assert summary.usage_complete_rate == 1.0
     assert summary.valid_review_output_rate == 1.0
-    assert summary.copilot_cli_version == "1.0.82"
+    assert summary.copilot_cli_version == "1.0.83"
     assert summary.bcquality_repository == "microsoft/BCQuality"
     assert summary.bcquality_commit == "a" * 40
     assert summary.bcquality_version == "1.6"
@@ -206,7 +213,7 @@ def test_leaderboard_propagates_public_pr_review_metrics() -> None:
     assert aggregate.credit_coverage_rate == 1.0
     assert aggregate.usage_complete_rate == 1.0
     assert aggregate.valid_review_output_rate == 1.0
-    assert aggregate.copilot_cli_version == "1.0.82"
+    assert aggregate.copilot_cli_version == "1.0.83"
     assert aggregate.bcquality_repository == "microsoft/BCQuality"
     assert aggregate.bcquality_commit == "a" * 40
     assert aggregate.bcquality_version == "1.6"
@@ -253,6 +260,14 @@ def test_result_json_persists_pr_review_diagnostics(tmp_path) -> None:
     assert saved_metrics["knowledge_suppressed"] == 2
     assert saved_metrics["sub_skills_executed"] == 3
     assert saved_metrics["sub_skills_skipped"] == 1
+    assert saved_metrics["premium_requests"] == 0.5
+    assert saved_metrics["models"] == ["claude-sonnet-5", "gpt-5.4"]
+    assert saved_metrics["copilot_cli_version"] == "1.0.83"
+    assert saved_metrics["leaf_model"] == "gpt-5.4"
+    assert saved_metrics["leaf_execution"] == "serial"
+    assert saved_metrics["max_leaf_concurrency"] == 4
+    assert saved_metrics["bcquality_source_snapshot"] == "b" * 64
+    assert saved_metrics["review_process_count"] == 2
 
 
 def test_summary_and_leaderboard_schemas_include_pr_review_diagnostics() -> None:

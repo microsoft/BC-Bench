@@ -116,6 +116,8 @@ def resolve_evaluation_runtime(
 CopilotModelName = Literal[
     "claude-sonnet-5",
     "claude-opus-5",
+    "gpt-5.4",
+    "gpt-6-astra",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
@@ -130,6 +132,7 @@ ClaudeCodeModel = Annotated[
     Literal[
         "claude-sonnet-5",
         "claude-opus-5",
+        "claude-opus-5-5",
         "claude-haiku-4-5",
     ],
     typer.Option(help="Claude Code model to use"),
