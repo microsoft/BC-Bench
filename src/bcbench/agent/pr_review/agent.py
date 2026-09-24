@@ -21,6 +21,7 @@ from typing import Any
 
 import yaml
 
+from bcbench.agent.pr_review.definitions import validate_requested_pr_review_definition
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.agent.pr_review.run_manifest import RUN_MANIFEST_FILE_NAME, load_run_manifest, validate_run_manifest
@@ -171,6 +172,7 @@ def run_pr_review_agent(
     agent_version: str,
     engine_path: Path | None = None,
     min_severity: str | None = None,
+    definition_id: str | None = None,
 ) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
 
@@ -212,6 +214,15 @@ def run_pr_review_agent(
         raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.") from exc
     if max_leaf_concurrency < 1:
         raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.")
+    requested_definition = validate_requested_pr_review_definition(
+        definition_id,
+        engine_commit=agent_version,
+        copilot_cli_version=cli_version,
+        root_model=model,
+        leaf_model=leaf_model,
+        leaf_execution=leaf_execution,
+        max_leaf_concurrency=max_leaf_concurrency,
+    )
 
     engine = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
     env = {
@@ -229,6 +240,7 @@ def run_pr_review_agent(
         "COPILOT_REVIEW_LEAF_MODEL": leaf_model,
         "COPILOT_REVIEW_LEAF_EXECUTION": leaf_execution,
         "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY": str(max_leaf_concurrency),
+        "MINIMUM_SEVERITY": settings["min_severity"],
         "AGENT_MINIMUM_SEVERITY": severity,
     }
 
@@ -272,13 +284,13 @@ def run_pr_review_agent(
         logger.exception("Unexpected error running engine review")
         raise
     else:
-        return (
-            build_pr_review_metrics(
-                output_dir,
-                bcquality_root,
-                time.monotonic() - start,
-                manifest=manifest,
-                engine_root=engine_root,
-            ),
-            config,
+        metrics = build_pr_review_metrics(
+            output_dir,
+            bcquality_root,
+            time.monotonic() - start,
+            manifest=manifest,
+            engine_root=engine_root,
         )
+        if requested_definition is not None and metrics.definition_id != requested_definition.id:
+            raise AgentError(f"Validated engine evidence did not resolve to requested BC PR Review definition {requested_definition.id!r}.")
+        return metrics, config

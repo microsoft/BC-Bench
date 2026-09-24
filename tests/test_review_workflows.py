@@ -79,6 +79,13 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
         "gpt-5.3-codex",
         "mai-code-1.1-flash",
     ]
+    assert inputs["definition-id"] == {
+        "description": "Registered PR Review definition (unclassified runs are never published)",
+        "required": False,
+        "default": "pr-review-production-sol-luna-serial-v1",
+        "type": "choice",
+        "options": ["pr-review-production-sol-luna-serial-v1", "unclassified"],
+    }
     assert inputs["leaf-model"]["default"] == "gpt-5.6-luna"
     assert inputs["leaf-model"]["options"] == ["gpt-5.4", "gpt-5.6-luna", "mai-code-1.1-flash"]
     assert inputs["leaf-execution"] == {
@@ -102,6 +109,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "full' }}-${{ inputs.repetition-id }}" in workflow
     for input_name in (
         "model:",
+        "definition-id:",
         "leaf-model:",
         "leaf-execution:",
         "max-leaf-concurrency:",
@@ -133,7 +141,7 @@ def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
     summarize = workflow["jobs"]["summarize-results"]["with"]
 
-    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.entries != '' }}"
+    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.definition-id != 'pr-review-production-sol-luna-serial-v1' || inputs.entries != '' }}"
     # Repeats stay available so an override can be measured over several runs.
     assert "inputs.engine-sha" not in workflow["jobs"]["requeue"]["if"]
 
@@ -144,11 +152,16 @@ def test_pr_review_requeue_preserves_engine_sha(engine_sha: str) -> None:
     payload = workflow["jobs"]["requeue"]["with"]["workflow-inputs"]
     engine_expression = "${{ toJSON(inputs.engine-sha) }}"
     entries_expression = "${{ toJSON(inputs.entries) }}"
+    definition_expression = "${{ inputs.definition-id }}"
 
     assert engine_expression in payload
     assert entries_expression in payload
-    parsed = json.loads(payload.replace(engine_expression, json.dumps(engine_sha)).replace(entries_expression, json.dumps("")))
+    assert definition_expression in payload
+    parsed = json.loads(
+        payload.replace(engine_expression, json.dumps(engine_sha)).replace(entries_expression, json.dumps("")).replace(definition_expression, "pr-review-production-sol-luna-serial-v1")
+    )
     assert parsed["engine-sha"] == engine_sha
+    assert parsed["definition-id"] == "pr-review-production-sol-luna-serial-v1"
 
 
 def test_requeue_workflow_reads_inputs_from_environment() -> None:
@@ -308,6 +321,12 @@ def test_transitive_provenance_is_only_displayed_on_advanced_dashboard() -> None
     assert "agent_version" in advanced
     assert "bcquality_commit" in advanced
     assert "copilot_cli_version" in advanced
+    assert "{{ agg.definition_name | default: agg.model }}" in dashboard
+    assert "{{ run.definition_name | default: run.model }}" in advanced
+    assert "definition_id" in advanced
+    assert "bcquality_source_snapshot" in advanced
+    assert "leaf_execution" in advanced
+    assert "minimum_severity" in advanced
     assert dashboard.count("{% if agg.experiment == null or agg.experiment.is_experiment == false %}") == 2
 
 

@@ -59,6 +59,8 @@ Generic Copilot evaluations use the action's default CLI pin. PR Review delibera
 
 BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. The validated manifest also records the leaf model, scheduling mode, maximum concurrency, BCQuality revision and source snapshot, and process count on every result. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata are retained for the [Advanced Metrics view](code-review-details.html).
 
+When a run exactly matches a release-owned PR Review definition, the default dashboard displays that **Definition** name. Standard single-model agents, historical rows, and PR Review rows with no recognized definition keep their existing model display instead. Historical data is never rewritten or guessed; only validated runtime evidence can produce a definition. The v1 registry's BCQuality commit and source snapshot are taken from the successful [evaluation-identity run 36001653480](https://github.com/microsoft/BC-Bench/actions/runs/36001653480) manifest artifact. The [Advanced Metrics view](code-review-details.html) shows the definition ID alongside the underlying root/leaf, scheduling, policy, engine, CLI, and BCQuality provenance.
+
 Unavailable AI credits remain `null` in bceval exports; observed zero remains zero. The pinned bc-eval 0.3.14 consumer requires numeric prompt/completion tokens, so its existing zero fallbacks for missing tokens remain unchanged. Use the original per-entry result metrics, not bceval token fields, to distinguish unknown usage from measured zero.
 
 ## Production BC PR Review Baseline
@@ -68,7 +70,7 @@ Unavailable AI credits remain `null` in bceval exports; observed zero remains ze
   <thead>
     <tr>
       <th>Agent</th>
-      <th>Model</th>
+      <th>Definition</th>
       <th>Micro F1 (95% CI)</th>
       <th>Precision</th>
       <th>Recall</th>
@@ -84,7 +86,7 @@ Unavailable AI credits remain `null` in bceval exports; observed zero remains ze
       {% if agg.experiment == null or agg.experiment.is_experiment == false %}
     <tr>
       <td>{{ agg.agent_name }}</td>
-      <td>{{ agg.model }}</td>
+      <td>{{ agg.definition_name | default: agg.model }}</td>
       <td>{{ agg.f1 | times: 100.0 | round: 1 }}%{% if agg.f1_ci_low %} ({{ agg.f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
       <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
@@ -107,7 +109,7 @@ Unavailable AI credits remain `null` in bceval exports; observed zero remains ze
   <thead>
     <tr>
       <th>Agent</th>
-      <th>Model</th>
+      <th>Definition</th>
       <th>Avg Time</th>
       <th>Avg Prompt Tokens</th>
       <th>Avg Completion Tokens</th>
@@ -123,7 +125,7 @@ Unavailable AI credits remain `null` in bceval exports; observed zero remains ze
       {% if agg.experiment == null or agg.experiment.is_experiment == false %}
     <tr>
       <td>{{ agg.agent_name }}</td>
-      <td>{{ agg.model }}</td>
+      <td>{{ agg.definition_name | default: agg.model }}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td>{% if agg.average_prompt_tokens != null %}{{ agg.average_prompt_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_completion_tokens != null %}{{ agg.average_completion_tokens | round: 0 }}{% else %}—{% endif %}</td>
@@ -149,7 +151,7 @@ These historical rows evaluate the generic Copilot or Claude runners against the
   <thead>
     <tr>
       <th>Agent</th>
-      <th>Model</th>
+      <th>Definition</th>
       <th>Micro F1</th>
       <th>Precision</th>
       <th>Recall</th>
@@ -162,7 +164,7 @@ These historical rows evaluate the generic Copilot or Claude runners against the
     {% for agg in legacy_results %}
     <tr>
       <td>{{ agg.agent_name }}</td>
-      <td>{{ agg.model }}</td>
+      <td>{{ agg.definition_name | default: agg.model }}</td>
       <td>{{ agg.f1 | times: 100.0 | round: 1 }}%</td>
       <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
       <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
@@ -190,7 +192,7 @@ The default tables follow the shared BC-Bench dashboard convention and show the 
     <tr>
       <th>Variant</th>
       <th>Agent</th>
-      <th>Model</th>
+      <th>Definition</th>
       <th>Micro F1 (95% CI)</th>
       <th>Macro F1 (95% CI)</th>
       <th>Precision</th>
@@ -208,7 +210,7 @@ The default tables follow the shared BC-Bench dashboard convention and show the 
         {%- if agg.experiment.custom_instructions -%}Inline knowledge (pre-#8700){%- else -%}Other{%- endif -%}
       </td>
       <td>{{ agg.agent_name }}</td>
-      <td>{{ agg.model }}</td>
+      <td>{{ agg.definition_name | default: agg.model }}</td>
       <td>{{ agg.f1 | times: 100.0 | round: 1 }}%{% if agg.f1_ci_low %} ({{ agg.f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{{ agg.macro_f1 | times: 100.0 | round: 1 }}%{% if agg.macro_f1_ci_low %} ({{ agg.macro_f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.macro_f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>

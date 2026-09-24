@@ -49,7 +49,9 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
   <thead>
     <tr>
       <th>Agent</th>
-      <th>Model</th>
+      <th>Root model</th>
+      <th>Definition</th>
+      <th>Definition ID</th>
       <th>Configuration</th>
       <th>Runs</th>
       <th>Tasks</th>
@@ -92,6 +94,10 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Copilot CLI</th>
       <th>BC-ALAgents</th>
       <th>BCQuality</th>
+      <th>Leaf model</th>
+      <th>Leaf scheduling</th>
+      <th>Review policy</th>
+      <th>BCQuality source snapshot</th>
     </tr>
   </thead>
   <tbody>
@@ -100,6 +106,8 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
     <tr>
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
+      <td>{{ agg.definition_name | default: agg.model }}</td>
+      <td>{% if agg.definition_id %}<code>{{ agg.definition_id }}</code>{% else %}—{% endif %}</td>
       <td>{% if agg.experiment %}<code>{{ agg.experiment | jsonify }}</code>{% else %}Baseline{% endif %}</td>
       <td>{{ agg.num_runs }}</td>
       <td>{{ agg.total }}</td>
@@ -142,6 +150,10 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if agg.copilot_cli_version %}{{ agg.copilot_cli_version }}{% else %}—{% endif %}</td>
       <td>{% if agg.agent_name == "BC PR Review" and agg.agent_version %}<a href="https://github.com/microsoft/BC-ALAgents/commit/{{ agg.agent_version }}" target="_blank">{{ agg.agent_version | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
       <td>{% if agg.bcquality_commit %}<a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">{{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% else %}—{% endif %}</td>
+      <td>{% if agg.leaf_model %}{{ agg.leaf_model }}{% else %}—{% endif %}</td>
+      <td>{% if agg.leaf_execution %}{{ agg.leaf_execution }} ({{ agg.max_leaf_concurrency }}){% else %}—{% endif %}</td>
+      <td>{% if agg.minimum_severity %}knowledge ≥ {{ agg.minimum_severity }}; agent ≥ {{ agg.agent_minimum_severity }}; {{ agg.cli_timeout_minutes }}m{% else %}—{% endif %}</td>
+      <td>{% if agg.bcquality_source_snapshot %}<code>{{ agg.bcquality_source_snapshot }}</code>{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -160,7 +172,9 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
     <tr>
       <th>Run</th>
       <th>Agent</th>
-      <th>Model</th>
+      <th>Root model</th>
+      <th>Definition</th>
+      <th>Definition ID</th>
       <th>Configuration</th>
       <th>Date</th>
       <th>Tasks</th>
@@ -209,6 +223,10 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Copilot CLI</th>
       <th>BC-ALAgents</th>
       <th>BCQuality</th>
+      <th>Leaf model</th>
+      <th>Leaf scheduling</th>
+      <th>Review policy</th>
+      <th>BCQuality source snapshot</th>
     </tr>
   </thead>
   <tbody>
@@ -218,6 +236,8 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if run.github_run_id %}<a href="https://github.com/microsoft/BC-Bench/actions/runs/{{ run.github_run_id }}" target="_blank">{{ run.github_run_id }}</a>{% else %}—{% endif %}</td>
       <td>{{ run.agent_name }}</td>
       <td>{{ run.model }}</td>
+      <td>{{ run.definition_name | default: run.model }}</td>
+      <td>{% if run.definition_id %}<code>{{ run.definition_id }}</code>{% else %}—{% endif %}</td>
       <td>{% if run.experiment %}<code>{{ run.experiment | jsonify }}</code>{% else %}Baseline{% endif %}</td>
       <td>{{ run.date }}</td>
       <td>{{ run.total }}</td>
@@ -266,6 +286,10 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if run.copilot_cli_version %}{{ run.copilot_cli_version }}{% else %}—{% endif %}</td>
       <td>{% if run.agent_name == "BC PR Review" and run.agent_version %}<a href="https://github.com/microsoft/BC-ALAgents/commit/{{ run.agent_version }}" target="_blank">{{ run.agent_version | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
       <td>{% if run.bcquality_commit %}<a href="https://github.com/{{ run.bcquality_repository }}/commit/{{ run.bcquality_commit }}" target="_blank">{{ run.bcquality_commit | slice: 0, 8 }}</a>{% if run.bcquality_version %} ({{ run.bcquality_version }}){% endif %}{% else %}—{% endif %}</td>
+      <td>{% if run.leaf_model %}{{ run.leaf_model }}{% else %}—{% endif %}</td>
+      <td>{% if run.leaf_execution %}{{ run.leaf_execution }} ({{ run.max_leaf_concurrency }}){% else %}—{% endif %}</td>
+      <td>{% if run.minimum_severity %}knowledge ≥ {{ run.minimum_severity }}; agent ≥ {{ run.agent_minimum_severity }}; {{ run.cli_timeout_minutes }}m{% else %}—{% endif %}</td>
+      <td>{% if run.bcquality_source_snapshot %}<code>{{ run.bcquality_source_snapshot }}</code>{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
