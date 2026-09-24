@@ -1,13 +1,14 @@
 from collections.abc import Sequence
-from typing import Any, NamedTuple, Self
+from typing import Any, NamedTuple, Self, TypeVar
 
 import numpy as np
-from pydantic import Field
+from pydantic import Field, model_validator
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
+from bcbench.agent.pr_review.definitions import validate_pr_review_definition_metadata
 from bcbench.dataset import ReviewComment
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
@@ -16,6 +17,7 @@ from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext, PRReviewMetrics
 
 logger = get_logger(__name__)
+_ProvenanceValue = TypeVar("_ProvenanceValue", str, int)
 
 _METRIC_EXPLANATIONS = """\
 <details>
@@ -181,6 +183,23 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
     f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
     f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
     severity_mae: float = 0.0
+    definition_id: str | None = None
+    definition_name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_definition(self) -> Self:
+        validate_pr_review_definition_metadata(self.definition_id, self.definition_name)
+        return self
+
+    @classmethod
+    def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
+        fields = super()._base_fields(context)
+        if isinstance(context.metrics, PRReviewMetrics):
+            fields.update(
+                definition_id=context.metrics.definition_id,
+                definition_name=context.metrics.definition_name,
+            )
+        return fields
 
     @classmethod
     def create(
@@ -319,21 +338,41 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     bcquality_repository: str | None = None
     bcquality_commit: str | None = None
     bcquality_version: str | None = None
+    leaf_model: str | None = None
+    leaf_execution: str | None = None
+    max_leaf_concurrency: int | None = Field(default=None, ge=1)
+    bcquality_source_snapshot: str | None = None
+    cli_timeout_minutes: int | None = Field(default=None, ge=0)
+    minimum_severity: str | None = None
+    agent_minimum_severity: str | None = None
+    review_source: str | None = None
+    definition_id: str | None = None
+    definition_name: str | None = None
 
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
 
+    @model_validator(mode="after")
+    def validate_definition(self) -> Self:
+        validate_pr_review_definition_metadata(self.definition_id, self.definition_name)
+        return self
+
     @classmethod
     def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
         pr_review_metrics = [result.metrics for result in results if isinstance(result.metrics, PRReviewMetrics)]
 
-        def consistent_value(values: Sequence[str | None], field_name: str) -> str | None:
+        def consistent_value(values: Sequence[_ProvenanceValue | None], field_name: str) -> _ProvenanceValue | None:
             available = {value for value in values if value is not None}
             if len(available) > 1:
                 logger.warning(f"Results contain inconsistent {field_name} values; omitting provenance: {available}")
                 return None
             return next(iter(available), None)
+
+        definitions = {(result.definition_id, result.definition_name) for result in results if isinstance(result, CodeReviewResult)}
+        if len(definitions) > 1:
+            raise ValueError(f"Cannot summarize code review results with different definitions: {definitions}")
+        definition_id, definition_name = next(iter(definitions), (None, None))
 
         return {
             **super()._base_fields(results, run_id),
@@ -341,7 +380,20 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             "bcquality_repository": consistent_value([metrics.bcquality_repository for metrics in pr_review_metrics], "bcquality_repository"),
             "bcquality_commit": consistent_value([metrics.bcquality_commit for metrics in pr_review_metrics], "bcquality_commit"),
             "bcquality_version": consistent_value([metrics.bcquality_version for metrics in pr_review_metrics], "bcquality_version"),
+            "leaf_model": consistent_value([metrics.leaf_model for metrics in pr_review_metrics], "leaf_model"),
+            "leaf_execution": consistent_value([metrics.leaf_execution for metrics in pr_review_metrics], "leaf_execution"),
+            "max_leaf_concurrency": consistent_value([metrics.max_leaf_concurrency for metrics in pr_review_metrics], "max_leaf_concurrency"),
+            "bcquality_source_snapshot": consistent_value([metrics.bcquality_source_snapshot for metrics in pr_review_metrics], "bcquality_source_snapshot"),
+            "cli_timeout_minutes": consistent_value([metrics.cli_timeout_minutes for metrics in pr_review_metrics], "cli_timeout_minutes"),
+            "minimum_severity": consistent_value([metrics.minimum_severity for metrics in pr_review_metrics], "minimum_severity"),
+            "agent_minimum_severity": consistent_value([metrics.agent_minimum_severity for metrics in pr_review_metrics], "agent_minimum_severity"),
+            "review_source": consistent_value([metrics.review_source for metrics in pr_review_metrics], "review_source"),
+            "definition_id": definition_id,
+            "definition_name": definition_name,
         }
+
+    def combination_key(self) -> tuple[str | None, ...]:
+        return (*super().combination_key(), self.definition_id)
 
     def _performance_markdown(self) -> str:
         def metric(value: float | None, digits: int = 1) -> str:

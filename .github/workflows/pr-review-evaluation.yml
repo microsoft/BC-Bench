@@ -18,6 +18,14 @@ on:
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
+      definition-id:
+        description: "Registered PR Review definition (unclassified runs are never published)"
+        required: false
+        default: "pr-review-production-sol-luna-serial-v1"
+        type: choice
+        options:
+          - "pr-review-production-sol-luna-serial-v1"
+          - "unclassified"
       leaf-model:
         description: "Model requested for domain leaf agents"
         required: false
@@ -168,6 +176,7 @@ jobs:
 
           uv run bcbench evaluate pr-review "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
+            --definition-id "${{ inputs.definition-id }}" `
             --engine-path "${{ steps.install-harnesses.outputs.bc-alagents-path }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
@@ -194,7 +203,7 @@ jobs:
       agent: "BC PR Review"
       # Scores only the modified entries, so publishing it to Braintrust/Kusto or the
       # leaderboard would record a partial corpus as a benchmark result.
-      mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.entries != '' }}
+      mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.definition-id != 'pr-review-production-sol-luna-serial-v1' || inputs.entries != '' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
@@ -211,4 +220,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "leaf-execution": "${{ inputs.leaf-execution }}", "max-leaf-concurrency": "${{ inputs.max-leaf-concurrency }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "repetition-id": "${{ inputs.repetition-id }}", "entries": ${{ toJSON(inputs.entries) }}, "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "definition-id": "${{ inputs.definition-id }}", "leaf-model": "${{ inputs.leaf-model }}", "leaf-execution": "${{ inputs.leaf-execution }}", "max-leaf-concurrency": "${{ inputs.max-leaf-concurrency }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "repetition-id": "${{ inputs.repetition-id }}", "entries": ${{ toJSON(inputs.entries) }}, "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

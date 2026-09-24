@@ -56,9 +56,14 @@ def _manifest() -> RunManifest:
         leaf_model="gpt-5.4-mini",
         leaf_execution="serial",
         max_leaf_concurrency=4,
+        cli_timeout_minutes=30,
+        minimum_severity="Medium",
+        agent_minimum_severity="Medium",
+        review_source="local",
     )
+    engine = SimpleNamespace(commit="e" * 40)
     bcquality = SimpleNamespace(commit="b" * 40, source_snapshot="a" * 64)
-    return cast(RunManifest, SimpleNamespace(configuration=configuration, bcquality=bcquality, processes=[object(), object()]))
+    return cast(RunManifest, SimpleNamespace(engine=engine, configuration=configuration, bcquality=bcquality, processes=[object(), object()]))
 
 
 def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> None:

@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from bcbench.agent.pr_review.definitions import resolve_pr_review_definition
 from bcbench.agent.pr_review.run_manifest import RunManifest
 from bcbench.exceptions import AgentError
 from bcbench.types import PRReviewMetrics
@@ -247,6 +248,7 @@ def build_pr_review_metrics(
             raise AgentError("BCQuality checkout does not match the validated run manifest.")
 
     usage_values_available = run.malformed_records == 0
+    definition = resolve_pr_review_definition(manifest, bcquality_repository=bcquality_identity[0] if bcquality_identity else None) if manifest else None
     return PRReviewMetrics(
         execution_time=execution_time,
         prompt_tokens=run.prompt_tokens if usage_values_available else None,
@@ -278,4 +280,10 @@ def build_pr_review_metrics(
         max_leaf_concurrency=manifest.configuration.max_leaf_concurrency if manifest else None,
         bcquality_source_snapshot=manifest.bcquality.source_snapshot if manifest else None,
         review_process_count=len(manifest.processes) if manifest else None,
+        cli_timeout_minutes=manifest.configuration.cli_timeout_minutes if manifest else None,
+        minimum_severity=manifest.configuration.minimum_severity if manifest else None,
+        agent_minimum_severity=manifest.configuration.agent_minimum_severity if manifest else None,
+        review_source=manifest.configuration.review_source if manifest else None,
+        definition_id=definition.id if definition else None,
+        definition_name=definition.display_name if definition else None,
     )

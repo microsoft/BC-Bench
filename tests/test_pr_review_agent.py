@@ -283,6 +283,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert "BCQUALITY_SHA" not in engine_env
     assert "BCQUALITY_REF" not in engine_env
     assert engine_env["GITHUB_REPOSITORY"] == "microsoft/BCApps"
+    assert engine_env["MINIMUM_SEVERITY"] == "Medium"
     assert engine_env["AGENT_MINIMUM_SEVERITY"] == "Medium"
     assert engine_env["COPILOT_REVIEW_CLI_VERSION"] == "1.0.83"
     assert engine_env["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.4"

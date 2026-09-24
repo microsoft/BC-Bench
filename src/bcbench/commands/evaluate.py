@@ -5,6 +5,7 @@ from typing import Annotated, cast
 import typer
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent.pr_review.definitions import DEFAULT_PR_REVIEW_DEFINITION_ID
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -180,11 +181,12 @@ def evaluate_claude_code(
 @evaluate_app.command("pr-review")
 def evaluate_pr_review(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    model: CopilotModel = "gpt-5.6-luna",
+    model: CopilotModel = "gpt-5.6-sol",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "pr_review_test_run",
     engine_path: PRReviewEnginePath = None,
+    definition_id: Annotated[str, typer.Option("--definition-id", help="Registered PR Review definition ID, or 'unclassified' for an unpublished experiment")] = DEFAULT_PR_REVIEW_DEFINITION_ID,
 ) -> None:
     """
     Evaluate BC PR Review on a single code-review entry.
@@ -225,6 +227,7 @@ def evaluate_pr_review(
             output_dir=ctx.result_dir,
             agent_version=agent_version,
             engine_path=engine_path,
+            definition_id=definition_id,
         ),
     )
 

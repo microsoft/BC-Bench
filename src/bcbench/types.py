@@ -118,6 +118,12 @@ class PRReviewMetrics(AgentMetrics):
     max_leaf_concurrency: int | None = Field(default=None, ge=1)
     bcquality_source_snapshot: str | None = None
     review_process_count: int | None = Field(default=None, ge=1)
+    cli_timeout_minutes: int | None = Field(default=None, ge=0)
+    minimum_severity: Literal["Critical", "High", "Medium", "Low"] | None = None
+    agent_minimum_severity: Literal["Critical", "High", "Medium", "Low"] | None = None
+    review_source: Literal["pr", "local"] | None = None
+    definition_id: str | None = None
+    definition_name: str | None = None
 
 
 type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]
