@@ -15,6 +15,9 @@ outputs:
   bc-alagents-path:
     description: Path to the pinned BC-ALAgents checkout
     value: ${{ steps.bc-alagents-path.outputs.path }}
+  copilot-version:
+    description: Installed GitHub Copilot CLI version
+    value: ${{ steps.copilot-version.outputs.version }}
 
 runs:
   using: composite

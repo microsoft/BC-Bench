@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
+from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_cli_version, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
 from bcbench.exceptions import AgentError
 from bcbench.types import EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry
@@ -96,6 +96,20 @@ def test_prepare_bcquality_root_ignores_ambient_overrides(tmp_path: Path, monkey
     assert not any(name.startswith("BCQUALITY_") for name in child_env)
 
 
+@pytest.mark.parametrize("value", ["", "latest", "1.0", "1.0.83; injected"])
+def test_pr_review_cli_version_requires_pinned_semver(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("COPILOT_REVIEW_CLI_VERSION", value)
+
+    with pytest.raises(AgentError, match="COPILOT_REVIEW_CLI_VERSION must be"):
+        _resolve_pr_review_cli_version()
+
+
+def test_pr_review_cli_version_uses_workflow_selected_pin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COPILOT_REVIEW_CLI_VERSION", "1.0.83")
+
+    assert _resolve_pr_review_cli_version() == "1.0.83"
+
+
 def test_valid_empty_findings_is_a_clean_review(tmp_path: Path) -> None:
     out, repo = _dirs(tmp_path)
     _write_output(out, json.dumps({"outcome": "completed", "outcome-reason": "", "findings": []}))
@@ -168,6 +182,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "microsoft/BC-Bench")
     monkeypatch.setenv("BCQUALITY_REF", "ambient-override")
+    monkeypatch.setenv("COPILOT_REVIEW_CLI_VERSION", "1.0.83")
     monkeypatch.setenv("COPILOT_REVIEW_LEAF_MODEL", "gpt-5.4")
     monkeypatch.setenv("COPILOT_REVIEW_LEAF_EXECUTION", "serial")
     monkeypatch.setenv("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "4")

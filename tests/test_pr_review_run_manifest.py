@@ -113,7 +113,6 @@ def test_accepts_bcquality_revision_resolved_by_pinned_engine(tmp_path: Path) ->
     ("mutation", "message"),
     [
         (lambda data: data.update(status="partial"), "status='partial'"),
-        (lambda data: data.update(status="failed"), "status='failed'"),
         (lambda data: data["engine"].update(commit="f" * 40), "engine.commit"),
         (lambda data: data["bcquality"].update(commit=None), "bcquality.commit is missing"),
         (lambda data: data["configuration"].update(leaf_model="gpt-5.6-luna"), "leaf_model"),
@@ -128,3 +127,21 @@ def test_rejects_contaminated_or_incomplete_runtime(tmp_path: Path, mutation, me
 
     with pytest.raises(AgentError, match=message):
         _validate(_load(tmp_path, payload))
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda data: data.update(completed_at=None), "completed manifest requires completed_at"),
+        (lambda data: data.update(failure_reason="unexpected"), "completed manifest must not have failure_reason"),
+        (lambda data: data.update(status="failed"), "failed manifest requires failure_reason"),
+        (lambda data: data.update(status="failed", failure_reason="leaf failed", completed_at=None), "failed manifest requires completed_at"),
+        (lambda data: data.update(status="running"), "running manifest must not have completed_at"),
+    ],
+)
+def test_rejects_inconsistent_manifest_lifecycle(tmp_path: Path, mutation, message: str) -> None:
+    payload = valid_manifest()
+    mutation(payload)
+
+    with pytest.raises(AgentError, match=message):
+        _load(tmp_path, payload)

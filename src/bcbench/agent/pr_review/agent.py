@@ -38,7 +38,7 @@ _config = get_config()
 _FINDINGS_OUTPUT_FILE = "al-code-review-findings.json"
 _REVIEW_OUTPUT_FILE = "review.json"
 _PREPARE_BCQUALITY_SCRIPT = Path(__file__).parent / "scripts" / "Prepare-BCQualityRoot.ps1"
-_COPILOT_CLI_VERSION = "1.0.83"
+_COPILOT_CLI_VERSION_ENV = "COPILOT_REVIEW_CLI_VERSION"
 
 
 def _load_pr_review_settings() -> dict[str, Any]:
@@ -82,6 +82,13 @@ def _resolve_pwsh() -> str:
     if not pwsh:
         raise AgentError("PowerShell (pwsh) not found in PATH. The BC-ALAgents engine requires PowerShell 7+.")
     return pwsh
+
+
+def _resolve_pr_review_cli_version() -> str:
+    cli_version = os.environ.get(_COPILOT_CLI_VERSION_ENV, "").strip()
+    if re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", cli_version) is None:
+        raise AgentError(f"{_COPILOT_CLI_VERSION_ENV} must be the installed pinned Copilot CLI semantic version.")
+    return cli_version
 
 
 def _environment_without_bcquality_overrides() -> dict[str, str]:
@@ -192,6 +199,7 @@ def run_pr_review_agent(
     _commit_patch_as_head(repo_path)
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
     bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
+    cli_version = _resolve_pr_review_cli_version()
     leaf_model = os.environ.get("COPILOT_REVIEW_LEAF_MODEL", "").strip()
     if not leaf_model:
         raise AgentError("COPILOT_REVIEW_LEAF_MODEL is required for deterministic PR Review evaluation.")
@@ -217,7 +225,7 @@ def run_pr_review_agent(
         "BCQUALITY_ROOT": str(bcquality_root),
         "GITHUB_REPOSITORY": entry.repo,
         "COPILOT_MODEL": model,
-        "COPILOT_REVIEW_CLI_VERSION": _COPILOT_CLI_VERSION,
+        _COPILOT_CLI_VERSION_ENV: cli_version,
         "COPILOT_REVIEW_LEAF_MODEL": leaf_model,
         "COPILOT_REVIEW_LEAF_EXECUTION": leaf_execution,
         "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY": str(max_leaf_concurrency),
@@ -245,7 +253,7 @@ def run_pr_review_agent(
         validate_run_manifest(
             manifest,
             engine_commit=agent_version,
-            cli_version=_COPILOT_CLI_VERSION,
+            cli_version=cli_version,
             root_model=model,
             leaf_model=leaf_model,
             leaf_execution=leaf_execution,

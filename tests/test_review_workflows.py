@@ -20,6 +20,16 @@ def _workflow(name: str) -> str:
     return text
 
 
+def _workflow_dispatch_inputs(workflow: dict) -> dict:
+    trigger = workflow.get("on", workflow.get(True))
+    assert isinstance(trigger, dict)
+    dispatch = trigger.get("workflow_dispatch")
+    assert isinstance(dispatch, dict)
+    inputs = dispatch.get("inputs")
+    assert isinstance(inputs, dict)
+    return inputs
+
+
 def test_copilot_workflow_routes_code_review_through_copilot() -> None:
     workflow = _workflow("copilot-evaluation.yml")
 
@@ -41,7 +51,7 @@ def test_claude_workflow_routes_code_review_through_claude() -> None:
 def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     workflow = _workflow("pr-review-evaluation.yml")
     workflow_data = yaml.safe_load(workflow)
-    inputs = workflow_data[True]["workflow_dispatch"]["inputs"]
+    inputs = _workflow_dispatch_inputs(workflow_data)
     install = next(step for step in workflow_data["jobs"]["evaluate-with-pr-review"]["steps"] if step.get("id") == "install-harnesses")
     config = yaml.safe_load(AGENT_CONFIG.read_text(encoding="utf-8"))
 
@@ -70,9 +80,20 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     ]
     assert inputs["leaf-model"]["default"] == "gpt-5.6-luna"
     assert inputs["leaf-model"]["options"] == ["gpt-5.4", "gpt-5.6-luna", "mai-code-1.1-flash"]
-    assert 'leaf-execution:\n        description: "Deterministic leaf scheduling mode"\n        required: false\n        default: "serial"' in workflow
-    assert 'max-leaf-concurrency:\n        description: "Maximum simultaneous leaves in parallel mode"' in workflow
-    assert 'COPILOT_REVIEW_CLI_VERSION: "1.0.83"' in workflow
+    assert inputs["leaf-execution"] == {
+        "description": "Deterministic leaf scheduling mode",
+        "required": False,
+        "default": "serial",
+        "type": "choice",
+        "options": ["serial", "parallel"],
+    }
+    assert inputs["max-leaf-concurrency"] == {
+        "description": "Maximum simultaneous leaves in parallel mode",
+        "required": False,
+        "default": "4",
+        "type": "string",
+    }
+    assert "COPILOT_REVIEW_CLI_VERSION: ${{ steps.install-harnesses.outputs.copilot-version }}" in workflow
     assert install["with"]["copilot-version"] == "1.0.83"
     assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
     assert "COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}" in workflow
@@ -96,7 +117,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
 
 def test_pr_review_workflow_passes_optional_engine_sha_to_harness_action() -> None:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
-    engine_input = workflow[True]["workflow_dispatch"]["inputs"]["engine-sha"]
+    engine_input = _workflow_dispatch_inputs(workflow)["engine-sha"]
     install = next(step for step in workflow["jobs"]["evaluate-with-pr-review"]["steps"] if step.get("id") == "install-harnesses")
 
     assert engine_input["required"] is False
@@ -124,6 +145,7 @@ def test_pr_review_requeue_preserves_engine_sha(engine_sha: str) -> None:
     entries_expression = "${{ toJSON(inputs.entries) }}"
 
     assert engine_expression in payload
+    assert entries_expression in payload
     parsed = json.loads(payload.replace(engine_expression, json.dumps(engine_sha)).replace(entries_expression, json.dumps("")))
     assert parsed["engine-sha"] == engine_sha
 
@@ -216,9 +238,9 @@ def test_agent_harness_action_validates_copilot_version(copilot_version: str, va
 
 
 def test_evaluation_workflows_expose_curated_current_models() -> None:
-    copilot_inputs = yaml.safe_load(_workflow("copilot-evaluation.yml"))[True]["workflow_dispatch"]["inputs"]["model"]["options"]
-    contamination_inputs = yaml.safe_load(_workflow("contamination.yml"))[True]["workflow_dispatch"]["inputs"]["model"]["options"]
-    claude_inputs = yaml.safe_load(_workflow("claude-evaluation.yml"))[True]["workflow_dispatch"]["inputs"]["model"]["options"]
+    copilot_inputs = _workflow_dispatch_inputs(yaml.safe_load(_workflow("copilot-evaluation.yml")))["model"]["options"]
+    contamination_inputs = _workflow_dispatch_inputs(yaml.safe_load(_workflow("contamination.yml")))["model"]["options"]
+    claude_inputs = _workflow_dispatch_inputs(yaml.safe_load(_workflow("claude-evaluation.yml")))["model"]["options"]
 
     assert "gpt-6-astra" in copilot_inputs
     assert "gpt-6-astra" in contamination_inputs
@@ -241,7 +263,8 @@ def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     assert config["runs"]["steps"].index(validation) < config["runs"]["steps"].index(checkout)
     assert checkout["with"]["ref"] == "${{ steps.engine-sha.outputs.sha }}"
     assert checkout["with"]["persist-credentials"] is False
-    assert set(config["outputs"]) == {"bc-alagents-path"}
+    assert config["outputs"]["copilot-version"]["value"] == "${{ steps.copilot-version.outputs.version }}"
+    assert set(config["outputs"]) == {"bc-alagents-path", "copilot-version"}
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is required to test the composite action script")

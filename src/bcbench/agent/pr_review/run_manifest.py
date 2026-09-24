@@ -95,6 +95,28 @@ class RunManifest(BaseModel):
     plan: ReviewPlan
     processes: list[ProcessRecord]
 
+    @model_validator(mode="after")
+    def validate_lifecycle(self) -> "RunManifest":
+        if self.status == "running":
+            if self.completed_at is not None:
+                raise ValueError("running manifest must not have completed_at")
+            if self.failure_reason is not None:
+                raise ValueError("running manifest must not have failure_reason")
+        elif self.status == "completed":
+            if self.completed_at is None:
+                raise ValueError("completed manifest requires completed_at")
+            if self.failure_reason is not None:
+                raise ValueError("completed manifest must not have failure_reason")
+        elif self.status == "partial":
+            if self.completed_at is None:
+                raise ValueError("partial manifest requires completed_at")
+        elif self.status == "failed":
+            if self.completed_at is None:
+                raise ValueError("failed manifest requires completed_at")
+            if not self.failure_reason:
+                raise ValueError("failed manifest requires failure_reason")
+        return self
+
 
 def load_run_manifest(path: Path) -> RunManifest:
     if not path.exists():
