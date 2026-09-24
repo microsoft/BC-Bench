@@ -511,14 +511,13 @@ function Get-BCBenchDatasetPath {
 
 <#
 .SYNOPSIS
-    Gets additional BC artifact parameters for a category.
+    Gets BC artifact and container options for a category.
 .DESCRIPTION
-    Categories use the public artifact feed by default. Add only category-specific overrides here,
-    using parameter names accepted by Get-BCArtifactUrl.
+    Categories use the public artifact feed by default.
 .PARAMETER Category
     The evaluation category requesting a BC artifact.
 .OUTPUTS
-    Hashtable of additional Get-BCArtifactUrl parameters.
+    Hashtable of category-specific storage account and insider EULA options.
 #>
 function Get-BCBenchArtifactConfig {
     [CmdletBinding()]
@@ -529,12 +528,36 @@ function Get-BCBenchArtifactConfig {
     )
 
     [hashtable] $categoryConfig = @{
-        # Add opt-in category overrides here. For example:
-        # "category" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
-        "data-query" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
+        "data-query" = @{ storageAccount = "bcinsider"; accept_insiderEula = $true }
     }
 
     return $categoryConfig[$Category] ?? @{}
+}
+
+function Get-BCBenchPinnedArtifactUrl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Category
+    )
+
+    $storageAccount = (Get-BCBenchArtifactConfig -Category $Category).storageAccount ?? 'bcartifacts'
+    $configPath = Join-Path $PSScriptRoot '..' 'config' 'bc-artifacts.json'
+    $artifacts = Get-Content $configPath -Raw | ConvertFrom-Json -AsHashtable
+    if (-not $artifacts.ContainsKey($storageAccount) -or -not $artifacts[$storageAccount].ContainsKey($Version)) {
+        throw "No pinned BC artifact URL for $storageAccount version $Version in $configPath."
+    }
+
+    $url = $artifacts[$storageAccount][$Version]
+    $uri = $null
+    if ($url -isnot [string] -or -not [Uri]::TryCreate($url, [UriKind]::Absolute, [ref]$uri) -or
+        $uri.Scheme -ne 'https' -or $uri.AbsolutePath -notmatch "^/sandbox/$([regex]::Escape($Version))\.\d+\.\d+/w1/?$" -or
+        $uri.Host -notmatch "^$([regex]::Escape($storageAccount))(\.azureedge\.net|-[a-z0-9]+\.[a-z0-9]+\.azurefd\.net)$") {
+        throw "Invalid pinned BC artifact URL for $storageAccount version $Version in $configPath`: $url"
+    }
+    return $url
 }
 
 <#
@@ -621,4 +644,4 @@ function Get-LatestReleaseBranch {
     return $latest.Name
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchArtifactConfig, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchArtifactConfig, Get-BCBenchPinnedArtifactUrl, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch

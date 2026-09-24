@@ -47,6 +47,8 @@ param(
     [switch]$BcMcp
 )
 
+if (-not $SkipContainer) { $ErrorActionPreference = 'Stop' }
+
 [DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath -Version $Version -InstanceId $InstanceId
 if ($InstanceId) {
     $Version = $entries[0].environment_setup_version
@@ -94,23 +96,21 @@ if (-not $SkipContainer) {
 
     Write-Log "Creating container $ContainerName for version $Version..." -Level Info
 
-    [hashtable] $artifactParameters = @{
-        version = $Version
-        Country = $Country
-    }
     [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category
-    foreach ($key in $categoryArtifactConfig.Keys) {
-        $artifactParameters[$key] = $categoryArtifactConfig[$key]
-    }
-
-    [string] $url = Get-BCArtifactUrl @artifactParameters
+    if ($Country -ne 'w1') { throw "Approved BC artifacts are only configured for w1, not $Country." }
+    [string] $url = Get-BCBenchPinnedArtifactUrl -Version $Version -Category $Category
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
-    # Create container synchronously with NAV folder shared
-    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath) -AcceptInsiderEula ([bool]$categoryArtifactConfig.accept_insiderEula)
+    try {
+        # Create container synchronously with NAV folder shared
+        New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath) -AcceptInsiderEula ([bool]$categoryArtifactConfig.accept_insiderEula)
 
-    # Create compiler folder synchronously
-    New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
+        # Create compiler folder synchronously
+        New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
+    }
+    catch {
+        throw "Failed to set up BC $Version with exact artifact $url (it may no longer be available); no latest-artifact fallback is allowed. $($_.Exception.Message)"
+    }
 
     Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
 
