@@ -119,6 +119,7 @@ CopilotModelName = Literal[
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
+    "gpt-6-luna",
     "gpt-5.3-codex",
     "mai-code-1.1-flash",
     "gemini-3.7-flash",
