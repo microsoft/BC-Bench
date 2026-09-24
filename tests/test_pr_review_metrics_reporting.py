@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from bcbench.agent.pr_review.definitions import DEFAULT_PR_REVIEW_DEFINITION_ID, get_pr_review_definition
 from bcbench.results.codereview import CodeReviewResultSummary
 from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
@@ -40,7 +41,16 @@ def _metrics(*, duration: float, scale: int) -> PRReviewMetrics:
         max_leaf_concurrency=4,
         bcquality_source_snapshot="b" * 64,
         review_process_count=2,
+        cli_timeout_minutes=30,
+        minimum_severity="Medium",
+        agent_minimum_severity="Medium",
+        review_source="local",
     )
+
+
+def _defined_metrics(*, duration: float, scale: int) -> PRReviewMetrics:
+    definition = get_pr_review_definition(DEFAULT_PR_REVIEW_DEFINITION_ID)
+    return _metrics(duration=duration, scale=scale).model_copy(update={"definition_id": definition.id, "definition_name": definition.display_name})
 
 
 def test_pr_review_provenance_fields_are_code_review_specific() -> None:
@@ -55,6 +65,8 @@ def test_pr_review_provenance_fields_are_code_review_specific() -> None:
         "max_leaf_concurrency",
         "bcquality_source_snapshot",
         "review_process_count",
+        "definition_id",
+        "definition_name",
     }
 
     assert provenance_fields <= CodeReviewResultSummary.model_fields.keys()
@@ -104,6 +116,10 @@ def test_summary_aggregates_public_pr_review_metrics() -> None:
     assert summary.max_leaf_concurrency == 4
     assert summary.bcquality_source_snapshot == "b" * 64
     assert summary.review_process_count == 2
+    assert summary.cli_timeout_minutes == 30
+    assert summary.minimum_severity == "Medium"
+    assert summary.agent_minimum_severity == "Medium"
+    assert summary.review_source == "local"
     assert summary.metric_counts["knowledge_used"] == 2
     assert summary.metric_sums["knowledge_used"] == 15
 
@@ -283,6 +299,10 @@ def test_leaderboard_propagates_public_pr_review_metrics() -> None:
     assert aggregate.max_leaf_concurrency == 4
     assert aggregate.bcquality_source_snapshot == "b" * 64
     assert aggregate.review_process_count == 2
+    assert aggregate.cli_timeout_minutes == 30
+    assert aggregate.minimum_severity == "Medium"
+    assert aggregate.agent_minimum_severity == "Medium"
+    assert aggregate.review_source == "local"
 
 
 def test_github_summary_renders_only_public_performance_metrics() -> None:
@@ -366,7 +386,53 @@ def test_summary_and_leaderboard_schemas_include_pr_review_diagnostics() -> None
             "max_leaf_concurrency",
             "bcquality_source_snapshot",
             "review_process_count",
+            "definition_id",
+            "definition_name",
             "metric_counts",
             "metric_sums",
         ):
             assert diagnostic in payload
+
+
+def test_named_definition_is_persisted_and_part_of_code_review_combination_identity() -> None:
+    named = CodeReviewResultSummary.from_results(
+        [create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=_defined_metrics(duration=4.0, scale=1))],
+        run_id="named",
+    )
+    legacy = CodeReviewResultSummary.from_results(
+        [create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=4.0, scale=1))],
+        run_id="legacy",
+    )
+
+    assert named.definition_id == DEFAULT_PR_REVIEW_DEFINITION_ID
+    assert named.definition_name == "BC PR Review — Production / Sol / Luna / Serial v1"
+    assert named.combination_key() != legacy.combination_key()
+    assert CodeReviewLeaderboardAggregate.from_runs([named]).definition_id == DEFAULT_PR_REVIEW_DEFINITION_ID
+
+    with pytest.raises(ValueError, match="different combinations"):
+        CodeReviewLeaderboardAggregate.from_runs([named, legacy])
+
+
+def test_generic_code_review_rows_retain_existing_combination_behavior() -> None:
+    first = CodeReviewResultSummary.from_results(
+        [create_codereview_result(agent_name=AgentHarness.COPILOT, model="gpt-5.6-sol", metrics=AgentMetrics(execution_time=4.0))],
+        run_id="first",
+    )
+    second = CodeReviewResultSummary.from_results(
+        [create_codereview_result(agent_name=AgentHarness.COPILOT, model="gpt-5.6-sol", metrics=AgentMetrics(execution_time=5.0))],
+        run_id="second",
+    )
+
+    aggregate = CodeReviewLeaderboardAggregate.from_runs([first, second])
+
+    assert first.definition_id is None
+    assert second.definition_id is None
+    assert first.combination_key() == second.combination_key()
+    assert aggregate.num_runs == 2
+
+
+def test_code_review_result_rejects_an_unregistered_definition_name() -> None:
+    invalid_metrics = _metrics(duration=4.0, scale=1).model_copy(update={"definition_id": "unregistered", "definition_name": "Arbitrary"})
+
+    with pytest.raises(ValueError, match="Unknown BC PR Review definition"):
+        create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=invalid_metrics)

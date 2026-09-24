@@ -1,15 +1,16 @@
 import logging
 from collections.abc import Hashable, Sequence
-from typing import Literal, NamedTuple, Self, override
+from typing import Any, Literal, NamedTuple, Self, override
 
 import numpy as np
 from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
-from pydantic import Field
+from pydantic import Field, model_validator
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
+from bcbench.agent.pr_review.definitions import validate_pr_review_definition_metadata
 from bcbench.dataset import BaseDatasetEntry, ReviewComment
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
@@ -201,6 +202,24 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
     f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
     f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
     severity_mae: float = 0.0
+    definition_id: str | None = None
+    definition_name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_definition(self) -> Self:
+        validate_pr_review_definition_metadata(self.definition_id, self.definition_name)
+        return self
+
+    @classmethod
+    @override
+    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
+        fields = super()._base_fields(context)
+        if isinstance(context.metrics, PRReviewMetrics):
+            fields.update(
+                definition_id=context.metrics.definition_id,
+                definition_name=context.metrics.definition_name,
+            )
+        return fields
 
     @classmethod
     def create[E: BaseDatasetEntry](
@@ -350,10 +369,21 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     token_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     credit_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
     usage_complete_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    cli_timeout_minutes: int | None = Field(default=None, ge=0)
+    minimum_severity: Literal["Critical", "High", "Medium", "Low"] | None = None
+    agent_minimum_severity: Literal["Critical", "High", "Medium", "Low"] | None = None
+    review_source: Literal["pr", "local"] | None = None
+    definition_id: str | None = None
+    definition_name: str | None = None
 
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_definition(self) -> Self:
+        validate_pr_review_definition_metadata(self.definition_id, self.definition_name)
+        return self
 
     @override
     def combination_key(self) -> tuple[Hashable, ...]:
@@ -369,6 +399,11 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             self.max_leaf_concurrency,
             self.bcquality_source_snapshot,
             self.review_process_count,
+            self.cli_timeout_minutes,
+            self.minimum_severity,
+            self.agent_minimum_severity,
+            self.review_source,
+            self.definition_id,
         )
 
     def _performance_markdown(self) -> str:
@@ -560,6 +595,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
 
         metric_counts = {name: sum(value is not None for value in metric_values(name)) for name in _PR_REVIEW_METRICS}
         metric_sums = {name: float(sum(value for value in metric_values(name) if value is not None)) for name in _PR_REVIEW_METRICS}
+        definitions = {(result.definition_id, result.definition_name) for result in code_review_results}
+        if len(definitions) > 1:
+            raise ValueError(f"Cannot summarize code review results with different definitions: {definitions}")
+        definition_id, definition_name = next(iter(definitions), (None, None))
 
         return summary.model_copy(
             update={
@@ -613,6 +652,12 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "max_leaf_concurrency": consistent_runtime_value("max_leaf_concurrency"),
                 "bcquality_source_snapshot": consistent_runtime_value("bcquality_source_snapshot"),
                 "review_process_count": consistent_runtime_value("review_process_count"),
+                "cli_timeout_minutes": consistent_runtime_value("cli_timeout_minutes"),
+                "minimum_severity": consistent_runtime_value("minimum_severity"),
+                "agent_minimum_severity": consistent_runtime_value("agent_minimum_severity"),
+                "review_source": consistent_runtime_value("review_source"),
+                "definition_id": definition_id,
+                "definition_name": definition_name,
                 "metric_counts": metric_counts,
                 "metric_sums": metric_sums,
             }
