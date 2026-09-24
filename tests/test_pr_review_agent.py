@@ -26,7 +26,7 @@ def _write_output(output_dir: Path, text: str) -> None:
 def _write_run_manifest(output_dir: Path, *, root_model: str, leaf_model: str) -> None:
     def process(role: str, ordinal: int, skill_id: str, model: str) -> dict:
         metrics = {
-            "cli_version": "1.0.83",
+            "cli_version": "1.0.88",
             "models": [model],
             "usage_complete": True,
             "malformed_records": 0,
@@ -56,7 +56,7 @@ def _write_run_manifest(output_dir: Path, *, root_model: str, leaf_model: str) -
         "engine": {"repository": "microsoft/BC-ALAgents", "commit": "e" * 40, "agent_version": "1.6.6"},
         "bcquality": {"commit": "b" * 40, "source_snapshot": "a" * 64},
         "configuration": {
-            "copilot_cli_version": "1.0.83",
+            "copilot_cli_version": "1.0.88",
             "root_model": root_model,
             "leaf_model": leaf_model,
             "leaf_execution": "serial",
@@ -186,7 +186,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
             {
                 "schema_version": 1,
                 "metrics_source": "copilot-cli-otel",
-                "cli_version": "1.0.83",
+                "cli_version": "1.0.88",
                 "wall_time_seconds": 2.4,
                 "prompt_tokens": 100,
                 "cached_tokens": 20,
@@ -236,7 +236,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert metrics.total_tokens == 110
     assert metrics.ai_credits == 0.25
     assert metrics.api_calls == 2
-    assert metrics.copilot_cli_version == "1.0.83"
+    assert metrics.copilot_cli_version == "1.0.88"
     assert metrics.leaf_model == "gpt-5.4"
     assert metrics.leaf_execution == "serial"
     assert metrics.max_leaf_concurrency == 4
@@ -256,7 +256,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert "BCQUALITY_REF" not in engine_env
     assert engine_env["GITHUB_REPOSITORY"] == "microsoft/BCApps"
     assert engine_env["AGENT_MINIMUM_SEVERITY"] == "Medium"
-    assert engine_env["COPILOT_REVIEW_CLI_VERSION"] == "1.0.83"
+    assert engine_env["COPILOT_REVIEW_CLI_VERSION"] == "1.0.88"
     assert engine_env["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.4"
     assert engine_env["COPILOT_REVIEW_LEAF_EXECUTION"] == "serial"
     assert run_process.call_args.args[0][-1].endswith("Invoke-CopilotPRReview.ps1")

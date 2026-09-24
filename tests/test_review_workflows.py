@@ -10,7 +10,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "bab2863f14a1f5c474179c136e2c9775cc836fa6"
+DEFAULT_ENGINE_SHA = "03239afe611a3eff490002eba0e4098b48099ba3"
 PWSH = shutil.which("pwsh")
 
 
@@ -61,6 +61,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert inputs["model"]["default"] == "gpt-5.6-sol"
     assert inputs["model"]["options"] == [
         "gpt-5.4",
+        "gpt-6-astra",
         "gpt-5.6-sol",
         "gpt-5.6-terra",
         "gpt-5.6-luna",
@@ -71,7 +72,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert inputs["leaf-model"]["options"] == ["gpt-5.4", "gpt-5.6-luna", "mai-code-1.1-flash"]
     assert 'leaf-execution:\n        description: "Deterministic leaf scheduling mode"\n        required: false\n        default: "serial"' in workflow
     assert 'max-leaf-concurrency:\n        description: "Maximum simultaneous leaves in parallel mode"' in workflow
-    assert 'COPILOT_REVIEW_CLI_VERSION: "1.0.83"' in workflow
+    assert 'COPILOT_REVIEW_CLI_VERSION: "1.0.88"' in workflow
     assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
     assert "COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}" in workflow
     assert "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}" in workflow
@@ -161,7 +162,18 @@ def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.83" in action
+    assert "@github/copilot@1.0.88" in action
+    assert "@anthropic-ai/claude-code@2.1.281" in action
+
+
+def test_evaluation_workflows_expose_curated_current_models() -> None:
+    copilot_inputs = yaml.safe_load(_workflow("copilot-evaluation.yml"))[True]["workflow_dispatch"]["inputs"]["model"]["options"]
+    contamination_inputs = yaml.safe_load(_workflow("contamination.yml"))[True]["workflow_dispatch"]["inputs"]["model"]["options"]
+    claude_inputs = yaml.safe_load(_workflow("claude-evaluation.yml"))[True]["workflow_dispatch"]["inputs"]["model"]["options"]
+
+    assert "gpt-6-astra" in copilot_inputs
+    assert "gpt-6-astra" in contamination_inputs
+    assert "claude-opus-5-5" in claude_inputs
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:

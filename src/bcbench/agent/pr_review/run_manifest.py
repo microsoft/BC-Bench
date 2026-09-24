@@ -85,7 +85,7 @@ class RunManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     schema_version: Literal[1]
-    status: Literal["running", "completed", "failed"]
+    status: Literal["running", "completed", "partial", "failed"]
     started_at: str
     completed_at: str | None
     failure_reason: str | None

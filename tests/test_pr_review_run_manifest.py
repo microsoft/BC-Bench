@@ -9,7 +9,7 @@ from bcbench.exceptions import AgentError
 
 ENGINE_COMMIT = "e" * 40
 BCQUALITY_COMMIT = "b" * 40
-CLI_VERSION = "1.0.83"
+CLI_VERSION = "1.0.88"
 
 
 def _metrics(model: str) -> dict:
@@ -112,6 +112,7 @@ def test_accepts_bcquality_revision_resolved_by_pinned_engine(tmp_path: Path) ->
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
+        (lambda data: data.update(status="partial"), "status='partial'"),
         (lambda data: data.update(status="failed"), "status='failed'"),
         (lambda data: data["engine"].update(commit="f" * 40), "engine.commit"),
         (lambda data: data["bcquality"].update(commit=None), "bcquality.commit is missing"),

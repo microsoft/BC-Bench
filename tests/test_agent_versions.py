@@ -15,8 +15,8 @@ from bcbench.operations import commit_changes, init_repo
 @pytest.mark.parametrize(
     ("output", "expected"),
     [
-        ("GitHub Copilot CLI 1.0.82\nCommit: abc\n", "1.0.82"),
-        ("2.1.221 (Claude Code)\n", "2.1.221"),
+        ("GitHub Copilot CLI 1.0.88\nCommit: abc\n", "1.0.88"),
+        ("2.1.281 (Claude Code)\n", "2.1.281"),
         ("1.2.3-preview.4+build.5\n", "1.2.3-preview.4+build.5"),
     ],
 )
