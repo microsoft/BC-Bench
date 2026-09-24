@@ -6,6 +6,10 @@ inputs:
     description: Full BC-ALAgents commit SHA (blank uses the default pin)
     required: false
     default: ""
+  copilot-version:
+    description: GitHub Copilot CLI version (defaults to 1.0.88)
+    required: false
+    default: "1.0.88"
 
 outputs:
   bc-alagents-path:
@@ -35,8 +39,19 @@ runs:
       run: npm install -g @anthropic-ai/claude-code@2.1.281
       shell: pwsh
 
+    - name: Validate GitHub Copilot CLI version
+      id: copilot-version
+      shell: pwsh
+      env:
+        COPILOT_VERSION: ${{ inputs.copilot-version }}
+      run: |
+        if ($env:COPILOT_VERSION -notmatch '\A\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\z') {
+          throw "copilot-version must be a pinned semantic version."
+        }
+        "version=$env:COPILOT_VERSION" >> $env:GITHUB_OUTPUT
+
     - name: Install GitHub Copilot CLI
-      run: npm install -g @github/copilot@1.0.88
+      run: npm install -g @github/copilot@${{ steps.copilot-version.outputs.version }}
       shell: pwsh
 
     - name: Checkout BC-ALAgents

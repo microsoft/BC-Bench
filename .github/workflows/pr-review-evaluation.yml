@@ -13,7 +13,6 @@ on:
         type: choice
         options:
           - "gpt-5.4"
-          - "gpt-6-astra"
           - "gpt-5.6-sol"
           - "gpt-5.6-terra"
           - "gpt-5.6-luna"
@@ -152,6 +151,7 @@ jobs:
         uses: $/.github/actions/install-agent-harnesses
         with:
           engine-sha: ${{ inputs.engine-sha }}
+          copilot-version: "1.0.83"
 
       - name: Run BC PR Review for entry ${{ matrix.entry }}
         timeout-minutes: 120
@@ -159,7 +159,7 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-          COPILOT_REVIEW_CLI_VERSION: "1.0.88"
+          COPILOT_REVIEW_CLI_VERSION: "1.0.83"
           COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}
           COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}
           COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}

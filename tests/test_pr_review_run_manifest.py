@@ -9,7 +9,7 @@ from bcbench.exceptions import AgentError
 
 ENGINE_COMMIT = "e" * 40
 BCQUALITY_COMMIT = "b" * 40
-CLI_VERSION = "1.0.88"
+CLI_VERSION = "1.0.83"
 
 
 def _metrics(model: str) -> dict:
