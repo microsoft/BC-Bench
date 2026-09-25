@@ -469,7 +469,7 @@ function Get-RepoCloneInfo {
         return @{
             Url                 = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
             Token               = $env:ADO_TOKEN
-            SparseCheckoutPaths = @('App/Apps', 'App/Layers')
+            SparseCheckoutPaths = @('App/Apps', 'App/Internal/Apps', 'App/Layers')
         }
     }
 }
@@ -543,6 +543,14 @@ function Get-BCBenchArtifactConfig {
     }
 
     if ($Country -ne 'w1') { throw "Approved BC artifacts are only configured for w1, not $Country." }
+
+    [hashtable] $pinnedInsiderUrls = @{
+        '29.0' = 'https://bcinsider-fvh2ekdjecfjd6gk.b02.azurefd.net/sandbox/29.0.54011.55007/w1'
+        '30.0' = 'https://bcinsider-fvh2ekdjecfjd6gk.b02.azurefd.net/sandbox/30.0.55015.0/w1'
+    }
+    if ($pinnedInsiderUrls.ContainsKey($Version)) {
+        return @{ artifactUrl = $pinnedInsiderUrls[$Version]; accept_insiderEula = $true }
+    }
 
     [hashtable] $pinnedUrls = @{
         '24.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.0.16410.31330/w1'
