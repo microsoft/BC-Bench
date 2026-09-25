@@ -141,12 +141,7 @@ def _load_filter_report(path: Path) -> _FilterReport | None:
 
 @cache
 def _count_available_knowledge(bcquality_root: Path) -> int:
-    return sum(
-        1
-        for layer in _KNOWLEDGE_LAYERS
-        for path in (bcquality_root / layer / "knowledge").rglob("*.md")
-        if path.is_file()
-    )
+    return sum(1 for layer in _KNOWLEDGE_LAYERS for path in (bcquality_root / layer / "knowledge").rglob("*.md") if path.is_file())
 
 
 def _normalize_knowledge_reference(path: str) -> str | None:

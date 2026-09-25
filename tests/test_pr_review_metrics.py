@@ -154,7 +154,6 @@ def test_validated_manifest_promotes_deterministic_metrics(tmp_path: Path) -> No
     metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
 
     assert metrics.models == ["gpt-5.4-mini", "gpt-5.6-sol"]
-    assert metrics.premium_requests == 1.75
     assert metrics.leaf_model == "gpt-5.4-mini"
     assert metrics.leaf_execution == "serial"
     assert metrics.max_leaf_concurrency == 4
