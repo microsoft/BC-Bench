@@ -1,9 +1,5 @@
 # Undoing a drop shipment fails when the location requires bins
 
-## Environment
-
-- Extension-free Business Central with Base Application 28.3.52162.53835.
-
 ## Reproduction steps
 
 1. Create location `DOCKZILLA` with:
