@@ -513,7 +513,7 @@ function Get-BCBenchDatasetPath {
 .SYNOPSIS
     Gets the BC artifact URL and container options for a category and version.
 .DESCRIPTION
-    Container-backed categories use pinned public artifact URLs, except data-query which uses the latest BC Insider artifact.
+    Container-backed categories use pinned public artifact URLs, optionally, the latest BC Insider artifact.
 .PARAMETER Category
     The evaluation category requesting a BC artifact.
 .PARAMETER Version
@@ -560,14 +560,7 @@ function Get-BCBenchArtifactConfig {
         throw "No pinned BC artifact URL for bcartifacts version $Version in Get-BCBenchArtifactConfig."
     }
 
-    $url = $pinnedUrls[$Version]
-    $uri = $null
-    if ($url -isnot [string] -or -not [Uri]::TryCreate($url, [UriKind]::Absolute, [ref]$uri) -or
-        $uri.Scheme -ne 'https' -or $uri.AbsolutePath -notmatch "^/sandbox/$([regex]::Escape($Version))\.\d+\.\d+/w1/?$" -or
-        $uri.Host -notmatch '^bcartifacts(\.azureedge\.net|-[a-z0-9]+\.[a-z0-9]+\.azurefd\.net)$') {
-        throw "Invalid pinned BC artifact URL for bcartifacts version $Version`: $url"
-    }
-    return @{ artifactUrl = $url; accept_insiderEula = $false }
+    return @{ artifactUrl = $pinnedUrls[$Version]; accept_insiderEula = $false }
 }
 
 <#

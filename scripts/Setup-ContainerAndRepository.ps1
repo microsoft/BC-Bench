@@ -98,22 +98,11 @@ if (-not $SkipContainer) {
     [string] $url = $categoryArtifactConfig.artifactUrl
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
-    $previousErrorActionPreference = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = 'Stop'
-        # Create container synchronously with NAV folder shared
-        New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath) -AcceptInsiderEula ([bool]$categoryArtifactConfig.accept_insiderEula)
+    # Create container synchronously with NAV folder shared
+    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath) -AcceptInsiderEula ([bool]$categoryArtifactConfig.accept_insiderEula)
 
-        # Create compiler folder synchronously
-        New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
-    }
-    catch {
-        Write-Log "Failed to set up BC $Version with artifact $url" -Level Error
-        throw
-    }
-    finally {
-        $ErrorActionPreference = $previousErrorActionPreference
-    }
+    # Create compiler folder synchronously
+    New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
 
     Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
 
