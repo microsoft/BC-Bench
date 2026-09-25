@@ -1,13 +1,8 @@
 # Exchange-rate adjustment ledger entry shows the wrong adjustment amount
 
-## Environment
-
-- CRONUS company using W1/local Business Central 28.4.
-- Local currency is EUR.
-
 ## Reproduction steps
 
-1. Open **Currencies** and select `USD`.
+1. In a W1-localized CRONUS company with EUR as the local currency, open **Currencies** and select `USD`.
 2. Ensure **Unrealized Gains Acc.** and **Unrealized Losses Acc.** are populated.
 3. Enter these USD exchange rates:
    - `7 April 2026`: EUR 1 = USD `1.1525`
