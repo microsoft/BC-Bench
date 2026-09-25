@@ -1,10 +1,5 @@
 # Posting a mileage expense report fails because the calculated amount is not rounded
 
-## Environment
-
-- US Business Central 28.1 (Platform 28.0.50017.0, Application 28.1.49838.50112).
-- Expense Agent (Preview) is installed and configured.
-
 ## Reproduction steps
 
 1. Open **Expense Agent Setup**.
