@@ -85,7 +85,7 @@ runs:
         $alToolDotNetVersion = if (([System.Version]$version).Major -lt 29) { "8.0" } else { "10.0" }
         "al_tool_dotnet_version=$alToolDotNetVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-        $url = (Get-BCBenchArtifactConfig -Version $version -Category "${{ inputs.category }}" -CandidateUrl $env:BCBENCH_CANDIDATE_ARTIFACT_URL).artifactUrl
+        $url = (Get-BCBenchArtifactConfig -Version $version -Category "${{ inputs.category }}").artifactUrl
         $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($url)))
         "cache_key=bcartifacts-$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 

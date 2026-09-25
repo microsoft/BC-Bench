@@ -94,7 +94,7 @@ if (-not $SkipContainer) {
 
     Write-Log "Creating container $ContainerName for version $Version..." -Level Info
 
-    [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category -Version $Version -Country $Country -CandidateUrl $env:BCBENCH_CANDIDATE_ARTIFACT_URL
+    [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category -Version $Version -Country $Country
     [string] $url = $categoryArtifactConfig.artifactUrl
     Write-Log "Retrieved artifact URL: $url" -Level Info
 

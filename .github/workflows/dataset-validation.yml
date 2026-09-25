@@ -21,10 +21,6 @@ on:
   schedule:
     - cron: "0 0 * * 0"
 
-concurrency:
-  group: bc-artifact-verification
-  cancel-in-progress: false
-
 jobs:
   get-entries:
     uses: $/.github/workflows/get-entries.yml
@@ -33,30 +29,9 @@ jobs:
       test-run: ${{ inputs.test-run || false }}
       category: "bug-fix"
 
-  resolve-artifacts:
-    runs-on: [GitHub-BCBench]
-    needs: get-entries
-    if: needs.get-entries.outputs.entries != '[]'
-    outputs:
-      artifacts: ${{ steps.resolve.outputs.artifacts }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-
-      - name: Install BcContainerHelper
-        shell: pwsh
-        run: Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
-
-      - name: Resolve latest URLs once per BC version
-        id: resolve
-        shell: pwsh
-        env:
-          ENTRIES_JSON: ${{ needs.get-entries.outputs.entries }}
-        run: .\scripts\Resolve-BCBenchArtifactCandidates.ps1 -EntriesJson $env:ENTRIES_JSON
-
   verify-build-and-tests:
     runs-on: [GitHub-BCBench]
-    needs: [get-entries, resolve-artifacts]
+    needs: get-entries
     if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
@@ -72,19 +47,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-
-      - name: Select latest candidate for this entry
-        shell: pwsh
-        env:
-          ARTIFACTS_JSON: ${{ needs.resolve-artifacts.outputs.artifacts }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
-          $version = Get-BCBenchEntryVersion -InstanceId "${{ matrix.entry }}" -Category 'bug-fix'
-          $candidates = $env:ARTIFACTS_JSON | ConvertFrom-Json -AsHashtable
-          if (-not $candidates.ContainsKey($version)) { throw "No candidate artifact URL for BC $version" }
-          $url = Get-BCBenchArtifactUrl -Version $version -CandidateUrl $candidates[$version]
-          "BCBENCH_CANDIDATE_ARTIFACT_URL=$url" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Setup BC Container and Repository
         id: setup-env
@@ -102,10 +64,10 @@ jobs:
         run: .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.repo_path }}"
         shell: pwsh
 
-  propose-artifacts:
+  refresh-artifacts:
     runs-on: ubuntu-latest
-    needs: [get-entries, resolve-artifacts, verify-build-and-tests]
-    if: ${{ needs.verify-build-and-tests.result == 'success' && !inputs.test-run && !inputs.modified-only && github.ref == 'refs/heads/main' }}
+    needs: verify-build-and-tests
+    if: github.event_name == 'schedule' && needs.verify-build-and-tests.result == 'success'
     permissions:
       contents: write
       pull-requests: write
@@ -113,29 +75,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - name: Propose verified BC artifacts
+      - name: Refresh pinned artifact URLs
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          CANDIDATES_JSON: ${{ needs.resolve-artifacts.outputs.artifacts }}
         run: |
-          .\scripts\Update-BCBenchArtifacts.ps1 -CandidatesJson $env:CANDIDATES_JSON
-          git diff --quiet -- config/bc-artifacts.json
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host 'Pinned artifacts already match the verified latest URLs.'
-            return
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
+          Import-Module BcContainerHelper -Force -DisableNameChecking
+
+          $path = 'scripts/BCBenchUtils.psm1'
+          $content = [IO.File]::ReadAllText($path)
+          $matches = [regex]::Matches($content, "'(?<version>\d+\.\d+)' = '(?<url>https://bcartifacts[^']+)'")
+          if ($matches.Count -eq 0) { throw 'No pinned public BC artifact URLs found.' }
+          foreach ($match in $matches) {
+            $version = $match.Groups['version'].Value
+            $url = Get-BCArtifactUrl -version $version -country 'w1' -select 'Latest'
+            $content = $content.Replace($match.Value, "'$version' = '$url'")
           }
-          if ($LASTEXITCODE -ne 1) { throw 'Could not compare artifact config.' }
+          [IO.File]::WriteAllText($path, $content)
+
+          git diff --quiet
+          if ($LASTEXITCODE -eq 0) { return }
 
           $PSNativeCommandUseErrorActionPreference = $true
-          $branch = "artifacts/verified-${{ github.run_id }}-${{ github.run_attempt }}"
+          $branch = "artifacts/refresh-${{ github.run_id }}"
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git switch -c $branch
-          git add config/bc-artifacts.json
-          git commit -m "Update verified BC artifact URLs"
+          git add $path
+          git commit -m 'Refresh pinned BC artifact URLs'
           git push origin $branch
-
-          $body = "All bug-fix entries passed against these URLs in [dataset verification](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). BC Insider URLs are unchanged."
-          gh pr create --base main --head $branch --title "Update verified BC artifact URLs" --body $body
-          gh pr merge $branch --auto --squash --delete-branch
+          gh pr create --base main --head $branch --title 'Refresh pinned BC artifact URLs' --body 'Updates the pinned public BC artifact URLs after the weekly dataset verification succeeded.'
