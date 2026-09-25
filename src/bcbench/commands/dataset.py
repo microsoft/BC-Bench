@@ -6,7 +6,7 @@ from typing import Annotated
 import typer
 
 from bcbench.cli_options import EvaluationCategoryOption
-from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
+from bcbench.dataset import BaseDatasetEntry, BCalScenarioEntry, CodeReviewEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
 from bcbench.logger import get_logger
@@ -95,6 +95,10 @@ def view_entry(
     if isinstance(entry, NL2ALEntry):
         info_table.add_row("Page", entry.page)
         info_table.add_row("Audience", entry.audience)
+    elif isinstance(entry, BCalScenarioEntry):
+        info_table.add_row("Mode", entry.session.mode or "N/A")
+        info_table.add_row("Page", entry.session.page or "N/A")
+        info_table.add_row("Audience", entry.session.audience or "N/A")
 
     metadata_dict = entry.metadata.model_dump()
     for field_name, field_value in metadata_dict.items():
@@ -167,6 +171,13 @@ def view_entry(
             console.print(checklist_table)
         else:
             console.print("[dim]No expected assertions[/dim]")
+    elif isinstance(entry, BCalScenarioEntry):
+        console.print("\n[bold cyan]Scenario Steps:[/bold cyan]")
+        for step in entry.steps:
+            console.print(f"- {step.id}: {step.type}")
+        console.print("\n[bold cyan]Artifact Checklist:[/bold cyan]")
+        for assertion in entry.evaluation.artifact_assertions:
+            console.print(f"- [{assertion['level']}] {assertion['text']}")
 
 
 @dataset_app.command("version")

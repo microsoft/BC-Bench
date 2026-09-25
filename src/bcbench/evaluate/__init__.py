@@ -1,6 +1,7 @@
 """Evaluation module for running pipelines and creating results."""
 
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.evaluate.bcal_scenario import BCalScenarioPipeline
 from bcbench.evaluate.bugfix import BugFixPipeline
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.evaluate.dataquery import DataQueryPipeline
@@ -12,6 +13,7 @@ from bcbench.evaluate.testgeneration import TestGenerationPipeline
 
 __all__ = [
     "AgentRunner",
+    "BCalScenarioPipeline",
     "BugFixPipeline",
     "CodeReviewPipeline",
     "DataQueryPipeline",
