@@ -86,9 +86,7 @@ def _resolve_pwsh() -> str:
 
 
 def _resolve_pr_review_cli_version(cli_version: str | None = None) -> str:
-    selected_version = cli_version if cli_version is not None else os.environ.get(_COPILOT_CLI_VERSION_ENV)
-    if selected_version is None:
-        selected_version = get_copilot_version()
+    selected_version = cli_version.strip() if cli_version is not None else get_copilot_version()
     cli_version = selected_version.strip()
     if re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", cli_version) is None:
         raise AgentError(f"{_COPILOT_CLI_VERSION_ENV} must be the installed pinned Copilot CLI semantic version.")
@@ -209,26 +207,20 @@ def run_pr_review_agent(
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
     bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
     cli_version = _resolve_pr_review_cli_version(cli_version)
-    leaf_model = (leaf_model or os.environ.get("COPILOT_REVIEW_LEAF_MODEL") or model).strip()
+    leaf_model = (leaf_model or model).strip()
     if not leaf_model:
         raise AgentError("PR Review leaf model must not be empty.")
-    leaf_execution = (leaf_execution or os.environ.get("COPILOT_REVIEW_LEAF_EXECUTION", "serial")).strip().lower()
+    leaf_execution = (leaf_execution or "serial").strip().lower()
     if leaf_execution not in {"serial", "parallel"}:
-        raise AgentError("COPILOT_REVIEW_LEAF_EXECUTION must be 'serial' or 'parallel'.")
+        raise AgentError("PR Review leaf execution must be 'serial' or 'parallel'.")
     if max_leaf_concurrency is None:
-        try:
-            max_leaf_concurrency = int(os.environ.get("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "4"))
-        except ValueError as exc:
-            raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.") from exc
+        max_leaf_concurrency = 4
     if max_leaf_concurrency < 1:
-        raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.")
+        raise AgentError("PR Review max leaf concurrency must be a positive integer.")
     if cli_timeout_minutes is None:
-        try:
-            cli_timeout_minutes = int(os.environ.get("COPILOT_REVIEW_CLI_TIMEOUT_MINUTES", "30"))
-        except ValueError as exc:
-            raise AgentError("COPILOT_REVIEW_CLI_TIMEOUT_MINUTES must be a non-negative integer.") from exc
+        cli_timeout_minutes = 30
     if cli_timeout_minutes < 0:
-        raise AgentError("COPILOT_REVIEW_CLI_TIMEOUT_MINUTES must be a non-negative integer.")
+        raise AgentError("PR Review CLI timeout minutes must be a non-negative integer.")
 
     engine = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
     env = {
