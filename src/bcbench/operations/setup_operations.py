@@ -1,15 +1,16 @@
 """Setup operations for repository preparation."""
 
 import json
+import logging
 import re
 from pathlib import Path
 from uuid import uuid4
 
-from bcbench.dataset.dataset_entry import RepoGroundedEntry
-from bcbench.logger import get_logger
-from bcbench.operations.git_operations import checkout_commit, clean_repo, commit_changes
+from bcbench_core.git import checkout_commit, clean_repo, commit_changes
 
-logger = get_logger(__name__)
+from bcbench.dataset.dataset_entry import RepoGroundedEntry
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["bootstrap_app_json", "set_runtime_version", "setup_repo_prebuild"]
 
@@ -158,7 +159,10 @@ def set_runtime_version(repo_path: Path, project_paths: list[str]) -> None:
         if app_json.get("runtime"):
             continue
 
-        platform: str = app_json.get("platform", "")
+        platform: object = app_json.get("platform")
+        if not isinstance(platform, str):
+            continue
+
         platform_major = _major_version(platform)
         if platform_major is None:
             continue

@@ -11,7 +11,7 @@ import pytest
 from bcbench.dataset import RepoGroundedEntry
 from bcbench.operations import setup_agent_skills
 from bcbench.operations.instruction_operations import _get_source_instructions_path
-from bcbench.types import AgentHarness
+from bcbench.types import AgentConfig, AgentHarness
 
 
 def test_setup_agent_skills_path():
@@ -27,7 +27,7 @@ def test_setup_agent_skills():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"skills": {"enabled": True}}
+        config = AgentConfig.model_validate({"skills": {"enabled": True}})
 
         # Setup skills
         result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
@@ -60,7 +60,7 @@ def test_nonexistent_skills():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "nonexistent-repo"
-        config = {"skills": {"enabled": True}}
+        config = AgentConfig.model_validate({"skills": {"enabled": True}})
 
         # Error comes from _get_source_instructions_path when the profile folder doesn't exist
         with pytest.raises(FileNotFoundError, match="not found"):
@@ -80,7 +80,7 @@ def test_overwrite_skill_folder_files():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"skills": {"enabled": True}}
+        config = AgentConfig.model_validate({"skills": {"enabled": True}})
 
         # Target skill folder
         target_skill_dir = repo_path / ".github" / "skills" / "al-test-generation"
@@ -110,7 +110,7 @@ def test_path_specific_skills_copied():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"skills": {"enabled": True}}
+        config = AgentConfig.model_validate({"skills": {"enabled": True}})
 
         # Setup skills
         setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
@@ -129,7 +129,7 @@ def test_path_specific_skills_removed_before_copy():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"skills": {"enabled": True}}
+        config = AgentConfig.model_validate({"skills": {"enabled": True}})
 
         # Create existing .github/skills directory with old files
         skills_dir = repo_path / ".github" / "skills" / "al-test-generation"
@@ -154,7 +154,7 @@ def test_skills_disabled():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"skills": {"enabled": False}}
+        config = AgentConfig.model_validate({"skills": {"enabled": False}})
 
         result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 

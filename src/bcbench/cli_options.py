@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import typer
+from bcbench_core.container import ContainerConfig
 
-from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, DatasetTier, EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here
@@ -43,6 +44,8 @@ ContainerMcpUrl = Annotated[str | None, typer.Option(envvar="BC_MCP_URL", help="
 ContainerCompany = Annotated[str, typer.Option(envvar="BC_COMPANY", help="BC company name")]
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
+
+TierOption = Annotated[DatasetTier, typer.Option(help="Only use dataset entries whose metadata.tier matches")]
 
 
 def resolve_agent_runtime(

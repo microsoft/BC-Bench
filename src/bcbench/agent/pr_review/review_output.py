@@ -21,12 +21,11 @@ scoring pipeline unchanged.
 """
 
 import json
+import logging
 from pathlib import PurePosixPath
 from typing import Any
 
-from bcbench.logger import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["engine_report_to_review_comments", "load_engine_report"]
 

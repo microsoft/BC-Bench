@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.cli_options import CopilotModel, EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import FilePathIdentificationResult
 from bcbench.contamination.runner import load_identification_results, run_filepath_identification
 from bcbench.dataset import BugFixEntry
-from bcbench.logger import get_logger
-from bcbench.operations import prepare_run_dir
 from bcbench.types import EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 contamination_app = typer.Typer(help="Contamination diagnostics for the dataset")
@@ -35,7 +35,7 @@ def filepath_identification(
     if category is not EvaluationCategory.BUG_FIX:
         raise typer.BadParameter("filepath-identification currently supports only bug-fix category", param_hint="--category")
 
-    entry: BugFixEntry = BugFixEntry.load(category.dataset_path, entry_id=entry_id)[0]
+    entry: BugFixEntry = BugFixEntry.load(category.dataset_path(), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
     run_filepath_identification(entry=entry, model=model, result_dir=run_dir)
 

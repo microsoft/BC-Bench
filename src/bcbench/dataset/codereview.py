@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Self, override
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -81,6 +81,7 @@ class ReviewComment(BaseModel):
     def severity_label(self) -> str:
         return self.severity.value if self.severity is not None else "unspecified"
 
+    @override
     def __str__(self) -> str:
         loc = f"{self.file}:{self.line_start}"
         if self.line_end and self.line_end != self.line_start:
@@ -129,9 +130,11 @@ class CodeReviewEntry(RepoGroundedEntry):
             )
         return self
 
+    @override
     def get_task(self) -> str:
         return self.patch
 
+    @override
     def get_expected_output(self) -> str:
         return "\n".join(str(c) for c in self.expected_comments)
 

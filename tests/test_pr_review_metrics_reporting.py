@@ -1,8 +1,10 @@
 import json
 
+from bcbench_core.agent.metrics import AgentMetrics
+
 from bcbench.results.codereview import CodeReviewResultSummary
 from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
-from bcbench.types import AgentHarness, AgentMetrics, PRReviewMetrics
+from bcbench.types import AgentHarness, PRReviewMetrics
 from tests.conftest import create_codereview_result
 
 

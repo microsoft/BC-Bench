@@ -9,14 +9,13 @@ from typing import Any, cast
 
 from azure.ai.evaluation.red_team import AttackStrategy, RedTeam, RiskCategory, SupportedLanguages
 from azure.identity import DefaultAzureCredential
+from bcbench_core.artifacts import copy_symbol_apps
 
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
 from bcbench.dataset.dataset_entry import NL2ALEntry
-from bcbench.logger import get_logger
-from bcbench.operations import copy_symbol_apps
 from bcbench.types import EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["build_bcal_target", "run_scan"]
 
@@ -67,7 +66,7 @@ def build_bcal_target(package_cache_path: Path, export_base: Path, backend_confi
 
     category = EvaluationCategory.NL2AL
     # bcal always requires --page/--audience, but red teaming has no dataset entry of its own at the moment.
-    entry = category.entry_class.load(category.dataset_path)[0]
+    entry = category.entry_class.load(category.dataset_path())[0]
     _ensure_package_cache(package_cache_path, entry.environment_setup_version)
 
     # Azure's simple string callback converts exceptions into assistant responses. Its full

@@ -123,7 +123,7 @@ class TestClaudeCodeMetricsParsing:
 
 
 class TestClaudeStreamParsing:
-    def _lines(self, *events: dict) -> list[str]:
+    def _lines(self, *events: dict[str, object]) -> list[str]:
         return [json.dumps(event) for event in events]
 
     def test_counts_tool_use_across_assistant_messages(self):

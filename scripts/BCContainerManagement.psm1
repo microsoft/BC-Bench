@@ -374,7 +374,7 @@ function Publish-MCPConfigApp {
         [string]$BuildRoot
     )
 
-    Import-Module "$PSScriptRoot\AppUtils.psm1" -Force -DisableNameChecking
+    Import-Module "$PSScriptRoot\..\packages\bcbench-core\src\bcbench_core\powershell\AppUtils.psm1" -Force -DisableNameChecking
 
     [int]$major = ([System.Version]$Version).Major
     [string]$sourceFolder = Join-Path $PSScriptRoot "al\mcp-config-setup"

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import tempfile
 from pathlib import Path
 
-from bcbench.agent.copilot.cli import invoke_copilot
+from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
+
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import (
@@ -15,10 +18,9 @@ from bcbench.contamination.filepath_identification import (
     parse_prediction,
 )
 from bcbench.dataset import BugFixEntry
-from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 _RESULT_SUFFIX = f".filepath-identification{_config.file_patterns.result_pattern}"
@@ -35,7 +37,8 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
             model=model,
             work_dir=Path(tmp),
             timeout=_config.timeout.filepath_identification,
-            allow_all_tools=False,
+            env=os.environ,
+            options=CopilotOptions(allow_all_tools=False),
         )
 
     gold_files: list[str] = extract_file_paths_from_patch(entry.patch)

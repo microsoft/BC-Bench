@@ -2,18 +2,19 @@ import contextlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 BASE = Path("evaluation_results/gh_run_27240290541")
 DATASET = Path("dataset/codereview.jsonl")
 
 
-def load_ood(iid: str) -> tuple[str, list[dict]]:
+def load_ood(iid: str) -> tuple[str, list[dict[str, Any]]]:
     hits = list(BASE.rglob(f"{iid}.jsonl"))
     if not hits:
         return "", []
     r = json.loads(hits[0].read_text(encoding="utf-8").strip().splitlines()[0])
     edom = (r.get("domain") or "").lower()
-    findings: list = []
+    findings: list[Any] = []
     with contextlib.suppress(Exception):
         findings = json.loads(r.get("output", "")).get("findings", [])
     ood = [x for x in findings if isinstance(x, dict) and (x.get("domain") or "").lower() not in ("", edom)]

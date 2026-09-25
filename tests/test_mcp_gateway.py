@@ -4,12 +4,14 @@ import threading
 import time
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import override
 from urllib.parse import urlsplit
 
 import pytest
+from bcbench_core.container import ContainerConfig
 
 from bcbench.agent.shared.mcp_gateway import BcMcpGateway, start_bc_mcp_gateway
-from bcbench.types import AgentRuntimeConfig, ContainerConfig
+from bcbench.types import AgentRuntimeConfig
 
 _WARMUP_MODULE = "bcbench.agent.shared.mcp_gateway"
 
@@ -32,6 +34,7 @@ class _RecordingServer(ThreadingHTTPServer):
 class _UpstreamHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
+    @override
     def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
         pass
 
@@ -162,6 +165,7 @@ class TestBcMcpGateway:
 class _McpHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
+    @override
     def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
         pass
 
@@ -251,6 +255,7 @@ class _EmptyThenToolsHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     tools_list_calls = 0
 
+    @override
     def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
         pass
 
@@ -306,6 +311,7 @@ class _HeldOpenSseHandler(BaseHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
 
+    @override
     def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
         pass
 
@@ -324,6 +330,7 @@ class _HeldOpenPostSseHandler(BaseHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
 
+    @override
     def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
         pass
 
@@ -377,6 +384,7 @@ class _InitializeExperimentalHandler(BaseHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
 
+    @override
     def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
         pass
 

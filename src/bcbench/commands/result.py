@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -8,7 +9,6 @@ import typer
 
 from bcbench.cli_options import EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
-from bcbench.logger import get_logger
 from bcbench.results import (
     BaseEvaluationResult,
     EvaluationResultSummary,
@@ -19,7 +19,7 @@ from bcbench.results import (
     write_bceval_results,
 )
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 _config = get_config()

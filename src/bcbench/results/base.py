@@ -1,15 +1,16 @@
 """Base evaluation result class with shared metrics across all evaluation categories."""
 
 import json
+import logging
 from pathlib import Path
-from typing import Any, Self, cast
+from typing import Any, Self, cast, override
 
 from pydantic import BaseModel, model_validator
 
-from bcbench.logger import get_logger
-from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.dataset import BaseDatasetEntry
+from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class BaseEvaluationResult(BaseModel):
@@ -20,6 +21,7 @@ class BaseEvaluationResult(BaseModel):
     model: str
     agent_name: str
     category: EvaluationCategory
+    tier: DatasetTier = DatasetTier.GOLD
     agent_version: str | None = None
 
     timeout: bool = False
@@ -31,7 +33,7 @@ class BaseEvaluationResult(BaseModel):
     experiment: ExperimentConfiguration | None = None
 
     @classmethod
-    def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
+    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
         metrics_contract = context.agent_name.metrics_contract
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
@@ -45,6 +47,7 @@ class BaseEvaluationResult(BaseModel):
             "project": context.entry.extract_project_name(),
             "model": context.model.replace(".", "-"),
             "category": context.category,
+            "tier": context.tier,
             "agent_name": context.agent_name,
             "agent_version": context.agent_version,
             "metrics": context.metrics,
@@ -52,7 +55,7 @@ class BaseEvaluationResult(BaseModel):
         }
 
     @classmethod
-    def create_agent_timeout_failure(cls, context: "EvaluationContext") -> Self:
+    def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:
         return cls(**cls._base_fields(context), timeout=True, error_message="Agent timed out")
 
     def save(self, output_dir: Path, result_file: str) -> None:
@@ -113,25 +116,27 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     build: bool = False
 
     @classmethod
-    def create_success(cls, context: "EvaluationContext", output: str) -> Self:
+    def create_success[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str) -> Self:
         return cls(**cls._base_fields(context), output=output, resolved=True, build=True)
 
     @classmethod
-    def create_build_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+    def create_build_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str, error_message: str) -> Self:
         return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)
 
     @classmethod
-    def create_result(cls, context: "EvaluationContext", output: str, *, build: bool, resolved: bool, error_message: str | None = None) -> Self:
+    def create_result[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str, *, build: bool, resolved: bool, error_message: str | None = None) -> Self:
         """General factory for execution outcomes, e.g. compiled+ran but produced the wrong result (build=True, resolved=False)."""
         return cls(**cls._base_fields(context), output=output, build=build, resolved=resolved, error_message=error_message)
 
     @property
+    @override
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"
         return "Success" if self.resolved else "Failed"
 
     @property
+    @override
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {"resolved": self.resolved, "build": self.build}
 
@@ -158,10 +163,12 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
         return {**payload, "judge_model": judge_model}
 
     @classmethod
-    def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
+    @override
+    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
         return {**super()._base_fields(context), "judge_model": context.category.judge_model}
 
     @property
+    @override
     def export_metadata(self) -> dict[str, str | int | float | bool | None]:
         return {"judge_model": self.judge_model}
 
@@ -174,18 +181,19 @@ class JudgeBasedEvaluationResult(JudgeScoredEvaluationResult):
     """
 
     @classmethod
-    def create_raw(cls, context: "EvaluationContext", output: str) -> Self:
+    def create_raw[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str) -> Self:
         return cls(**cls._base_fields(context), output=output)
 
     @classmethod
-    def create_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+    def create_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str, error_message: str) -> Self:
         return cls(**cls._base_fields(context), output=output, error_message=error_message)
 
     @classmethod
-    def create_empty_output(cls, context: "EvaluationContext") -> Self:
+    def create_empty_output[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:
         return cls(**cls._base_fields(context), output="")
 
     @property
+    @override
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"

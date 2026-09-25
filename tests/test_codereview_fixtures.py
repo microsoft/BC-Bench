@@ -2,10 +2,10 @@ import json
 import subprocess
 
 import pytest
+from bcbench_core.git import apply_patch, init_repo
 from unidiff import PatchSet
 
 from bcbench.dataset.codereview import CodeReviewEntry, Severity
-from bcbench.operations.git_operations import apply_patch, init_repo
 from bcbench.types import EvaluationCategory
 
 _SCAN = "synthetic__performance-014"
@@ -21,7 +21,7 @@ def _unique_object(pairs):
 
 @pytest.fixture(scope="module")
 def materialized_entries(tmp_path_factory):
-    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    dataset = EvaluationCategory.CODE_REVIEW.dataset_path()
     entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
     raw_entries = {json.loads(line)["instance_id"]: line for line in dataset.read_text(encoding="utf-8").splitlines() if line.strip()}
     materialized = {}

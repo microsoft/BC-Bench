@@ -1,6 +1,7 @@
 """CLI command for AI red teaming BC-Bench agents (POC)."""
 
 import json
+import logging
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Annotated, Any
 
 import typer
 from azure.ai.evaluation.red_team import AttackStrategy, RiskCategory, SupportedLanguages
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -15,13 +17,11 @@ from rich.text import Text
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.config import get_config
-from bcbench.logger import get_logger
-from bcbench.types import BCalLLMBackend
 
 # Loose JSON alias (aliasing keeps `Any` out of function signatures, satisfying ANN401).
 type Json = dict[str, Any]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 _console = Console()
 
@@ -50,18 +50,15 @@ def scan(
         ),
     ] = False,
     target: Annotated[RedTeamTarget, typer.Option(help="Agent under test")] = RedTeamTarget.BCAL,
-    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend used by the bcal target.")] = BCalLLMBackend.EXTERNAL_COMMAND,
-    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend).")] = None,
-    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend).")] = None,
-    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
-    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (external-command backend).")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal.")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal.")] = None,
     output: Annotated[Path, typer.Option(help="Where the SDK writes the scan output. It creates a *directory* at this path holding evaluation_results.json.")] = _config.paths.redteam_scorecard,
     scan_name: Annotated[str | None, typer.Option(help="Scan name shown in the shared Foundry project. Defaults to bcbench-redteam-<timestamp>.")] = None,
 ) -> None:
     """
     Run an AI red teaming Agent scan against a BC-Bench agent.
 
-    Requires the optional redteam dependency group (`uv sync --group redteam`) and a Foundry Hub project via the AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME env vars (plus Azure credentials, e.g. `az login`).
+    Requires the optional redteam extra (`uv sync --extra redteam`) and a Foundry Hub project via the AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME env vars (plus Azure credentials, e.g. `az login`).
     The bcal symbol cache is auto-populated from the BC artifacts cache (run scripts/Download-BCSymbols.ps1 first).
 
     Examples:
@@ -79,12 +76,9 @@ def scan(
 
     # Only support NL2AL for now, we will think about extensibility later.
     scan_target = build_bcal_target(
-        package_cache_path=_config.paths.evaluation_results_path / "redteam" / _config.file_patterns.alpackages_dirname,
+        package_cache_path=_config.paths.evaluation_results_path / "redteam" / ALPACKAGES_DIRNAME,
         export_base=output.parent / "bcal-exports",
         backend_config=BCalBackendConfig(
-            backend=backend,
-            endpoint=endpoint,
-            deployment=deployment,
             command=llm_command,
             model=llm_model,
         ),

@@ -1,5 +1,6 @@
 """Utilities for working with git patches and project paths."""
 
+import logging
 import subprocess
 from pathlib import Path
 
@@ -8,9 +9,8 @@ from unidiff.errors import UnidiffParseError
 
 from bcbench.config import get_config
 from bcbench.exceptions import CollectionError
-from bcbench.logger import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 

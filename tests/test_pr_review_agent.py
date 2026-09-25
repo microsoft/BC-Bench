@@ -4,9 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_cli_version, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
-from bcbench.exceptions import AgentError
 from bcbench.types import EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry
 
@@ -156,7 +156,7 @@ def test_invalid_output_raises_instead_of_clean_review(tmp_path: Path, text: str
         {"outcome": "no-knowledge", "findings": "nope"},
     ],
 )
-def test_malformed_report_raises_instead_of_clean_review(tmp_path: Path, report: dict) -> None:
+def test_malformed_report_raises_instead_of_clean_review(tmp_path: Path, report: dict[str, object]) -> None:
     out, repo = _dirs(tmp_path)
     _write_output(out, json.dumps(report))
     with pytest.raises(AgentError, match="no findings list"):

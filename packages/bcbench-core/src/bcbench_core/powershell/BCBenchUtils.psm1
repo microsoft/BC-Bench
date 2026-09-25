@@ -1,0 +1,452 @@
+<#
+.SYNOPSIS
+    BC-Bench Utilities Module
+.DESCRIPTION
+    Common utility functions used across BC-Bench PowerShell scripts
+#>
+
+<#
+.SYNOPSIS
+    Creates a PSCredential object from various authentication sources
+.DESCRIPTION
+    Handles credential creation from parameter or environment variable with conflict detection
+.PARAMETER Username
+    The username for authentication
+.PARAMETER Password
+    Optional SecureString password parameter
+.PARAMETER EnvironmentVariableName
+    Name of environment variable containing password (default: BC_SERVER_PASSWORD)
+.OUTPUTS
+    PSCredential object
+.EXAMPLE
+    $cred = Get-BCCredential -Username "admin" -Password $securePassword
+.EXAMPLE
+    $cred = Get-BCCredential -Username "admin" # Uses BC_SERVER_PASSWORD env var
+#>
+function Get-BCCredential {
+    [CmdletBinding()]
+    [OutputType([PSCredential])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Username,
+
+        [Parameter(Mandatory = $false)]
+        [SecureString]$Password,
+
+        [Parameter(Mandatory = $false)]
+        [string]$EnvironmentVariableName = "BC_SERVER_PASSWORD"
+    )
+
+    # Get environment password
+    [string] $envPassword = [Environment]::GetEnvironmentVariable($EnvironmentVariableName)
+    [bool] $hasParameterPassword = $null -ne $Password
+    [bool] $hasEnvPassword = -not [string]::IsNullOrEmpty($envPassword)
+
+    # Check for conflicts
+    if ($hasParameterPassword -and $hasEnvPassword) {
+        throw "Conflict: Both -Password parameter and $EnvironmentVariableName environment variable are provided. Please use only one method for providing the password."
+    }
+
+    # Create credential based on available source
+    if ($hasParameterPassword) {
+        Write-Verbose "Using Username/Password from parameters"
+        return New-Object System.Management.Automation.PSCredential($Username, $Password)
+    }
+    elseif ($hasEnvPassword) {
+        Write-Verbose "Using Username/Password from environment variable: $EnvironmentVariableName"
+        $secureEnvPassword = ConvertTo-SecureString -String $envPassword -AsPlainText -Force
+        return New-Object System.Management.Automation.PSCredential($Username, $secureEnvPassword)
+    }
+    else {
+        throw "Authentication credentials are required. Provide either: 1. -Password parameter, 2. $EnvironmentVariableName environment variable"
+    }
+}
+
+<#
+.SYNOPSIS
+    Clones a Git repository with authentication and retry logic
+.DESCRIPTION
+    Initializes a repository and fetches a specific commit using token authentication with configurable retry attempts.
+    Uses git init and git fetch to avoid fetching the default branch tip.
+.PARAMETER RepoUrl
+    Base URL of the repository (without authentication)
+.PARAMETER Token
+    Authentication token for repository access
+.PARAMETER ClonePath
+    Local path where repository should be cloned
+.PARAMETER MaxRetries
+    Maximum number of retry attempts (default: 3)
+.PARAMETER RetryDelaySeconds
+    Delay between retry attempts in seconds (default: 30)
+.PARAMETER CommitSha
+    Specific commit SHA to checkout.
+.PARAMETER FetchDepth
+    Depth of history to fetch (default: 200). Used for both commit fetch and submodule initialization.
+.EXAMPLE
+    Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -ClonePath "C:\temp\repo" -CommitSha "abc123..."
+#>
+function Invoke-GitCloneWithRetry {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoUrl,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Token,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ClonePath,
+
+        [Parameter(Mandatory = $false)]
+        [int]$MaxRetries = 3,
+
+        [Parameter(Mandatory = $false)]
+        [int]$RetryDelaySeconds = 30,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CommitSha,
+
+        [Parameter(Mandatory = $false)]
+        [int]$FetchDepth = 200,
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$SparseCheckoutPaths = @()
+    )
+
+    # Extract domain and path from URL for authentication
+    $uri = [System.Uri]$RepoUrl
+    $authenticatedUrl = "https://$($Token)@$($uri.Authority)$($uri.PathAndQuery)"
+
+    [int] $retryCount = 0
+    [bool] $cloneSuccess = $false
+
+    while ($retryCount -lt $MaxRetries -and -not $cloneSuccess) {
+        $retryCount++
+        try {
+            # Remove existing clone if it exists (clean slate for each attempt)
+            if (Test-Path $ClonePath) {
+                Write-Log "Removing existing directory at $ClonePath" -Level Warning
+                Remove-Item -Path $ClonePath -Recurse -Force
+            }
+
+            Write-Log "Attempting repository clone (Attempt $retryCount/$MaxRetries)..." -Level Info
+
+            Write-Log "Using git init and fetch to clone specific commit: $CommitSha" -Level Debug
+
+            # Initialize empty git repository
+            $initResult = & git init $ClonePath 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Git init failed with exit code $LASTEXITCODE`: $initResult"
+            }
+
+            # Add remote with authenticated URL
+            Write-Log "Adding remote origin" -Level Debug
+            $remoteAddResult = & git -C $ClonePath remote add origin $authenticatedUrl 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to add remote origin with exit code $LASTEXITCODE`: $remoteAddResult"
+            }
+
+            # Configure sparse-checkout if paths are specified (limits which directories are checked out)
+            if ($SparseCheckoutPaths.Count -gt 0) {
+                Write-Log "Configuring sparse-checkout for paths: $($SparseCheckoutPaths -join ', ')" -Level Info
+                $sparseInitResult = & git -C $ClonePath sparse-checkout init --cone 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to initialize sparse-checkout with exit code $LASTEXITCODE`: $sparseInitResult"
+                }
+                $sparseSetResult = & git -C $ClonePath sparse-checkout set @SparseCheckoutPaths 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to set sparse-checkout paths with exit code $LASTEXITCODE`: $sparseSetResult"
+                }
+            }
+
+            # Fetch the specific commit with history
+            Write-Log "Fetching commit $CommitSha with depth $FetchDepth" -Level Debug
+            $fetchResult = & git -C $ClonePath fetch --depth $FetchDepth origin $CommitSha 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to fetch commit $CommitSha`: $fetchResult"
+            }
+
+            # Checkout the specific commit
+            Write-Log "Checking out commit $CommitSha" -Level Debug
+            $checkoutResult = & git -C $ClonePath checkout $CommitSha 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to checkout commit $CommitSha`: $checkoutResult"
+            }
+
+            # Initialize submodules if any exist (while remote is still configured)
+            Write-Log "Initializing submodules (if any)" -Level Debug
+            $submoduleResult = & git -C $ClonePath submodule update --init --recursive --depth $FetchDepth 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "Warning: Failed to initialize submodules: $submoduleResult" -Level Warning
+            }
+
+            # Remove the remote to prevent fetching future commits and clean up credentials
+            # This is critical for benchmark integrity - the repository must not be able to access newer code
+            Write-Log "Removing remote origin to prevent future fetches" -Level Debug
+            $remoteRemoveResult = & git -C $ClonePath remote remove origin 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to remove remote origin. Benchmark integrity compromised: $remoteRemoveResult"
+            }
+
+            # Remove remotes from all submodules to prevent fetching future commits
+            # This is critical for benchmark integrity - submodules should not be able to access newer code
+            Write-Log "Removing remotes from submodules to prevent future fetches" -Level Debug
+            # git provides $name and $sm_path variables in submodule foreach
+            $submodulePaths = & git -C $ClonePath submodule foreach --quiet 'echo $sm_path' 2>&1
+            $submoduleNames = & git -C $ClonePath submodule foreach --quiet 'echo $name' 2>&1
+            if ($LASTEXITCODE -eq 0 -and $submodulePaths) {
+                for ($i = 0; $i -lt @($submodulePaths).Count; $i++) {
+                    $submodulePath = @($submodulePaths)[$i]
+                    $submoduleName = @($submoduleNames)[$i]
+                    if ($submodulePath) {
+                        $fullSubmodulePath = Join-Path $ClonePath $submodulePath
+                        $subRemoteResult = & git -C $fullSubmodulePath remote remove origin 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "Failed to remove remote from submodule $submodulePath. Benchmark integrity compromised: $subRemoteResult"
+                        }
+                        Write-Log "Removed remote from submodule: $submodulePath" -Level Debug
+
+                        # Remove submodule URL from main repo's .git/config using the submodule name
+                        $submoduleConfigKey = "submodule.$submoduleName.url"
+                        $unsetResult = & git -C $ClonePath config --unset $submoduleConfigKey 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Log "Warning: Failed to remove submodule URL config for $submoduleName`: $unsetResult" -Level Warning
+                        }
+                        else {
+                            Write-Log "Removed submodule URL config: $submoduleConfigKey" -Level Debug
+                        }
+                    }
+                }
+            }
+
+            $cloneSuccess = $true
+            Write-Log "Repository cloned and checked out to commit $CommitSha successfully" -Level Success
+        }
+        catch {
+            Write-Log "Clone attempt $retryCount failed: $($_.Exception.Message)" -Level Error
+            if ($retryCount -eq $MaxRetries) {
+                Write-Log "Failed to clone repository after $MaxRetries attempts" -Level Error
+                throw "Repository clone failed"
+            }
+            else {
+                Write-Log "Retrying in $RetryDelaySeconds seconds..." -Level Warning
+                Start-Sleep -Seconds $RetryDelaySeconds
+            }
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    Writes colorful log messages with standardized formatting
+.DESCRIPTION
+    Provides consistent logging output with color coding for different log levels.
+    Optimized for GitHub Actions with proper formatting and colors.
+.PARAMETER Message
+    The message to log
+.PARAMETER Level
+    Log level: Info, Warning, Error, Success, Debug (default: Info)
+.PARAMETER Title
+    GitHub Actions annotation title (default: the calling script or module file name)
+.EXAMPLE
+    Write-Log "Operation completed successfully" -Level Success
+    Write-Log "Missing configuration file" -Level Warning
+    Write-Log "Authentication failed" -Level Error
+#>
+function Write-Log {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$Message,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("Info", "Warning", "Error", "Success", "Debug")]
+        [string]$Level = "Info",
+
+        [Parameter(Mandatory = $false)]
+        [string]$Title
+    )
+
+    # Skip Debug messages unless RUNNER_DEBUG is enabled
+    if ($Level -eq "Debug" -and $env:RUNNER_DEBUG -ne '1') {
+        return
+    }
+
+    $logConfig = @{
+        "Info"    = @{ Color = "White"; AnsiColor = "`e[37m" }      # White
+        "Warning" = @{ Color = "Yellow"; AnsiColor = "`e[33m" }  # Yellow
+        "Error"   = @{ Color = "Red"; AnsiColor = "`e[31m" }       # Red
+        "Success" = @{ Color = "Green"; AnsiColor = "`e[32m" }   # Green
+        "Debug"   = @{ Color = "Cyan"; AnsiColor = "`e[36m" }      # Cyan
+    }
+
+    $config = $logConfig[$Level]
+    $timestamp = (Get-Date).ToString("HH:mm:ss")
+    $formattedMessage = "[$timestamp] $Message"
+
+    if ($env:CI -eq "true") {
+        # Reset ANSI color code
+        $resetColor = "`e[0m"
+
+        # Using Console.Out preserves ANSI escape sequences in GitHub Actions logs
+        [Console]::Out.WriteLine("$($config.AnsiColor)$formattedMessage$resetColor")
+
+        # Emit GitHub Actions workflow commands for warnings and error
+        if ($env:GITHUB_ACTIONS -eq "true" -and ($Level -eq "Warning" -or $Level -eq "Error")) {
+            # Escape special characters for GitHub Actions
+            # Per GitHub docs: need to escape %, \r, \n
+            $escapedMessage = $Message -replace '%', '%25' -replace '\r', '%0D' -replace '\n', '%0A'
+
+            # Determine the command type
+            $command = if ($Level -eq "Error") { "error" } else { "warning" }
+
+            if (-not $Title) {
+                [string]$callerScript = (Get-PSCallStack)[1].ScriptName
+                $Title = if ($callerScript) { Split-Path -Path $callerScript -Leaf } else { "PowerShell" }
+            }
+            $escapedTitle = $Title -replace '%', '%25' -replace '\r', '%0D' -replace '\n', '%0A' -replace ':', '%3A' -replace ',', '%2C'
+
+            # Output GitHub Actions annotation to stdout
+            # Format: ::warning title={title}::{message}
+            [Console]::Out.WriteLine("::$command title=$($escapedTitle)::$escapedMessage")
+        }
+    }
+    else {
+        # Local execution - write with color
+        Write-Host $formattedMessage -ForegroundColor $config.Color
+    }
+}
+
+<#
+.SYNOPSIS
+    Applies a git patch from a string to the current repository
+.DESCRIPTION
+    Saves patch content to a temporary file and applies it using git apply.
+    Cleans up the temporary file after application.
+.PARAMETER PatchContent
+    The patch content as a string
+.PARAMETER PatchId
+    Unique identifier for the patch
+.PARAMETER RepositoryPath
+    Optional path to the git repository (default: current directory)
+.OUTPUTS
+    Returns $true if patch applied successfully, $false otherwise
+.EXAMPLE
+    Invoke-GitApplyPatch -PatchContent $patchString -PatchId "test-123"
+.EXAMPLE
+    Invoke-GitApplyPatch -PatchContent $patchString -RepositoryPath "C:\repo"
+#>
+function Invoke-GitApplyPatch {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PatchContent,
+
+        [Parameter(Mandatory = $true)]
+        [string]$PatchId,
+
+        [Parameter(Mandatory = $false)]
+        [string]$RepositoryPath
+    )
+
+    try {
+        # Create temporary patch file
+        [string]$patchPath = Join-Path -Path $env:TEMP -ChildPath "patch_$PatchId.diff"
+        Write-Log "Saving patch to temporary file: $patchPath" -Level Debug
+        $PatchContent | Out-File -FilePath $patchPath -Encoding utf8 -Force
+
+        if ($RepositoryPath) {
+            $applyResult = git -C $RepositoryPath apply --whitespace=nowarn $patchPath 2>&1
+        }
+        else {
+            $applyResult = git apply --whitespace=nowarn $patchPath 2>&1
+        }
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to apply patch: $applyResult"
+        }
+
+        Write-Log "Patch applied successfully" -Level Success
+    }
+    catch {
+        Write-Log "Exception while applying patch: $($_.Exception.Message)" -Level Error
+        throw
+    }
+    finally {
+        if (Test-Path $patchPath) {
+            Remove-Item -Path $patchPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    Updates version numbers in a BC app project's app.json file
+.DESCRIPTION
+    Updates the application, platform, and dependency versions in an app.json file.
+    Platform version uses only the first two digits (major.minor).
+    Application and dependency versions use the full version with .0.0 appended.
+    Automatically locates app.json in the project folder.
+.PARAMETER ProjectPath
+    Path to the BC app project folder containing app.json
+.PARAMETER Version
+    Target version string (e.g., "26.5" or "26.6")
+.OUTPUTS
+    Returns $true if update was successful, $false otherwise
+.EXAMPLE
+    Update-AppProjectVersion -ProjectPath "C:\repo\app" -Version "26.6"
+    # Updates application to 26.6.0.0 and platform to 26.0.0.0
+#>
+function Update-AppProjectVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+    Write-Log "Updating app project version in: $ProjectPath to version: $Version" -Level Info
+    [string]$appJsonPath = Join-Path -Path $ProjectPath -ChildPath "app.json"
+
+    if (-not (Test-Path $appJsonPath)) {
+        throw "app.json not found at: $appJsonPath"
+    }
+
+    Write-Log "Reading app.json from: $appJsonPath" -Level Debug
+    $appJson = Get-Content -Path $appJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    [string[]]$versionParts = $Version.Split('.')
+    if ($versionParts.Count -lt 2) {
+        throw "Invalid version format: $Version. Expected format: major.minor (e.g., 26.5)"
+    }
+
+    [string]$applicationVersion = "$($versionParts[0]).$($versionParts[1]).0.0"
+    [string]$platformVersion = "$($versionParts[0]).0.0.0"
+
+    Write-Log "Updating versions - Application: $applicationVersion, Platform: $platformVersion" -Level Debug
+
+    $appJson.version = $applicationVersion
+
+    if ($appJson.PSObject.Properties.Name -contains "application") {
+        $appJson.application = $applicationVersion
+    }
+    else {
+        Write-Log "'application' property does not exist in app.json under $ProjectPath" -Level Warning
+    }
+
+    $appJson.platform = $platformVersion
+
+    if ($appJson.dependencies) {
+        foreach ($dependency in $appJson.dependencies) {
+            $dependency.version = $applicationVersion
+        }
+        Write-Log "Updated $($appJson.dependencies.Count) dependency version(s)" -Level Debug
+    }
+
+    $appJson | ConvertTo-Json -Depth 10 | Set-Content -Path $appJsonPath -Encoding UTF8 -Force
+
+    Write-Log "Successfully updated app.json at: $appJsonPath" -Level Success
+}
+
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion
