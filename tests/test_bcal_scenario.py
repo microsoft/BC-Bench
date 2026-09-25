@@ -290,5 +290,5 @@ def test_bcal_workflow_accepts_both_advanced_categories():
 
     assert '- "bcal-scenario"' in workflow
     assert '- "bcal-feature"' in workflow
-    assert '--category "${{ inputs.category || \'bcal-scenario\' }}"' in workflow
+    assert "--category \"${{ inputs.category || 'bcal-scenario' }}\"" in workflow
     assert "path: ${{ env.EVALUATION_RESULTS_DIR }}/**" in workflow
