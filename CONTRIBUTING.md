@@ -27,10 +27,6 @@ BC-Bench/
 └── docs/           # GitHub Page for the leaderboard site
 ```
 
-## Container Artifacts
-
-Container-backed public BC versions use exact artifact URLs in `Get-BCBenchArtifactConfig` in [scripts/BCBenchUtils.psm1](scripts/BCBenchUtils.psm1). Add a pin there when a dataset introduces a new public version; an unconfigured version fails rather than falling back to a newer build. `data-query` instead resolves the latest BC Insider artifact for its version. The setup action keys its artifact cache by the resolved URL.
-
 ## Setup
 
 Prerequisites:

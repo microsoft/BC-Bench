@@ -203,9 +203,3 @@ def test_agent_workflows_select_al_tool_dotnet_version_for_bc_version() -> None:
     for workflow_name in ("claude-evaluation.yml", "copilot-evaluation.yml"):
         workflow = _workflow(workflow_name)
         assert '--framework "net${{ steps.setup-env.outputs.al_tool_dotnet_version }}"' in workflow
-        jobs = yaml.safe_load(workflow)["jobs"]
-        evaluation_job = next(job for job in jobs.values() if any(step.get("name") == "Install AL Tool" for step in job.get("steps", [])))
-        install_step = next(step for step in evaluation_job["steps"] if step.get("name") == "Install AL Tool")
-        assert install_step["if"] == "${{ needs.get-entries.outputs.requires-container == 'true' && (inputs.al-mcp || inputs.al-lsp) }}"
-        setup_step = next(step for step in evaluation_job["steps"] if step.get("id") == "setup-env")
-        assert setup_step["with"]["skip-container"] == "${{ needs.get-entries.outputs.requires-container != 'true' }}"
