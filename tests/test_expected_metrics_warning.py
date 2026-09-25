@@ -28,9 +28,7 @@ class TestExpectedMetricsWarning:
         with caplog.at_level(logging.WARNING):
             BugFixResult.create_success(context, "patch")
 
-        assert _missing_metric_warnings(caplog) == [
-            f"Result for {context.entry.instance_id} missing metrics: completion_tokens, execution_time, prompt_tokens, tool_usage, turn_count"
-        ]
+        assert _missing_metric_warnings(caplog) == [f"Result for {context.entry.instance_id} missing metrics: completion_tokens, execution_time, prompt_tokens, tool_usage, turn_count"]
 
     def test_warns_when_expected_metric_is_missing(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=AgentHarness.COPILOT)
