@@ -29,10 +29,40 @@ jobs:
       test-run: ${{ inputs.test-run || false }}
       category: "bug-fix"
 
+  prepare-artifacts:
+    runs-on: ubuntu-latest
+    needs: get-entries
+    if: github.event_name == 'schedule' && needs.get-entries.outputs.entries != '[]'
+    outputs:
+      module: ${{ steps.refresh.outputs.module }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Refresh pinned artifact URLs
+        id: refresh
+        shell: pwsh
+        run: |
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
+          Import-Module BcContainerHelper -Force -DisableNameChecking
+
+          $path = 'scripts/BCBenchUtils.psm1'
+          $content = [IO.File]::ReadAllText($path)
+          $matches = [regex]::Matches($content, "'(?<version>\d+\.\d+)' = '(?<url>https://bcartifacts[^']+)'")
+          if ($matches.Count -eq 0) { throw 'No pinned public BC artifact URLs found.' }
+          foreach ($match in $matches) {
+            $version = $match.Groups['version'].Value
+            $url = Get-BCArtifactUrl -version $version -country 'w1' -select 'Latest'
+            $content = $content.Replace($match.Value, "'$version' = '$url'")
+          }
+
+          $module = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($content))
+          "module=$module" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
   verify-build-and-tests:
     runs-on: [GitHub-BCBench]
-    needs: get-entries
-    if: needs.get-entries.outputs.entries != '[]'
+    needs: [get-entries, prepare-artifacts]
+    if: always() && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' && (github.event_name != 'schedule' || needs.prepare-artifacts.result == 'success')
     environment:
       name: ado-read
       deployment: false
@@ -47,6 +77,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Use refreshed artifact URLs
+        if: github.event_name == 'schedule'
+        shell: pwsh
+        env:
+          MODULE: ${{ needs.prepare-artifacts.outputs.module }}
+        run: |
+          [IO.File]::WriteAllBytes('scripts/BCBenchUtils.psm1', [Convert]::FromBase64String($env:MODULE))
 
       - name: Setup BC Container and Repository
         id: setup-env
@@ -63,3 +101,42 @@ jobs:
         timeout-minutes: 60
         run: .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.repo_path }}"
         shell: pwsh
+
+  propose-artifacts:
+    runs-on: ubuntu-latest
+    needs: [prepare-artifacts, verify-build-and-tests]
+    if: github.event_name == 'schedule' && needs.verify-build-and-tests.result == 'success'
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Apply verified artifact URLs
+        shell: pwsh
+        env:
+          MODULE: ${{ needs.prepare-artifacts.outputs.module }}
+        run: |
+          [IO.File]::WriteAllBytes('scripts/BCBenchUtils.psm1', [Convert]::FromBase64String($env:MODULE))
+
+      - name: Propose verified artifact URLs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $path = 'scripts/BCBenchUtils.psm1'
+          git diff --quiet
+          if ($LASTEXITCODE -eq 0) { return }
+
+          $PSNativeCommandUseErrorActionPreference = $true
+          $branch = "artifacts/refresh-${{ github.run_id }}"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git switch -c $branch
+          git add $path
+          git commit -m 'Refresh pinned BC artifact URLs'
+          git push origin $branch
+          gh pr create --base main --head $branch --title 'Refresh pinned BC artifact URLs' --body 'Updates the pinned public BC artifact URLs after the weekly dataset verification succeeded.'
+          gh workflow run CI.yml --ref $branch
