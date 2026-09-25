@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.12.19,<0.13"]
+build-backend = "uv_build"
 
 [project]
 name = "bcbench"
@@ -8,12 +8,14 @@ version = "0.13.0"
 description = "Benchmarking tool for Business Central (AL) ecosystem, inspired by SWE-Bench"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {name = "Microsoft Corporation"}
 ]
 classifiers = ["Private :: Do Not Upload"]
 dependencies = [
+    "bcbench-core",
     "jsonschema>=4.0",
     "python-dotenv>=1.2.2",
     "requests>=2.0",
@@ -31,19 +33,23 @@ dependencies = [
 [project.scripts]
 bcbench = "bcbench.cli:app"
 
+[tool.uv]
+# ty's uv integration (TY_UV=1, used for missing-direct-dependency) needs uv >= 0.12.3
+required-version = ">=0.12.19"
+
+[tool.uv.workspace]
+members = ["packages/bcbench-core"]
+
+[tool.uv.sources]
+bcbench-core = { workspace = true }
+
 [[tool.uv.index]]
 name = "microsoft-cfs"
 url = "https://packagefeedproxy.microsoft.io/pypi/simple"
 default = true
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-bcbench = ["agent/*.yaml", "agent/pr_review/scripts/*.ps1"]
-
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "packages/bcbench-core/tests"]
 addopts = ["-v", "--strict-markers", "-m", "not e2e"]
 markers = [
     "integration",
@@ -51,58 +57,14 @@ markers = [
 ]
 collect_imported_tests = false
 
+[tool.coverage.run]
+# Repo-relative paths in coverage.xml so GitHub Code Quality can map them onto PR files
+relative_files = true
+include = ["src/bcbench/*", "packages/bcbench-core/src/bcbench_core/*"]
+
 [tool.ruff]
-target-version = "py313"
-line-length = 200
-
-[tool.ruff.lint]
-extend-select = [
-    # Restore the pyflakes/pycodestyle correctness rules that ruff 0.16 dropped from
-    # its default set (E711/E712/E713/E714/E721/E731/E741, F403/F405/F406/F722, etc.).
-    "E4",    # pycodestyle: import placement (E401/E402)
-    "E7",    # pycodestyle: statement/comparison lints (== None, lambda assignment, ...)
-    "F",     # pyflakes: undefined names, star-import hazards, unused imports
-    "PLE",   # Pylint errors (includes __all__ validation)
-    "PLW",   # Pylint warnings (includes subprocess.run check requirement)
-    "I",     # isort (import sorting)
-    "UP",    # pyupgrade (modernize Python code)
-    "B",     # flake8-bugbear (find likely bugs)
-    "SIM",   # flake8-simplify (simplify code)
-    "C4",    # flake8-comprehensions (better list/dict comprehensions)
-    "RET",   # flake8-return (simplify return statements)
-    "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
-    "RUF",   # Ruff-specific rules
-    "TID",   # flake8-tidy-imports (ban relative imports + extensible banned-API list)
-    "LOG",   # flake8-logging: catch deprecated logging.warn, misuse of exception(), etc.
-    "G",     # flake8-logging-format: catch string concat / % formatting in log calls
-    "TRY",   # tryceratops: better exception handling
-    "PT",    # flake8-pytest-style: consistent pytest patterns (~30 test files)
-    "ANN",   # flake8-annotations: enforce type hints (we prefer strong typing)
-    "T20",   # flake8-print: prefer logger over print (we have a proper logger)
-    "FURB",  # refurb: modern Python idioms (e.g. x or y over x if x else y)
-    "ISC",   # implicit string concat (catches missing comma in lists of strings)
-    "ICN",   # import conventions (np, pd, plt aliases)
-    "PYI",   # type stubs (no-op now, guard for future)
-    "SLOT",  # require __slots__ on str/tuple/namedtuple subclasses
-    "ASYNC", # async best practices (no-op now, guard for future)
-    "PERF",  # perflint: avoid needless per-iteration overhead (prefer extend/comprehensions)
-    "RSE",   # flake8-raise: drop redundant parentheses on bare exception raises
-    "PGH",   # pygrep-hooks: require codes on noqa/type-ignore comments (PGH003/PGH004)
-    "S307",  # flake8-bandit: ban eval (was PGH001, which ruff removed in favour of this rule)
-    "DTZ",   # flake8-datetimez: require timezone-aware datetime usage
-    "NPY",   # NumPy-specific correctness and modernization checks
-    "PIE",   # flake8-pie: miscellaneous correctness and simplification checks
-]
-
-ignore = [
-    # Deliberate style choices with many intentional violations; everything else is fixed in-tree
-    # (targeted `# noqa` with a rationale is preferred over adding entries here).
-    "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible (143 sites)
-    "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message (96 sites)
-]
-
-[tool.ruff.lint.flake8-tidy-imports]
-ban-relative-imports = "all"
+# The app inherits the bcbench-core lint baseline; tables redefined below replace the inherited ones.
+extend = "packages/bcbench-core/pyproject.toml"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # Force sandboxed rendering:
@@ -114,6 +76,13 @@ ban-relative-imports = "all"
 "notebooks/**" = ["ANN", "T20"]   # notebooks routinely print() for analysis output
 "src/bcbench/commands/**" = ["T20"]   # CLI commands print user-facing output
 "tools/**" = ["T20"]                  # standalone CLI scripts
+
+[tool.ty.src]
+exclude = ["notebooks/", "packages/"]
+
+[tool.ty.analysis]
+# bc-eval[capi] is internal and installed only into a separate venv by bcal-evaluation.yml
+allowed-unresolved-imports = ["bc_eval.**"]
 
 [dependency-groups]
 analysis = [
@@ -127,7 +96,7 @@ dev = [
     "pytest-cov>=7.0",
     "ruff>=0.16.0",
     "pre-commit>=4.3.0",
-    "ty>=0.0.33",
+    "ty>=0.0.84",
 ]
 # `bcbench redteam` only, and not in default-groups: azure-ai-evaluation[redteam] pulls in ~76
 # packages (pyrit, transformers, datasets, ...) that no other command needs.

@@ -3,14 +3,13 @@
 Both `altool launchmcpserver` and `altool launchlspserver` need the same package-cache layout and assembly probing paths.
 """
 
+import logging
 from pathlib import Path
 
+from bcbench_core.artifacts import resolve_artifact_version_root
 from packaging.version import InvalidVersion, Version
 
-from bcbench.logger import get_logger
-from bcbench.operations import resolve_artifact_version_root
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # .NET major versions excluded from runtime detection (unstable/preview)
 # See: navcontainerhelper/InitializeModule.ps1 line 62

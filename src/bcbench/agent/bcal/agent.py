@@ -1,19 +1,20 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+import logging
 import shutil
 import subprocess
 import time
 from pathlib import Path
 
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, BCalLLMBackend, ExperimentConfiguration
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 _BCAL_TOOL = "bcal"
@@ -149,7 +150,7 @@ def run_bcal_agent(
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
     project_name: str = entry.project_paths[0]
-    package_cache_path = repo_path / project_name / _config.file_patterns.alpackages_dirname
+    package_cache_path = repo_path / project_name / ALPACKAGES_DIRNAME
     if not package_cache_path.exists():
         raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 

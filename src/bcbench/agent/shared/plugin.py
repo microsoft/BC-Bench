@@ -1,15 +1,16 @@
 import json
+import logging
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
 
+from bcbench_core.git import clone_repo_at_revision
+
 from bcbench.config import get_config
 from bcbench.exceptions import AgentError
-from bcbench.logger import get_logger
-from bcbench.operations.git_operations import clone_repo_at_revision
 from bcbench.types import PluginConfig
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 

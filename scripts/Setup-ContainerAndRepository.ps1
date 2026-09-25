@@ -6,7 +6,8 @@
 #>
 
 using module .\DatasetEntry.psm1
-using module .\BCBenchUtils.psm1
+using module ..\packages\bcbench-core\src\bcbench_core\powershell\BCBenchUtils.psm1
+using module .\BenchmarkUtils.psm1
 using module .\BCContainerManagement.psm1
 
 param(
@@ -94,16 +95,8 @@ if (-not $SkipContainer) {
 
     Write-Log "Creating container $ContainerName for version $Version..." -Level Info
 
-    [hashtable] $artifactParameters = @{
-        version = $Version
-        Country = $Country
-    }
-    [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category
-    foreach ($key in $categoryArtifactConfig.Keys) {
-        $artifactParameters[$key] = $categoryArtifactConfig[$key]
-    }
-
-    [string] $url = Get-BCArtifactUrl @artifactParameters
+    [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category -Version $Version -Country $Country
+    [string] $url = $categoryArtifactConfig.artifactUrl
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
     # Create container synchronously with NAV folder shared

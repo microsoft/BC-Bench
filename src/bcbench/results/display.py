@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -5,11 +6,10 @@ from rich.console import Console
 from rich.table import Table
 
 from bcbench.config import get_config
-from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary, calculate_average_tool_usage
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 console = Console()
 
 

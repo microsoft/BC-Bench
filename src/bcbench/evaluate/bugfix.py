@@ -1,25 +1,19 @@
+import logging
 from pathlib import Path
+
+from bcbench_core.bc import build_and_publish_projects
+from bcbench_core.exceptions import BuildError, TestExecutionError
+from bcbench_core.git import apply_patch, clean_project_paths, stage_and_get_diff
+from bcbench_core.projects import categorize_projects
 
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
-from bcbench.operations import (
-    apply_patch,
-    build_and_publish_projects,
-    categorize_projects,
-    clean_project_paths,
-    copy_problem_statement_folder,
-    run_tests,
-    set_runtime_version,
-    setup_repo_prebuild,
-    stage_and_get_diff,
-)
+from bcbench.operations import copy_problem_statement_folder, run_tests, set_runtime_version, setup_repo_prebuild
 from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationContext
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["BugFixPipeline"]
 
@@ -56,7 +50,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
         # Clean test projects to revert any unintended agent changes before capturing diff
         clean_project_paths(context.repo_path, test_projects)
 
-        generated_patch = stage_and_get_diff(context.repo_path)
+        generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
         result: BugFixResult | None = None
 
         try:
@@ -67,7 +61,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
                 container,
                 context.entry.environment_setup_version,
             )
-            run_tests(context.entry, container)
+            run_tests(context.entry.fail_to_pass, context.entry.pass_to_pass, container)
 
             result = BugFixResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")

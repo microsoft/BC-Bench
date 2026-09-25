@@ -246,6 +246,8 @@ function Invoke-GitCloneWithRetry {
     The message to log
 .PARAMETER Level
     Log level: Info, Warning, Error, Success, Debug (default: Info)
+.PARAMETER Title
+    GitHub Actions annotation title (default: the calling script or module file name)
 .EXAMPLE
     Write-Log "Operation completed successfully" -Level Success
     Write-Log "Missing configuration file" -Level Warning
@@ -259,7 +261,10 @@ function Write-Log {
 
         [Parameter(Mandatory = $false)]
         [ValidateSet("Info", "Warning", "Error", "Success", "Debug")]
-        [string]$Level = "Info"
+        [string]$Level = "Info",
+
+        [Parameter(Mandatory = $false)]
+        [string]$Title
     )
 
     # Skip Debug messages unless RUNNER_DEBUG is enabled
@@ -295,9 +300,15 @@ function Write-Log {
             # Determine the command type
             $command = if ($Level -eq "Error") { "error" } else { "warning" }
 
+            if (-not $Title) {
+                [string]$callerScript = (Get-PSCallStack)[1].ScriptName
+                $Title = if ($callerScript) { Split-Path -Path $callerScript -Leaf } else { "PowerShell" }
+            }
+            $escapedTitle = $Title -replace '%', '%25' -replace '\r', '%0D' -replace '\n', '%0A' -replace ':', '%3A' -replace ',', '%2C'
+
             # Output GitHub Actions annotation to stdout
             # Format: ::warning title={title}::{message}
-            [Console]::Out.WriteLine("::$command title=BCBench::$escapedMessage")
+            [Console]::Out.WriteLine("::$command title=$($escapedTitle)::$escapedMessage")
         }
     }
     else {
@@ -438,187 +449,4 @@ function Update-AppProjectVersion {
     Write-Log "Successfully updated app.json at: $appJsonPath" -Level Success
 }
 
-<#
-.SYNOPSIS
-    Gets clone information based on the repository type (GitHub or ADO)
-.PARAMETER Entry
-    A DatasetEntry object containing the repo field
-.OUTPUTS
-    Hashtable with Url and Token properties
-#>
-function Get-RepoCloneInfo {
-    [CmdletBinding()]
-    [OutputType([hashtable])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [DatasetEntry]$Entry
-    )
-
-    [string[]] $repoParts = $Entry.repo -split '/'
-    [bool] $isGitHub = $repoParts[0].ToLower() -ne 'microsoftinternal'
-
-    if ($isGitHub) {
-        return @{
-            Url                 = "https://github.com/$($Entry.repo).git"
-            Token               = $env:GITHUB_TOKEN
-            SparseCheckoutPaths = @()
-        }
-    }
-    else {
-        # ADO internal NAV repository — sparse-checkout to only include application code
-        return @{
-            Url                 = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
-            Token               = $env:ADO_TOKEN
-            SparseCheckoutPaths = @('App/Apps', 'App/Layers')
-        }
-    }
-}
-
-<#
-.SYNOPSIS
-    Gets the default dataset path for a given category
-.DESCRIPTION
-    Get the dataset path based on the provided category, must be maintained when adding new categories.
-.PARAMETER Category
-    The category for which to get the dataset path
-.OUTPUTS
-    String representing the dataset path
-#>
-function Get-BCBenchDatasetPath {
-    [CmdletBinding()]
-    [OutputType([string])]
-    param(
-        [Parameter(Mandatory = $true)]
-        # Category validation lives only here: every caller resolves the dataset path through this function, so there's no need to duplicate ValidateSet on each caller.
-        [ValidateSet("bug-fix", "test-generation", "code-review", "nl2al", "data-query", "extensibility-request-advisor", "extensibility-request-implement", "extensibility-request-triage")]
-        [string] $Category
-    )
-
-    switch ($Category) {
-        "bug-fix" { $DatasetName = "bcbench.jsonl" }
-        "test-generation" { $DatasetName = "bcbench.jsonl" }
-        "code-review" { $DatasetName = "codereview.jsonl" }
-        "nl2al" { $DatasetName = "nl2al.jsonl" }
-        "data-query" { $DatasetName = "dataquery.jsonl" }
-        "extensibility-request-advisor" { $DatasetName = "extensibility_request_advisor.jsonl" }
-        "extensibility-request-implement" { $DatasetName = "extensibility_request_implement.jsonl" }
-        "extensibility-request-triage" { $DatasetName = "extensibility_request_triage.jsonl" }
-    }
-
-    [string] $projectRoot = Split-Path $PSScriptRoot -Parent
-    return Join-Path $projectRoot "dataset" $DatasetName
-}
-
-<#
-.SYNOPSIS
-    Gets additional BC artifact parameters for a category.
-.DESCRIPTION
-    Categories use the public artifact feed by default. Add only category-specific overrides here,
-    using parameter names accepted by Get-BCArtifactUrl.
-.PARAMETER Category
-    The evaluation category requesting a BC artifact.
-.OUTPUTS
-    Hashtable of additional Get-BCArtifactUrl parameters.
-#>
-function Get-BCBenchArtifactConfig {
-    [CmdletBinding()]
-    [OutputType([hashtable])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $Category
-    )
-
-    [hashtable] $categoryConfig = @{
-        # Add opt-in category overrides here. For example:
-        # "category" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
-        "data-query" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
-    }
-
-    return $categoryConfig[$Category] ?? @{}
-}
-
-<#
-.SYNOPSIS
-    Resolves the BC sandbox version (environment_setup_version) for a dataset entry.
-.DESCRIPTION
-    Centralizes the category -> dataset -> version lookup used by container setup, symbol download,
-    and the CI artifact cache key. Resolves the dataset file via Get-BCBenchDatasetPath.
-.PARAMETER InstanceId
-    The dataset instance_id to resolve.
-.PARAMETER Category
-    The dataset category, used to locate the dataset file.
-.PARAMETER DatasetPath
-    Optional override for the dataset (.jsonl) path. Defaults to the category-specific path via Get-BCBenchDatasetPath.
-.OUTPUTS
-    The environment_setup_version string, e.g. "26.5".
-.EXAMPLE
-    Get-BCBenchEntryVersion -InstanceId "bug-fix__job-budget-report-1" -Category "bug-fix"
-#>
-function Get-BCBenchEntryVersion {
-    [CmdletBinding()]
-    [OutputType([string])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $InstanceId,
-
-        [Parameter(Mandatory = $true)]
-        [string] $Category,
-
-        [Parameter(Mandatory = $false)]
-        [string] $DatasetPath = (Get-BCBenchDatasetPath -Category $Category)
-    )
-
-    if (-not (Test-Path $DatasetPath)) {
-        throw "Dataset file not found at: $DatasetPath"
-    }
-
-    foreach ($line in Get-Content -Path $DatasetPath) {
-        if ([string]::IsNullOrWhiteSpace($line)) { continue }
-        $entry = $line | ConvertFrom-Json
-        if ($entry.instance_id -eq $InstanceId) {
-            return $entry.environment_setup_version
-        }
-    }
-
-    throw "Entry '$InstanceId' not found in $DatasetPath"
-}
-
-<#
-.SYNOPSIS
-    Returns the latest BCApps release branch name (e.g. "releases/28.5").
-.DESCRIPTION
-    Lists all refs under refs/heads/releases/ via the GitHub API and returns
-    the branch with the highest <major>.<minor> version. Branches whose name
-    after "releases/" does not parse as a version are ignored.
-.PARAMETER Repo
-    OWNER/REPO. Defaults to microsoft/BCApps.
-.OUTPUTS
-    String like "releases/28.5", or $null if no release branch is found.
-#>
-function Get-LatestReleaseBranch {
-    [CmdletBinding()]
-    [OutputType([string])]
-    param(
-        [string]$Repo = 'microsoft/BCApps'
-    )
-
-    $refsJson = & gh api "repos/$Repo/git/matching-refs/heads/releases/" --jq '[.[].ref]'
-    if ($LASTEXITCODE -ne 0) { throw "gh api matching-refs failed for $Repo" }
-
-    $latest = $refsJson | ConvertFrom-Json |
-    ForEach-Object { $_ -replace '^refs/heads/', '' } |
-    ForEach-Object {
-        $name = $_
-        $suffix = $name -replace '^releases/', ''
-        $version = $null
-        if ([Version]::TryParse($suffix, [ref]$version)) {
-            [pscustomobject]@{ Name = $name; Version = $version }
-        }
-    } |
-    Sort-Object Version -Descending |
-    Select-Object -First 1
-
-    return $latest.Name
-}
-
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchArtifactConfig, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion

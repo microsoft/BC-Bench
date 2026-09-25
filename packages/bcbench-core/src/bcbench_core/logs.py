@@ -1,13 +1,11 @@
-"""Unified logging configuration for bcbench."""
+"""Opt-in logging configuration for applications built on bcbench-core."""
 
 import logging
 import re
 import sys
-from typing import ClassVar
+from typing import ClassVar, override
 
-from bcbench.config import get_config
-
-__all__ = ["get_logger", "setup_logger"]
+__all__ = ["setup_logging"]
 
 
 class SensitiveDataFilter(logging.Filter):
@@ -48,6 +46,7 @@ class SensitiveDataFilter(logging.Filter):
         ),
     ]
 
+    @override
     def filter(self, record: logging.LogRecord) -> bool:
         """Redact sensitive information from the log record's message."""
         if isinstance(record.msg, str):
@@ -93,6 +92,7 @@ class ColoredFormatter(logging.Formatter):
         logging.CRITICAL: (RED, "[%(asctime)s] %(name)s - CRITICAL: %(message)s"),
     }
 
+    @override
     def format(self, record: logging.LogRecord) -> str:
         color, log_fmt = self.FORMATS.get(record.levelno, self.FORMATS[logging.INFO])
         formatter = logging.Formatter(log_fmt, datefmt="%H:%M:%S")
@@ -113,6 +113,7 @@ class GitHubActionsHandler(logging.Handler):
     to prevent duplicate output from other handlers.
     """
 
+    @override
     def emit(self, record: logging.LogRecord) -> None:
         """Emit a GitHub Actions annotation for warning and error level logs."""
         try:
@@ -150,46 +151,43 @@ class GitHubActionsHandler(logging.Handler):
 class GitHubActionsSkipFilter(logging.Filter):
     """Filter that skips records already handled by GitHubActionsHandler."""
 
+    @override
     def filter(self, record: logging.LogRecord) -> bool:
         """Return False if the record was already handled by GitHub Actions handler."""
         return not getattr(record, "gh_actions_handled", False)
 
 
-_logging_configured = False
+_CORE_LOGGER = __name__.partition(".")[0]
+_GITHUB_HANDLER_NAME = f"{_CORE_LOGGER}.github_actions"
+_CONSOLE_HANDLER_NAME = f"{_CORE_LOGGER}.console"
 
 
-def setup_logger(verbose: bool = False) -> None:
-    """
-    Configure logging for the entire bcbench package.
+def setup_logging(app_logger: str, debug: bool, github_actions: bool) -> None:
+    """Configure process-wide logging; call once from the application entry point.
+
+    Calling again replaces the handlers installed by a previous call; other root handlers are kept.
 
     Args:
-        verbose: If True, set bcbench loggers to DEBUG level, otherwise INFO.
+        app_logger: Top-level logger name of the application, usually its package name; bcbench-core's logger is always included.
+        debug: If True, set application and bcbench-core loggers to DEBUG level, otherwise INFO.
+        github_actions: If True, also emit warnings and errors as GitHub Actions annotations.
     """
-    global _logging_configured  # noqa: PLW0603
-
-    if _logging_configured:
-        return
-
-    config = get_config()
-
-    bcbench_level = logging.DEBUG if verbose else logging.INFO
-
-    # Check for GitHub Actions debug mode
-    if config.env.runner_debug:
-        bcbench_level = logging.DEBUG
+    app_level = logging.DEBUG if debug else logging.INFO
 
     # Configure root logger (for 3rd party libraries) to WARNING
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.WARNING)
 
-    # Remove existing handlers
     for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
+        if handler.get_name() in {_GITHUB_HANDLER_NAME, _CONSOLE_HANDLER_NAME}:
+            root_logger.removeHandler(handler)
+            handler.close()
 
     # Add GitHub Actions handler FIRST if running in GitHub Actions
     # This ensures records are marked before the console handler sees them
-    if config.env.github_actions:
+    if github_actions:
         github_handler = GitHubActionsHandler()
+        github_handler.set_name(_GITHUB_HANDLER_NAME)
         github_handler.setLevel(logging.WARNING)  # Only warnings and errors
         github_handler.setFormatter(logging.Formatter("%(message)s"))
         github_handler.addFilter(SensitiveDataFilter())
@@ -197,21 +195,11 @@ def setup_logger(verbose: bool = False) -> None:
 
     # Create console handler with colored formatter and sensitive data filter
     console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.set_name(_CONSOLE_HANDLER_NAME)
     console_handler.setFormatter(ColoredFormatter())
     console_handler.addFilter(SensitiveDataFilter())
     console_handler.addFilter(GitHubActionsSkipFilter())
     root_logger.addHandler(console_handler)
 
-    # Configure bcbench loggers to use the desired level
-    bcbench_logger = logging.getLogger("bcbench")
-    bcbench_logger.setLevel(bcbench_level)
-
-    _logging_configured = True
-
-
-def get_logger(name: str) -> logging.Logger:
-    # Ensure name starts with 'bcbench.' for proper hierarchy
-    if not name.startswith("bcbench.") and name != "bcbench":
-        name = f"bcbench.{name}"
-
-    return logging.getLogger(name)
+    for name in (app_logger, _CORE_LOGGER):
+        logging.getLogger(name).setLevel(app_level)

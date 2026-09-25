@@ -7,9 +7,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 import pytest
+from bcbench_core.container import ContainerConfig
 
 from bcbench.agent.shared.mcp_gateway import BcMcpGateway, start_bc_mcp_gateway
-from bcbench.types import AgentRuntimeConfig, ContainerConfig
+from bcbench.types import AgentRuntimeConfig
 
 _WARMUP_MODULE = "bcbench.agent.shared.mcp_gateway"
 

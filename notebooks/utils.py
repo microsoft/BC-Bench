@@ -3,9 +3,8 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 import pandas as pd
+from bcbench_core.scoring import pass_at_k, pass_hat_k
 from unidiff import PatchSet
-
-from bcbench.results.metrics import pass_at_k, pass_hat_k
 
 # Root paths - all notebooks should use these
 NOTEBOOKS_ROOT = Path(__file__).parent

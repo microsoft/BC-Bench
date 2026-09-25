@@ -29,15 +29,15 @@ carrying the full final diff and no expected comments is emitted as a fallback.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from bcbench.collection.gh_client import GHClient
 from bcbench.dataset import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.exceptions import CollectionError
-from bcbench.logger import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # GitHub reaction contents that mark a comment as a confirmed (good) finding.
 POSITIVE_REACTIONS = frozenset({"+1", "heart", "hooray", "rocket"})

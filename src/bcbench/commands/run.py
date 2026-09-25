@@ -1,5 +1,6 @@
 """CLI commands for running agents."""
 
+import logging
 from typing import Annotated, cast
 
 import typer
@@ -23,10 +24,9 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.logger import get_logger
 from bcbench.types import BCalLLMBackend, EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 run_app = typer.Typer(help="Run agents on single dataset entry")

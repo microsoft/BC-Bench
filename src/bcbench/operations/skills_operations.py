@@ -1,12 +1,12 @@
+import logging
 from pathlib import Path
 from shutil import copytree, rmtree
 
 from bcbench.dataset.dataset_entry import BaseDatasetEntry
-from bcbench.logger import get_logger
 from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.types import AgentHarness
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def setup_agent_skills(

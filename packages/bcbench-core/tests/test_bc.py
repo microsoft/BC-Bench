@@ -1,35 +1,34 @@
+import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from bcbench.config import get_config
-from bcbench.dataset import TestEntry
-from bcbench.operations import bc_operations
-from bcbench.types import ContainerConfig
-
-_config = get_config()
+from bcbench_core import bc, dataset, exceptions
+from bcbench_core.bc import APP_UTILS_MODULE, BCBENCH_UTILS_MODULE
+from bcbench_core.container import ContainerConfig
 
 
 class TestEscapePsString:
     def test_escape_single_quote(self):
-        assert bc_operations._escape_ps_string("O'Brien") == "O''Brien"
+        assert bc.escape_ps_string("O'Brien") == "O''Brien"
 
     def test_escape_multiple_quotes(self):
-        assert bc_operations._escape_ps_string("It's a 'test'") == "It''s a ''test''"
+        assert bc.escape_ps_string("It's a 'test'") == "It''s a ''test''"
 
     def test_no_escape_needed(self):
-        assert bc_operations._escape_ps_string("normal_string") == "normal_string"
+        assert bc.escape_ps_string("normal_string") == "normal_string"
 
     def test_empty_string(self):
-        assert bc_operations._escape_ps_string("") == ""
+        assert bc.escape_ps_string("") == ""
 
     def test_password_with_special_chars(self):
-        assert bc_operations._escape_ps_string("P@ss'word123") == "P@ss''word123"
+        assert bc.escape_ps_string("P@ss'word123") == "P@ss''word123"
 
 
 class TestPowerShellScriptGeneration:
     def test_build_app_publish_script_basic(self):
-        script = bc_operations.build_ps_app_build_and_publish(
+        script = bc.build_ps_app_build_and_publish(
             container_name="bcserver",
             username="admin",
             password="Test123",
@@ -50,7 +49,7 @@ class TestPowerShellScriptGeneration:
         assert "$$password" not in script
 
     def test_build_app_publish_script_with_quotes(self):
-        script = bc_operations.build_ps_app_build_and_publish(
+        script = bc.build_ps_app_build_and_publish(
             container_name="bc'server",
             username="admin",
             password="P@ss'word",
@@ -63,7 +62,7 @@ class TestPowerShellScriptGeneration:
         assert "App''s" in script
 
     def test_build_test_script_without_functions(self):
-        script = bc_operations.build_ps_test_script(
+        script = bc.build_ps_test_script(
             container_name="bcserver",
             username="admin",
             password="Test123",
@@ -79,7 +78,7 @@ class TestPowerShellScriptGeneration:
         assert "-functionNames" not in script
 
     def test_build_test_script_with_functions(self):
-        script = bc_operations.build_ps_test_script(
+        script = bc.build_ps_test_script(
             container_name="bcserver",
             username="admin",
             password="Test123",
@@ -97,7 +96,7 @@ class TestPowerShellScriptGeneration:
         assert "'TestDelete'" in script
 
     def test_build_test_script_with_quoted_function_names(self):
-        script = bc_operations.build_ps_test_script(
+        script = bc.build_ps_test_script(
             container_name="bcserver",
             username="admin",
             password="Test123",
@@ -113,7 +112,7 @@ class TestPowerShellScriptGeneration:
     def test_build_dataset_tests_script(self):
         test_entries = '[{"codeunit": 50100, "function": "TestCreate"}]'
 
-        script = bc_operations.build_ps_dataset_tests_script(
+        script = bc.build_ps_dataset_tests_script(
             container_name="bcserver",
             username="admin",
             password="Test123",
@@ -132,7 +131,7 @@ class TestPowerShellScriptGeneration:
         # JSON with single quotes that need escaping
         test_entries = '[{"name": "Test\'s Function"}]'
 
-        script = bc_operations.build_ps_dataset_tests_script(
+        script = bc.build_ps_dataset_tests_script(
             container_name="bcserver",
             username="admin",
             password="Test123",
@@ -145,9 +144,9 @@ class TestPowerShellScriptGeneration:
 
     def test_all_scripts_have_error_action_preference(self):
         scripts = [
-            bc_operations.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
-            bc_operations.build_ps_test_script("bc", "admin", "pass", 50100),
-            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
+            bc.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
+            bc.build_ps_test_script("bc", "admin", "pass", 50100),
+            bc.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
         ]
 
         for script in scripts:
@@ -155,20 +154,27 @@ class TestPowerShellScriptGeneration:
 
     def test_all_scripts_import_modules(self):
         scripts = [
-            bc_operations.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
-            bc_operations.build_ps_test_script("bc", "admin", "pass", 50100),
-            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
+            bc.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
+            bc.build_ps_test_script("bc", "admin", "pass", 50100),
+            bc.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
         ]
 
         for script in scripts:
             assert "Import-Module BcContainerHelper" in script
-            assert f"Import-Module '{_config.paths.ps_script_path / 'AppUtils.psm1'}'" in script  # AppUtils module
+            assert f"Import-Module '{APP_UTILS_MODULE}'" in script
+
+    def test_build_script_imports_bcbench_utils_for_update_app_project_version(self):
+        script = bc.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0")
+
+        assert f"Import-Module '{BCBENCH_UTILS_MODULE}'" in script
+        assert BCBENCH_UTILS_MODULE.is_file()
+        assert APP_UTILS_MODULE.is_file()
 
     def test_all_scripts_create_credential(self):
         scripts = [
-            bc_operations.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
-            bc_operations.build_ps_test_script("bc", "admin", "pass", 50100),
-            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
+            bc.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
+            bc.build_ps_test_script("bc", "admin", "pass", 50100),
+            bc.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
         ]
 
         for script in scripts:
@@ -177,7 +183,7 @@ class TestPowerShellScriptGeneration:
             assert "-credential" in script.lower()
 
     def test_path_with_spaces(self):
-        script = bc_operations.build_ps_app_build_and_publish(
+        script = bc.build_ps_app_build_and_publish(
             container_name="bcserver",
             username="admin",
             password="Test123",
@@ -191,7 +197,7 @@ class TestPowerShellScriptGeneration:
         assert "App" in script
 
     def test_version_is_not_quoted(self):
-        script = bc_operations.build_ps_app_build_and_publish(
+        script = bc.build_ps_app_build_and_publish(
             container_name="bcserver",
             username="admin",
             password="Test123",
@@ -222,10 +228,10 @@ class TestRunTestSuite:
 
     def test_test_entries_serialized_as_json(self, mock_subprocess):
         test_entries = [
-            TestEntry(codeunitID=137404, functionName=frozenset({"ExchangeProductionBOMItemShouldSetEndingDate"})),
+            dataset.TestEntry(codeunitID=137404, functionName=frozenset({"ExchangeProductionBOMItemShouldSetEndingDate"})),
         ]
 
-        bc_operations.run_test_suite(
+        bc.run_test_suite(
             test_entries=test_entries,
             expectation="Pass",
             container=ContainerConfig(name="bcserver", username="admin", password="Test123", company="CRONUS"),
@@ -242,11 +248,11 @@ class TestRunTestSuite:
 
     def test_multiple_test_entries_serialized_as_json(self, mock_subprocess):
         test_entries = [
-            TestEntry(codeunitID=100, functionName=frozenset({"TestA", "TestB"})),
-            TestEntry(codeunitID=200, functionName=frozenset({"TestC"})),
+            dataset.TestEntry(codeunitID=100, functionName=frozenset({"TestB", "TestA"})),
+            dataset.TestEntry(codeunitID=200, functionName=frozenset({"TestC"})),
         ]
 
-        bc_operations.run_test_suite(
+        bc.run_test_suite(
             test_entries=test_entries,
             expectation="Pass",
             container=ContainerConfig(name="bcserver", username="admin", password="Test123", company="CRONUS"),
@@ -257,5 +263,74 @@ class TestRunTestSuite:
 
         assert '"codeunitID":100' in command
         assert '"codeunitID":200' in command
-        assert '"functionName":' in command
+        # Sorted, so the generated script is deterministic
+        assert '"functionName":["TestA","TestB"]' in command
         assert "TestEntry(" not in command
+
+
+_CONTAINER = ContainerConfig("bcserver", "admin", "secret", "CRONUS")
+
+
+_OK = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+
+
+class TestBuildAndPublishProjects:
+    def test_runs_build_script_per_project_in_repo(self, tmp_path):
+        with patch.object(bc.subprocess, "run", return_value=_OK) as run:
+            bc.build_and_publish_projects(tmp_path, ["App/MyApp"], _CONTAINER, "27.2")
+
+        command = run.call_args.args[0]
+        assert command[:4] == ["pwsh", "-NoProfile", "-NonInteractive", "-Command"]
+        assert "Invoke-AppBuildAndPublish -containerName 'bcserver'" in command[-1]
+        assert str(tmp_path / "App/MyApp") in command[-1]
+        assert run.call_args.kwargs["cwd"] == tmp_path
+
+    def test_baseapp_gets_its_own_timeout(self, tmp_path):
+        with patch.object(bc.subprocess, "run", return_value=_OK) as run:
+            bc.build_and_publish_projects(tmp_path, ["App/Layers/W1/BaseApp", "App/Layers/W1/Tests"], _CONTAINER, "27.2")
+            bc.build_and_publish_projects(tmp_path, ["App/Layers/W1/BaseApp", "App/Layers/W1/Tests"], _CONTAINER, "27.2", timeout=10, baseapp_timeout=99)
+
+        assert [c.kwargs["timeout"] for c in run.call_args_list] == [30 * 60, 5 * 60, 99, 10]
+
+    def test_compile_failure_raises_build_error_with_compiler_errors(self, tmp_path):
+        output = "noise\nsrc/Codeunit.al(3,1): error AL0118: The name 'Foo' does not exist\n"
+        with patch.object(bc.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "pwsh", output=output)), pytest.raises(exceptions.BuildError) as error:
+            bc.build_and_publish_projects(tmp_path, ["App/MyApp"], _CONTAINER, "27.2")
+
+        assert error.value.project_path == "App/MyApp"
+        assert error.value.errors == "src/Codeunit.al(3,1): error AL0118: The name 'Foo' does not exist"
+
+    def test_timeout_raises_build_timeout_expired(self, tmp_path):
+        with patch.object(bc.subprocess, "run", side_effect=subprocess.TimeoutExpired("pwsh", 60)), pytest.raises(exceptions.BuildTimeoutExpired, match="App/MyApp after 60 seconds"):
+            bc.build_and_publish_projects(tmp_path, ["App/MyApp"], _CONTAINER, "27.2", timeout=60)
+
+
+_TESTS = [dataset.TestEntry(codeunitID=100, functionName=frozenset({"TestA"}))]
+
+
+class TestRunTestSuiteOutcome:
+    def test_defaults_to_three_minutes(self):
+        with patch.object(bc.subprocess, "run", return_value=_OK) as run:
+            bc.run_test_suite(_TESTS, "Pass", _CONTAINER)
+
+        assert run.call_args.kwargs["timeout"] == 3 * 60
+
+    def test_unmet_expectation_raises_test_execution_error(self):
+        failure = subprocess.CalledProcessError(1, "pwsh", output="Tests failed for Codeunit 100\nTestA failed", stderr="boom")
+        with patch.object(bc.subprocess, "run", side_effect=failure), pytest.raises(exceptions.TestExecutionError, match=r"expected: Pass") as error:
+            bc.run_test_suite(_TESTS, "Pass", _CONTAINER)
+
+        assert error.value.stderr == "boom"
+
+    def test_timeout_raises_test_execution_timeout_expired(self):
+        with patch.object(bc.subprocess, "run", side_effect=subprocess.TimeoutExpired("pwsh", 60)), pytest.raises(exceptions.TestExecutionTimeoutExpired, match="after 60 seconds") as error:
+            bc.run_test_suite(_TESTS, "Fail", _CONTAINER, timeout=60)
+
+        assert error.value.tests == '[{"codeunitID":100,"functionName":["TestA"]}]'
+
+    def test_logs_test_output_at_debug(self, caplog):
+        caplog.set_level("DEBUG", logger="bcbench_core.bc")
+        with patch.object(bc.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="Tests passed for Codeunit 100", stderr="")):
+            bc.run_test_suite(_TESTS, "Pass", _CONTAINER)
+
+        assert "Test output:\nTests passed for Codeunit 100" in caplog.text

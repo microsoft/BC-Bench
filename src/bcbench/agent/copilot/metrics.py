@@ -1,11 +1,11 @@
 import json
+import logging
 from collections import Counter
 from collections.abc import Sequence
 
-from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Verified against the CLI's own "AI Credits" footer: 9613375000 nano-AIU renders as "AI Credits 9.61".
 NANO_AIU_PER_AI_CREDIT = 1_000_000_000

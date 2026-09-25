@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
+from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
@@ -26,7 +27,6 @@ __all__ = [
     "ChecklistAssertion",
     "ChecklistLevel",
     "CommitSha",
-    "ContainerConfig",
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
@@ -558,27 +558,6 @@ class EvaluationCategory(StrEnum):
                 return "windows-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")
-
-
-@dataclass(frozen=True)
-class ContainerConfig:
-    name: str
-    username: str
-    password: str
-    company: str
-    server_url: str = ""
-    server_instance: str = ""
-    mcp_url: str | None = None
-
-    def __post_init__(self) -> None:
-        name = self.name.strip()
-        if not name:
-            raise ValueError("Container name must not be empty")
-        company = self.company.strip()
-        if not company:
-            raise ValueError("Company must not be empty")
-        object.__setattr__(self, "name", name)
-        object.__setattr__(self, "company", company)
 
 
 @dataclass(frozen=True)

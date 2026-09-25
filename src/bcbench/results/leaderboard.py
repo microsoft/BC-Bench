@@ -1,18 +1,19 @@
 import json
+import logging
 from abc import ABC
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from bcbench_core.scoring import pass_hat_k
+from bcbench_core.stats import bootstrap_ci
 from pydantic import BaseModel, field_validator
 
-from bcbench.logger import get_logger
-from bcbench.results.metrics import bootstrap_ci, pass_hat_k
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class LeaderboardAggregate(BaseModel, ABC):

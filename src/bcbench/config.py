@@ -40,11 +40,9 @@ class PathConfig:
     dataset_dir: Path
     problem_statement_dir: Path
     testbed_path: Path
-    ps_script_path: Path
     evaluation_results_path: Path
     leaderboard_dir: Path
     agent_share_dir: Path
-    bc_artifacts_cache: Path
     redteam_scorecard: Path
     plugin_root: Path
 
@@ -58,11 +56,9 @@ class PathConfig:
             dataset_dir=root / "dataset",
             problem_statement_dir=root / "dataset" / "problemstatement",
             testbed_path=root.parent / "NAV",
-            ps_script_path=root / "scripts",
             evaluation_results_path=evaluation_results_path,
             leaderboard_dir=root / "docs" / "_data",
             agent_share_dir=agent_share_dir,
-            bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
             redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
             # `.bcbench` avoids colliding with agent-reserved dirs (`.claude/`, `.github/`)
             plugin_root=root / ".bcbench",
@@ -73,10 +69,7 @@ class PathConfig:
 class TimeoutConfig:
     """Timeout configuration for various operations."""
 
-    build_baseapp: int
-    build_app: int
     execute_query: int
-    test_execution: int
     agent_execution: int
     bcal_execution: int
     filepath_identification: int
@@ -85,12 +78,9 @@ class TimeoutConfig:
     def default(cls) -> TimeoutConfig:
         """Get default timeout configuration."""
         return cls(
-            build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
-            build_app=5 * 60,  # 5 minutes for application compilation
             # The data-query gold query is compiled, published AND run live per entry — it does more
             # than a plain app build and is slow on the insider-29 artifact, so it gets its own budget.
             execute_query=15 * 60,
-            test_execution=3 * 60,  # 3 minutes for test execution
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
             # Total bcal CLI budget per instance.
             bcal_execution=25 * 60,
@@ -105,7 +95,6 @@ class FilePatternConfig:
     """File patterns and naming conventions."""
 
     trajectory_pattern: str
-    patch_pattern: str
     instance_pattern: str
     result_pattern: str
     instruction_source_naming: str
@@ -113,7 +102,6 @@ class FilePatternConfig:
     test_project_identifiers: tuple[str, ...]
     problem_statement_readme: str
     problem_statement_dest_dir: str
-    alpackages_dirname: str
     nl2al_export_subdir: str
     plugin_manifest: Path
 
@@ -122,7 +110,6 @@ class FilePatternConfig:
         """Get default file pattern configuration."""
         return cls(
             trajectory_pattern=".traj.json",
-            patch_pattern=".patch",
             instance_pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$",
             result_pattern=".jsonl",
             instruction_source_naming="AGENTS.md",
@@ -130,7 +117,6 @@ class FilePatternConfig:
             test_project_identifiers=("test", "tests"),
             problem_statement_readme="README.md",
             problem_statement_dest_dir="problem",
-            alpackages_dirname=".alpackages",
             nl2al_export_subdir="src",
             # Where both Copilot CLI and Claude Code look for a plugin's manifest
             plugin_manifest=Path(".claude-plugin") / "plugin.json",

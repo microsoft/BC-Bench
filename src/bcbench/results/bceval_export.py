@@ -3,16 +3,16 @@ Convert the result into a format that bceval can consume and upload to Braintrus
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
 from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _experiment_metadata(experiment: ExperimentConfiguration | None, git_ref: str | None, benchmark_version: str) -> dict[str, Any]:

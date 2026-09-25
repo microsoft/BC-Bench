@@ -1,6 +1,7 @@
 """CLI command for AI red teaming BC-Bench agents (POC)."""
 
 import json
+import logging
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Annotated, Any
 
 import typer
 from azure.ai.evaluation.red_team import AttackStrategy, RiskCategory, SupportedLanguages
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -15,13 +17,12 @@ from rich.text import Text
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.config import get_config
-from bcbench.logger import get_logger
 from bcbench.types import BCalLLMBackend
 
 # Loose JSON alias (aliasing keeps `Any` out of function signatures, satisfying ANN401).
 type Json = dict[str, Any]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 _console = Console()
 
@@ -79,7 +80,7 @@ def scan(
 
     # Only support NL2AL for now, we will think about extensibility later.
     scan_target = build_bcal_target(
-        package_cache_path=_config.paths.evaluation_results_path / "redteam" / _config.file_patterns.alpackages_dirname,
+        package_cache_path=_config.paths.evaluation_results_path / "redteam" / ALPACKAGES_DIRNAME,
         export_base=output.parent / "bcal-exports",
         backend_config=BCalBackendConfig(
             backend=backend,

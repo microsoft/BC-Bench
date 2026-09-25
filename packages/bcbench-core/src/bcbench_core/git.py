@@ -1,16 +1,14 @@
-"""Git repository operations."""
+"""Git repository operations; requires git 2.49+ and an authenticated GitHub CLI (`gh`)."""
 
+import logging
 import subprocess
 import tempfile
 from pathlib import Path
 
-from bcbench.config import get_config
-from bcbench.exceptions import EmptyDiffError, PatchApplicationError
-from bcbench.logger import get_logger
-from bcbench.operations.filesystem_operations import remove_tree
+from bcbench_core.exceptions import EmptyDiffError, PatchApplicationError
+from bcbench_core.filesystem import remove_tree
 
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
 
 def clean_repo(repo_path: Path) -> None:
@@ -89,7 +87,7 @@ def has_changes(repo_path: Path) -> bool:
     return bool(result.stdout.strip())
 
 
-def commit_changes(repo_path: Path, message: str, *, allow_empty: bool = False, no_verify: bool = False) -> None:
+def commit_changes(repo_path: Path, message: str, allow_empty: bool = False, no_verify: bool = False) -> None:
     logger.info(f"Committing changes: {message}")
     subprocess.run(["git", "add", "-A"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
     commit_args = ["git", "-c", "user.name=bcbench", "-c", "user.email=bcbench@noreply", "commit"]
@@ -111,7 +109,7 @@ def commit_changes(repo_path: Path, message: str, *, allow_empty: bool = False, 
 def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") -> None:
     logger.info(f"Applying {patch_name}")
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=_config.file_patterns.patch_pattern, delete=False, encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False, encoding="utf-8") as f:
         f.write(patch_content)
         patch_file = f.name
 
@@ -134,20 +132,19 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         Path(patch_file).unlink(missing_ok=True)
 
 
-def stage_and_get_diff(repo_path: Path) -> str:
-    """Stage all *.al file changes and get the git diff.
-
-    This function stages all *.al files in the repository and returns the diff.
-    It does NOT stage app.json files as dataset doesn't include app.json changes yet.
+def stage_and_get_diff(repo_path: Path, exclude: tuple[str, ...] = ()) -> str:
+    """Stage all *.al file changes and return the staged diff against HEAD.
 
     Args:
-        repo_path: Path to the git repository
+        repo_path: Path to the git repository.
+        exclude: Git pathspec patterns left out of the diff, including files staged earlier (e.g. by the agent).
+            Defaults to no exclusions. For AL-only evaluation, you'll likely want to pass `("**/app.json", "*.docx", "*.md")`
 
     Returns:
-        String containing the git diff patch
+        The git diff patch.
 
     Raises:
-        EmptyDiffError: If the generated diff is empty (agent made no changes)
+        EmptyDiffError: If the generated diff is empty (agent made no changes).
     """
     logger.info("Staging *.al file changes and getting git diff")
 
@@ -164,7 +161,7 @@ def stage_and_get_diff(repo_path: Path) -> str:
 
     # Get diff of staged changes against HEAD
     result = subprocess.run(
-        ["git", "diff", "--cached", "--", ".", ":!*.docx", ":!**/app.json", ":!*.md"],
+        ["git", "diff", "--cached", "--", ".", *(f":!{pattern}" for pattern in exclude)],
         cwd=repo_path,
         capture_output=True,
         encoding="utf-8",

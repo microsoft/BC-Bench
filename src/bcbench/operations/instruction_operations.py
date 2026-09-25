@@ -1,13 +1,13 @@
+import logging
 from pathlib import Path
 from shutil import copytree, rmtree
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.dataset_entry import RepoGroundedEntry
-from bcbench.logger import get_logger
 from bcbench.types import AgentHarness
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 

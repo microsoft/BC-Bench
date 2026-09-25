@@ -19,18 +19,21 @@ A very high-level overview of the repository structure:
 
 ```
 BC-Bench/
-├── src/bcbench/    # Evaluation harness — agent orchestration, build/test pipeline, results
-├── dataset/        # Benchmark dataset tasks
-├── scripts/        # Scripts for container setup & test execution; not needed for local development
-├── notebooks/      # Analysis and visualization of results
-├── evaluator/      # Braintrust scorer integration, used only when uploading result to Braintrust
-└── docs/           # GitHub Page for the leaderboard site
+├── src/bcbench/              # Evaluation harness — agent orchestration, build/test pipeline, results
+├── packages/bcbench-core/    # Reusable evaluation library consumed by src/bcbench (uv workspace member)
+├── dataset/                  # Benchmark dataset tasks
+├── scripts/                  # Scripts for container setup & test execution; not needed for local development
+├── notebooks/                # Analysis and visualization of results
+├── evaluator/                # Braintrust scorer integration, used only when uploading result to Braintrust
+└── docs/                     # GitHub Page for the leaderboard site
 ```
+
+The repository is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) with two Python projects: the `bcbench` application at the root and the `bcbench-core` library. `bcbench` depends on `bcbench-core`; never the reverse. The ruff baseline lives in `packages/bcbench-core/pyproject.toml` and the root config extends it with application-only settings. See [packages/bcbench-core/README.md](packages/bcbench-core/README.md) for the library boundary.
 
 ## Setup
 
 Prerequisites:
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) 0.12.19 or later (`uv self update`)
 - [GitHub CLI](https://cli.github.com/)
 - [GitHub Copilot CLI](https://github.com/github/copilot-cli)
 
@@ -58,8 +61,8 @@ uv run bcbench --help
 # This is very fast, give it a go and see it live!
 uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
 
-# Run tests
-uv run pytest --cov=src/bcbench --cov-report=term-missing
+# Run tests (bcbench and bcbench-core)
+uv run pytest --cov --cov-report=term-missing
 
 # Lint and format
 uv run pre-commit run --all-files
@@ -136,6 +139,10 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 3. Update all applicable pins consistently and make any required compatibility changes.
 4. Run focused tests for the integration, then perform a test evaluation for tools exposed to the agent.
 5. Bump the benchmark version according to the Versioning Policy. Tool changes that may affect evaluation results normally require a minor bump.
+
+### Refresh BC sandbox artifacts
+
+Public `w1` sandbox URLs are pinned by version in [`scripts/BCBenchArtifactPins.json`](scripts/BCBenchArtifactPins.json), so we are more resilient to upstream changes. Manual dataset-validation runs use the saved pins. The scheduled run resolves the latest URLs, verifies them across the full bug-fix dataset, and pushes a pins-only branch for a manual PR only if every job succeeds. BC Insider artifacts remain dynamically resolved.
 
 ### Bump the BC PR Review engine
 
