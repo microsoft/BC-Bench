@@ -98,7 +98,8 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
     assert "COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}" in workflow
     assert "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}" in workflow
-    assert "full' }}-${{ inputs.repetition-id }}" in workflow
+    assert "group: pr-review-evaluation-${{ inputs.modified-only && 'modified' || inputs.test-run && 'test' || 'full' }}" in workflow
+    assert "repetition-id" not in workflow
     for input_name in (
         "model:",
         "leaf-model:",
@@ -108,7 +109,6 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
         "test-run:",
         "modified-only:",
         "repeat:",
-        "repetition-id:",
         "entries:",
         "git-ref:",
     ):

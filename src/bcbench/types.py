@@ -99,7 +99,6 @@ class PRReviewMetrics(AgentMetrics):
     api_calls: int | None = Field(default=None, ge=0)
     failed_api_calls: int | None = Field(default=None, ge=0)
     usage_api_calls: int | None = Field(default=None, ge=0)
-    premium_requests: float | None = Field(default=None, ge=0)
     models: list[str] = Field(default_factory=list)
     usage_complete: bool | None = None
     malformed_records: int | None = Field(default=None, ge=0)

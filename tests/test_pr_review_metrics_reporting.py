@@ -97,7 +97,6 @@ def test_result_json_preserves_raw_diagnostics(tmp_path) -> None:
         failed_api_calls=0,
         usage_api_calls=4,
         ai_credits=0.5,
-        premium_requests=0.5,
         models=["claude-sonnet-5", "gpt-5.4"],
         copilot_cli_version="1.0.83",
         usage_complete=False,
@@ -118,7 +117,6 @@ def test_result_json_preserves_raw_diagnostics(tmp_path) -> None:
     assert saved_metrics["api_calls"] == 5
     assert saved_metrics["failed_api_calls"] == 0
     assert saved_metrics["usage_api_calls"] == 4
-    assert saved_metrics["premium_requests"] == 0.5
     assert saved_metrics["models"] == ["claude-sonnet-5", "gpt-5.4"]
     assert saved_metrics["copilot_cli_version"] == "1.0.83"
     assert saved_metrics["usage_complete"] is False

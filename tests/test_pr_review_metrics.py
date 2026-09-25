@@ -61,7 +61,6 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
     assert metrics.failed_api_calls == 1
     assert metrics.usage_api_calls == 2
     assert metrics.ai_credits == 1.75
-    assert metrics.premium_requests == 1.75
     assert metrics.models == ["gpt-5.4-mini", "gpt-5.6-sol"]
     assert metrics.usage_complete is True
     assert metrics.malformed_records == 0

@@ -104,7 +104,6 @@ def build_pr_review_metrics(output_dir: Path, execution_time: float, manifest: R
         failed_api_calls=run.failed_api_calls if usage_values_available else None,
         usage_api_calls=run.usage_api_calls if usage_values_available else None,
         ai_credits=run.ai_credits if usage_values_available else None,
-        premium_requests=run.premium_requests if usage_values_available else None,
         models=run.models,
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
