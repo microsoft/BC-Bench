@@ -12,12 +12,15 @@ class BCalSessionConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
 
     publisher: str | None = None
-    mode: str | None = None
+    # mode and publish are serialized straight into the bcal scenario file and deserialized there
+    # as the BcalAppMode / BcalPublishMode enums. Constrain them to the CLI's accepted wire values
+    # so a wrong value fails dataset validation instead of crashing bcal mid-run.
+    mode: Literal["extension", "customization", "personalization"] | None = None
     audience: str | None = None
     profile: str | None = None
     page: str | None = None
     locale: str | None = None
-    publish: bool = False
+    publish: Literal["never", "ask", "always"] = "never"
     review_enabled: bool | None = Field(default=None, alias="review")
     review_deployment: str | None = Field(default=None, alias="reviewDeployment")
     resume: bool | None = None
