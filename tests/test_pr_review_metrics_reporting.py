@@ -260,7 +260,6 @@ def test_result_json_persists_pr_review_diagnostics(tmp_path) -> None:
     assert saved_metrics["knowledge_suppressed"] == 2
     assert saved_metrics["sub_skills_executed"] == 3
     assert saved_metrics["sub_skills_skipped"] == 1
-    assert saved_metrics["premium_requests"] == 0.5
     assert saved_metrics["models"] == ["claude-sonnet-5", "gpt-5.4"]
     assert saved_metrics["copilot_cli_version"] == "1.0.83"
     assert saved_metrics["leaf_model"] == "gpt-5.4"

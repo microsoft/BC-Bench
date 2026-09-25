@@ -141,11 +141,12 @@ def _load_filter_report(path: Path) -> _FilterReport | None:
 
 @cache
 def _count_available_knowledge(bcquality_root: Path) -> int:
-    def is_knowledge_file(path: Path) -> bool:
-        parts = path.relative_to(bcquality_root).parts
-        return len(parts) >= 3 and parts[0].lower() in _KNOWLEDGE_LAYERS and parts[1].lower() == "knowledge"
-
-    return sum(1 for path in bcquality_root.rglob("*.md") if path.is_file() and is_knowledge_file(path))
+    return sum(
+        1
+        for layer in _KNOWLEDGE_LAYERS
+        for path in (bcquality_root / layer / "knowledge").rglob("*.md")
+        if path.is_file()
+    )
 
 
 def _normalize_knowledge_reference(path: str) -> str | None:
@@ -198,7 +199,7 @@ def _load_bcquality_identity(engine_root: Path, bcquality_root: Path) -> tuple[s
     if not isinstance(repository, str) or not isinstance(version, str):
         raise AgentError(f"BCQuality provenance config {config_path} must contain string repo and version values.")
     repository = re.sub(r"\.git$", "", re.sub(r"^(https://github\.com/|git@github\.com:)", "", repository))
-    if re.fullmatch(r"[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+", repository) is None:
+    if re.fullmatch(r"[a-zA-Z0-9_-]+/(?!\.{1,2}$)[a-zA-Z0-9_.-]+", repository) is None:
         raise AgentError(f"BCQuality provenance config {config_path} contains invalid repository {repository!r}.")
     try:
         commit = subprocess.run(
@@ -232,13 +233,13 @@ def build_pr_review_metrics(
     bcquality_identity = _load_bcquality_identity(engine_root, bcquality_root) if engine_root is not None else None
 
     if manifest:
-        expected_models = {manifest.configuration.root_model, manifest.configuration.leaf_model}
+        expected_models = list(dict.fromkeys([manifest.configuration.leaf_model, manifest.configuration.root_model]))
         if (
             run.cli_version != manifest.configuration.copilot_cli_version
             or not run.usage_complete
             or run.malformed_records != 0
             or len(run.models) != len(set(run.models))
-            or set(run.models) != expected_models
+            or set(run.models) != set(expected_models)
         ):
             raise AgentError("Engine aggregate metrics do not match the validated run manifest.")
         if manifest.bcquality.commit is None:
@@ -259,8 +260,7 @@ def build_pr_review_metrics(
         failed_api_calls=run.failed_api_calls,
         usage_api_calls=run.usage_api_calls,
         ai_credits=run.ai_credits if usage_values_available else None,
-        premium_requests=run.premium_requests if usage_values_available else None,
-        models=run.models,
+        models=expected_models if manifest else run.models,
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
         knowledge_files=_count_available_knowledge(bcquality_root.resolve()),

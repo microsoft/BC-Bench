@@ -17,7 +17,12 @@ from bcbench.cli_options import (
     CopilotModel,
     EvaluationCategoryOption,
     OutputDir,
+    PRReviewCliTimeoutMinutes,
+    PRReviewCliVersion,
     PRReviewEnginePath,
+    PRReviewLeafExecution,
+    PRReviewLeafModel,
+    PRReviewMaxLeafConcurrency,
     RepoPath,
     resolve_agent_runtime,
 )
@@ -142,6 +147,11 @@ def run_pr_review(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     engine_path: PRReviewEnginePath = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
+    cli_version: PRReviewCliVersion = None,
+    leaf_model: PRReviewLeafModel = None,
+    leaf_execution: PRReviewLeafExecution = None,
+    max_leaf_concurrency: PRReviewMaxLeafConcurrency = 4,
+    cli_timeout_minutes: PRReviewCliTimeoutMinutes = 30,
 ) -> None:
     """
     Run BC PR Review on a single code-review entry.
@@ -169,6 +179,11 @@ def run_pr_review(
         agent_version=get_pr_review_version(engine_path, require_clean=False),
         engine_path=engine_path,
         min_severity=min_severity,
+        cli_version=cli_version,
+        leaf_model=leaf_model,
+        leaf_execution=leaf_execution,
+        max_leaf_concurrency=max_leaf_concurrency,
+        cli_timeout_minutes=cli_timeout_minutes,
     )
 
 

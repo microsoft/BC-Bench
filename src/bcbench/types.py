@@ -59,7 +59,7 @@ type ExpectedOutput = str | Checklist
 type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form
-type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
+type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$")]
 
 
 class AgentMetrics(BaseModel):
@@ -99,7 +99,6 @@ class PRReviewMetrics(AgentMetrics):
     api_calls: int | None = Field(default=None, ge=0)
     failed_api_calls: int | None = Field(default=None, ge=0)
     usage_api_calls: int | None = Field(default=None, ge=0)
-    premium_requests: float | None = Field(default=None, ge=0)
     models: list[str] = Field(default_factory=list)
     usage_complete: bool | None = None
     malformed_records: int | None = Field(default=None, ge=0)

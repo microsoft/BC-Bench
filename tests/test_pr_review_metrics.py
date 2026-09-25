@@ -1,13 +1,11 @@
 import json
 import subprocess
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
 from unittest.mock import patch
 
 import pytest
 
-from bcbench.agent.pr_review.metrics import FILTER_REPORT_FILE_NAME, RUN_METRICS_FILE_NAME, _count_available_knowledge, build_pr_review_metrics
+from bcbench.agent.pr_review.metrics import FILTER_REPORT_FILE_NAME, RUN_METRICS_FILE_NAME, _count_available_knowledge, _load_bcquality_identity, build_pr_review_metrics
 from bcbench.agent.pr_review.run_manifest import RunManifest
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError
@@ -50,15 +48,55 @@ def _write_run_metrics(root: Path, **overrides: object) -> None:
 
 
 def _manifest() -> RunManifest:
-    configuration = SimpleNamespace(
-        copilot_cli_version="1.0.81-0",
-        root_model="gpt-5.6-sol",
-        leaf_model="gpt-5.4-mini",
-        leaf_execution="serial",
-        max_leaf_concurrency=4,
+    def process(role: str, ordinal: int, skill_id: str, model: str) -> dict[str, object]:
+        return {
+            "role": role,
+            "ordinal": ordinal,
+            "skill_id": skill_id,
+            "requested_model": model,
+            "observed_models": [model],
+            "status": "completed",
+            "started_at": "2026-09-14T12:00:00Z",
+            "completed_at": "2026-09-14T12:00:01Z",
+            "duration_seconds": 1.0,
+            "exit_code": 0,
+            "report_path": f"{role}/{ordinal}/_review-report.json",
+            "failure_reason": None,
+            "metrics": {
+                "cli_version": "1.0.81-0",
+                "models": [model],
+                "usage_complete": True,
+                "malformed_records": 0,
+            },
+        }
+
+    return RunManifest.model_validate(
+        {
+            "schema_version": 1,
+            "status": "completed",
+            "started_at": "2026-09-14T12:00:00Z",
+            "completed_at": "2026-09-14T12:00:02Z",
+            "failure_reason": None,
+            "engine": {"repository": "microsoft/BC-ALAgents", "commit": "e" * 40, "agent_version": "1.6.6"},
+            "bcquality": {"commit": "b" * 40, "source_snapshot": "a" * 64},
+            "configuration": {
+                "copilot_cli_version": "1.0.81-0",
+                "root_model": "gpt-5.6-sol",
+                "leaf_model": "gpt-5.4-mini",
+                "leaf_execution": "serial",
+                "max_leaf_concurrency": 4,
+                "cli_timeout_minutes": 30,
+                "minimum_severity": "Medium",
+                "agent_minimum_severity": "Medium",
+                "review_source": "local",
+            },
+            "plan": {"skill_id": "al-code-review", "leaf_count": 1, "leaf_ids": ["al-performance-review"]},
+            "processes": [
+                process("leaf", 1, "al-performance-review", "gpt-5.4-mini"),
+                process("root", 2, "al-code-review", "gpt-5.6-sol"),
+            ],
+        }
     )
-    bcquality = SimpleNamespace(commit="b" * 40, source_snapshot="a" * 64)
-    return cast(RunManifest, SimpleNamespace(configuration=configuration, bcquality=bcquality, processes=[object(), object()]))
 
 
 def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> None:
@@ -79,7 +117,6 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
     assert metrics.failed_api_calls == 1
     assert metrics.usage_api_calls == 2
     assert metrics.ai_credits == 1.75
-    assert metrics.premium_requests == 1.75
     assert metrics.models == ["gpt-5.4-mini", "gpt-5.6-sol"]
     assert metrics.usage_complete is True
     assert metrics.malformed_records == 0
@@ -124,6 +161,14 @@ def test_validated_manifest_promotes_deterministic_metrics(tmp_path: Path) -> No
     assert metrics.bcquality_commit == "b" * 40
     assert metrics.bcquality_source_snapshot == "a" * 64
     assert metrics.review_process_count == 2
+
+
+def test_validated_manifest_normalizes_model_order(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, models=["gpt-5.6-sol", "gpt-5.4-mini"])
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
+
+    assert metrics.models == ["gpt-5.4-mini", "gpt-5.6-sol"]
 
 
 @pytest.mark.parametrize(
@@ -505,6 +550,26 @@ def test_invalid_runtime_provenance_config_fails_metrics(tmp_path: Path) -> None
 
     with pytest.raises(AgentError, match="contains invalid repository"):
         build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "engine")
+
+
+def test_runtime_provenance_allows_dotted_repository_names(tmp_path: Path) -> None:
+    config = tmp_path / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('bcquality:\n  repo: "microsoft/BC.Quality"\n  version: "1.6"\n', encoding="utf-8")
+    completed = subprocess.CompletedProcess(args=["git"], returncode=0, stdout="b" * 40 + "\n", stderr="")
+
+    with patch("bcbench.agent.pr_review.metrics.subprocess.run", return_value=completed):
+        assert _load_bcquality_identity(config.parents[2], tmp_path) == ("microsoft/BC.Quality", "b" * 40, "1.6")
+
+
+@pytest.mark.parametrize("repository", ["microsoft/..", "microsoft/BCQuality/extra", "microsoft/BC Quality"])
+def test_runtime_provenance_rejects_unsafe_repository_names(tmp_path: Path, repository: str) -> None:
+    config = tmp_path / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text(f'bcquality:\n  repo: "{repository}"\n  version: "1.6"\n', encoding="utf-8")
+
+    with pytest.raises(AgentError, match="contains invalid repository"):
+        _load_bcquality_identity(config.parents[2], tmp_path)
 
 
 def test_unresolvable_runtime_provenance_checkout_fails_metrics(tmp_path: Path) -> None:

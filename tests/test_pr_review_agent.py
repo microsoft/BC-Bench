@@ -97,17 +97,19 @@ def test_prepare_bcquality_root_ignores_ambient_overrides(tmp_path: Path, monkey
 
 
 @pytest.mark.parametrize("value", ["", "latest", "1.0", "1.0.83; injected"])
-def test_pr_review_cli_version_requires_pinned_semver(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
-    monkeypatch.setenv("COPILOT_REVIEW_CLI_VERSION", value)
-
+def test_pr_review_cli_version_requires_pinned_semver(value: str) -> None:
     with pytest.raises(AgentError, match="COPILOT_REVIEW_CLI_VERSION must be"):
-        _resolve_pr_review_cli_version()
+        _resolve_pr_review_cli_version(value)
 
 
-def test_pr_review_cli_version_uses_workflow_selected_pin(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("COPILOT_REVIEW_CLI_VERSION", "1.0.83")
+def test_pr_review_cli_version_uses_workflow_selected_pin() -> None:
+    assert _resolve_pr_review_cli_version("1.0.83") == "1.0.83"
 
-    assert _resolve_pr_review_cli_version() == "1.0.83"
+
+def test_pr_review_cli_version_uses_installed_cli_when_no_workflow_pin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("COPILOT_REVIEW_CLI_VERSION", raising=False)
+    with patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"):
+        assert _resolve_pr_review_cli_version() == "1.0.83"
 
 
 def test_valid_empty_findings_is_a_clean_review(tmp_path: Path) -> None:
@@ -250,6 +252,11 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
             output_dir=Path("output"),
             agent_version="e" * 40,
             engine_path=tmp_path / "engine",
+            cli_version="1.0.83",
+            leaf_model="gpt-5.4",
+            leaf_execution="serial",
+            max_leaf_concurrency=4,
+            cli_timeout_minutes=30,
         )
 
     assert isinstance(metrics, PRReviewMetrics)
@@ -287,5 +294,83 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert engine_env["COPILOT_REVIEW_CLI_VERSION"] == "1.0.83"
     assert engine_env["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.4"
     assert engine_env["COPILOT_REVIEW_LEAF_EXECUTION"] == "serial"
+    assert engine_env["COPILOT_REVIEW_CLI_TIMEOUT_MINUTES"] == "30"
     assert run_process.call_args.args[0][-1].endswith("Invoke-CopilotPRReview.ps1")
     assert "-GenerateOnly" not in run_process.call_args.args[0]
+
+
+def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _, repo = _dirs(tmp_path)
+    entry = create_codereview_entry()
+    settings = {"min_severity": "Medium"}
+    completed = subprocess.CompletedProcess(args=["pwsh"], returncode=0, stdout="", stderr="")
+    engine_root = tmp_path / "engine"
+    bcquality_root = tmp_path / "bcquality"
+    knowledge_root = bcquality_root / "knowledge"
+    knowledge_root.mkdir(parents=True)
+    (knowledge_root / "one.md").write_text("# One", encoding="utf-8")
+    (bcquality_root / "_filter-report.json").write_text('{"removed": []}', encoding="utf-8")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    (output_dir / "_run-metrics.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "metrics_source": "copilot-cli-otel",
+                "cli_version": "1.0.83",
+                "wall_time_seconds": 1.0,
+                "prompt_tokens": 1,
+                "cached_tokens": 0,
+                "cache_creation_tokens": 0,
+                "completion_tokens": 1,
+                "reasoning_tokens": 0,
+                "total_tokens": 2,
+                "api_calls": 1,
+                "failed_api_calls": 0,
+                "usage_api_calls": 1,
+                "ai_credits": 0.01,
+                "premium_requests": 0.0,
+                "models": ["gpt-5.6-sol", "gpt-5.6-luna"],
+                "usage_complete": True,
+                "malformed_records": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_run_manifest(output_dir, root_model="gpt-5.6-sol", leaf_model="gpt-5.6-luna")
+    monkeypatch.setenv("COPILOT_REVIEW_LEAF_MODEL", "ambient-leaf")
+    monkeypatch.setenv("COPILOT_REVIEW_LEAF_EXECUTION", "parallel")
+    monkeypatch.setenv("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "99")
+    monkeypatch.setenv("COPILOT_REVIEW_CLI_TIMEOUT_MINUTES", "99")
+
+    with (
+        patch("bcbench.agent.pr_review.agent._load_pr_review_settings", return_value=settings),
+        patch("bcbench.agent.pr_review.agent._resolve_pr_review_root", return_value=engine_root),
+        patch("bcbench.agent.pr_review.agent._resolve_pwsh", return_value="pwsh"),
+        patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
+        patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
+        patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root),
+        patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
+        patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[1.0, 2.0]),
+        patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
+    ):
+        run_pr_review_agent(
+            entry=entry,
+            model="gpt-5.6-sol",
+            category=EvaluationCategory.CODE_REVIEW,
+            repo_path=repo,
+            output_dir=output_dir,
+            agent_version="e" * 40,
+            engine_path=engine_root,
+            cli_version="1.0.83",
+            leaf_model="gpt-5.6-luna",
+            leaf_execution="serial",
+            max_leaf_concurrency=4,
+            cli_timeout_minutes=30,
+        )
+
+    engine_env = run_process.call_args.kwargs["env"]
+    assert engine_env["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.6-luna"
+    assert engine_env["COPILOT_REVIEW_LEAF_EXECUTION"] == "serial"
+    assert engine_env["COPILOT_REVIEW_MAX_LEAF_CONCURRENCY"] == "4"
+    assert engine_env["COPILOT_REVIEW_CLI_TIMEOUT_MINUTES"] == "30"
