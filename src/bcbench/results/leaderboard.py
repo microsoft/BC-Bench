@@ -5,9 +5,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from bcbench.logger import get_logger
+from bcbench.results.investigation import InvestigationSummary
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
@@ -88,6 +89,7 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
     ci_low: float | None = None
     ci_high: float | None = None
     pass_hat_5: float | None = None
+    investigation: InvestigationSummary | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "ExecutionBasedLeaderboardAggregate":
@@ -112,6 +114,7 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
                 "ci_low": round(ci["ci_low"], 3) if ci["ci_low"] is not None else None,
                 "ci_high": round(ci["ci_high"], 3) if ci["ci_high"] is not None else None,
                 "pass_hat_5": pass_hat_5,
+                "investigation": InvestigationSummary.combine([run.investigation for run in execution_runs if run.investigation is not None]),
             }
         )
 

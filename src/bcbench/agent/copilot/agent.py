@@ -1,6 +1,7 @@
 """GitHub Copilot CLI Agent implementation."""
 
 import subprocess
+from contextlib import ExitStack
 from pathlib import Path
 
 import yaml
@@ -8,11 +9,14 @@ import yaml
 from bcbench.agent.copilot.cli import invoke_copilot
 from bcbench.agent.shared import (
     agent_subprocess_env,
+    attach_history_metrics,
     build_al_lsp_plugin,
     build_mcp_config,
     build_prompt,
     resolve_config_plugins,
+    resolve_history_settings,
     start_bc_mcp_gateway,
+    start_history_gateway,
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -43,15 +47,8 @@ def run_copilot_agent(
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=bool(runtime and runtime.al_mcp))
-    bc_gateway = start_bc_mcp_gateway(runtime)
-    mcp_config_json, mcp_server_names = build_mcp_config(
-        copilot_config,
-        entry,
-        repo_path,
-        runtime=runtime,
-        bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
-    )
+    history_settings = resolve_history_settings(copilot_config, category)
+    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=bool(runtime and runtime.al_mcp), history=history_settings)
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(
         entry,
         category,
@@ -65,54 +62,68 @@ def run_copilot_agent(
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
-        mcp_servers=mcp_server_names,
         al_lsp_enabled=lsp_plugin_dir is not None,
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
         plugins=[plugin.record for plugin, _ in plugins] or None,
+        history=history_settings,
     )
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
+    history_gateway = None
     try:
-        extra_args = [
-            "--log-level=debug",
-            f"--log-dir={output_dir.resolve()}",
-        ]
-        if mcp_config_json:
-            extra_args.append(f"--additional-mcp-config={mcp_config_json}")
-        if lsp_plugin_dir is not None:
-            extra_args.append(f"--plugin-dir={lsp_plugin_dir}")
-        extra_args.extend(f"--plugin-dir={plugin_dir}" for _, plugin_dir in plugins)
-        # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
-        # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
-        # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
-        # silently widen the agent's sandbox access.
-        extra_args.extend(f"--add-dir={plugin_dir}" for plugin, plugin_dir in plugins if plugin.grant_dir_access)
-        if custom_agent:
-            extra_args.append(f"--agent={custom_agent}")
+        with ExitStack() as cleanup:
+            bc_gateway = start_bc_mcp_gateway(runtime)
+            if bc_gateway is not None:
+                cleanup.callback(bc_gateway.stop)
+            history_gateway = start_history_gateway(entry, history_settings, output_dir)
+            if history_gateway is not None:
+                cleanup.callback(history_gateway.stop)
+            mcp_config_json, mcp_server_names = build_mcp_config(
+                copilot_config,
+                entry,
+                repo_path,
+                runtime=runtime,
+                bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
+                history_gateway_url=history_gateway.base_url if history_gateway else None,
+            )
+            config = config.model_copy(update={"mcp_servers": mcp_server_names})
+            extra_args = [
+                "--log-level=debug",
+                f"--log-dir={output_dir.resolve()}",
+            ]
+            if mcp_config_json:
+                extra_args.append(f"--additional-mcp-config={mcp_config_json}")
+            if lsp_plugin_dir is not None:
+                extra_args.append(f"--plugin-dir={lsp_plugin_dir}")
+            extra_args.extend(f"--plugin-dir={plugin_dir}" for _, plugin_dir in plugins)
+            # Directory access is opt-in; registering a plugin must not widen filesystem access.
+            extra_args.extend(f"--add-dir={plugin_dir}" for plugin, plugin_dir in plugins if plugin.grant_dir_access)
+            if custom_agent:
+                extra_args.append(f"--agent={custom_agent}")
 
-        metrics, _ = invoke_copilot(
-            prompt=prompt,
-            model=model,
-            work_dir=repo_path,
-            timeout=_config.timeout.agent_execution,
-            allow_all_tools=True,
-            custom_instructions=instructions_enabled,
-            extra_args=extra_args,
-            env=agent_subprocess_env(
-                {
-                    "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
-                },
-                pass_bc_credentials=category.pass_on_bc_container_credentials,
-            ),
-        )
-        logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
+            metrics, _ = invoke_copilot(
+                prompt=prompt,
+                model=model,
+                work_dir=repo_path,
+                timeout=_config.timeout.agent_execution,
+                allow_all_tools=True,
+                custom_instructions=instructions_enabled,
+                extra_args=extra_args,
+                env=agent_subprocess_env(
+                    {
+                        "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
+                    },
+                    pass_bc_credentials=category.pass_on_bc_container_credentials,
+                ),
+            )
+            logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
     except subprocess.TimeoutExpired:
         logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
+        metrics = attach_history_metrics(AgentMetrics(execution_time=_config.timeout.agent_execution), history_gateway)
         raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
@@ -121,7 +132,4 @@ def run_copilot_agent(
         logger.exception("Unexpected error running Copilot CLI")
         raise
     else:
-        return metrics, config
-    finally:
-        if bc_gateway is not None:
-            bc_gateway.stop()
+        return attach_history_metrics(metrics, history_gateway), config

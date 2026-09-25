@@ -1,9 +1,11 @@
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
+from bcbench.exceptions import BuildError
 from bcbench.operations import bc_operations
 from bcbench.types import ContainerConfig
 
@@ -204,6 +206,36 @@ class TestPowerShellScriptGeneration:
         # Should not have quotes around version
         assert "'27.0'" not in script
         assert '"27.0"' not in script
+
+
+class TestBuildAndPublish:
+    def test_failure_preserves_stdout_and_stderr(self, tmp_path, monkeypatch):
+        def fail(*args, **kwargs):
+            raise subprocess.CalledProcessError(
+                returncode=1,
+                cmd=args[0],
+                output="stdout compiler detail",
+                stderr="stderr compiler detail",
+            )
+
+        monkeypatch.setattr(subprocess, "run", fail)
+
+        with pytest.raises(BuildError) as raised:
+            bc_operations.build_and_publish_projects(
+                tmp_path,
+                ["App\\Layers\\W1\\BaseApp"],
+                ContainerConfig("bcserver", "admin", "pass", "CRONUS"),
+                "27.0",
+            )
+
+        assert raised.value.output == "stdout compiler detail\nstderr compiler detail"
+
+    def test_powershell_module_keeps_partial_compiler_output(self):
+        module = (_config.paths.ps_script_path / "AppUtils.psm1").read_text(encoding="utf-8")
+
+        assert "[System.Collections.Generic.List[object]]::new()" in module
+        assert "ForEach-Object { $compileOutput.Add($_) }" in module
+        assert "Write-Log ($compileOutput | Out-String) -Level Error" in module
 
 
 class TestRunTestSuite:

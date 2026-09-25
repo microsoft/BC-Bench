@@ -9,6 +9,9 @@ from unidiff.errors import UnidiffParseError
 from bcbench.config import get_config
 from bcbench.exceptions import CollectionError
 from bcbench.logger import get_logger
+from bcbench.patch import extract_file_paths_from_patch
+
+__all__ = ["extract_file_paths_from_patch", "extract_patches", "find_project_paths_from_diff", "separate_patches"]
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -143,20 +146,3 @@ def find_project_paths_from_diff(patch: str) -> list[str]:
                 break
 
     return sorted(project_paths)
-
-
-def extract_file_paths_from_patch(patch: str) -> list[str]:
-    """Extract file paths from a patch.
-
-    Args:
-        patch: The diff/patch string to analyze
-
-    Returns:
-        List of file paths referenced in the patch
-    """
-    if not patch:
-        return []
-
-    patch_set = PatchSet(patch)
-
-    return [patched_file.path for patched_file in patch_set if patched_file.path]
