@@ -223,6 +223,10 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         ),
         encoding="utf-8",
     )
+    (output_dir / "al-code-review-findings.json").write_text(
+        json.dumps({"findings": [], "subResults": [], "skippedSubSkills": [], "suppressed": []}),
+        encoding="utf-8",
+    )
     _write_run_manifest(output_dir, root_model="gpt-5.6-luna", leaf_model="gpt-5.4")
 
     with (
@@ -232,6 +236,10 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root) as prepare_bcquality,
+        patch(
+            "bcbench.agent.pr_review.metrics._load_bcquality_identity",
+            return_value=("microsoft/BCQuality", "b" * 40, "1.6"),
+        ),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[10.0, 12.5]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
@@ -259,10 +267,14 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert metrics.ai_credits == 0.25
     assert metrics.api_calls == 2
     assert metrics.copilot_cli_version == "1.0.83"
+    assert metrics.models == ["gpt-5.4", "gpt-5.6-luna"]
+    assert metrics.bcquality_repository == "microsoft/BCQuality"
+    assert metrics.bcquality_commit == "b" * 40
+    assert metrics.bcquality_version == "1.6"
     assert metrics.leaf_model == "gpt-5.4"
     assert metrics.leaf_execution == "serial"
     assert metrics.max_leaf_concurrency == 4
-    assert metrics.bcquality_commit == "b" * 40
+    assert metrics.bcquality_source_snapshot == "a" * 64
     assert metrics.review_process_count == 2
     assert config.is_empty()
     resolve_engine.assert_called_once_with(tmp_path / "engine")
@@ -337,6 +349,10 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root),
+        patch(
+            "bcbench.agent.pr_review.metrics._load_bcquality_identity",
+            return_value=("microsoft/BCQuality", "b" * 40, "1.6"),
+        ),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[1.0, 2.0]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,

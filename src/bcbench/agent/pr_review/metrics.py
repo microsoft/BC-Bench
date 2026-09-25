@@ -1,7 +1,11 @@
 import json
+import re
+import subprocess
+from functools import cache
 from pathlib import Path
 from typing import Annotated, Literal
 
+import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from bcbench.agent.pr_review.run_manifest import RunManifest
@@ -9,8 +13,53 @@ from bcbench.exceptions import AgentError
 from bcbench.types import PRReviewMetrics
 
 RUN_METRICS_FILE_NAME = "_run-metrics.json"
+FILTER_REPORT_FILE_NAME = "_filter-report.json"
+FINDINGS_FILE_NAME = "al-code-review-findings.json"
+_KNOWLEDGE_LAYERS = {"microsoft", "community", "custom"}
 _NonNegativeInt = Annotated[int, Field(ge=0)]
 _NonNegativeFloat = Annotated[float, Field(ge=0)]
+
+
+class _FilterRemoval(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    kind: Literal["knowledge", "knowledge-sample", "skill"]
+
+
+class _FilterReport(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    removed: list[_FilterRemoval]
+
+
+class _EngineDiagnostics(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    knowledge_used: _NonNegativeInt | None
+    knowledge_suppressed: _NonNegativeInt | None
+    sub_skills_executed: _NonNegativeInt | None
+    sub_skills_skipped: _NonNegativeInt | None
+
+
+class _KnowledgeReference(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    path: str | None = None
+
+
+class _DiagnosticItem(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    references: list[_KnowledgeReference] = Field(default_factory=list)
+
+
+class _EngineFindings(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    findings: list[_DiagnosticItem]
+    sub_results: list[_DiagnosticItem] = Field(alias="subResults")
+    skipped_sub_skills: list[object] = Field(alias="skippedSubSkills")
+    suppressed: list[object]
 
 
 class _RunMetrics(BaseModel):
@@ -77,20 +126,122 @@ def _load_run_metrics(path: Path) -> _RunMetrics:
         raise AgentError(f"Engine run metrics artifact {path} does not satisfy schema version 1: {exc}") from exc
 
 
-def build_pr_review_metrics(output_dir: Path, execution_time: float, manifest: RunManifest | None = None) -> PRReviewMetrics:
+def _load_filter_report(path: Path) -> _FilterReport | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise AgentError(f"Could not read BCQuality filter report {path}: {exc}") from exc
+    try:
+        return _FilterReport.model_validate(payload)
+    except ValidationError as exc:
+        raise AgentError(f"BCQuality filter report {path} has an invalid shape: {exc}") from exc
+
+
+@cache
+def _count_available_knowledge(bcquality_root: Path) -> int:
+    return sum(1 for layer in _KNOWLEDGE_LAYERS for path in (bcquality_root / layer / "knowledge").rglob("*.md") if path.is_file())
+
+
+def _normalize_knowledge_reference(path: str) -> str | None:
+    parts = path.replace("\\", "/").strip("/").split("/")
+    if any(part in {"", ".."} for part in parts) or not parts[-1].lower().endswith(".md"):
+        return None
+    for index in range(len(parts) - 2):
+        if parts[index].lower() in _KNOWLEDGE_LAYERS and parts[index + 1].lower() == "knowledge":
+            return "/".join(parts[index:]).lower()
+    return None
+
+
+def _load_engine_diagnostics(path: Path) -> _EngineDiagnostics:
+    if not path.exists():
+        return _EngineDiagnostics(knowledge_used=None, knowledge_suppressed=None, sub_skills_executed=None, sub_skills_skipped=None)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise AgentError(f"Could not read engine findings artifact {path}: {exc}") from exc
+    try:
+        report = _EngineFindings.model_validate(payload)
+    except ValidationError as exc:
+        raise AgentError(f"Engine findings artifact {path} has an invalid diagnostics shape: {exc}") from exc
+
+    cited: set[str] = set()
+    for item in [*report.findings, *report.sub_results]:
+        for reference in item.references:
+            if reference.path is not None:
+                normalized = _normalize_knowledge_reference(reference.path)
+                if normalized is not None:
+                    cited.add(normalized)
+
+    return _EngineDiagnostics(
+        knowledge_used=len(cited),
+        knowledge_suppressed=len(report.suppressed),
+        sub_skills_executed=len(report.sub_results),
+        sub_skills_skipped=len(report.skipped_sub_skills),
+    )
+
+
+def _load_bcquality_identity(engine_root: Path, bcquality_root: Path) -> tuple[str, str, str]:
+    config_path = engine_root / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    try:
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        bcquality = config["bcquality"]
+        repository = bcquality["repo"]
+        version = bcquality["version"]
+    except (OSError, TypeError, KeyError, yaml.YAMLError) as exc:
+        raise AgentError(f"Could not read BCQuality provenance from {config_path}: {exc}") from exc
+    if not isinstance(repository, str) or not isinstance(version, str):
+        raise AgentError(f"BCQuality provenance config {config_path} must contain string repo and version values.")
+    repository = re.sub(r"\.git$", "", re.sub(r"^(https://github\.com/|git@github\.com:)", "", repository))
+    if re.fullmatch(r"[a-zA-Z0-9_-]+/(?!\.{1,2}$)[a-zA-Z0-9_.-]+", repository) is None:
+        raise AgentError(f"BCQuality provenance config {config_path} contains invalid repository {repository!r}.")
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(bcquality_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise AgentError(f"Could not resolve BCQuality provenance from checkout {bcquality_root}: {exc}") from exc
+    if re.fullmatch(r"[0-9a-fA-F]{40}", commit) is None:
+        raise AgentError(f"BCQuality checkout at {bcquality_root} returned invalid commit {commit!r}.")
+    return repository, commit, version
+
+
+def build_pr_review_metrics(
+    output_dir: Path,
+    bcquality_root: Path,
+    execution_time: float,
+    *,
+    manifest: RunManifest | None = None,
+    engine_root: Path | None = None,
+) -> PRReviewMetrics:
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
+    report = _load_filter_report(bcquality_root / FILTER_REPORT_FILE_NAME)
+    engine = _load_engine_diagnostics(output_dir / FINDINGS_FILE_NAME)
+    bcquality_identity = _load_bcquality_identity(engine_root, bcquality_root) if engine_root is not None else None
+
     if manifest:
-        expected_models = {manifest.configuration.root_model, manifest.configuration.leaf_model}
+        expected_models = list(dict.fromkeys([manifest.configuration.leaf_model, manifest.configuration.root_model]))
         if (
             run.cli_version != manifest.configuration.copilot_cli_version
             or not run.usage_complete
             or run.malformed_records != 0
             or len(run.models) != len(set(run.models))
-            or set(run.models) != expected_models
+            or set(run.models) != set(expected_models)
         ):
             raise AgentError("Engine aggregate metrics do not match the validated run manifest.")
+        if manifest.bcquality.commit is None:
+            raise AgentError("Validated run manifest is missing the BCQuality commit.")
+        if bcquality_identity is not None and bcquality_identity[1].lower() != manifest.bcquality.commit.lower():
+            raise AgentError("BCQuality checkout does not match the validated run manifest.")
+
     usage_values_available = run.malformed_records == 0
     return PRReviewMetrics(
         execution_time=execution_time,
@@ -100,18 +251,26 @@ def build_pr_review_metrics(output_dir: Path, execution_time: float, manifest: R
         completion_tokens=run.completion_tokens if usage_values_available else None,
         reasoning_tokens=run.reasoning_tokens if usage_values_available else None,
         total_tokens=run.total_tokens if usage_values_available else None,
-        api_calls=run.api_calls if usage_values_available else None,
-        failed_api_calls=run.failed_api_calls if usage_values_available else None,
-        usage_api_calls=run.usage_api_calls if usage_values_available else None,
+        api_calls=run.api_calls,
+        failed_api_calls=run.failed_api_calls,
+        usage_api_calls=run.usage_api_calls,
         ai_credits=run.ai_credits if usage_values_available else None,
-        models=run.models,
+        models=expected_models if manifest else run.models,
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
+        knowledge_files=_count_available_knowledge(bcquality_root.resolve()),
+        knowledge_pruned=sum(1 for item in report.removed if item.kind == "knowledge") if report is not None else None,
+        knowledge_used=engine.knowledge_used,
+        knowledge_suppressed=engine.knowledge_suppressed,
+        sub_skills_executed=engine.sub_skills_executed,
+        sub_skills_skipped=engine.sub_skills_skipped,
         copilot_cli_version=run.cli_version,
+        bcquality_repository=bcquality_identity[0] if bcquality_identity else None,
+        bcquality_commit=manifest.bcquality.commit if manifest else (bcquality_identity[1] if bcquality_identity else None),
+        bcquality_version=bcquality_identity[2] if bcquality_identity else None,
         leaf_model=manifest.configuration.leaf_model if manifest else None,
         leaf_execution=manifest.configuration.leaf_execution if manifest else None,
         max_leaf_concurrency=manifest.configuration.max_leaf_concurrency if manifest else None,
-        bcquality_commit=manifest.bcquality.commit if manifest else None,
         bcquality_source_snapshot=manifest.bcquality.source_snapshot if manifest else None,
         review_process_count=len(manifest.processes) if manifest else None,
     )

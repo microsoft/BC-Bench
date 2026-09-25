@@ -59,7 +59,7 @@ type ExpectedOutput = str | Checklist
 type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form
-type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
+type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$")]
 
 
 class AgentMetrics(BaseModel):
@@ -102,11 +102,19 @@ class PRReviewMetrics(AgentMetrics):
     models: list[str] = Field(default_factory=list)
     usage_complete: bool | None = None
     malformed_records: int | None = Field(default=None, ge=0)
+    knowledge_files: int | None = Field(default=None, ge=0)
+    knowledge_pruned: int | None = Field(default=None, ge=0)
+    knowledge_used: int | None = Field(default=None, ge=0)
+    knowledge_suppressed: int | None = Field(default=None, ge=0)
+    sub_skills_executed: int | None = Field(default=None, ge=0)
+    sub_skills_skipped: int | None = Field(default=None, ge=0)
     copilot_cli_version: str | None = None
+    bcquality_repository: RepoSlug | None = None
+    bcquality_commit: CommitSha | None = None
+    bcquality_version: str | None = None
     leaf_model: str | None = None
     leaf_execution: Literal["serial", "parallel"] | None = None
     max_leaf_concurrency: int | None = Field(default=None, ge=1)
-    bcquality_commit: str | None = None
     bcquality_source_snapshot: str | None = None
     review_process_count: int | None = Field(default=None, ge=1)
 
