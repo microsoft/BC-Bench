@@ -48,12 +48,23 @@ def test_pinned_artifacts_cover_container_dataset_versions() -> None:
 )
 def test_action_uses_configured_artifact_or_skips_container(category: str, dataset: str, version: str, skip_container: bool, tmp_path: Path) -> None:
     assert PWSH is not None
+    action = yaml.safe_load((ROOT / ".github" / "actions" / "setup-bc-container-repo" / "action.yml").read_text(encoding="utf-8"))
+    steps = action["runs"]["steps"]
+    version_step = next(step for step in steps if step.get("id") == "bcversion")
+    cache_step = next(step for step in steps if step["name"] == "Cache BC sandbox artifacts")
+    assert version_step["if"] == cache_step["if"] == "inputs.skip-container != 'true'"
+    assert cache_step["with"]["key"] == "${{ steps.bcversion.outputs.cache_key }}"
+    if skip_container:
+        return
+
     entries = (json.loads(line) for line in (ROOT / "dataset" / dataset).read_text(encoding="utf-8").splitlines())
     entry = next((item for item in entries if item["environment_setup_version"] == version), None)
     assert entry is not None, f"No entry in {dataset} for version {version}"
-    action = yaml.safe_load((ROOT / ".github" / "actions" / "setup-bc-container-repo" / "action.yml").read_text(encoding="utf-8"))
-    steps = action["runs"]["steps"]
-    script = next(step for step in steps if step.get("id") == "bcversion")["run"]
+    script = version_step["run"]
+    if category == "data-query":
+        script = script.replace(
+            "Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking", "Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking\n" + MOCK_INSIDER_LOOKUP
+        )
     for expression, value in {
         "${{ inputs.instance-id }}": entry["instance_id"],
         "${{ inputs.category }}": category,
@@ -71,35 +82,9 @@ def test_action_uses_configured_artifact_or_skips_container(category: str, datas
     )
     assert result.returncode == 0, result.stderr
     outputs = dict(line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines())
-    assert outputs["version"] == version
     assert outputs["al_tool_dotnet_version"] == ("10.0" if int(entry["environment_setup_version"].split(".")[0]) >= 29 else "8.0")
-
-    artifact_step = next(step for step in steps if step.get("id") == "bcartifact")
-    cache_step = next(step for step in steps if step["name"] == "Cache BC sandbox artifacts")
-    assert artifact_step["if"] == cache_step["if"] == "inputs.skip-container != 'true'"
-    assert cache_step["with"]["key"] == "${{ steps.bcartifact.outputs.cache_key }}"
-    if skip_container:
-        assert "cache_key" not in outputs
-        return
-
-    script = artifact_step["run"].replace("${{ steps.bcversion.outputs.version }}", outputs["version"]).replace("${{ inputs.category }}", category)
-    if category == "data-query":
-        script = script.replace(
-            "Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking", "Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking\n" + MOCK_INSIDER_LOOKUP
-        )
-    output = tmp_path / "artifact-output"
-    result = subprocess.run(
-        [PWSH, "-NoProfile", "-NonInteractive", "-Command", script],
-        cwd=ROOT,
-        env={**os.environ, "GITHUB_OUTPUT": str(output)},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    artifact_outputs = dict(line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines())
     url = INSIDER_URL if category == "data-query" else "https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/27.0.38460.54596/w1"
-    assert artifact_outputs["cache_key"] == f"bcartifacts-{hashlib.sha256(url.encode()).hexdigest().upper()}"
+    assert outputs["cache_key"] == f"bcartifacts-{hashlib.sha256(url.encode()).hexdigest().upper()}"
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is required")
