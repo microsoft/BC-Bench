@@ -20,7 +20,6 @@ def _metrics(*, duration: float, scale: int) -> PRReviewMetrics:
         api_calls=10 * scale,
         failed_api_calls=scale - 1,
         usage_api_calls=9 * scale,
-        premium_requests=0.5 * scale,
         models=["claude-sonnet-5", "gpt-5.4"],
         usage_complete=True,
         malformed_records=0,
