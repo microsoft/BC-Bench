@@ -24,11 +24,11 @@ def create_bcal_scenario_entry(**overrides) -> BCalScenarioEntry:
         "environment_setup_version": "28.0",
         "project_paths": ["app"],
         "session": {
-            "mode": "agent",
+            "mode": "extension",
             "audience": "Technical",
             "page": "Item Card",
             "locale": "en-US",
-            "publish": False,
+            "publish": "never",
             "review": True,
         },
         "steps": [{"id": "request", "type": "user", "text": "Implement the requested feature."}],
@@ -238,7 +238,7 @@ def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
     }
     assert [entry.instance_id for entry in features] == ["bcal-feature__warehouse-inventory-risk-1"]
     assert len(features[0].evaluation.artifact_assertions) >= 12
-    assert features[0].session.publish is False
+    assert features[0].session.publish == "never"
     assert features[0].evaluation.runtime_verification is None
     assert any(assertion["text"].startswith("Forbidden behavior is absent:") for assertion in features[0].get_expected_output()["assertions"])
 
