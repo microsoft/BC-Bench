@@ -2,7 +2,7 @@
 
 ## Reproduction steps
 
-1. Open **Expense Agent Setup**.
+1. In a US-localized company, open **Expense Agent Setup**.
 2. Set **Standard Rate of Mileage** to `4.32` and select a valid **Default Mileage UOM**.
 3. Ensure an expense user exists with a valid employee posting group and expense posting account.
 4. Ensure a company-paid expense payment method exists.
