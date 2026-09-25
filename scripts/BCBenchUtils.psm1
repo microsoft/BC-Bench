@@ -544,6 +544,13 @@ function Get-BCBenchArtifactConfig {
 
     if ($Country -ne 'w1') { throw "Approved BC artifacts are only configured for w1, not $Country." }
 
+    if ($Version -eq '29.0') {
+        return @{
+            artifactUrl = 'https://bcinsider-fvh2ekdjecfjd6gk.b02.azurefd.net/sandbox/29.0.54011.55007/w1'
+            accept_insiderEula = $true
+        }
+    }
+
     [hashtable] $pinnedUrls = @{
         '24.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.0.16410.31330/w1'
         '24.2' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.2.20227.31325/w1'
@@ -554,6 +561,7 @@ function Get-BCBenchArtifactConfig {
         '26.5' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/26.5.38752.54549/w1'
         '27.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/27.0.38460.54596/w1'
         '27.2' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/27.2.42879.54576/w1'
+        '28.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/28.0.46665.54980/w1'
     }
 
     if (-not $pinnedUrls.ContainsKey($Version)) {

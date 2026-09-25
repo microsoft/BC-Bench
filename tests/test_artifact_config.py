@@ -32,9 +32,23 @@ def test_released_bug_fix_uses_pinned_artifact():
     }
 
 
+def test_bc_28_bug_fix_uses_pinned_artifact():
+    assert get_artifact_config("bug-fix", "28.0") == {
+        "accept_insiderEula": False,
+        "artifactUrl": "https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/28.0.46665.54980/w1",
+    }
+
+
+def test_bc_29_bug_fix_uses_pinned_insider_artifact():
+    assert get_artifact_config("bug-fix", "29.0") == {
+        "accept_insiderEula": True,
+        "artifactUrl": "https://bcinsider-fvh2ekdjecfjd6gk.b02.azurefd.net/sandbox/29.0.54011.55007/w1",
+    }
+
+
 def test_unpinned_bug_fix_version_fails():
     with pytest.raises(subprocess.CalledProcessError):
-        get_artifact_config("bug-fix", "28.0")
+        get_artifact_config("bug-fix", "30.0")
 
 
 def test_setup_workflow_passes_resolved_version_to_artifact_config():
