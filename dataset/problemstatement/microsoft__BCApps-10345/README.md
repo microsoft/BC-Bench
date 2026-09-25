@@ -2,7 +2,7 @@
 
 ## Reproduction steps
 
-1. In **Company Information**, set **User Experience** to **Premium**.
+1. In a Switzerland (CH)-localized CRONUS company, open **Company Information** and set **User Experience** to **Premium**.
 2. Prepare service contract template `TEMPL0002` as a prepaid contract invoiced quarterly.
 3. Create three service items for customer `10000`, each using item `S-100`. Refer to them as items A, B, and C.
 4. Set the work date to `1 January 2026`.
