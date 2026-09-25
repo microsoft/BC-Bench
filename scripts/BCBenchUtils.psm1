@@ -511,16 +511,17 @@ function Get-BCBenchDatasetPath {
 
 <#
 .SYNOPSIS
-    Gets additional BC artifact parameters for a category.
+    Gets the BC artifact URL and container options for a category and version.
 .DESCRIPTION
-    Categories use the public artifact feed by default. Add only category-specific overrides here,
-    using parameter names accepted by Get-BCArtifactUrl.
+    Container-backed categories use pinned public artifact URLs, optionally, the latest BC Insider artifact.
 .PARAMETER Category
     The evaluation category requesting a BC artifact.
 .PARAMETER Version
-    BC version requested by the entry. Insider versions use the insider artifact feed.
+    The dataset entry's BC sandbox version.
+.PARAMETER Country
+    BC artifact country (public pins are available only for w1).
 .OUTPUTS
-    Hashtable of additional Get-BCArtifactUrl parameters.
+    Hashtable with artifactUrl and accept_insiderEula.
 #>
 function Get-BCBenchArtifactConfig {
     [CmdletBinding()]
@@ -529,19 +530,37 @@ function Get-BCBenchArtifactConfig {
         [Parameter(Mandatory = $true)]
         [string] $Category,
 
-        [Parameter(Mandatory = $false)]
-        [string] $Version
+        [Parameter(Mandatory = $true)]
+        [string] $Version,
+
+        [string] $Country = 'w1'
     )
 
-    if ($Category -eq "data-query") {
-        return @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
+    if ($Category -eq 'data-query') {
+        $url = Get-BCArtifactUrl -Version $Version -Country $Country -StorageAccount 'bcinsider' -Select 'Latest' -accept_insiderEula
+        if (-not $url) { throw "No BC Insider artifact URL resolved for version $Version ($Country)." }
+        return @{ artifactUrl = $url; accept_insiderEula = $true }
     }
 
-    if ($Version -and ($Category -in @("bug-fix", "test-generation")) -and ([Version]$Version).Major -ge 29) {
-        return @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
+    if ($Country -ne 'w1') { throw "Approved BC artifacts are only configured for w1, not $Country." }
+
+    [hashtable] $pinnedUrls = @{
+        '24.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.0.16410.31330/w1'
+        '24.2' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.2.20227.31325/w1'
+        '24.3' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.3.21374.32119/w1'
+        '25.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/25.0.23364.48438/w1'
+        '26.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/26.0.30643.50520/w1'
+        '26.3' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/26.3.36158.49685/w1'
+        '26.5' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/26.5.38752.54549/w1'
+        '27.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/27.0.38460.54596/w1'
+        '27.2' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/27.2.42879.54576/w1'
     }
 
-    return @{}
+    if (-not $pinnedUrls.ContainsKey($Version)) {
+        throw "No pinned BC artifact URL for bcartifacts version $Version in Get-BCBenchArtifactConfig."
+    }
+
+    return @{ artifactUrl = $pinnedUrls[$Version]; accept_insiderEula = $false }
 }
 
 <#
