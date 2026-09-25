@@ -66,11 +66,6 @@ on:
           - "3"
           - "4"
           - "5"
-      repetition-id:
-        description: "Independent repetition identifier used to allow concurrent full runs"
-        required: false
-        default: "default"
-        type: string
       entries:
         description: "Optional JSON array of entry IDs for a focused experiment"
         required: false
@@ -83,7 +78,7 @@ on:
         type: string
 
 concurrency:
-  group: pr-review-evaluation-${{ inputs.modified-only && 'modified' || inputs.test-run && 'test' || 'full' }}-${{ inputs.repetition-id }}
+  group: pr-review-evaluation-${{ inputs.modified-only && 'modified' || inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -211,4 +206,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "leaf-execution": "${{ inputs.leaf-execution }}", "max-leaf-concurrency": "${{ inputs.max-leaf-concurrency }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "repetition-id": "${{ inputs.repetition-id }}", "entries": ${{ toJSON(inputs.entries) }}, "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "leaf-execution": "${{ inputs.leaf-execution }}", "max-leaf-concurrency": "${{ inputs.max-leaf-concurrency }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "entries": ${{ toJSON(inputs.entries) }}, "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
