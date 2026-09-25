@@ -41,7 +41,7 @@ on:
         default: "4"
         type: string
       engine-sha:
-        description: "Full BC-ALAgents commit SHA"
+        description: "Full BC-ALAgents commit SHA (blank uses the default pin)"
         required: false
         default: ""
         type: string

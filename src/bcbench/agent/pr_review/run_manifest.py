@@ -12,7 +12,7 @@ RUN_MANIFEST_FILE_NAME = "_run-manifest.json"
 class ProcessMetrics(BaseModel):
     model_config = ConfigDict(extra="allow", frozen=True, strict=True)
 
-    cli_version: str | None
+    cli_version: str
     models: list[str]
     usage_complete: bool
     malformed_records: int = Field(ge=0)
@@ -140,6 +140,9 @@ def validate_run_manifest(
     leaf_model: str,
     leaf_execution: str,
     max_leaf_concurrency: int,
+    cli_timeout_minutes: int,
+    minimum_severity: str,
+    agent_minimum_severity: str,
 ) -> None:
     expected_configuration = {
         "copilot_cli_version": cli_version,
@@ -147,6 +150,9 @@ def validate_run_manifest(
         "leaf_model": leaf_model,
         "leaf_execution": leaf_execution,
         "max_leaf_concurrency": max_leaf_concurrency,
+        "cli_timeout_minutes": cli_timeout_minutes,
+        "minimum_severity": minimum_severity,
+        "agent_minimum_severity": agent_minimum_severity,
         "review_source": "local",
     }
     actual_configuration = manifest.configuration.model_dump()

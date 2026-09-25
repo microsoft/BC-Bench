@@ -95,6 +95,9 @@ def _validate(manifest) -> None:
         leaf_model="gpt-5.4",
         leaf_execution="serial",
         max_leaf_concurrency=4,
+        cli_timeout_minutes=30,
+        minimum_severity="Medium",
+        agent_minimum_severity="Medium",
     )
 
 
@@ -118,6 +121,9 @@ def test_accepts_bcquality_revision_resolved_by_pinned_engine(tmp_path: Path) ->
         (lambda data: data["configuration"].update(leaf_model="gpt-5.6-luna"), "leaf_model"),
         (lambda data: data["processes"][0].update(observed_models=["gemini-3.6-flash"]), "model telemetry"),
         (lambda data: data["processes"][0]["metrics"].update(usage_complete=False), "process metrics"),
+        (lambda data: data["configuration"].update(cli_timeout_minutes=45), "cli_timeout_minutes"),
+        (lambda data: data["configuration"].update(minimum_severity="High"), "minimum_severity"),
+        (lambda data: data["configuration"].update(agent_minimum_severity="High"), "agent_minimum_severity"),
         (lambda data: data["processes"].reverse(), "process ordinals"),
     ],
 )
@@ -144,4 +150,12 @@ def test_rejects_inconsistent_manifest_lifecycle(tmp_path: Path, mutation, messa
     mutation(payload)
 
     with pytest.raises(AgentError, match=message):
+        _load(tmp_path, payload)
+
+
+def test_rejects_missing_process_cli_version(tmp_path: Path) -> None:
+    payload = valid_manifest()
+    payload["processes"][0]["metrics"]["cli_version"] = None
+
+    with pytest.raises(AgentError, match="does not satisfy schema version 1"):
         _load(tmp_path, payload)

@@ -21,6 +21,7 @@ from typing import Any
 
 import yaml
 
+from bcbench.agent.copilot.cli import get_copilot_version
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.agent.pr_review.run_manifest import RUN_MANIFEST_FILE_NAME, load_run_manifest, validate_run_manifest
@@ -84,8 +85,11 @@ def _resolve_pwsh() -> str:
     return pwsh
 
 
-def _resolve_pr_review_cli_version() -> str:
-    cli_version = os.environ.get(_COPILOT_CLI_VERSION_ENV, "").strip()
+def _resolve_pr_review_cli_version(cli_version: str | None = None) -> str:
+    selected_version = cli_version if cli_version is not None else os.environ.get(_COPILOT_CLI_VERSION_ENV)
+    if selected_version is None:
+        selected_version = get_copilot_version()
+    cli_version = selected_version.strip()
     if re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", cli_version) is None:
         raise AgentError(f"{_COPILOT_CLI_VERSION_ENV} must be the installed pinned Copilot CLI semantic version.")
     return cli_version
@@ -171,6 +175,11 @@ def run_pr_review_agent(
     agent_version: str,
     engine_path: Path | None = None,
     min_severity: str | None = None,
+    cli_version: str | None = None,
+    leaf_model: str | None = None,
+    leaf_execution: str | None = None,
+    max_leaf_concurrency: int | None = None,
+    cli_timeout_minutes: int | None = None,
 ) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
 
@@ -199,19 +208,27 @@ def run_pr_review_agent(
     _commit_patch_as_head(repo_path)
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
     bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
-    cli_version = _resolve_pr_review_cli_version()
-    leaf_model = os.environ.get("COPILOT_REVIEW_LEAF_MODEL", "").strip()
+    cli_version = _resolve_pr_review_cli_version(cli_version)
+    leaf_model = (leaf_model or os.environ.get("COPILOT_REVIEW_LEAF_MODEL") or model).strip()
     if not leaf_model:
-        raise AgentError("COPILOT_REVIEW_LEAF_MODEL is required for deterministic PR Review evaluation.")
-    leaf_execution = os.environ.get("COPILOT_REVIEW_LEAF_EXECUTION", "serial").strip().lower()
+        raise AgentError("PR Review leaf model must not be empty.")
+    leaf_execution = (leaf_execution or os.environ.get("COPILOT_REVIEW_LEAF_EXECUTION", "serial")).strip().lower()
     if leaf_execution not in {"serial", "parallel"}:
         raise AgentError("COPILOT_REVIEW_LEAF_EXECUTION must be 'serial' or 'parallel'.")
-    try:
-        max_leaf_concurrency = int(os.environ.get("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "4"))
-    except ValueError as exc:
-        raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.") from exc
+    if max_leaf_concurrency is None:
+        try:
+            max_leaf_concurrency = int(os.environ.get("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "4"))
+        except ValueError as exc:
+            raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.") from exc
     if max_leaf_concurrency < 1:
         raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.")
+    if cli_timeout_minutes is None:
+        try:
+            cli_timeout_minutes = int(os.environ.get("COPILOT_REVIEW_CLI_TIMEOUT_MINUTES", "30"))
+        except ValueError as exc:
+            raise AgentError("COPILOT_REVIEW_CLI_TIMEOUT_MINUTES must be a non-negative integer.") from exc
+    if cli_timeout_minutes < 0:
+        raise AgentError("COPILOT_REVIEW_CLI_TIMEOUT_MINUTES must be a non-negative integer.")
 
     engine = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
     env = {
@@ -229,6 +246,7 @@ def run_pr_review_agent(
         "COPILOT_REVIEW_LEAF_MODEL": leaf_model,
         "COPILOT_REVIEW_LEAF_EXECUTION": leaf_execution,
         "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY": str(max_leaf_concurrency),
+        "COPILOT_REVIEW_CLI_TIMEOUT_MINUTES": str(cli_timeout_minutes),
         "AGENT_MINIMUM_SEVERITY": severity,
     }
 
@@ -258,6 +276,9 @@ def run_pr_review_agent(
             leaf_model=leaf_model,
             leaf_execution=leaf_execution,
             max_leaf_concurrency=max_leaf_concurrency,
+            cli_timeout_minutes=cli_timeout_minutes,
+            minimum_severity=settings["min_severity"],
+            agent_minimum_severity=severity,
         )
         count = _write_review_json(output_dir, repo_path)
         logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")

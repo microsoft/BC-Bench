@@ -110,6 +110,12 @@ def test_pr_review_cli_version_uses_workflow_selected_pin(monkeypatch: pytest.Mo
     assert _resolve_pr_review_cli_version() == "1.0.83"
 
 
+def test_pr_review_cli_version_uses_installed_cli_when_no_workflow_pin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("COPILOT_REVIEW_CLI_VERSION", raising=False)
+    with patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"):
+        assert _resolve_pr_review_cli_version() == "1.0.83"
+
+
 def test_valid_empty_findings_is_a_clean_review(tmp_path: Path) -> None:
     out, repo = _dirs(tmp_path)
     _write_output(out, json.dumps({"outcome": "completed", "outcome-reason": "", "findings": []}))
@@ -274,5 +280,6 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert engine_env["COPILOT_REVIEW_CLI_VERSION"] == "1.0.83"
     assert engine_env["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.4"
     assert engine_env["COPILOT_REVIEW_LEAF_EXECUTION"] == "serial"
+    assert engine_env["COPILOT_REVIEW_CLI_TIMEOUT_MINUTES"] == "30"
     assert run_process.call_args.args[0][-1].endswith("Invoke-CopilotPRReview.ps1")
     assert "-GenerateOnly" not in run_process.call_args.args[0]
