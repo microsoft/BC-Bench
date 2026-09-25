@@ -24,6 +24,53 @@ PRReviewEnginePath = Annotated[
     ),
 ]
 
+PRReviewCliVersion = Annotated[
+    str | None,
+    typer.Option(
+        "--cli-version",
+        envvar="COPILOT_REVIEW_CLI_VERSION",
+        help="GitHub Copilot CLI version expected in the PR Review engine manifest; omitted probes the installed CLI",
+    ),
+]
+
+PRReviewLeafModel = Annotated[
+    str | None,
+    typer.Option(
+        "--leaf-model",
+        envvar="COPILOT_REVIEW_LEAF_MODEL",
+        help="Copilot model requested for PR Review domain leaf agents; defaults to the root model",
+    ),
+]
+
+PRReviewLeafExecution = Annotated[
+    str | None,
+    typer.Option(
+        "--leaf-execution",
+        envvar="COPILOT_REVIEW_LEAF_EXECUTION",
+        help="PR Review leaf scheduling mode: serial or parallel",
+    ),
+]
+
+PRReviewMaxLeafConcurrency = Annotated[
+    int,
+    typer.Option(
+        "--max-leaf-concurrency",
+        envvar="COPILOT_REVIEW_MAX_LEAF_CONCURRENCY",
+        min=1,
+        help="Maximum simultaneous PR Review leaf agents in parallel mode",
+    ),
+]
+
+PRReviewCliTimeoutMinutes = Annotated[
+    int,
+    typer.Option(
+        "--cli-timeout-minutes",
+        envvar="COPILOT_REVIEW_CLI_TIMEOUT_MINUTES",
+        min=0,
+        help="Copilot CLI child-process timeout recorded in the PR Review engine manifest",
+    ),
+]
+
 OutputDir = Annotated[Path, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)]
 
 RunId = Annotated[str, typer.Option(envvar="GITHUB_RUN_ID", help="Unique identifier for this evaluation run")]
@@ -116,6 +163,8 @@ def resolve_evaluation_runtime(
 CopilotModelName = Literal[
     "claude-sonnet-5",
     "claude-opus-5",
+    "gpt-5.4",
+    "gpt-6-astra",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
@@ -130,6 +179,7 @@ ClaudeCodeModel = Annotated[
     Literal[
         "claude-sonnet-5",
         "claude-opus-5",
+        "claude-opus-5-5",
         "claude-haiku-4-5",
     ],
     typer.Option(help="Claude Code model to use"),
