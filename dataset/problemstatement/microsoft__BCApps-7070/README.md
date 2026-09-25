@@ -1,10 +1,5 @@
 # Closed subscription lines prevent changing the contract customer
 
-## Environment
-
-- Business Central with the Subscription Billing app enabled.
-- A company with two customers and an item configured for subscription billing.
-
 ## Reproduction steps
 
 1. Open **Customer Subscription Contracts** and create a contract for the first customer.
