@@ -1,5 +1,6 @@
 """Collection module for gathering dataset entries from GitHub PRs."""
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,10 +12,9 @@ from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_p
 from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
 from bcbench.exceptions import CollectionError, NoTestsExtractedError
-from bcbench.logger import get_logger
 from bcbench.operations import extract_tests_from_patch
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 MIN_PROJECT_PATHS = 2

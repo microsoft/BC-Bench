@@ -1,5 +1,6 @@
 """CLI commands for running agents."""
 
+import logging
 from typing import Annotated, cast
 
 import typer
@@ -23,10 +24,9 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.logger import get_logger
-from bcbench.types import BCalLLMBackend, EvaluationCategory
+from bcbench.types import EvaluationCategory, NL2ALDataset
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 run_app = typer.Typer(help="Run agents on single dataset entry")
@@ -176,11 +176,9 @@ def run_pr_review(
 def run_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     repo_path: RepoPath = _config.paths.evaluation_results_path,
-    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.AZURE_OPENAI,
-    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
-    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
-    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (required for external-command backend)")] = None,
-    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
 ) -> None:
     """
     Run BCal dotnet tool on a single nl2al entry to generate AL code.
@@ -191,16 +189,13 @@ def run_bcal(
         uv run bcbench run bcal nl2al__job-budget-report-1
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path_for(dataset), entry_id=entry_id)[0])
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_bcal_agent(
         entry=entry,
         repo_path=repo_path,
         backend_config=BCalBackendConfig(
-            backend=backend,
-            endpoint=endpoint,
-            deployment=deployment,
             command=llm_command,
             model=llm_model,
         ),

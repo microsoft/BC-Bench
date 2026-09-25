@@ -4,8 +4,9 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Self, override
 
+from bcbench_core.dataset import TestEntry
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
@@ -14,14 +15,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
-
-
-class TestEntry(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    codeunitID: Annotated[int, Field(gt=0)]
-    functionName: Annotated[frozenset[str], Field(min_length=1)]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestGenEntry"]
 
 
 class EntryMetadata(BaseModel):
@@ -30,6 +24,8 @@ class EntryMetadata(BaseModel):
     area: str | None = None
     image_count: Annotated[int, Field(ge=0)] | None = None
     persona: str | None = None
+    family: str | None = None
+    tier: Literal["gold", "challenge"] | None = None
 
 
 class BaseDatasetEntry(BaseModel):
@@ -124,6 +120,7 @@ class RepoGroundedEntry(BaseDatasetEntry):
     patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
 
     @property
+    @override
     def customization_profile(self) -> str:
         return self.repo.replace("/", "-")
 
@@ -131,6 +128,7 @@ class RepoGroundedEntry(BaseDatasetEntry):
     def problem_statement_dir(self) -> Path:
         return _config.paths.problem_statement_dir / self.instance_id
 
+    @override
     def get_task(self) -> str:
         readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
         return readme_path.read_text(encoding="utf-8")
@@ -164,6 +162,7 @@ class _BugFixTestGenBase(RepoGroundedEntry):
 class BugFixEntry(_BugFixTestGenBase):
     """Dataset entry for the bug-fix category."""
 
+    @override
     def get_expected_output(self) -> str:
         return self.patch
 
@@ -171,6 +170,7 @@ class BugFixEntry(_BugFixTestGenBase):
 class TestGenEntry(_BugFixTestGenBase):
     """Dataset entry for the test-generation category."""
 
+    @override
     def get_expected_output(self) -> str:
         return self.test_patch
 
@@ -182,14 +182,18 @@ class NL2ALEntry(BaseDatasetEntry):
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
     page: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./]*$")]
     audience: Literal["Business", "Technical", "Both"]
+    language: str = "en-US"
 
     @property
+    @override
     def customization_profile(self) -> str:
         return "nl2al"
 
+    @override
     def get_task(self) -> str:
         return self.nl_prompt
 
+    @override
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}
 
@@ -210,11 +214,14 @@ class DataQueryEntry(BaseDatasetEntry):
     ordered: bool = False
 
     @property
+    @override
     def customization_profile(self) -> str:
         return "dataquery"
 
+    @override
     def get_task(self) -> str:
         return self.nl_prompt
 
+    @override
     def get_expected_output(self) -> str:
         return self.gold_query

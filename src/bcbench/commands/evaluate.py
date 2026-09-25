@@ -1,10 +1,15 @@
+import logging
 import random
+from hashlib import sha256
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, cast, override
 
 import typer
+from bcbench_core.filesystem import prepare_run_dir
+from pydantic import ValidationError
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent.bcal.version import get_bcal_version, verify_bcal_version
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -26,12 +31,20 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
-from bcbench.logger import get_logger
-from bcbench.operations import prepare_run_dir
+from bcbench.exceptions import AgentError
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import (
+    AgentHarness,
+    AgentMetrics,
+    BCalPackageProvenance,
+    BCalPackageSource,
+    EvaluationCategory,
+    EvaluationContext,
+    ExperimentConfiguration,
+    NL2ALDataset,
+)
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
@@ -238,11 +251,18 @@ def evaluate_bcal(
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "bcal_test_run",
-    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.EXTERNAL_COMMAND,
-    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
-    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
-    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (required for external-command backend)")] = None,
-    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
+    bcal_version: Annotated[str | None, typer.Option(envvar="BCAL_PACKAGE_VERSION", help="Expected installed BCAL NuGet version; verified against dotnet tool list")] = None,
+    bcal_package_channel: Annotated[
+        BCalPackageSource,
+        typer.Option("--bcal-package-channel", envvar="BCAL_PACKAGE_CHANNEL", help="BCAL package channel: official baseline or experimental package"),
+    ] = BCalPackageSource.OFFICIAL,
+    bcal_branch: Annotated[
+        str,
+        typer.Option(envvar="BCAL_PACKAGE_BRANCH", help="BCAL source branch; official packages use master"),
+    ] = "master",
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -250,36 +270,51 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    dataset_path = category.dataset_path_for(dataset)
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
-        backend=backend,
-        endpoint=endpoint,
-        deployment=deployment,
         command=llm_command,
         model=llm_model,
     )
+    try:
+        bcal_package = BCalPackageProvenance(source=bcal_package_channel, branch=bcal_branch)
+    except ValidationError as exc:
+        message = exc.errors()[0]["msg"].removeprefix("Value error, ")
+        raise typer.BadParameter(message, param_hint="--bcal-branch") from exc
 
-    logger.info(f"Running evaluation on entry {entry_id} with BCal")
+    logger.info(f"Running evaluation on entry {entry_id} with BCal package {bcal_package.source}/{bcal_package.branch}")
 
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        model=backend_config.model_label(),
+        model=llm_model or "external-command",
         agent_name=AgentHarness.BCAL,
         category=category,
+        bcal_package=bcal_package,
+        dataset=dataset,
+        dataset_version=dataset.version,
+        dataset_sha256=sha256(dataset_path.read_bytes()).hexdigest(),
     )
 
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_bcal_agent(
-            entry=cast(NL2ALEntry, ctx.entry),
-            repo_path=ctx.repo_path,
-            backend_config=backend_config,
-        ),
-    )
+    try:
+        context.agent_version = get_bcal_version()
+        verify_bcal_version(context.agent_version, bcal_version)
+        category.pipeline.execute(
+            context,
+            lambda ctx: run_bcal_agent(
+                entry=cast(NL2ALEntry, ctx.entry),
+                repo_path=ctx.repo_path,
+                backend_config=backend_config,
+            ),
+        )
+    except AgentError as exc:
+        result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
+        category.pipeline.save_result(context, result)
+        logger.exception("BCal execution failed for %s", entry.instance_id)
+        raise typer.Exit(code=1) from exc
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -348,12 +383,15 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
     It randomly generates different scenarios to test result handling and serialization.
     """
 
+    @override
     def setup_workspace(self, entry: BaseDatasetEntry, repo_path: Path) -> None:
         logger.info("Mock pipeline: Skipping workspace setup")
 
+    @override
     def setup(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         logger.info("Mock pipeline: Skipping setup")
 
+    @override
     def run_agent(self, context: EvaluationContext[BaseDatasetEntry], agent_runner: AgentRunner[BaseDatasetEntry]) -> None:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
@@ -384,6 +422,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         logger.info(f"Using agent metrics: {context.metrics}")
         logger.info(f"Using experiment configuration: {context.experiment}")
 
+    @override
     def evaluate(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")

@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+import yaml
+from bcbench_core.container import ContainerConfig
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -17,24 +19,32 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
+    "AL_MCP_SERVER_NAME",
+    "BC_MCP_SERVER_NAME",
+    "AgentConfig",
     "AgentHarness",
     "AgentMetrics",
     "AgentMetricsContract",
     "AnyAgentMetrics",
-    "BCalLLMBackend",
+    "BCalPackageProvenance",
+    "BCalPackageSource",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
     "CommitSha",
-    "ContainerConfig",
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
     "ExperimentConfiguration",
+    "HttpMcpServer",
     "JudgeCalibrationReport",
+    "McpServerConfig",
+    "NL2ALDataset",
     "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
+    "StdioMcpServer",
+    "TestGenerationInput",
 ]
 
 
@@ -60,6 +70,44 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
+
+
+class BCalPackageSource(StrEnum):
+    OFFICIAL = "official"
+    EXPERIMENT = "experiment"
+
+    @property
+    def feed_name(self) -> Literal["DynamicsSMBPackages", "DynamicsSMBTest@Local"]:
+        match self:
+            case BCalPackageSource.OFFICIAL:
+                return "DynamicsSMBPackages"
+            case BCalPackageSource.EXPERIMENT:
+                return "DynamicsSMBTest@Local"
+
+        raise ValueError(f"Unknown BCal package source: {self}")
+
+
+class BCalPackageProvenance(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source: BCalPackageSource
+    branch: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_source_branch(self) -> BCalPackageProvenance:
+        if self.source is BCalPackageSource.OFFICIAL and self.branch != "master":
+            raise ValueError("Official BCAL packages must use branch 'master'")
+        if self.source is BCalPackageSource.EXPERIMENT and self.branch.casefold() == "master":
+            raise ValueError("Experimental BCAL packages must name a non-master branch")
+        return self
+
+    @property
+    def feed_name(self) -> Literal["DynamicsSMBPackages", "DynamicsSMBTest@Local"]:
+        return self.source.feed_name
+
+    @property
+    def is_experiment(self) -> bool:
+        return self.source is BCalPackageSource.EXPERIMENT
 
 
 class AgentMetrics(BaseModel):
@@ -275,6 +323,15 @@ class AgentHarness(StrEnum):
                 raise ValueError(f"{self.value} does not support repository setup")
 
 
+class NL2ALDataset(StrEnum):
+    GOLD = "gold"
+    CHALLENGE = "challenge"
+
+    @property
+    def version(self) -> str:
+        return "2026-10-09.candidate-v2"
+
+
 class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
@@ -287,6 +344,20 @@ class EvaluationCategory(StrEnum):
     EXT_REQUEST_IMPLEMENT = "extensibility-request-implement"
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
+
+    def dataset_path_for(self, dataset: NL2ALDataset | None = None) -> Path:
+        if dataset is None:
+            return self.dataset_path
+        if self is not EvaluationCategory.NL2AL:
+            raise ValueError("The dataset panel option is only supported for the nl2al category")
+
+        match dataset:
+            case NL2ALDataset.GOLD:
+                return self.dataset_path
+            case NL2ALDataset.CHALLENGE:
+                return self.dataset_path.with_name("nl2al_challenge.jsonl")
+
+        raise ValueError(f"Unknown NL2AL dataset: {dataset}")
 
     @property
     def dataset_path(self) -> Path:
@@ -415,7 +486,7 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
-    def pipeline(self) -> EvaluationPipeline:
+    def pipeline(self) -> EvaluationPipeline[Any]:
         from bcbench.evaluate import (
             BugFixPipeline,
             CodeReviewPipeline,
@@ -560,25 +631,98 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
 
-@dataclass(frozen=True)
-class ContainerConfig:
-    name: str
-    username: str
-    password: str
-    company: str
-    server_url: str = ""
-    server_instance: str = ""
-    mcp_url: str | None = None
+type TestGenerationInput = Literal["problem-statement", "gold-patch", "both"]
 
-    def __post_init__(self) -> None:
-        name = self.name.strip()
-        if not name:
-            raise ValueError("Container name must not be empty")
-        company = self.company.strip()
-        if not company:
-            raise ValueError("Company must not be empty")
-        object.__setattr__(self, "name", name)
-        object.__setattr__(self, "company", company)
+
+class PromptConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    include_project_paths: StrictBool = False
+    test_generation_input: TestGenerationInput = Field(default="problem-statement", alias="test-generation-input")
+    templates: dict[EvaluationCategory, str] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_templates(cls, data: object) -> object:
+        # config.yaml keys each prompt template as `<category>-template`
+        if not isinstance(data, dict):
+            return data
+        if "templates" in data:
+            raise ValueError("Prompt templates must be configured as `<category>-template` keys, not `templates`")
+        settings = {key: value for key, value in data.items() if not key.endswith("-template")}
+        templates = {key.removesuffix("-template"): value for key, value in data.items() if key.endswith("-template")}
+        return {**settings, "templates": templates}
+
+
+class HttpMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["http"]
+    name: str
+    url: str
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+class StdioMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["stdio"]
+    name: str
+    command: str
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+type McpServerConfig = Annotated[HttpMcpServer | StdioMcpServer, Field(discriminator="type")]
+
+AL_MCP_SERVER_NAME = "altool"
+BC_MCP_SERVER_NAME = "bcmcp"
+
+
+class McpConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    servers: tuple[McpServerConfig, ...] = ()
+
+    @model_validator(mode="after")
+    def check_reserved_server_types(self) -> McpConfig:
+        # build_mcp_config customizes these servers by name and relies on their transport type
+        for server in self.servers:
+            if server.name == AL_MCP_SERVER_NAME and not isinstance(server, StdioMcpServer):
+                raise ValueError(f"MCP server '{AL_MCP_SERVER_NAME}' must be of type 'stdio'")
+            if server.name == BC_MCP_SERVER_NAME and not isinstance(server, HttpMcpServer):
+                raise ValueError(f"MCP server '{BC_MCP_SERVER_NAME}' must be of type 'http'")
+        return self
+
+
+class ToggleConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: StrictBool = False
+
+
+class CustomAgentsConfig(ToggleConfig):
+    name: str | None = None
+
+
+class AgentConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    prompt: PromptConfig = Field(default_factory=PromptConfig)
+    instructions: ToggleConfig = Field(default_factory=ToggleConfig)
+    skills: ToggleConfig = Field(default_factory=ToggleConfig)
+    agents: CustomAgentsConfig = Field(default_factory=CustomAgentsConfig)
+    # Kept raw: only enabled entries are validated into `PluginConfig`, since a disabled
+    # entry may point at a path that only exists on another machine.
+    plugins: tuple[dict[str, object], ...] = ()
+    mcp: McpConfig = Field(default_factory=McpConfig)
+    # Declared so typos in agent sections are rejected; their contents are validated by `JudgeConfig` and the pr-review agent
+    judges: dict[str, object] = Field(default_factory=dict)
+    pr_review: dict[str, object] = Field(default_factory=dict)
+
+    @classmethod
+    def from_file(cls, path: Path) -> AgentConfig:
+        return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 @dataclass(frozen=True)
@@ -630,6 +774,10 @@ class EvaluationContext[E: BaseDatasetEntry]:
     container: ContainerConfig | None = None
 
     agent_version: str | None = None
+    bcal_package: BCalPackageProvenance | None = None
+    dataset: NL2ALDataset | None = None
+    dataset_version: str | None = None
+    dataset_sha256: str | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None
@@ -641,8 +789,3 @@ class EvaluationContext[E: BaseDatasetEntry]:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
-
-
-class BCalLLMBackend(StrEnum):
-    AZURE_OPENAI = "azure-openai"
-    EXTERNAL_COMMAND = "external-command"

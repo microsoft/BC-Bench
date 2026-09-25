@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -15,10 +16,9 @@ from bcbench.contamination.filepath_identification import (
     parse_prediction,
 )
 from bcbench.dataset import BugFixEntry
-from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 _RESULT_SUFFIX = f".filepath-identification{_config.file_patterns.result_pattern}"

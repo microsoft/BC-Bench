@@ -1,11 +1,11 @@
 import json
+import logging
 from collections import Counter
 from collections.abc import Sequence
 
-from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Verified against the CLI's own "AI Credits" footer: 9613375000 nano-AIU renders as "AI Credits 9.61".
 NANO_AIU_PER_AI_CREDIT = 1_000_000_000
@@ -22,7 +22,7 @@ def _milliseconds_to_seconds(value: object) -> float | None:
     return None if milliseconds is None else milliseconds / 1000.0
 
 
-def _tool_label(data: dict) -> str | None:
+def _tool_label(data: dict[str, object]) -> str | None:
     tool_name = data.get("toolName")
     if not isinstance(tool_name, str) or not tool_name:
         return None

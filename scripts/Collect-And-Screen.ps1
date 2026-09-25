@@ -38,7 +38,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-Import-Module (Join-Path $PSScriptRoot 'BCBenchUtils.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot '..\packages\bcbench-core\src\bcbench_core\powershell\BCBenchUtils.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'BenchmarkUtils.psm1') -Force
 
 $latestRelease = Get-LatestReleaseBranch -Repo $Repo
 if (-not $latestRelease) { throw "No releases/* branch found in $Repo" }

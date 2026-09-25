@@ -5,17 +5,17 @@ These wrap GitHub Actions workflow features (step outputs, log groups) and are n
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 from bcbench.config import get_config
-from bcbench.logger import get_logger
 
 __all__ = ["github_log_group", "write_step_outputs"]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def write_step_outputs(outputs: dict[str, str]) -> None:

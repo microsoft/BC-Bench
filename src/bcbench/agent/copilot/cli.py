@@ -1,5 +1,6 @@
 """GitHub Copilot CLI helpers."""
 
+import logging
 import shutil
 import subprocess
 import sys
@@ -9,10 +10,9 @@ from pathlib import Path
 from bcbench.agent.copilot.metrics import parse_output
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
-from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["get_copilot_version", "invoke_copilot"]
 
