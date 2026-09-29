@@ -64,6 +64,8 @@ The **BC-Bench repository is an application**, not the public distribution:
 | `src/bcbench/types.py`, `dataset/`, `src/bcbench/dataset/`, `src/bcbench/evaluate/{bugfix,testgeneration,codereview,...}.py` | Remain in `src/bcbench/` or `dataset/` | BC-Bench categories, schemas, prompts, fixtures, evaluation and scoring policy |
 | `src/bcbench/config.py`, `cli.py`, `commands/`, `agent/shared/config.yaml`, `agent/shared/instructions/` | Remain in the application | BC-Bench CLI defaults, instruction profiles and experiment selection |
 | `src/bcbench/agent/{copilot,claude,bcal,pr_review}/`, `agent/shared/mcp_gateway.py`, `collection/`, `redteam.py` | Remain in the application; no internal adapter is included in core | BC-Bench harnesses and integrations, including organization-specific CAPI and collection |
+| `src/bcbench/agent/shared/{env,lsp,mcp,plugin,prompt,version}.py`, `operations/`, `analysis/`, `contamination/` | Remain in the application; generic command execution is provided by `bcbench_core.run_command` | BC-specific workspace, provider configuration, AL tools and benchmark analyses |
+| `src/bcbench/logger.py`, `exceptions.py`, `github_actions.py`, `results/{metrics,display}.py` | Remain in the application; core has its own independent contracts | BC-Bench logging, errors, CI presentation and existing scoring conventions |
 | `src/bcbench/results/{summary,leaderboard,bceval_export}.py`, `docs/_data/`, `.github/`, `scripts/` | Remain in the application | Benchmark scores, reporting, publication, CI and runner/container provisioning |
 | No external example | `examples/synthetic-consumer/` | Independent synthetic consumer, not included in the core archives |
 
