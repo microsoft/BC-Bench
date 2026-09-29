@@ -98,7 +98,7 @@ From the repository root, on Python 3.13 with `uv` installed:
 REPO="$(pwd -P)"
 uv build --no-config "$REPO/library" --out-dir /tmp/bcbench-core-dist
 uv venv --python 3.13 /tmp/bcbench-example-venv
-uv pip install --python /tmp/bcbench-example-venv/bin/python /tmp/bcbench-core-dist/bcbench_core-0.1.0-py3-none-any.whl
+uv pip install --python /tmp/bcbench-example-venv/bin/python --index-url https://pypi.org/simple /tmp/bcbench-core-dist/bcbench_core-0.1.0-py3-none-any.whl
 cd /tmp
 /tmp/bcbench-example-venv/bin/python "$REPO/examples/synthetic-consumer/consumer.py" \
   --dataset "$REPO/examples/synthetic-consumer/dataset.jsonl" \

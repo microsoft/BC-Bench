@@ -112,12 +112,27 @@ def test_distribution_contents_and_external_consumer(tmp_path):
         )
     assert not any(marker in text for marker in (b"microsoftInternal", b"packagefeedproxy", b"CAPI_CLIENT_ID", b"bcbench.jsonl") for text in texts)
 
-    site = tmp_path / "site"
-    subprocess.run(["uv", "pip", "install", "--target", str(site), "--no-deps", str(wheel)], check=True, capture_output=True, text=True)
+    venv = tmp_path / "venv"
+    subprocess.run(["uv", "venv", "--python", sys.executable, str(venv)], cwd=tmp_path, check=True, capture_output=True, text=True)
+    external_python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    subprocess.run(
+        ["uv", "pip", "install", "--python", str(external_python), "--index-url", "https://pypi.org/simple", str(wheel)],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        [str(external_python), "-c", "import importlib.util; assert importlib.util.find_spec('bcbench') is None; import bcbench_core"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     output = tmp_path / "output"
     process = subprocess.run(
         [
-            sys.executable,
+            str(external_python),
             str(ROOT / "examples/synthetic-consumer/consumer.py"),
             "--dataset",
             str(ROOT / "examples/synthetic-consumer/dataset.jsonl"),
@@ -129,7 +144,6 @@ def test_distribution_contents_and_external_consumer(tmp_path):
             "external-consumer-1",
         ],
         cwd=tmp_path,
-        env={**os.environ, "PYTHONPATH": str(site)},
         check=True,
         capture_output=True,
         text=True,
