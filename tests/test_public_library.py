@@ -84,12 +84,12 @@ def test_command_agent_receives_only_scoped_environment(tmp_path):
 
 def test_distribution_contents_and_external_consumer(tmp_path):
     package_version = tomllib.loads((ROOT / "library/pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
-    sdist_root = f"bcbench-core-{package_version}"
     dist = Path(os.environ["BCBENCH_CORE_DIST"]) if "BCBENCH_CORE_DIST" in os.environ else tmp_path / "dist"
     if "BCBENCH_CORE_DIST" not in os.environ:
         subprocess.run(["uv", "build", "--no-config", str(ROOT / "library"), "--out-dir", str(dist)], check=True, capture_output=True, text=True)
     wheel = next(dist.glob("bcbench_core-*.whl"))
-    sdist = next(dist.glob("bcbench-core-*.tar.gz"))
+    sdist = next(path for path in dist.glob("*.tar.gz") if path.name.startswith((f"bcbench-core-{package_version}", f"bcbench_core-{package_version}")))
+    sdist_root = sdist.name.removesuffix(".tar.gz")
     with zipfile.ZipFile(wheel) as archive:
         wheel_files = archive.namelist()
         assert all(name.startswith(("bcbench_core/", f"bcbench_core-{package_version}.dist-info/")) for name in wheel_files)

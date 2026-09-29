@@ -110,7 +110,7 @@ This prints `2 answers round-tripped; mean score 1.0` and writes two per-instanc
 JSONL files plus `summary.jsonl` and `aggregate.jsonl` under the requested
 output directory. The script has its own dataset, result model, deterministic
 agent, pipeline and scorer; no core category changes are required. Run
-`tar -tzf /tmp/bcbench-core-dist/bcbench-core-0.1.0.tar.gz` and
+`tar -tzf /tmp/bcbench-core-dist/bcbench_core-0.1.0.tar.gz` and
 `unzip -l /tmp/bcbench-core-dist/bcbench_core-0.1.0-py3-none-any.whl` to
 inspect **both** distributable archives. `tests/test_public_library.py` also
 checks their allowlisted contents and executes the consumer outside the checkout.
