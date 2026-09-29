@@ -139,7 +139,7 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 
 ### Refresh BC sandbox artifacts
 
-Public `w1` sandbox URLs are pinned by version in [`scripts/BCBenchArtifactPins.json`](scripts/BCBenchArtifactPins.json), beside the module that reads them. Manual dataset-validation runs use the saved pins. The scheduled run resolves the latest URLs, verifies them across the full bug-fix matrix, and pushes a pins-only branch for a manual PR only if every job succeeds. BC Insider artifacts remain dynamically resolved.
+Public `w1` sandbox URLs are pinned by version in [`scripts/BCBenchArtifactPins.json`](scripts/BCBenchArtifactPins.json), so we are more resiliant to upstream changes. Manual dataset-validation runs use the saved pins. The scheduled run resolves the latest URLs, verifies them across the full bug-fix dataset, and pushes a pins-only branch for a manual PR only if every job succeeds. BC Insider artifacts remain dynamically resolved.
 
 ### Bump the BC PR Review engine
 

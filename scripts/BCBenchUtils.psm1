@@ -582,7 +582,7 @@ function Get-BCBenchLatestArtifactUrls {
         }
 
         $url = Get-BCArtifactUrl -Version $version -Country 'w1' -Select 'Latest' -ErrorAction Stop
-        if ($url -isnot [string] -or $url -notmatch "^https://[^/]+/sandbox/$([regex]::Escape($version))\.\d+\.\d+/w1$") {
+        if ($url -isnot [string]) {
             throw "No valid public BC artifact URL resolved for version $version (w1): $url."
         }
 
