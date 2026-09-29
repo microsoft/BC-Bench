@@ -34,7 +34,7 @@ jobs:
     needs: get-entries
     if: github.event_name == 'schedule' && needs.get-entries.outputs.entries != '[]'
     outputs:
-      module: ${{ steps.refresh.outputs.module }}
+      pins: ${{ steps.refresh.outputs.pins }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -45,19 +45,12 @@ jobs:
         run: |
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           Import-Module BcContainerHelper -Force -DisableNameChecking
+          Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
 
-          $path = 'scripts/BCBenchUtils.psm1'
-          $content = [IO.File]::ReadAllText($path)
-          $matches = [regex]::Matches($content, "'(?<version>\d+\.\d+)' = '(?<url>https://bcartifacts[^']+)'")
-          if ($matches.Count -eq 0) { throw 'No pinned public BC artifact URLs found.' }
-          foreach ($match in $matches) {
-            $version = $match.Groups['version'].Value
-            $url = Get-BCArtifactUrl -version $version -country 'w1' -select 'Latest'
-            $content = $content.Replace($match.Value, "'$version' = '$url'")
-          }
-
-          $module = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($content))
-          "module=$module" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          $latestUrls = Get-BCBenchLatestArtifactUrls
+          $urlsJson = ($latestUrls | ConvertTo-Json -Depth 2) + "`n"
+          $pins = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($urlsJson))
+          "pins=$pins" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
   verify-build-and-tests:
     runs-on: [GitHub-BCBench]
@@ -82,9 +75,9 @@ jobs:
         if: github.event_name == 'schedule'
         shell: pwsh
         env:
-          MODULE: ${{ needs.prepare-artifacts.outputs.module }}
+          PINS: ${{ needs.prepare-artifacts.outputs.pins }}
         run: |
-          [IO.File]::WriteAllBytes('scripts/BCBenchUtils.psm1', [Convert]::FromBase64String($env:MODULE))
+          [IO.File]::WriteAllBytes((Join-Path 'scripts' 'BCBenchArtifactPins.json'), [Convert]::FromBase64String($env:PINS))
 
       - name: Setup BC Container and Repository
         id: setup-env
@@ -115,15 +108,15 @@ jobs:
       - name: Apply verified artifact URLs
         shell: pwsh
         env:
-          MODULE: ${{ needs.prepare-artifacts.outputs.module }}
+          PINS: ${{ needs.prepare-artifacts.outputs.pins }}
         run: |
-          [IO.File]::WriteAllBytes('scripts/BCBenchUtils.psm1', [Convert]::FromBase64String($env:MODULE))
+          [IO.File]::WriteAllBytes((Join-Path 'scripts' 'BCBenchArtifactPins.json'), [Convert]::FromBase64String($env:PINS))
 
       - name: Push verified artifact branch for manual PR
         shell: pwsh
         run: |
-          $path = 'scripts/BCBenchUtils.psm1'
-          git diff --quiet
+          $path = Join-Path 'scripts' 'BCBenchArtifactPins.json'
+          git diff --quiet -- $path
           if ($LASTEXITCODE -eq 0) { return }
           if ($LASTEXITCODE -ne 1) { throw 'Could not compare artifact pins.' }
 
