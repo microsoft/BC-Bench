@@ -107,9 +107,7 @@ jobs:
     needs: [prepare-artifacts, verify-build-and-tests]
     if: github.event_name == 'schedule' && needs.verify-build-and-tests.result == 'success'
     permissions:
-      actions: write
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -121,22 +119,19 @@ jobs:
         run: |
           [IO.File]::WriteAllBytes('scripts/BCBenchUtils.psm1', [Convert]::FromBase64String($env:MODULE))
 
-      - name: Propose verified artifact URLs
+      - name: Push verified artifact branch for manual PR
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           $path = 'scripts/BCBenchUtils.psm1'
           git diff --quiet
           if ($LASTEXITCODE -eq 0) { return }
+          if ($LASTEXITCODE -ne 1) { throw 'Could not compare artifact pins.' }
 
           $PSNativeCommandUseErrorActionPreference = $true
-          $branch = "artifacts/refresh-${{ github.run_id }}"
+          $branch = "artifacts/refresh-${{ github.run_id }}-${{ github.run_attempt }}"
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git switch -c $branch
           git add $path
           git commit -m 'Refresh pinned BC artifact URLs'
           git push origin $branch
-          gh pr create --base main --head $branch --title 'Refresh pinned BC artifact URLs' --body 'Updates the pinned public BC artifact URLs after the weekly dataset verification succeeded.'
-          gh workflow run CI.yml --ref $branch
