@@ -69,6 +69,6 @@ def run_command(
     env: Mapping[str, str],
     timeout: float,
 ) -> subprocess.CompletedProcess[str]:
-    if not command or not (executable := shutil.which(command[0])):
+    if not command or not (executable := shutil.which(command[0], path=env.get("PATH", ""))):
         raise ProviderUnavailableError(f"Agent executable unavailable: {command[0] if command else '(missing)'}")
     return subprocess.run([executable, *command[1:]], cwd=workspace, env=dict(env), timeout=timeout, capture_output=True, text=True, check=True)

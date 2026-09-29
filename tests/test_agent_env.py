@@ -26,6 +26,20 @@ def test_preserves_other_vars(monkeypatch):
     assert "BC_SERVER_PASSWORD" not in env
 
 
+def test_only_agent_credentials_are_forwarded(monkeypatch):
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "agent-token")
+    monkeypatch.setenv("GH_TOKEN", "publication-token")
+    monkeypatch.setenv("ADO_TOKEN", "setup-token")
+    monkeypatch.setenv("AZURE_CLIENT_SECRET", "service-token")
+
+    env = agent_subprocess_env()
+
+    assert env["COPILOT_GITHUB_TOKEN"] == "agent-token"
+    assert "GH_TOKEN" not in env
+    assert "ADO_TOKEN" not in env
+    assert "AZURE_CLIENT_SECRET" not in env
+
+
 def test_preserves_bc_connection_vars_when_allowed(monkeypatch):
     monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")

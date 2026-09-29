@@ -29,6 +29,7 @@ from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.operations import prepare_run_dir
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results.provenance import make_run_identity
 from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -88,6 +89,7 @@ def evaluate_copilot(
         agent_name=AgentHarness.COPILOT,
         agent_version=get_copilot_version(),
         category=category,
+        provenance=make_run_identity(category, category.dataset_path),
     )
 
     pipeline = category.pipeline
@@ -158,6 +160,7 @@ def evaluate_claude_code(
         agent_name=AgentHarness.CLAUDE,
         agent_version=get_claude_version(),
         category=category,
+        provenance=make_run_identity(category, category.dataset_path),
     )
 
     pipeline = category.pipeline
@@ -212,6 +215,7 @@ def evaluate_pr_review(
         agent_name=AgentHarness.PR_REVIEW,
         agent_version=get_pr_review_version(engine_path),
         category=category,
+        provenance=make_run_identity(category, category.dataset_path),
     )
 
     category.pipeline.execute(
@@ -268,6 +272,7 @@ def evaluate_bcal(
         model=backend_config.model_label(),
         agent_name=AgentHarness.BCAL,
         category=category,
+        provenance=make_run_identity(category, category.dataset_path),
     )
 
     category.pipeline.execute(
@@ -330,6 +335,7 @@ def evaluate_mock(
         model="mock-model",
         agent_name=AgentHarness.MOCK,
         category=category,
+        provenance=make_run_identity(category, category.dataset_path),
     )
 
     pipeline = MockEvaluationPipeline()

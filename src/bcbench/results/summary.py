@@ -8,6 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from bcbench_core import RunIdentity
 from pydantic import BaseModel, Field
 
 from bcbench.logger import get_logger
@@ -59,6 +60,7 @@ class EvaluationResultSummary(BaseModel, ABC):
     experiment: ExperimentConfiguration | None = None
 
     benchmark_version: str
+    provenance: RunIdentity | None = None
 
     @abstractmethod
     def render_github_metrics_markdown(self) -> str:
@@ -84,6 +86,8 @@ class EvaluationResultSummary(BaseModel, ABC):
         tool_usages: list[dict[str, int]] = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
 
         first_result = results[0]
+        if any(result.provenance != first_result.provenance for result in results):
+            raise ValueError("Cannot summarize results from different runs")
         experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
 
         return {
@@ -101,7 +105,8 @@ class EvaluationResultSummary(BaseModel, ABC):
             "average_tool_usage": calculate_average_tool_usage(tool_usages) if tool_usages else None,
             "github_run_id": run_id,
             "experiment": experiment,
-            "benchmark_version": get_benchmark_version(),
+            "benchmark_version": first_result.benchmark_version or get_benchmark_version(),
+            "provenance": first_result.provenance,
         }
 
     @classmethod
@@ -147,7 +152,8 @@ class EvaluationResultSummary(BaseModel, ABC):
         experiment_key: str | None = None
         if self.experiment and not self.experiment.is_empty():
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
-        return (self.agent_name, self.agent_version, self.model, experiment_key, self.benchmark_version)
+        provenance_key = json.dumps(self.provenance.model_dump(mode="json"), sort_keys=True) if self.provenance else None
+        return (self.agent_name, self.agent_version, self.model, experiment_key, self.benchmark_version, provenance_key)
 
 
 class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):

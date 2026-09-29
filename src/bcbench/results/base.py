@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any, Self, cast
 
-from bcbench_core import write_result
+from bcbench_core import RunIdentity, write_result
 from pydantic import BaseModel, model_validator
 
 from bcbench.logger import get_logger
@@ -21,6 +21,8 @@ class BaseEvaluationResult(BaseModel):
     agent_name: str
     category: EvaluationCategory
     agent_version: str | None = None
+    benchmark_version: str | None = None
+    provenance: RunIdentity | None = None
 
     timeout: bool = False
 
@@ -32,6 +34,8 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
+        from bcbench.results.summary import get_benchmark_version
+
         metrics_contract = context.agent_name.metrics_contract
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
@@ -47,6 +51,8 @@ class BaseEvaluationResult(BaseModel):
             "category": context.category,
             "agent_name": context.agent_name,
             "agent_version": context.agent_version,
+            "benchmark_version": get_benchmark_version(),
+            "provenance": context.provenance.model_copy(update={"experiment": context.experiment.model_dump(mode="json") if context.experiment else {}}) if context.provenance else None,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }

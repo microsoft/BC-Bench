@@ -6,7 +6,7 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
 def core_version() -> str:
@@ -21,7 +21,7 @@ class RunIdentity(BaseModel):
     benchmark_id: str
     data_revision: str
     scorer_id: str
-    experiment: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    experiment: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 class EvaluationResult(BaseModel):
@@ -86,6 +86,15 @@ class RunSummary(BaseModel):
     instance_scores: dict[str, float]
 
 
+class RunAggregate(BaseModel):
+    identity: RunIdentity
+    agent: str
+    model: str
+    count: int
+    mean_score: float
+    runs: list[RunSummary]
+
+
 def summarize[SummaryT](
     scored: Sequence[ScoredResult],
     *,
@@ -114,7 +123,7 @@ def aggregate_summaries[SummaryT: RunSummary, AggregateT](
     summaries: Sequence[SummaryT],
     *,
     reducer: Callable[[Sequence[SummaryT]], AggregateT] | None = None,
-) -> RunSummary | AggregateT:
+) -> RunAggregate | AggregateT:
     if not summaries:
         raise ValueError("Cannot aggregate an empty set of runs")
     first = summaries[0]
@@ -123,11 +132,11 @@ def aggregate_summaries[SummaryT: RunSummary, AggregateT](
     if reducer is not None:
         return reducer(summaries)
     count = sum(run.count for run in summaries)
-    return RunSummary(
+    return RunAggregate(
         identity=first.identity,
         agent=first.agent,
         model=first.model,
         count=count,
         mean_score=sum(run.mean_score * run.count for run in summaries) / count,
-        instance_scores={key: score for run in summaries for key, score in run.instance_scores.items()},
+        runs=list(summaries),
     )

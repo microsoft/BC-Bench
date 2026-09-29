@@ -112,6 +112,7 @@ def sample_results_directory(tmp_path, sample_dataset_file_for_cli):
 def test_evaluate_bcal_records_backend_model_label(tmp_path):
     entry = create_nl2al_entry()
     captured = {}
+    (tmp_path / "nl2al.jsonl").write_text(entry.model_dump_json() + "\n", encoding="utf-8")
 
     class EntryClass:
         @staticmethod
@@ -144,6 +145,7 @@ def test_evaluate_bcal_records_backend_model_label(tmp_path):
 @pytest.fixture
 def agent_command_category(tmp_path):
     entry = create_dataset_entry()
+    (tmp_path / "dataset.jsonl").write_text(entry.model_dump_json() + "\n", encoding="utf-8")
 
     class EntryClass:
         @staticmethod
@@ -163,6 +165,9 @@ def agent_command_category(tmp_path):
         entry_class=EntryClass,
         pipeline=Pipeline(),
         requires_container=False,
+        value="bug-fix",
+        core_score="ResolutionRate",
+        judge_model=None,
     )
 
 

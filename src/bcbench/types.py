@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
+    from bcbench_core import RunIdentity
+
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
@@ -629,6 +631,9 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # Experiment configuration
     experiment: ExperimentConfiguration | None = None
+
+    # Supplied by the repository composition root, never inferred by the library.
+    provenance: RunIdentity | None = None
 
     def get_container(self) -> ContainerConfig:
         if self.container is None:

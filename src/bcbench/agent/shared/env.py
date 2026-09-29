@@ -8,14 +8,33 @@ import os
 # other channels (an embedded env block for altool; the BC MCP gateway injects the auth header upstream,
 # so the agent's MCP config stays credential-free), so withholding these from the agent process closes
 # the direct-API/direct-DB side-doors without breaking MCP connectivity.
-_WITHHELD_ENV_PREFIXES = ("BC_SERVER_", "BC_MCP_")
-_WITHHELD_ENV_VARS = frozenset({"BC_COMPANY", "BC_CONTAINER_NAME"})
+_AGENT_ENV_VARS = frozenset(
+    {
+        "PATH",
+        "PATHEXT",
+        "HOME",
+        "USERPROFILE",
+        "SYSTEMROOT",
+        "WINDIR",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_DATA_HOME",
+        "COPILOT_GITHUB_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "ANTHROPIC_API_KEY",
+    }
+)
+_BC_ENV_PREFIXES = ("BC_SERVER_", "BC_MCP_")
+_BC_ENV_VARS = frozenset({"BC_COMPANY", "BC_CONTAINER_NAME"})
 
 
 def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:
-    env = dict(os.environ)
-    if not pass_bc_credentials:
-        env = {k: v for k, v in env.items() if not k.startswith(_WITHHELD_ENV_PREFIXES) and k not in _WITHHELD_ENV_VARS}
+    env = {k: v for k, v in os.environ.items() if k in _AGENT_ENV_VARS or (pass_bc_credentials and (k.startswith(_BC_ENV_PREFIXES) or k in _BC_ENV_VARS))}
     if overrides:
         env.update(overrides)
     return env
