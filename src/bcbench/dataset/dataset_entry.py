@@ -8,11 +8,9 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from bcbench.config import get_config
+from bcbench.config import FilePatternConfig, get_config
 from bcbench.exceptions import EntryNotFoundError
 from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
-
-_config = get_config()
 
 __all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
 
@@ -39,7 +37,7 @@ class BaseDatasetEntry(BaseModel):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
+    instance_id: str = Field(pattern=FilePatternConfig.default().instance_pattern)
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
     project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = []
@@ -129,10 +127,10 @@ class RepoGroundedEntry(BaseDatasetEntry):
 
     @property
     def problem_statement_dir(self) -> Path:
-        return _config.paths.problem_statement_dir / self.instance_id
+        return get_config().paths.problem_statement_dir / self.instance_id
 
     def get_task(self) -> str:
-        readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
+        readme_path = self.problem_statement_dir / get_config().file_patterns.problem_statement_readme
         return readme_path.read_text(encoding="utf-8")
 
 

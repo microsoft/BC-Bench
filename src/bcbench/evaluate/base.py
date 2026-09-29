@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Protocol
 
+from bcbench_core import run_steps
+
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
@@ -12,7 +14,6 @@ from bcbench.results import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
-_config = get_config()
 
 __all__ = ["AgentRunner", "EvaluationPipeline"]
 
@@ -89,22 +90,23 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             context: Evaluation context with configuration
             agent_runner: Function that runs the specific agent and returns (AgentMetrics, ExperimentConfiguration)
         """
-        self.setup(context)
 
-        try:
-            self.run_agent(context, agent_runner)
-        except AgentTimeoutError as e:
+        def on_timeout(ctx: EvaluationContext[E], e: Exception) -> None:
+            assert isinstance(e, AgentTimeoutError)
             context.metrics = e.metrics
             context.experiment = e.config
             result = context.category.result_class.create_agent_timeout_failure(context)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
-            return
-        finally:
-            logger.info(f"Agent metrics: {context.metrics}")
-            logger.info(f"Experiment configuration: {context.experiment}")
 
-        self.evaluate(context)
+        def run_agent(ctx: EvaluationContext[E], runner: AgentRunner[E]) -> None:
+            try:
+                self.run_agent(ctx, runner)
+            finally:
+                logger.info(f"Agent metrics: {ctx.metrics}")
+                logger.info(f"Experiment configuration: {ctx.experiment}")
+
+        run_steps(context, agent_runner, setup=self.setup, run_agent=run_agent, evaluate=self.evaluate, on_timeout=on_timeout, timeout_error=AgentTimeoutError)
 
     def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.
@@ -114,4 +116,4 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             result: BaseEvaluationResult to save
         """
 
-        result.save(context.result_dir, f"{context.entry.instance_id}{_config.file_patterns.result_pattern}")
+        result.save(context.result_dir, f"{context.entry.instance_id}{get_config().file_patterns.result_pattern}")

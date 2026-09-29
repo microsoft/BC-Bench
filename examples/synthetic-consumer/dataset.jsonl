@@ -1,0 +1,2 @@
+{"instance_id":"sample-1","text":"hello","expected":"HELLO"}
+{"instance_id":"sample-2","text":"world","expected":"WORLD"}
