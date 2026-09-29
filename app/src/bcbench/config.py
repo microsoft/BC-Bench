@@ -29,7 +29,7 @@ def _get_git_root() -> Path:
         return Path(result.stdout.strip())
     except subprocess.CalledProcessError:
         # Fallback to file-based resolution if not in a git repo
-        return Path(__file__).parent.parent.parent
+        return Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ class PathConfig:
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
         """Create path configuration from repository root."""
-        agent_share_dir = root / "src" / "bcbench" / "agent" / "shared"
+        agent_share_dir = root / "app" / "agent"
         evaluation_results_path = root / "evaluation_results"
         return cls(
             bc_bench_root=root,

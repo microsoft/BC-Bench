@@ -36,7 +36,7 @@ _config = get_config()
 
 _FINDINGS_OUTPUT_FILE = "al-code-review-findings.json"
 _REVIEW_OUTPUT_FILE = "review.json"
-_PREPARE_BCQUALITY_SCRIPT = Path(__file__).parent / "scripts" / "Prepare-BCQualityRoot.ps1"
+_PREPARE_BCQUALITY_SCRIPT = _config.paths.bc_bench_root / "app" / "integrations" / "pr_review" / "Prepare-BCQualityRoot.ps1"
 
 
 def _load_pr_review_settings() -> dict[str, Any]:

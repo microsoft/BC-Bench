@@ -127,7 +127,7 @@ prompt:
     You MUST write answer.json before finishing; if you do not, there is no output to evaluate.
 
 # controls:
-# 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
+# 1. whether to copy custom instructions from `app/agent/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md
 #    - Claude: copies to repo/.claude/ and renames AGENTS.md to CLAUDE.md
 # 2. whether to pass --disable-custom-instructions to copilot
@@ -138,14 +138,14 @@ instructions:
   enabled: false
 
 # controls:
-# 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
+# 1. whether to copy skills from `app/agent/instructions/<sanitized-repo>/skills/`
 #    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
 skills:
   enabled: false
 
 # controls:
-# 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`
+# 1. whether to copy custom agents from `app/agent/instructions/<sanitized-repo>/agents/`
 #    - Copilot: copies to repo/.github/agents/
 #    - Claude: copies to repo/.claude/agents/
 # 2. whether to pass --agent=<agent-name> to copilot or claude
@@ -166,7 +166,7 @@ plugins:
   - name: "bcbench-example"
     enabled: false
     source: local
-    path: "C:/depot/BC-Bench/src/bcbench/agent/shared/plugins/bcbench-example"
+    path: "C:/depot/BC-Bench/app/agent/plugins/bcbench-example"
   - name: "superpowers"
     enabled: false
     source: github

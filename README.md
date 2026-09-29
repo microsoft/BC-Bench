@@ -58,22 +58,33 @@ dependency is Pydantic.
 
 The **BC-Bench repository is an application**, not the public distribution:
 
+```text
+library/                public bcbench-core project (only build/publish this wheel)
+app/
+  src/bcbench/          BC-Bench CLI, category pipelines, result models, agent adapters
+  agent/                repository-owned config, prompts, profiles and example plugins
+  integrations/         repository-owned CAPI bridge and PR-review setup script
+dataset/                repository-owned benchmark entries and problem statements
+.github/, scripts/      repository-owned workflows and environment provisioning
+```
+
 | Before (single `bcbench` project) | After | Owner |
 | --- | --- | --- |
-| `src/bcbench/evaluate/base.py` runner/template and `results/base.py` JSONL writing | Reusable `run_steps`, `AgentRunner`, `write_result` extracted into `library/src/bcbench_core/`; legacy template/result classes delegate to core | Library primitives; BC-Bench category orchestration |
-| `src/bcbench/types.py`, `dataset/`, `src/bcbench/dataset/`, `src/bcbench/evaluate/{bugfix,testgeneration,codereview,...}.py` | Remain in `src/bcbench/` or `dataset/` | BC-Bench categories, schemas, prompts, fixtures, evaluation and scoring policy |
-| `src/bcbench/config.py`, `cli.py`, `commands/`, `agent/shared/config.yaml`, `agent/shared/instructions/` | Remain in the application | BC-Bench CLI defaults, instruction profiles and experiment selection |
-| `src/bcbench/agent/{copilot,claude,bcal,pr_review}/`, `agent/shared/mcp_gateway.py`, `collection/`, `redteam.py` | Remain in the application; no internal adapter is included in core | BC-Bench harnesses and integrations, including organization-specific CAPI and collection |
-| `src/bcbench/agent/shared/{env,lsp,mcp,plugin,prompt,version}.py`, `operations/`, `analysis/`, `contamination/` | Remain in the application; generic command execution is provided by `bcbench_core.run_command` | BC-specific workspace, provider configuration, AL tools and benchmark analyses |
-| `src/bcbench/logger.py`, `exceptions.py`, `github_actions.py`, `results/{metrics,display}.py` | Remain in the application; core has its own independent contracts | BC-Bench logging, errors, CI presentation and existing scoring conventions |
-| `src/bcbench/results/{summary,leaderboard,bceval_export}.py`, `docs/_data/`, `.github/`, `scripts/` | Remain in the application | Benchmark scores, reporting, publication, CI and runner/container provisioning |
+| `src/bcbench/evaluate/base.py` runner/template and `results/base.py` JSONL writing | Shared steps and persistence in `library/src/bcbench_core/`; BC-Bench adapters in `app/src/bcbench/` | Library primitives; BC-Bench category orchestration |
+| `src/bcbench/{types,dataset,evaluate,results,commands,config,cli}.py` and subpackages | `app/src/bcbench/` | BC-Bench CLI, categories, schemas, evaluation, results and scoring policy |
+| `src/bcbench/agent/shared/{config.yaml,instructions/,plugins/}` | `app/agent/` | BC-Bench prompts, profiles and experiments; never package resources |
+| `src/bcbench/agent/bcal/bc_eval_capi_bridge.py`, `src/bcbench/agent/pr_review/scripts/Prepare-BCQualityRoot.ps1` | `app/integrations/{bcal,pr_review}/` | Repository-owned service auth and setup |
+| `src/bcbench/agent/{copilot,claude,bcal,pr_review}/`, `collection/`, `operations/`, `analysis/`, `contamination/` | `app/src/bcbench/` | BC-Bench agent adapters, collection, workspace and analyses |
+| `docs/_data/`, `.github/`, `scripts/` | Unchanged, outside both packages | Reporting, publication, CI and runner/container provisioning |
 | No external example | `examples/synthetic-consumer/` | Independent synthetic consumer, not included in the core archives |
 
 `library/pyproject.toml` is a separate build root: setuptools discovers only
 `bcbench_core` under `library/src/` and excludes package data. Do **not** publish
 the root `bcbench` application wheel (its metadata marks it private). The root
-application depends on the local core workspace member; existing `uv run bcbench
-...` workflows retain their invocations and current benchmark semantics.
+application installs `app/src/bcbench` and depends on the local core workspace
+member; existing `uv run bcbench ...` workflows retain their invocations and
+current benchmark semantics. The BCAL workflow now points its external-command
+bridge at `app/integrations/bcal/`; CI coverage uses `app/src/bcbench`.
 The application retains its own repository-relative CLI defaults and legacy
 category registry for its existing workflows; other repositories use the core
 API rather than importing these BC-Bench-specific commands.

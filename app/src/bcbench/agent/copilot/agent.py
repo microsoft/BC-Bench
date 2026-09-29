@@ -38,7 +38,7 @@ def run_copilot_agent(
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
     """
-    config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
+    config_file = _config.paths.agent_share_dir / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")

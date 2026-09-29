@@ -70,7 +70,7 @@ def _get_source_instructions_path(profile: str) -> Path:
     """
     Get path to the source instruction folder for an instruction profile.
 
-    Instructions are stored in shared/instructions/ and used by both Copilot and Claude.
+    Instructions are stored in app/agent/instructions/ and used by both Copilot and Claude.
 
     Raises:
         FileNotFoundError: If instruction file doesn't exist

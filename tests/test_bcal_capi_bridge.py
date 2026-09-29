@@ -7,7 +7,7 @@ from io import BytesIO
 
 import pytest
 
-from bcbench.agent.bcal import bc_eval_capi_bridge
+from app.integrations.bcal import bc_eval_capi_bridge
 
 
 def test_load_request_accepts_utf8_bom_from_bcal_windows_stdin():

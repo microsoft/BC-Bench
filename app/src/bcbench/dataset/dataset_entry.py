@@ -92,7 +92,7 @@ class BaseDatasetEntry(BaseModel):
     @property
     @abstractmethod
     def customization_profile(self) -> str:
-        """Folder under `agent/shared/instructions/` holding this entry's instructions, skills and custom agents.
+        """Folder under `app/agent/instructions/` holding this entry's instructions, skills and custom agents.
 
         Repo-grounded entries key this on their repo so the agent sees the customization a developer would already have checked in.
         Categories that scaffold their own workspace pick their own folder name and place it alongside the repo-keyed ones.

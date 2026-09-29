@@ -42,7 +42,7 @@ def run_claude_code(
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used
     """
-    config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
+    config_file = _config.paths.agent_share_dir / "config.yaml"
     claude_config = yaml.safe_load(config_file.read_text())
 
     claude_cmd = shutil.which("claude")

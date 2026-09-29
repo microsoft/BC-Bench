@@ -46,10 +46,11 @@ members = [
 bcbench-core = { workspace = true, editable = true }
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["app/src"]
 
-[tool.setuptools.package-data]
-bcbench = ["agent/*.yaml", "agent/pr_review/scripts/*.ps1"]
+[tool.setuptools]
+package-dir = {"" = "app/src"}
+include-package-data = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -121,7 +122,7 @@ ban-relative-imports = "all"
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN"]
 "notebooks/**" = ["ANN", "T20"]   # notebooks routinely print() for analysis output
-"src/bcbench/commands/**" = ["T20"]   # CLI commands print user-facing output
+"app/src/bcbench/commands/**" = ["T20"]   # CLI commands print user-facing output
 "tools/**" = ["T20"]                  # standalone CLI scripts
 
 [dependency-groups]

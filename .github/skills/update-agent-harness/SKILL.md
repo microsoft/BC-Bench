@@ -29,11 +29,11 @@ Use this table when the model set changes:
 ## Copilot Surfaces
 
 - `.github/actions/install-agent-harnesses/action.yml`
-- `src/bcbench/agent/copilot/agent.py` and `metrics.py`
-- `src/bcbench/agent/copilot/cli.py` and `src/bcbench/cli_options.py`
+- `app/src/bcbench/agent/copilot/agent.py` and `metrics.py`
+- `app/src/bcbench/agent/copilot/cli.py` and `app/src/bcbench/cli_options.py`
 - `.github/workflows/copilot-evaluation.yml`
 - `.github/workflows/contamination.yml`
-- Defaults under `src/bcbench/commands/` and `src/bcbench/config.py`
+- Defaults under `app/src/bcbench/commands/` and `app/src/bcbench/config.py`
 - Copilot-focused tests under `tests/`
 
 Preserve unrelated changes and stored leaderboard results. Stop for maintainer input when release notes are incomplete, compatibility affects result comparability, a model has no clear benchmark role, availability is required but unverified, or focused validation fails.

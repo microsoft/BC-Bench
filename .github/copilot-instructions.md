@@ -3,7 +3,8 @@
 This is a benchmark for evaluating coding agents on real-world Business Central (AL) development tasks, inspired by SWE-Bench. Unlike traditional model benchmarks, BC-Bench is designed to help select models and rapidly iterate on mcp servers, custom instruction/agents, etc for engineers. The repository contains:
 
 - **Dataset**: Benchmark entries following SWE-Bench schema with BC-specific adjustments
-- **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
+- **Public Library** (`library/src/bcbench_core/`): Reusable execution, result and scoring contracts; no repository-owned data or integrations
+- **Benchmark Application** (`app/src/bcbench/`): CLI, agent implementations, category pipelines and validation utilities; profiles and integrations live under `app/`
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
 - **Tools** (`tools/`): Ad-hoc scripts for GitHub Artifacts download, etc
 - **Agent Evaluations**: Focuses on GitHub Copilot CLI and Claude Code

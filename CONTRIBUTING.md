@@ -19,7 +19,8 @@ A very high-level overview of the repository structure:
 
 ```
 BC-Bench/
-├── src/bcbench/    # Evaluation harness — agent orchestration, build/test pipeline, results
+├── library/        # Public bcbench-core project; build and publish from here
+├── app/            # Repository-owned CLI, evaluation pipelines, agent profiles and integrations
 ├── dataset/        # Benchmark dataset tasks
 ├── scripts/        # Scripts for container setup & test execution; not needed for local development
 ├── notebooks/      # Analysis and visualization of results
@@ -59,7 +60,7 @@ uv run bcbench --help
 uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
 
 # Run tests
-uv run pytest --cov=src/bcbench --cov-report=term-missing
+uv run pytest --cov=app/src/bcbench --cov-report=term-missing
 
 # Lint and format
 uv run pre-commit run --all-files
@@ -123,7 +124,7 @@ The short maintainer checklist is:
 1. Find the current hardcoded CLI pin in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml).
 2. Review first-party release notes for every version between the current and target pins. Check BC-Bench's flags, authentication, non-interactive behavior, logs, and metrics parsing for breaking changes.
 3. Curate models for benchmark value. Do not add every available model: prefer models that represent a new frontier, provider, capability, or cost tier, and skip older or redundant models that add little comparative value.
-4. Keep model choices and defaults synchronized across `src/bcbench/cli_options.py`, evaluation workflows, command defaults, and judge configuration.
+4. Keep model choices and defaults synchronized across `app/src/bcbench/cli_options.py`, evaluation workflows, command defaults, and judge configuration in `app/agent/config.yaml`.
 5. Bump the benchmark version in [`pyproject.toml`](pyproject.toml) according to the Versioning Policy. Harness and model-list changes normally require a minor bump.
 6. Run focused compatibility tests, pre-commit, and a test evaluation with the evaluation identity before merging.
 
