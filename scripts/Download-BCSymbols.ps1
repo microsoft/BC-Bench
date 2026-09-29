@@ -39,8 +39,8 @@ Write-Log "Resolved BC version $version for InstanceId $InstanceId" -Level Info
 
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
-[string] $artifactUrl = Get-BCArtifactUrl -version $version -country $Country -select 'Latest'
-if (-not $artifactUrl) { throw "No BC artifact URL resolved for version $version ($Country)" }
+[hashtable] $artifactConfig = Get-BCBenchArtifactConfig -Category $Category -Version $version -Country $Country
+[string] $artifactUrl = $artifactConfig.artifactUrl
 Write-Log "Downloading artifact: $artifactUrl" -Level Info
 
 $paths = Download-Artifacts -artifactUrl $artifactUrl -includePlatform
