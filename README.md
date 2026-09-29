@@ -128,6 +128,31 @@ agent, pipeline and scorer; no core category changes are required. Run
 inspect **both** distributable archives. `tests/test_public_library.py` also
 checks their allowlisted contents and executes the consumer outside the checkout.
 
+### The existing code-review category as a consumer
+
+[`app/code_review_consumer.py`](app/code_review_consumer.py) is a composition
+example using the **real** code-review dataset model and pipeline. It accepts a
+dataset, entry ID, checkout, output directory and injected agent runner; the
+script chooses Copilot CLI, while `evaluate_code_review()` can receive another
+runner. BC-Bench owns the prompt, git workspace setup, judge, comment matching,
+F1 scoring and category-specific summary/aggregate. `bcbench-core` provides the
+typed agent contract, the pipeline execution steps, result writing and typed
+JSONL loading. No code-review category is registered in the public library.
+
+```sh
+uv run python app/code_review_consumer.py \
+  --dataset dataset/codereview.jsonl --entry-id '<code-review-entry-id>' \
+  --repo-path /path/to/evaluation-checkout --output-dir /tmp/review-runs \
+  --run-id example-1 --model gpt-5.3-codex
+```
+
+The runner needs a checkout and authenticated Copilot CLI; the existing judge
+also needs its configured model. This example stores one result JSONL file,
+`evaluation_summary.json` and `aggregate.jsonl` in the supplied run directory.
+It does not upload or publish anything. The normal `bcbench evaluate copilot`
+command remains the supported workflow invocation; the example makes the
+application's composition decisions visible without changing its scoring.
+
 Core run identity records the core version, consumer revision, benchmark ID,
 dataset revision, scorer ID and experiment separately in each result; loading,
 scoring, summarization and aggregation reject incompatible identities. BC-Bench's
