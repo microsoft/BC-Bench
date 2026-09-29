@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tarfile
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -82,25 +83,27 @@ def test_command_agent_receives_only_scoped_environment(tmp_path):
 
 
 def test_distribution_contents_and_external_consumer(tmp_path):
+    package_version = tomllib.loads((ROOT / "library/pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    sdist_root = f"bcbench-core-{package_version}"
     dist = Path(os.environ["BCBENCH_CORE_DIST"]) if "BCBENCH_CORE_DIST" in os.environ else tmp_path / "dist"
     if "BCBENCH_CORE_DIST" not in os.environ:
-        subprocess.run(["uv", "build", str(ROOT / "library"), "--out-dir", str(dist)], check=True, capture_output=True, text=True)
+        subprocess.run(["uv", "build", "--no-config", str(ROOT / "library"), "--out-dir", str(dist)], check=True, capture_output=True, text=True)
     wheel = next(dist.glob("bcbench_core-*.whl"))
     sdist = next(dist.glob("bcbench-core-*.tar.gz"))
     with zipfile.ZipFile(wheel) as archive:
         wheel_files = archive.namelist()
-        assert all(name.startswith(("bcbench_core/", "bcbench_core-0.1.0.dist-info/")) for name in wheel_files)
+        assert all(name.startswith(("bcbench_core/", f"bcbench_core-{package_version}.dist-info/")) for name in wheel_files)
         texts = [archive.read(name) for name in wheel_files if name.endswith((".py", "METADATA"))]
     with tarfile.open(sdist, "r:gz") as archive:
         sdist_files = [member.name for member in archive.getmembers() if member.isfile()]
         assert all(
-            name.startswith(("bcbench-core-0.1.0/src/bcbench_core/", "bcbench-core-0.1.0/src/bcbench_core.egg-info/"))
+            name.startswith((f"{sdist_root}/src/bcbench_core/", f"{sdist_root}/src/bcbench_core.egg-info/"))
             or name
             in {
-                "bcbench-core-0.1.0/README.md",
-                "bcbench-core-0.1.0/PKG-INFO",
-                "bcbench-core-0.1.0/pyproject.toml",
-                "bcbench-core-0.1.0/setup.cfg",
+                f"{sdist_root}/README.md",
+                f"{sdist_root}/PKG-INFO",
+                f"{sdist_root}/pyproject.toml",
+                f"{sdist_root}/setup.cfg",
             }
             for name in sdist_files
         )

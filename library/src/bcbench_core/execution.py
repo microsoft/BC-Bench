@@ -52,6 +52,7 @@ def run_steps[ContextT, OutputT](
     evaluate: Callable[[ContextT], None],
     on_timeout: Callable[[ContextT, Exception], None],
     timeout_error: type[Exception],
+    on_agent_finished: Callable[[ContextT], None] | None = None,
 ) -> None:
     setup(context)
     try:
@@ -59,6 +60,9 @@ def run_steps[ContextT, OutputT](
     except timeout_error as error:
         on_timeout(context, error)
         return
+    finally:
+        if on_agent_finished is not None:
+            on_agent_finished(context)
     evaluate(context)
 
 

@@ -67,13 +67,14 @@ class TestExecuteHappyPath:
 
 
 class TestExecuteAgentTimeout:
-    def test_persists_timeout_result_and_skips_evaluate(self, tmp_path):
+    def test_persists_timeout_result_and_skips_evaluate(self, tmp_path, caplog):
         ctx = create_evaluation_context(tmp_path)
         timeout_metrics = AgentMetrics(execution_time=600.0)
         timeout_config = ExperimentConfiguration(custom_instructions=True)
         pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config))
 
-        pipeline.execute(ctx, _noop_runner)
+        with caplog.at_level("INFO", logger="bcbench.evaluate.base"):
+            pipeline.execute(ctx, _noop_runner)
 
         assert pipeline.evaluate_called is False
         result = _read_only_result(ctx)
@@ -81,6 +82,7 @@ class TestExecuteAgentTimeout:
         assert result.error_message == "Agent timed out"
         assert result.metrics == timeout_metrics
         assert result.experiment == timeout_config
+        assert "execution_time=600.0" in caplog.text
 
     def test_persists_category_specific_timeout_result(self, tmp_path):
         entry = create_nl2al_entry()

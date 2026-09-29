@@ -99,14 +99,11 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
 
-        def run_agent(ctx: EvaluationContext[E], runner: AgentRunner[E]) -> None:
-            try:
-                self.run_agent(ctx, runner)
-            finally:
-                logger.info(f"Agent metrics: {ctx.metrics}")
-                logger.info(f"Experiment configuration: {ctx.experiment}")
+        def log_agent(ctx: EvaluationContext[E]) -> None:
+            logger.info(f"Agent metrics: {ctx.metrics}")
+            logger.info(f"Experiment configuration: {ctx.experiment}")
 
-        run_steps(context, agent_runner, setup=self.setup, run_agent=run_agent, evaluate=self.evaluate, on_timeout=on_timeout, timeout_error=AgentTimeoutError)
+        run_steps(context, agent_runner, setup=self.setup, run_agent=self.run_agent, evaluate=self.evaluate, on_timeout=on_timeout, timeout_error=AgentTimeoutError, on_agent_finished=log_agent)
 
     def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.

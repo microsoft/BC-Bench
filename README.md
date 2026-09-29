@@ -96,7 +96,7 @@ From the repository root, on Python 3.13 with `uv` installed:
 
 ```sh
 REPO="$(pwd -P)"
-uv build "$REPO/library" --out-dir /tmp/bcbench-core-dist
+uv build --no-config "$REPO/library" --out-dir /tmp/bcbench-core-dist
 uv venv --python 3.13 /tmp/bcbench-example-venv
 uv pip install --python /tmp/bcbench-example-venv/bin/python /tmp/bcbench-core-dist/bcbench_core-0.1.0-py3-none-any.whl
 cd /tmp
