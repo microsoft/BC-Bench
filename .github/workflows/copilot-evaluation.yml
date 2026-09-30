@@ -105,11 +105,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      copilot-requests: write
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 64
+      max-parallel: 16
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -147,9 +146,13 @@ jobs:
         timeout-minutes: 120
         shell: pwsh
         env:
-          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:COPILOT_GITHUB_TOKEN)) {
+              throw "COPILOT_PAT is missing or unavailable."
+          }
+
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
