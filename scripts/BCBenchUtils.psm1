@@ -509,32 +509,87 @@ function Get-BCBenchDatasetPath {
     return Join-Path $projectRoot "dataset" $DatasetName
 }
 
+function Get-BCBenchArtifactPins {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [string] $Path = (Join-Path $PSScriptRoot 'BCBenchArtifactPins.json')
+    )
+
+    $pinnedUrls = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    if ($pinnedUrls -isnot [hashtable] -or $pinnedUrls.Count -eq 0) {
+        throw "BC artifact pins must be a nonempty version-to-URL map in $Path."
+    }
+
+    return $pinnedUrls
+}
+
 <#
 .SYNOPSIS
-    Gets additional BC artifact parameters for a category.
+    Gets the BC artifact URL and container options for a category and version.
 .DESCRIPTION
-    Categories use the public artifact feed by default. Add only category-specific overrides here,
-    using parameter names accepted by Get-BCArtifactUrl.
+    Container-backed categories use pinned public artifact URLs, optionally, the latest BC Insider artifact.
 .PARAMETER Category
     The evaluation category requesting a BC artifact.
+.PARAMETER Version
+    The dataset entry's BC sandbox version.
+.PARAMETER Country
+    BC artifact country (public pins are available only for w1).
 .OUTPUTS
-    Hashtable of additional Get-BCArtifactUrl parameters.
+    Hashtable with artifactUrl and accept_insiderEula.
 #>
 function Get-BCBenchArtifactConfig {
     [CmdletBinding()]
     [OutputType([hashtable])]
     param(
         [Parameter(Mandatory = $true)]
-        [string] $Category
+        [string] $Category,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Version,
+
+        [string] $Country = 'w1'
     )
 
-    [hashtable] $categoryConfig = @{
-        # Add opt-in category overrides here. For example:
-        # "category" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
-        "data-query" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
+    if ($Category -eq 'data-query') {
+        $url = Get-BCArtifactUrl -Version $Version -Country $Country -StorageAccount 'bcinsider' -Select 'Latest' -accept_insiderEula
+        if (-not $url) { throw "No BC Insider artifact URL resolved for version $Version ($Country)." }
+        return @{ artifactUrl = $url; accept_insiderEula = $true }
     }
 
-    return $categoryConfig[$Category] ?? @{}
+    if ($Country -ne 'w1') { throw "Approved BC artifacts are only configured for w1, not $Country." }
+
+    [hashtable] $pinnedUrls = Get-BCBenchArtifactPins
+
+    if (-not $pinnedUrls.ContainsKey($Version) -or $pinnedUrls[$Version] -isnot [string] -or [string]::IsNullOrWhiteSpace($pinnedUrls[$Version])) {
+        throw "No pinned BC artifact URL for bcartifacts version $Version in Get-BCBenchArtifactConfig."
+    }
+
+    return @{ artifactUrl = $pinnedUrls[$Version]; accept_insiderEula = $false }
+}
+
+function Get-BCBenchLatestArtifactUrls {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [string] $Path = (Join-Path $PSScriptRoot 'BCBenchArtifactPins.json')
+    )
+
+    $pins = Get-BCBenchArtifactPins -Path $Path
+    foreach ($version in @($pins.Keys)) {
+        if ($version -notmatch '^\d+\.\d+$') {
+            throw "Invalid pinned BC artifact version: $version."
+        }
+
+        $url = Get-BCArtifactUrl -Version $version -Country 'w1' -Select 'Latest' -ErrorAction Stop
+        if ($url -isnot [string]) {
+            throw "No valid public BC artifact URL resolved for version $version (w1): $url."
+        }
+
+        $pins[$version] = $url
+    }
+
+    return $pins
 }
 
 <#
@@ -621,4 +676,4 @@ function Get-LatestReleaseBranch {
     return $latest.Name
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchArtifactConfig, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchArtifactPins, Get-BCBenchArtifactConfig, Get-BCBenchLatestArtifactUrls, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
