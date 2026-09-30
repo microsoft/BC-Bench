@@ -137,6 +137,10 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 4. Run focused tests for the integration, then perform a test evaluation for tools exposed to the agent.
 5. Bump the benchmark version according to the Versioning Policy. Tool changes that may affect evaluation results normally require a minor bump.
 
+### Refresh BC sandbox artifacts
+
+Public `w1` sandbox URLs are pinned by version in [`scripts/BCBenchArtifactPins.json`](scripts/BCBenchArtifactPins.json), so we are more resilient to upstream changes. Manual dataset-validation runs use the saved pins. The scheduled run resolves the latest URLs, verifies them across the full bug-fix dataset, and pushes a pins-only branch for a manual PR only if every job succeeds. BC Insider artifacts remain dynamically resolved.
+
 ### Bump the BC PR Review engine
 
 1. Update the pinned `microsoft/BC-ALAgents` commit in `.github/actions/install-agent-harnesses/action.yml`
