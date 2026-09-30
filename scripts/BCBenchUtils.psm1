@@ -509,6 +509,21 @@ function Get-BCBenchDatasetPath {
     return Join-Path $projectRoot "dataset" $DatasetName
 }
 
+function Get-BCBenchArtifactPins {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [string] $Path = (Join-Path $PSScriptRoot 'BCBenchArtifactPins.json')
+    )
+
+    $pinnedUrls = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    if ($pinnedUrls -isnot [hashtable] -or $pinnedUrls.Count -eq 0) {
+        throw "BC artifact pins must be a nonempty version-to-URL map in $Path."
+    }
+
+    return $pinnedUrls
+}
+
 <#
 .SYNOPSIS
     Gets the BC artifact URL and container options for a category and version.
@@ -544,23 +559,37 @@ function Get-BCBenchArtifactConfig {
 
     if ($Country -ne 'w1') { throw "Approved BC artifacts are only configured for w1, not $Country." }
 
-    [hashtable] $pinnedUrls = @{
-        '24.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.0.16410.31330/w1'
-        '24.2' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.2.20227.31325/w1'
-        '24.3' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/24.3.21374.32119/w1'
-        '25.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/25.0.23364.48438/w1'
-        '26.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/26.0.30643.50520/w1'
-        '26.3' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/26.3.36158.49685/w1'
-        '26.5' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/26.5.38752.54549/w1'
-        '27.0' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/27.0.38460.54596/w1'
-        '27.2' = 'https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/sandbox/27.2.42879.54576/w1'
-    }
+    [hashtable] $pinnedUrls = Get-BCBenchArtifactPins
 
-    if (-not $pinnedUrls.ContainsKey($Version)) {
+    if (-not $pinnedUrls.ContainsKey($Version) -or $pinnedUrls[$Version] -isnot [string] -or [string]::IsNullOrWhiteSpace($pinnedUrls[$Version])) {
         throw "No pinned BC artifact URL for bcartifacts version $Version in Get-BCBenchArtifactConfig."
     }
 
     return @{ artifactUrl = $pinnedUrls[$Version]; accept_insiderEula = $false }
+}
+
+function Get-BCBenchLatestArtifactUrls {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [string] $Path = (Join-Path $PSScriptRoot 'BCBenchArtifactPins.json')
+    )
+
+    $pins = Get-BCBenchArtifactPins -Path $Path
+    foreach ($version in @($pins.Keys)) {
+        if ($version -notmatch '^\d+\.\d+$') {
+            throw "Invalid pinned BC artifact version: $version."
+        }
+
+        $url = Get-BCArtifactUrl -Version $version -Country 'w1' -Select 'Latest' -ErrorAction Stop
+        if ($url -isnot [string]) {
+            throw "No valid public BC artifact URL resolved for version $version (w1): $url."
+        }
+
+        $pins[$version] = $url
+    }
+
+    return $pins
 }
 
 <#
@@ -647,4 +676,4 @@ function Get-LatestReleaseBranch {
     return $latest.Name
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchArtifactConfig, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchArtifactPins, Get-BCBenchArtifactConfig, Get-BCBenchLatestArtifactUrls, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
