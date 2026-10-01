@@ -2,15 +2,16 @@ from collections.abc import Sequence
 from typing import NamedTuple, Self
 
 import numpy as np
+from bcbench_core.evaluation import EvaluationRun
+from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
 from pydantic import Field
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
-from bcbench.dataset import ReviewComment
+from bcbench.dataset import CodeReviewEntry, ReviewComment
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
-from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext
 
@@ -178,6 +179,87 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
     f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
     f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
     severity_mae: float = 0.0
+
+    @classmethod
+    def _fields_from_run(cls, run: EvaluationRun[CodeReviewEntry], judge_model: str) -> dict[str, object]:
+        return {
+            "instance_id": run.request.entry.instance_id,
+            "project": run.request.entry.extract_project_name(),
+            "model": run.request.model.replace(".", "-"),
+            "category": "code-review",
+            "agent_name": run.agent_name,
+            "agent_version": run.agent_version,
+            "metrics": run.execution.metrics,
+            "experiment": run.execution.experiment,
+            "judge_model": judge_model,
+        }
+
+    @classmethod
+    def create_timeout_from_run(cls, run: EvaluationRun[CodeReviewEntry], judge_model: str) -> Self:
+        return cls.model_validate(
+            {
+                **cls._fields_from_run(run, judge_model),
+                "timeout": True,
+                "error_message": "Agent timed out",
+            }
+        )
+
+    @classmethod
+    def create_from_run(
+        cls,
+        run: EvaluationRun[CodeReviewEntry],
+        judge_model: str,
+        output: str,
+        expected_comments: list[ReviewComment],
+        generated_comments: list[ReviewComment],
+        *,
+        matched_pairs: list[tuple[ReviewComment, ReviewComment]],
+        ignored_comments: list[ReviewComment],
+        ignored_matched_pairs: list[tuple[ReviewComment, ReviewComment]],
+    ) -> Self:
+        scores = _score_counts(
+            matched_count=len(matched_pairs),
+            generated_count=len(generated_comments),
+            expected_count=len(expected_comments),
+            ignored_count=len(ignored_matched_pairs),
+        )
+        return cls.model_validate(
+            {
+                **cls._fields_from_run(run, judge_model),
+                "output": output,
+                "expected_comments": expected_comments,
+                "generated_comments": generated_comments,
+                "ignored_comments": ignored_comments,
+                "valid_review_output": True,
+                "matched_comment_count": scores.matched,
+                "incorrect_comment_count": scores.incorrect,
+                "missed_comment_count": scores.missed,
+                "ignored_matched_comment_count": scores.ignored,
+                "precision": scores.precision,
+                "recall": scores.recall,
+                "f1": f1_score(scores.precision, scores.recall),
+                "f_beta_05": f_beta_score(scores.precision, scores.recall, beta=0.5),
+                "f_beta_2": f_beta_score(scores.precision, scores.recall, beta=2.0),
+                "severity_mae": _severity_mean_absolute_error(matched_pairs),
+            }
+        )
+
+    @classmethod
+    def create_invalid_from_run(
+        cls,
+        run: EvaluationRun[CodeReviewEntry],
+        judge_model: str,
+        output: str,
+        expected_comments: list[ReviewComment],
+    ) -> Self:
+        return cls.model_validate(
+            {
+                **cls._fields_from_run(run, judge_model),
+                "output": output,
+                "expected_comments": expected_comments,
+                "valid_review_output": False,
+            }
+        )
 
     @classmethod
     def create(

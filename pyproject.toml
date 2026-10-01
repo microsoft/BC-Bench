@@ -14,6 +14,7 @@ authors = [
 ]
 classifiers = ["Private :: Do Not Upload"]
 dependencies = [
+    "bcbench-core",
     "jsonschema>=4.0",
     "python-dotenv>=1.2.2",
     "requests>=2.0",
@@ -27,6 +28,12 @@ dependencies = [
     "scipy>=1.16.3",
     "jinja2>=3.1.6",
 ]
+
+[tool.uv.sources]
+bcbench-core = { workspace = true }
+
+[tool.uv.workspace]
+members = ["packages/*"]
 
 [project.scripts]
 bcbench = "bcbench.cli:app"

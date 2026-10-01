@@ -1,27 +1,44 @@
 """Business Central specific operations for building, publishing, and testing."""
 
+import json
+import logging
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from string import Template
-from typing import Literal
+from typing import Literal, Protocol
 
-from pydantic import TypeAdapter
+from bcbench_core.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
+from bcbench_core.operations.al import bootstrap_app_json
+from bcbench_core.operations.filesystem import remove_tree
+from bcbench_core.types import ContainerConfig
 
-from bcbench.config import get_config
-from bcbench.dataset import TestEntry
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
-from bcbench.logger import get_logger
-from bcbench.operations.filesystem_operations import remove_tree
-from bcbench.operations.setup_operations import bootstrap_app_json
-from bcbench.types import ContainerConfig
-
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
 
-def resolve_artifact_version_root(version: str) -> Path | None:
+class TestEntry(Protocol):
+    codeunitID: int
+    functionName: frozenset[str]
+
+
+class TestSuiteEntry(Protocol):
+    fail_to_pass: list[TestEntry]
+    pass_to_pass: list[TestEntry]
+
+
+@dataclass(frozen=True)
+class BusinessCentralSettings:
+    artifacts_cache: Path
+    scripts_dir: Path
+    build_baseapp_timeout: int
+    build_app_timeout: int
+    test_timeout: int
+    query_timeout: int
+    alpackages_dirname: str = ".alpackages"
+
+
+def resolve_artifact_version_root(version: str, settings: BusinessCentralSettings) -> Path | None:
     """Return the newest BCContainerHelper artifact folder matching a major.minor version.
 
     The dataset's ``environment_setup_version`` is major.minor (e.g. "27.2"); BCContainerHelper
@@ -31,21 +48,21 @@ def resolve_artifact_version_root(version: str) -> Path | None:
 
     Returns None when no matching artifact has been downloaded yet.
     """
-    version_roots = sorted((_config.paths.bc_artifacts_cache / "sandbox").glob(f"{version}.*"))
+    version_roots = sorted((settings.artifacts_cache / "sandbox").glob(f"{version}.*"))
     return version_roots[-1] if version_roots else None
 
 
-def copy_symbol_apps(project_dir: Path, version: str) -> None:
+def copy_symbol_apps(project_dir: Path, version: str, settings: BusinessCentralSettings) -> None:
     """Copy all *.app symbol files from the BC artifact cache into the project's .alpackages."""
-    version_root = resolve_artifact_version_root(version)
+    version_root = resolve_artifact_version_root(version, settings)
     if version_root is None:
-        raise FileNotFoundError(f"No BC artifact for version {version} under {_config.paths.bc_artifacts_cache / 'sandbox'}. Run scripts/Download-BCSymbols.ps1 to populate the cache.")
+        raise FileNotFoundError(f"No BC artifact for version {version} under {settings.artifacts_cache / 'sandbox'}. Run scripts/Download-BCSymbols.ps1 to populate the cache.")
 
     app_files = list(version_root.rglob("*.app"))
     if not app_files:
         raise FileNotFoundError(f"No *.app files found under {version_root}.")
 
-    alpackages_dir = project_dir / _config.file_patterns.alpackages_dirname
+    alpackages_dir = project_dir / settings.alpackages_dirname
     alpackages_dir.mkdir(parents=True, exist_ok=True)
     for app_file in app_files:
         shutil.copy2(app_file, alpackages_dir / app_file.name)
@@ -106,8 +123,8 @@ Invoke-DatasetTests -containerName '$container_name' -credential $$credential -t
 )
 
 
-def build_ps_app_build_and_publish(container_name: str, username: str, password: str, project_path: Path, version: str) -> str:
-    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
+def build_ps_app_build_and_publish(container_name: str, username: str, password: str, project_path: Path, version: str, settings: BusinessCentralSettings) -> str:
+    app_utils_path = settings.scripts_dir / "AppUtils.psm1"
 
     return _BUILD_AND_PUBLISH_TEMPLATE.substitute(
         app_utils_path=_escape_ps_string(str(app_utils_path)),
@@ -119,8 +136,15 @@ def build_ps_app_build_and_publish(container_name: str, username: str, password:
     )
 
 
-def build_ps_test_script(container_name: str, username: str, password: str, codeunit_id: int, function_names: list[str] | None = None) -> str:
-    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
+def build_ps_test_script(
+    container_name: str,
+    username: str,
+    password: str,
+    codeunit_id: int,
+    function_names: list[str] | None,
+    settings: BusinessCentralSettings,
+) -> str:
+    app_utils_path = settings.scripts_dir / "AppUtils.psm1"
 
     # Build function parameter if needed
     if function_names:
@@ -139,8 +163,15 @@ def build_ps_test_script(container_name: str, username: str, password: str, code
     )
 
 
-def build_ps_dataset_tests_script(container_name: str, username: str, password: str, test_entries_json: str, expectation: Literal["Pass", "Fail"]) -> str:
-    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
+def build_ps_dataset_tests_script(
+    container_name: str,
+    username: str,
+    password: str,
+    test_entries_json: str,
+    expectation: Literal["Pass", "Fail"],
+    settings: BusinessCentralSettings,
+) -> str:
+    app_utils_path = settings.scripts_dir / "AppUtils.psm1"
 
     return _DATASET_TESTS_TEMPLATE.substitute(
         app_utils_path=_escape_ps_string(str(app_utils_path)),
@@ -152,7 +183,7 @@ def build_ps_dataset_tests_script(container_name: str, username: str, password: 
     )
 
 
-def build_and_publish_projects(repo_path: Path, project_paths: list[str], container: ContainerConfig, version: str) -> None:
+def build_and_publish_projects(repo_path: Path, project_paths: list[str], container: ContainerConfig, version: str, settings: BusinessCentralSettings) -> None:
     """Build and publish all projects."""
     logger.info(f"Building and publishing {len(project_paths)} projects")
 
@@ -166,10 +197,11 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
             password=container.password,
             project_path=full_project_path,
             version=version,
+            settings=settings,
         )
 
         # Extend timeout for build and publish, especially for BaseApp
-        timeout = _config.timeout.build_baseapp if ("BaseApp" in project_path) else _config.timeout.build_app
+        timeout = settings.build_baseapp_timeout if "BaseApp" in project_path else settings.build_app_timeout
 
         try:
             subprocess.run(
@@ -193,21 +225,21 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
     logger.info("All projects built and published")
 
 
-def run_tests(entry: _BugFixTestGenBase, container: ContainerConfig) -> None:
+def run_tests(entry: TestSuiteEntry, container: ContainerConfig, settings: BusinessCentralSettings) -> None:
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
-        run_test_suite(entry.fail_to_pass, "Pass", container)
+        run_test_suite(entry.fail_to_pass, "Pass", container, settings)
 
     if entry.pass_to_pass:
         logger.info(f"Running {len(entry.pass_to_pass)} pass-to-pass tests")
-        run_test_suite(entry.pass_to_pass, "Pass", container)
+        run_test_suite(entry.pass_to_pass, "Pass", container, settings)
 
     logger.info("All tests completed")
 
 
-def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container: ContainerConfig) -> None:
+def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container: ContainerConfig, settings: BusinessCentralSettings) -> None:
     """Run a suite of tests."""
-    test_entries_json: str = TypeAdapter(list[TestEntry]).dump_json(test_entries).decode()
+    test_entries_json = json.dumps([{"codeunitID": entry.codeunitID, "functionName": sorted(entry.functionName)} for entry in test_entries])
 
     ps_script = build_ps_dataset_tests_script(
         container_name=container.name,
@@ -215,6 +247,7 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
         password=container.password,
         test_entries_json=test_entries_json,
         expectation=expectation,
+        settings=settings,
     )
 
     try:
@@ -225,7 +258,7 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
             capture_output=True,
             check=True,
             text=True,
-            timeout=_config.timeout.test_execution,
+            timeout=settings.test_timeout,
         )
         logger.info(f"Test suite completed with expectation met: {expectation}")
         if result.stdout:
@@ -235,8 +268,8 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
         logger.debug(f"Full test output: {e.stdout}")
         raise TestExecutionError(expectation, e.stderr, e.stdout) from None
     except subprocess.TimeoutExpired:
-        logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
-        raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None
+        logger.exception(f"Test execution timed out after {settings.test_timeout} seconds")
+        raise TestExecutionTimeoutExpired(test_entries_json, settings.test_timeout) from None
 
 
 # --- data-query category: compile + run an AL query and capture its rows via a wrapped API query ---
@@ -381,7 +414,15 @@ finally {
 )
 
 
-def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: Literal["generated", "gold"], company: str) -> list[dict]:
+def execute_al_query(
+    query_text: str,
+    container: ContainerConfig,
+    version: str,
+    work_root: Path,
+    suffix: Literal["generated", "gold"],
+    company: str,
+    settings: BusinessCentralSettings,
+) -> list[dict]:
     """Compile + publish an AL query (wrapped as an API query) to the container and return its rows.
 
     Builds a throwaway app under ``work_root/.bcbench-query-<suffix>``, compiles + publishes it,
@@ -393,8 +434,6 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
     NOTE: the container-side steps (compile/publish/OData fetch) require a running BC container
     and have not been validated locally; the wrapping and comparison logic are unit-tested.
     """
-    import json
-
     object_id = 50100 if suffix == "generated" else 50101
     app_dir = work_root / f".bcbench-query-{suffix}"
     if app_dir.exists():
@@ -407,7 +446,7 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
     # Symbols are downloaded into an explicit .alpackages folder by Invoke-AppBuildAndPublish (below).
 
     result_file = app_dir / "result.json"
-    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
+    app_utils_path = settings.scripts_dir / "AppUtils.psm1"
     ps_script = _QUERY_RUN_TEMPLATE.substitute(
         app_utils_path=_escape_ps_string(str(app_utils_path)),
         suffix=suffix,
@@ -432,13 +471,13 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
             capture_output=True,
             check=True,
             text=True,
-            timeout=_config.timeout.execute_query,
+            timeout=settings.query_timeout,
         )
     except subprocess.CalledProcessError as e:
         logger.debug(f"Query compile/publish/fetch failed ({suffix}): {e.stdout}\n{e.stderr}")
         raise BuildError(f"query-{suffix}", (e.stdout or "") + (e.stderr or "")) from None
     except subprocess.TimeoutExpired:
-        raise BuildTimeoutExpired(f"query-{suffix}", _config.timeout.execute_query) from None
+        raise BuildTimeoutExpired(f"query-{suffix}", settings.query_timeout) from None
 
     rows = json.loads(result_file.read_text(encoding="utf-8-sig") or "[]")
     return rows if isinstance(rows, list) else [rows]

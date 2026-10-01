@@ -20,16 +20,16 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from bcbench_core.operations import commit_changes, has_changes, init_repo
+from bcbench_core.types import ExperimentConfiguration
 
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import commit_changes, has_changes, init_repo
-from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import PRReviewMetrics
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -154,9 +154,8 @@ def _write_review_json(output_dir: Path, repo_path: Path) -> int:
 
 
 def run_pr_review_agent(
-    entry: BaseDatasetEntry,
+    entry: CodeReviewEntry,
     model: str,
-    category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
     engine_path: Path | None = None,
@@ -172,11 +171,6 @@ def run_pr_review_agent(
     Returns:
         Tuple of (PRReviewMetrics, ExperimentConfiguration).
     """
-    if category is not EvaluationCategory.CODE_REVIEW:
-        raise AgentError(f"The engine agent only supports the code-review category, got {category.value}.")
-    if not isinstance(entry, CodeReviewEntry):
-        raise AgentError(f"The engine agent requires a CodeReviewEntry, got {type(entry).__name__}.")
-
     repo_path = repo_path.resolve()
     output_dir = output_dir.resolve()
     settings = _load_pr_review_settings()

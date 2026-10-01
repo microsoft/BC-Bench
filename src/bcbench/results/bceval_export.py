@@ -6,11 +6,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from bcbench_core.types import ExperimentConfiguration
+
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExpectedOutput
 
 logger = get_logger(__name__)
 

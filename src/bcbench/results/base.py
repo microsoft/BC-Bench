@@ -4,10 +4,11 @@ import json
 from pathlib import Path
 from typing import Any, Self, cast
 
+from bcbench_core.types import ExperimentConfiguration
 from pydantic import BaseModel, model_validator
 
 from bcbench.logger import get_logger
-from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext
 
 logger = get_logger(__name__)
 

@@ -3,13 +3,13 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from bcbench_core.types import AgentRuntimeConfig, ContainerConfig
 from jinja2.sandbox import SandboxedEnvironment
 
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, compiler_symbol_folder_for_container
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import AgentRuntimeConfig, ContainerConfig
 
 logger = get_logger(__name__)
 

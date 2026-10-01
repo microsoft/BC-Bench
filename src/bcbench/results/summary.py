@@ -8,11 +8,12 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from bcbench_core.types import ExperimentConfiguration
 from pydantic import BaseModel, Field
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory
 
 if TYPE_CHECKING:
     from rich.console import RenderableType

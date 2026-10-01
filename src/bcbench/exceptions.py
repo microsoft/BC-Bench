@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bcbench.types import AgentMetrics, ExperimentConfiguration
+    from bcbench_core.types import AgentMetrics, ExperimentConfiguration
 
 __all__ = [
     "AgentError",

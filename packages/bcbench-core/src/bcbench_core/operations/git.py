@@ -1,16 +1,14 @@
 """Git repository operations."""
 
+import logging
 import subprocess
 import tempfile
 from pathlib import Path
 
-from bcbench.config import get_config
-from bcbench.exceptions import EmptyDiffError, PatchApplicationError
-from bcbench.logger import get_logger
-from bcbench.operations.filesystem_operations import remove_tree
+from bcbench_core.exceptions import EmptyDiffError, PatchApplicationError
+from bcbench_core.operations.filesystem import remove_tree
 
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
 
 def clean_repo(repo_path: Path) -> None:
@@ -111,7 +109,7 @@ def commit_changes(repo_path: Path, message: str, *, allow_empty: bool = False, 
 def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") -> None:
     logger.info(f"Applying {patch_name}")
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=_config.file_patterns.patch_pattern, delete=False, encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False, encoding="utf-8") as f:
         f.write(patch_content)
         patch_file = f.name
 

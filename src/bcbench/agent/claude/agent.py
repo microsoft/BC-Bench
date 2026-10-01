@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from bcbench_core.types import AgentMetrics, AgentRuntimeConfig, ExperimentConfiguration, PluginConfig
 
 from bcbench.agent.claude.metrics import parse_stream_output
 from bcbench.agent.shared import (
@@ -19,7 +20,7 @@ from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentHarness, EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()

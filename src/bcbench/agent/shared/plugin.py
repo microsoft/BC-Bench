@@ -3,11 +3,12 @@ import shutil
 from collections.abc import Mapping
 from pathlib import Path
 
+from bcbench_core.operations import clone_repo_at_revision
+from bcbench_core.types import PluginConfig
+
 from bcbench.config import get_config
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.operations.git_operations import clone_repo_at_revision
-from bcbench.types import PluginConfig
 
 logger = get_logger(__name__)
 _config = get_config()

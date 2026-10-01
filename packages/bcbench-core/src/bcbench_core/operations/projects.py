@@ -1,10 +1,8 @@
 """Project path categorization and management operations."""
 
-from bcbench.config import get_config
-from bcbench.logger import get_logger
+import logging
 
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
 
 def _is_test_project(project_path: str, test_identifiers: tuple[str, ...]) -> bool:
@@ -25,7 +23,7 @@ def _is_test_project(project_path: str, test_identifiers: tuple[str, ...]) -> bo
     return any(f"/{identifier}" in project_lower or f"\\{identifier}" in project_lower for identifier in test_identifiers)
 
 
-def categorize_projects(project_paths: list[str]) -> tuple[list[str], list[str]]:
+def categorize_projects(project_paths: list[str], test_identifiers: tuple[str, ...] = ("test", "tests")) -> tuple[list[str], list[str]]:
     """Categorize project paths into test projects and application projects.
 
     Args:
@@ -37,7 +35,6 @@ def categorize_projects(project_paths: list[str]) -> tuple[list[str], list[str]]
     Raises:
         RuntimeError: If project categorization fails (no test or app projects found)
     """
-    test_identifiers = _config.file_patterns.test_project_identifiers
     test_projects: list[str] = [project for project in project_paths if _is_test_project(project, test_identifiers)]
     app_projects: list[str] = [project for project in project_paths if project not in test_projects]
 

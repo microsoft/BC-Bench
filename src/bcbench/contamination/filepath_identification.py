@@ -5,9 +5,10 @@ from __future__ import annotations
 import re
 from typing import Annotated
 
+from bcbench_core.types import AgentMetrics
 from pydantic import BaseModel, ConfigDict, Field
 
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import EvaluationCategory
 
 
 def build_identification_prompt(task: str, repo: str = "microsoft/BCApps") -> str:

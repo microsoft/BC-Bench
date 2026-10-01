@@ -3,16 +3,20 @@ from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from bcbench_core.operations import clear_directory, execute_al_query
+
+from bcbench.bc_settings import create_business_central_settings
+from bcbench.config import get_config
 from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
-from bcbench.operations import clear_directory
 from bcbench.results.base import ExecutionBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
+_bc_settings = create_business_central_settings(get_config())
 
 __all__ = ["DataQueryPipeline", "result_sets_match"]
 
@@ -147,11 +151,17 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         loudly. In particular an empty gold is rejected (see EmptyGoldResultError) so an agent that
         retrieved nothing cannot spuriously match it.
         """
-        from bcbench.operations import execute_al_query
-
         logger.info(f"Running gold query live for {context.entry.instance_id}")
         company = context.get_container().company
-        rows = execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold", company=company)
+        rows = execute_al_query(
+            context.entry.gold_query,
+            context.get_container(),
+            context.entry.environment_setup_version,
+            context.repo_path,
+            "gold",
+            company=company,
+            settings=_bc_settings,
+        )
         if not rows:
             # An empty gold would make an empty agent answer spuriously "match" (result_sets_match([],
             # []) is True), scoring a run that retrieved nothing as resolved. Every question has a

@@ -9,14 +9,17 @@ from typing import Any, cast
 
 from azure.ai.evaluation.red_team import AttackStrategy, RedTeam, RiskCategory, SupportedLanguages
 from azure.identity import DefaultAzureCredential
+from bcbench_core.operations import copy_symbol_apps
 
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
+from bcbench.bc_settings import create_business_central_settings
+from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import NL2ALEntry
 from bcbench.logger import get_logger
-from bcbench.operations import copy_symbol_apps
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
+_bc_settings = create_business_central_settings(get_config())
 
 __all__ = ["build_bcal_target", "run_scan"]
 
@@ -52,7 +55,7 @@ def _ensure_package_cache(package_cache_path: Path, version: str) -> None:
         return
 
     logger.info(f"Populating bcal package cache at {package_cache_path} (BC {version})")
-    copy_symbol_apps(package_cache_path.parent, version)
+    copy_symbol_apps(package_cache_path.parent, version, _bc_settings)
 
 
 def _message_content(message: object) -> str:

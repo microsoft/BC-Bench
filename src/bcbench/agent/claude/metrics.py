@@ -2,8 +2,9 @@ import json
 from collections import Counter
 from collections.abc import Sequence
 
+from bcbench_core.types import AgentMetrics
+
 from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics
 
 logger = get_logger(__name__)
 

@@ -1,18 +1,16 @@
 import json
+import logging
 from collections import Counter
 from collections.abc import Sequence
 
-from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics
+from bcbench_core.types import AgentMetrics
 
-logger = get_logger(__name__)
-
-# Verified against the CLI's own "AI Credits" footer: 9613375000 nano-AIU renders as "AI Credits 9.61".
+logger = logging.getLogger(__name__)
 NANO_AIU_PER_AI_CREDIT = 1_000_000_000
 
 
 def _as_float(value: object) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, int | float):  # bool is an int subclass
+    if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return float(value)
 
@@ -34,17 +32,6 @@ def _tool_label(data: dict) -> str | None:
 
 
 def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -> tuple[AgentMetrics | None, str | None]:
-    """Parse metrics and the agent's final response from `copilot --output-format=json` (JSONL) stdout.
-
-    Relevant events (CLI 1.0.82):
-        model.call_start: one per request sent to the model, so counting them yields the turn count.
-        tool.execution_start: one per tool invocation, including sub-agent and MCP tool calls.
-        session.usage_checkpoint: `data.totalNanoAiu` is cumulative for the session, so the last one wins.
-        result: terminal event whose `usage` sits at the event root rather than under `data`.
-
-    Returns:
-        The parsed metrics (None when the stream carried none) and the agent's final response.
-    """
     execution_time: float | None = None
     llm_duration: float | None = None
     ai_credits: float | None = None
@@ -56,15 +43,13 @@ def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -
     for line_number, line in enumerate(output_lines, start=1):
         if not line.strip():
             continue
-
         try:
             event = json.loads(line)
         except json.JSONDecodeError as error:
-            logger.warning(f"Skipping invalid JSON from Copilot CLI output at line {line_number}: {error}")
+            logger.warning("Skipping invalid JSON from Copilot CLI output at line %s: %s", line_number, error)
             continue
-
         if not isinstance(event, dict):
-            logger.warning(f"Skipping non-object JSON from Copilot CLI output at line {line_number}")
+            logger.warning("Skipping non-object JSON from Copilot CLI output at line %s", line_number)
             continue
 
         match event.get("type"):
@@ -80,7 +65,6 @@ def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -
                 data = event.get("data")
                 if not isinstance(data, dict):
                     continue
-
                 content = data.get("content")
                 if isinstance(content, str) and content:
                     response = content
@@ -90,30 +74,24 @@ def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -
                         final_response = content
             case "session.usage_checkpoint":
                 data = event.get("data")
-                if not isinstance(data, dict):
-                    continue
-
-                total_nano_aiu = _as_float(data.get("totalNanoAiu"))
-                if total_nano_aiu is not None:
+                if isinstance(data, dict) and (total_nano_aiu := _as_float(data.get("totalNanoAiu"))) is not None:
                     ai_credits = total_nano_aiu / NANO_AIU_PER_AI_CREDIT
             case "result":
                 usage = event.get("usage")
-                if not isinstance(usage, dict):
-                    continue
+                if isinstance(usage, dict):
+                    execution_time = _milliseconds_to_seconds(usage.get("sessionDurationMs"))
+                    llm_duration = _milliseconds_to_seconds(usage.get("totalApiDurationMs"))
 
-                execution_time = _milliseconds_to_seconds(usage.get("sessionDurationMs"))
-                llm_duration = _milliseconds_to_seconds(usage.get("totalApiDurationMs"))
-
-    metrics = None
-    if execution_time is not None or llm_duration is not None or ai_credits is not None or turn_count:
-        metrics = AgentMetrics(
+    if execution_time is None and llm_duration is None and ai_credits is None and not turn_count:
+        logger.warning("No metrics found in Copilot JSON output")
+        return None, final_response or response
+    return (
+        AgentMetrics(
             execution_time=execution_time,
             llm_duration=llm_duration,
             ai_credits=ai_credits,
             turn_count=turn_count or None,
             tool_usage=dict(tool_usage) or None,
-        )
-    else:
-        logger.warning("No metrics found in Copilot JSON output")
-
-    return metrics, final_response or response
+        ),
+        final_response or response,
+    )

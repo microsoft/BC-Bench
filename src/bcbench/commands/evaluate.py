@@ -3,8 +3,11 @@ from pathlib import Path
 from typing import Annotated, cast
 
 import typer
+from bcbench_core.operations import prepare_run_dir
+from bcbench_core.types import AgentMetrics, ExperimentConfiguration
 
-from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, run_bcal_agent, run_claude_code, run_copilot_agent
+from bcbench.categories import CopilotCodeReviewAgent, PRReviewCodeReviewAgent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -22,14 +25,14 @@ from bcbench.cli_options import (
     RunId,
     resolve_evaluation_runtime,
 )
+from bcbench.composition import create_code_review_category
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
-from bcbench.operations import prepare_run_dir
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentHarness, BCalLLMBackend, EvaluationCategory, EvaluationContext
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -74,10 +77,20 @@ def evaluate_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
+
+    if category is EvaluationCategory.CODE_REVIEW:
+        definition = create_code_review_category(_config)
+        entry = definition.load(entry_id)
+        request = definition.request(entry=entry, repo_path=repo_path, result_dir=run_dir, model=model)
+        definition.flow().run(request, CopilotCodeReviewAgent(runtime))
+        logger.info("Evaluation complete!")
+        logger.info(f"Results saved to: {run_dir}")
+        return
+
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
 
     context = EvaluationContext(
         entry=entry,
@@ -197,34 +210,13 @@ def evaluate_pr_review(
 
     To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=None,
-        model=model,
-        agent_name=AgentHarness.PR_REVIEW,
-        agent_version=get_pr_review_version(engine_path),
-        category=category,
-    )
-
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_pr_review_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            engine_path=engine_path,
-        ),
-    )
+    definition = create_code_review_category(_config)
+    entry = definition.load(entry_id)
+    request = definition.request(entry=entry, repo_path=repo_path, result_dir=run_dir, model=model)
+    definition.flow().run(request, PRReviewCodeReviewAgent(engine_path))
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")

@@ -1,25 +1,29 @@
 from pathlib import Path
 
-from bcbench.dataset import BugFixEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import BuildError, TestExecutionError
-from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
-from bcbench.operations import (
+from bcbench_core.exceptions import BuildError, TestExecutionError
+from bcbench_core.operations import (
     apply_patch,
     build_and_publish_projects,
     categorize_projects,
     clean_project_paths,
-    copy_problem_statement_folder,
     run_tests,
     set_runtime_version,
     setup_repo_prebuild,
     stage_and_get_diff,
 )
+
+from bcbench.bc_settings import create_business_central_settings
+from bcbench.config import get_config
+from bcbench.dataset import BugFixEntry
+from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.github_actions import github_log_group
+from bcbench.logger import get_logger
+from bcbench.operations import copy_problem_statement_folder
 from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
+_bc_settings = create_business_central_settings(get_config())
 
 __all__ = ["BugFixPipeline"]
 
@@ -40,6 +44,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
             context.entry.project_paths,
             context.get_container(),
             context.entry.environment_setup_version,
+            _bc_settings,
         )
 
         copy_problem_statement_folder(context.entry, context.repo_path)
@@ -66,8 +71,9 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
                 context.entry.project_paths,
                 container,
                 context.entry.environment_setup_version,
+                _bc_settings,
             )
-            run_tests(context.entry, container)
+            run_tests(context.entry, container, _bc_settings)
 
             result = BugFixResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")

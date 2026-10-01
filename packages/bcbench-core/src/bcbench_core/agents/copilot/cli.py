@@ -1,30 +1,34 @@
-"""GitHub Copilot CLI helpers."""
-
+import logging
+import re
 import shutil
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from bcbench.agent.copilot.metrics import parse_output
-from bcbench.agent.shared.version import get_cli_version
-from bcbench.exceptions import AgentError
-from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics
+from bcbench_core.agents.copilot.metrics import parse_output
+from bcbench_core.exceptions import AgentError
+from bcbench_core.types import AgentMetrics
 
-logger = get_logger(__name__)
-
-__all__ = ["get_copilot_version", "invoke_copilot"]
+logger = logging.getLogger(__name__)
 
 
 def _find_copilot() -> str | None:
-    # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes
-    # PowerShell, which re-parses arguments and corrupts prompts containing double quotes.
     return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
 
 
 def get_copilot_version() -> str:
-    return get_cli_version(_find_copilot(), "GitHub Copilot CLI")
+    executable = _find_copilot()
+    if executable is None:
+        raise AgentError("GitHub Copilot CLI not found in PATH")
+    try:
+        result = subprocess.run([executable, "--version"], capture_output=True, text=True, encoding="utf-8", timeout=30, check=True)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise AgentError(f"Could not determine GitHub Copilot CLI version: {error}") from error
+    match = re.search(r"\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b", result.stdout)
+    if match is None:
+        raise AgentError(f"Unrecognized GitHub Copilot CLI version output: {result.stdout!r}")
+    return match.group()
 
 
 def invoke_copilot(
@@ -38,13 +42,6 @@ def invoke_copilot(
     extra_args: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
 ) -> tuple[AgentMetrics | None, str]:
-    """Run one non-interactive Copilot CLI prompt.
-
-    When ``allow_all_tools`` is false, the Copilot CLI is invoked with no tools available.
-
-    Returns:
-        A tuple containing parsed agent metrics, when available, and the final assistant response. The response is empty when none is emitted.
-    """
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
@@ -61,7 +58,6 @@ def invoke_copilot(
         f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
     ]
     logger.debug("Copilot command args: %s", cmd_args)
-
     result = subprocess.run(
         cmd_args,
         cwd=str(work_dir),
@@ -73,10 +69,8 @@ def invoke_copilot(
         timeout=timeout,
         check=True,
     )
-
     if result.stderr:
         sys.stderr.write(result.stderr)
         sys.stderr.flush()
-
     metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True)
     return metrics, final_response or ""

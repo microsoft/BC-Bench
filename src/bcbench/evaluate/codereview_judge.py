@@ -5,7 +5,9 @@ import re
 import subprocess
 from pathlib import Path
 
-from bcbench.agent.copilot.cli import invoke_copilot
+from bcbench_core.agents.copilot import invoke_copilot
+from bcbench_core.exceptions import AgentError as CoreAgentError
+
 from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.exceptions import AgentError, LLMJudgeError
@@ -144,7 +146,7 @@ def judge_verdicts(
             timeout=_config.timeout.agent_execution,
             allow_all_tools=True,
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, AgentError) as exc:
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, AgentError, CoreAgentError) as exc:
         raise LLMJudgeError(f"Judge subprocess failed: {exc}{_format_subprocess_output(exc)}") from exc
 
     return _parse_judge_results(result_path, len(pairs), stdout=final_response)

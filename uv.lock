@@ -2,6 +2,12 @@ version = 1
 revision = 3
 requires-python = "==3.13.*"
 
+[manifest]
+members = [
+    "bcbench",
+    "bcbench-core",
+]
+
 [[package]]
 name = "aiofiles"
 version = "24.1.0"
@@ -248,6 +254,7 @@ name = "bcbench"
 version = "0.13.0"
 source = { editable = "." }
 dependencies = [
+    { name = "bcbench-core" },
     { name = "jinja2" },
     { name = "jsonschema" },
     { name = "numpy" },
@@ -283,6 +290,7 @@ redteam = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bcbench-core", editable = "packages/bcbench-core" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "numpy", specifier = ">=2.3.5" },
@@ -314,6 +322,19 @@ dev = [
 redteam = [
     { name = "azure-ai-evaluation", extras = ["redteam"], specifier = ">=1.18.2" },
     { name = "azure-identity", specifier = ">=1.25.3" },
+]
+
+[[package]]
+name = "bcbench-core"
+version = "0.1.0"
+source = { editable = "packages/bcbench-core" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.0" },
 ]
 
 [[package]]

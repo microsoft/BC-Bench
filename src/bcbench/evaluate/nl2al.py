@@ -2,16 +2,20 @@ import os
 import subprocess
 from pathlib import Path
 
+from bcbench_core.exceptions import EmptyDiffError
+from bcbench_core.operations import copy_symbol_apps, remove_tree, stage_and_get_diff
+
+from bcbench.bc_settings import create_business_central_settings
+from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import EmptyDiffError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
-from bcbench.operations import copy_symbol_apps, remove_tree, stage_and_get_diff
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
+_bc_settings = create_business_central_settings(get_config())
 
 # bcal nondeterministically asks for clarification instead of editing, producing no *.al file
 # (an empty diff). Retries were removed: a stalled agent is scored as a failure rather than re-run,
@@ -55,7 +59,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
 
     def setup_workspace(self, entry: NL2ALEntry, repo_path: Path) -> None:
         _reset_repo_path(repo_path)
-        copy_symbol_apps(repo_path / entry.project_paths[0], entry.environment_setup_version)
+        copy_symbol_apps(repo_path / entry.project_paths[0], entry.environment_setup_version, _bc_settings)
         _git_init_and_commit(repo_path)
 
     def setup(self, context: EvaluationContext[NL2ALEntry]) -> None:

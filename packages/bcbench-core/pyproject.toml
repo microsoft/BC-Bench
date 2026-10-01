@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bcbench-core"
+version = "0.1.0"
+description = "Reusable evaluation framework for Business Central coding agents"
+requires-python = ">=3.13,<3.14"
+license = {text = "MIT"}
+authors = [{name = "Microsoft Corporation"}]
+dependencies = [
+    "pydantic>=2.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

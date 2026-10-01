@@ -5,12 +5,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from bcbench_core.types import ExperimentConfiguration
 from pydantic import BaseModel, field_validator
 
 from bcbench.logger import get_logger
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 

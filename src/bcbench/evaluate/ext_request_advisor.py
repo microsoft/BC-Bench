@@ -1,10 +1,11 @@
 from pathlib import Path
 
+from bcbench_core.operations import setup_repo_prebuild
+
 from bcbench.dataset import ExtRequestAdvisorEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
-from bcbench.operations import setup_repo_prebuild
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 

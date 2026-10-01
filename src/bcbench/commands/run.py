@@ -4,7 +4,8 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
+from bcbench.categories import CopilotCodeReviewAgent, PRReviewCodeReviewAgent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -21,6 +22,7 @@ from bcbench.cli_options import (
     RepoPath,
     resolve_agent_runtime,
 )
+from bcbench.composition import create_code_review_category
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.logger import get_logger
@@ -70,6 +72,14 @@ def run_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
+    if category is EvaluationCategory.CODE_REVIEW:
+        definition = create_code_review_category(_config)
+        entry = definition.load(entry_id)
+        request = definition.request(entry=entry, repo_path=repo_path, result_dir=output_dir, model=model)
+        definition.flow().workspace.prepare(entry, repo_path)
+        CopilotCodeReviewAgent(runtime).run(request)
+        return
+
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
@@ -156,19 +166,11 @@ def run_pr_review(
     Example:
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
-
-    run_pr_review_agent(
-        entry=entry,
-        model=model,
-        repo_path=repo_path,
-        category=category,
-        output_dir=output_dir,
-        engine_path=engine_path,
-        min_severity=min_severity,
-    )
+    definition = create_code_review_category(_config)
+    entry = definition.load(entry_id)
+    request = definition.request(entry=entry, repo_path=repo_path, result_dir=output_dir, model=model)
+    definition.flow().workspace.prepare(entry, repo_path)
+    PRReviewCodeReviewAgent(engine_path, min_severity).run(request)
 
 
 @run_app.command("bcal")

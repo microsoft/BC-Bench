@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import typer
+from bcbench_core.types import AgentRuntimeConfig, ContainerConfig
 
-from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationCategory
+from bcbench.types import EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here

@@ -5,13 +5,14 @@ import subprocess
 import time
 from pathlib import Path
 
+from bcbench_core.types import AgentMetrics, ExperimentConfiguration
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics, BCalLLMBackend, ExperimentConfiguration
+from bcbench.types import BCalLLMBackend
 
 logger = get_logger(__name__)
 _config = get_config()

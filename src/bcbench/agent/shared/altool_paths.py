@@ -5,12 +5,15 @@ Both `altool launchmcpserver` and `altool launchlspserver` need the same package
 
 from pathlib import Path
 
+from bcbench_core.operations import resolve_artifact_version_root
 from packaging.version import InvalidVersion, Version
 
+from bcbench.bc_settings import create_business_central_settings
+from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.operations import resolve_artifact_version_root
 
 logger = get_logger(__name__)
+_bc_settings = create_business_central_settings(get_config())
 
 # .NET major versions excluded from runtime detection (unstable/preview)
 # See: navcontainerhelper/InitializeModule.ps1 line 62
@@ -106,7 +109,7 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     Returns None when the artifact has not been downloaded yet — caller should fall
     back or surface an actionable error.
     """
-    version_root = resolve_artifact_version_root(environment_setup_version)
+    version_root = resolve_artifact_version_root(environment_setup_version, _bc_settings)
     if version_root is None:
         return None
 

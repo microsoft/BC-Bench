@@ -1,31 +1,33 @@
 from pathlib import Path
 
 import yaml
-
-from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.config import get_config
-from bcbench.dataset import TestEntry, TestGenEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
-from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
-from bcbench.operations import (
+from bcbench_core.exceptions import BuildError, TestExecutionError
+from bcbench_core.operations import (
     apply_patch,
     build_and_publish_projects,
     categorize_projects,
     clean_project_paths,
-    copy_problem_statement_folder,
-    extract_tests_from_patch,
+    run_test_suite,
+    set_runtime_version,
     setup_repo_prebuild,
     stage_and_get_diff,
 )
-from bcbench.operations.bc_operations import run_test_suite
-from bcbench.operations.setup_operations import set_runtime_version
+
+from bcbench.bc_settings import create_business_central_settings
+from bcbench.collection.patch_utils import extract_file_paths_from_patch
+from bcbench.config import get_config
+from bcbench.dataset import TestEntry, TestGenEntry
+from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.exceptions import NoTestsExtractedError
+from bcbench.github_actions import github_log_group
+from bcbench.logger import get_logger
+from bcbench.operations import copy_problem_statement_folder, extract_tests_from_patch
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 _config = get_config()
+_bc_settings = create_business_central_settings(_config)
 
 __all__ = ["TestGenerationPipeline", "_get_test_generation_input_mode"]
 
@@ -72,6 +74,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             context.entry.project_paths,
             context.get_container(),
             context.entry.environment_setup_version,
+            _bc_settings,
         )
 
         self._apply_input_postbuild(context.entry, context.repo_path)
@@ -108,8 +111,9 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
                 test_projects,
                 container,
                 context.entry.environment_setup_version,
+                _bc_settings,
             )
-            run_test_suite(generated_tests, "Fail", container)
+            run_test_suite(generated_tests, "Fail", container, _bc_settings)
 
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
 
@@ -118,8 +122,9 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
                 app_projects,
                 container,
                 context.entry.environment_setup_version,
+                _bc_settings,
             )
-            run_test_suite(generated_tests, "Pass", container)
+            run_test_suite(generated_tests, "Pass", container, _bc_settings)
 
             result = TestGenerationResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
