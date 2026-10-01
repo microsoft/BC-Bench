@@ -1,7 +1,27 @@
 version: 2
+registries:
+  # Dependabot's egress proxy requires a declaration even for anonymous feeds.
+  microsoft-cfs:
+    type: python-index
+    url: https://packagefeedproxy.microsoft.io/pypi/simple/
+    replaces-base: true
+
 updates:
   - package-ecosystem: "uv"
     directory: "/"
+    registries:
+      - microsoft-cfs
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 0
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      github-actions:
+        patterns: ["*"]
+    cooldown:
+      default-days: 7
