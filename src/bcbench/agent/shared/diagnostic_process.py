@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Self
 
 if os.name == "nt":
-    from bcbench.agent.shared.windows_job import CREATE_SUSPENDED, WindowsJob
+    from bcbench.diagnostics.windows_job import CREATE_SUSPENDED, WindowsJob
 
 
 class DiagnosticReadError(Exception):
@@ -18,7 +18,7 @@ class DiagnosticReadError(Exception):
 
 
 class DiagnosticProcess:
-    def __init__(self, command: Sequence[str], cwd: Path, env: Mapping[str, str] | None, *, max_line_length: int = -1, write_stdin: bool = False) -> None:
+    def __init__(self, command: Sequence[str], cwd: Path, env: Mapping[str, str] | None) -> None:
         self._job = WindowsJob() if os.name == "nt" else None
         process: subprocess.Popen[str] | None = None
         try:
@@ -26,7 +26,7 @@ class DiagnosticProcess:
                 command,
                 cwd=cwd,
                 env=dict(env) if env is not None else None,
-                stdin=subprocess.PIPE if write_stdin else subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 text=True,
@@ -44,8 +44,6 @@ class DiagnosticProcess:
             if process is not None:
                 process.kill()
                 process.wait(timeout=5)
-                if process.stdin is not None:
-                    process.stdin.close()
                 if process.stdout is not None:
                     process.stdout.close()
             raise
@@ -53,35 +51,14 @@ class DiagnosticProcess:
         self._tree_stopped = False
         self.cleanup_complete = False
         self._lines: queue.Queue[tuple[str, str]] = queue.Queue()
-        self._writes: queue.Queue[str | None] = queue.Queue()
-        self._writer = threading.Thread(target=self._write, daemon=True) if write_stdin else None
-        self._reader = threading.Thread(target=self._read, args=(max_line_length,), daemon=True)
+        self._reader = threading.Thread(target=self._read, daemon=True)
         self._reader.start()
-        if self._writer is not None:
-            self._writer.start()
 
-    def send_line(self, line: str) -> None:
-        if self._writer is None:
-            raise DiagnosticReadError
-        self._writes.put(line)
-
-    def _write(self) -> None:
-        assert self.process.stdin is not None
-        try:
-            while (line := self._writes.get()) is not None:
-                self.process.stdin.write(line + "\n")
-                self.process.stdin.flush()
-        except (OSError, ValueError):
-            self._lines.put(("error", ""))
-
-    def _read(self, max_line_length: int) -> None:
+    def _read(self) -> None:
         assert self.process.stdout is not None
         try:
             with self.process.stdout:
-                while line := self.process.stdout.readline(max_line_length):
-                    if max_line_length > 0 and len(line) >= max_line_length:
-                        self._lines.put(("error", ""))
-                        return
+                for line in self.process.stdout:
                     self._lines.put(("line", line))
         except (OSError, ValueError):
             self._lines.put(("error", ""))
@@ -129,14 +106,8 @@ class DiagnosticProcess:
         try:
             self._terminate_tree()
             self.process.wait(timeout=5)
-            if self._writer is not None:
-                self._writes.put(None)
-                self._writer.join(timeout=1)
             self._reader.join(timeout=1)
-            self.cleanup_complete = self._tree_stopped and not self._reader.is_alive() and (self._writer is None or not self._writer.is_alive())
-            if self.cleanup_complete and self.process.stdin is not None:
-                with suppress(OSError):
-                    self.process.stdin.close()
+            self.cleanup_complete = self._tree_stopped and not self._reader.is_alive()
         except (OSError, subprocess.TimeoutExpired):
             self.cleanup_complete = False
         finally:

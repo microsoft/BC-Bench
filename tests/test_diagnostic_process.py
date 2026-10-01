@@ -1,5 +1,4 @@
 import ctypes
-import json
 import subprocess
 import sys
 import time
@@ -9,9 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.agent.copilot.diagnostics import CopilotDiagnostics
 from bcbench.agent.shared.diagnostic_process import DiagnosticProcess
-from bcbench.agent.shared.mcp_diagnostics import SafeDiagnosticSnapshot
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows process-tree ownership")
 
@@ -39,23 +36,25 @@ class ChildProcessHandle:
 
 @pytest.mark.parametrize("inherit_stdout", [True, False])
 def test_exited_parent_does_not_leave_descendant_or_block_stdout(tmp_path: Path, inherit_stdout: bool):
+    release = tmp_path / "exit-parent"
     script = f"""
-import subprocess, sys
+import pathlib, subprocess, sys, time
 child = subprocess.Popen(
     [sys.executable, "-c", "import time; time.sleep(20)"],
     stdout={"sys.stdout" if inherit_stdout else "subprocess.DEVNULL"},
     stderr=subprocess.DEVNULL,
 )
 print(child.pid, flush=True)
-sys.stdin.readline()
+while not pathlib.Path({str(release)!r}).exists():
+    time.sleep(0.01)
 """
     child = None
     try:
-        with DiagnosticProcess([sys.executable, "-u", "-c", script], tmp_path, {}, write_stdin=True) as process:
+        with DiagnosticProcess([sys.executable, "-u", "-c", script], tmp_path, {}) as process:
             lines = process.lines(time.monotonic() + 5)
             child = ChildProcessHandle(int(next(lines)))
             assert not child.wait(0)
-            process.send_line("exit")
+            release.write_text("exit", encoding="utf-8")
             assert process.wait(time.monotonic() + 5) == 0
             assert list(lines) == []
         assert process.cleanup_complete
@@ -65,36 +64,27 @@ sys.stdin.readline()
             child.close()
 
 
-def test_copilot_parent_exit_is_not_misreported_as_timeout(tmp_path: Path):
-    diagnostics = CopilotDiagnostics(SafeDiagnosticSnapshot(tmp_path))
+def test_timeout_terminates_running_parent_and_descendant(tmp_path: Path):
     script = """
-import json, subprocess, sys
+import subprocess, sys, time
 child = subprocess.Popen(
     [sys.executable, "-c", "import time; time.sleep(20)"],
     stdout=sys.stdout, stderr=subprocess.DEVNULL,
 )
-print(json.dumps({"type": "result", "exitCode": 0, "childPid": child.pid}), flush=True)
+print(child.pid, flush=True)
+time.sleep(20)
 """
-    children = []
-    observe = diagnostics.observe_line
-
-    def observe_and_track_child(line):
-        event = json.loads(line)
-        if "childPid" in event:
-            children.append(ChildProcessHandle(event["childPid"]))
-        observe(line)
-
+    child = None
     try:
-        with patch.object(diagnostics, "observe_line", side_effect=observe_and_track_child):
-            diagnostics.run([sys.executable, "-u", "-c", script], tmp_path, {}, 3)
-        assert diagnostics.state["stream"] == "eof"
-        assert diagnostics.state["stop"]["process"] == "exited_zero"
-        assert diagnostics.state["stop"]["result_exit"] == "success"
-        assert diagnostics.state["stop"]["cleanup"] == "complete"
-        assert len(children) == 1
-        assert children[0].wait(1000)
+        with DiagnosticProcess([sys.executable, "-u", "-c", script], tmp_path, {}) as process:
+            lines = process.lines(time.monotonic() + 5)
+            child = ChildProcessHandle(int(next(lines)))
+            with pytest.raises(subprocess.TimeoutExpired):
+                list(process.lines(time.monotonic()))
+        assert process.cleanup_complete
+        assert child.wait(1000)
     finally:
-        for child in children:
+        if child is not None:
             child.close()
 
 
@@ -119,14 +109,14 @@ def test_resume_failure_reaps_suspended_process_and_closes_pipes(tmp_path: Path)
 
     with (
         patch("bcbench.agent.shared.diagnostic_process.subprocess.Popen", side_effect=track_process),
-        patch("bcbench.agent.shared.windows_job._resume_initial_thread", side_effect=OSError("Cannot resume")),
+        patch("bcbench.diagnostics.windows_job._resume_initial_thread", side_effect=OSError("Cannot resume")),
         pytest.raises(OSError, match="Cannot resume"),
     ):
-        DiagnosticProcess([sys.executable, "-c", "raise SystemExit(99)"], tmp_path, {}, write_stdin=True)
+        DiagnosticProcess([sys.executable, "-c", "raise SystemExit(99)"], tmp_path, {})
     assert len(processes) == 1
     assert processes[0].poll() is not None
     assert processes[0].returncode != 99
-    assert processes[0].stdin.closed
+    assert processes[0].stdin is None
     assert processes[0].stdout.closed
 
 

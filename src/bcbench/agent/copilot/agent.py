@@ -1,5 +1,6 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -15,9 +16,9 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
-from bcbench.agent.shared.mcp_diagnostics import SafeDiagnosticSnapshot, observe_al_catalog
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
+from bcbench.diagnostics.mcp_diagnostics import SafeDiagnosticSnapshot, observe_al_connection
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
@@ -78,10 +79,10 @@ def run_copilot_agent(
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     try:
         diagnostics = None
-        if runtime is not None and runtime.al_mcp:
+        if runtime is not None and runtime.al_mcp and os.environ.get("BCBENCH_AL_MCP_DIAGNOSTICS") == "1":
             snapshot = SafeDiagnosticSnapshot(output_dir)
             diagnostics = CopilotDiagnostics(snapshot)
-            observe_al_catalog(snapshot, mcp_config_json, repo_path)
+            mcp_config_json = observe_al_connection(mcp_config_json, snapshot)
         extra_args = [
             "--log-level=debug",
             f"--log-dir={output_dir.resolve()}",

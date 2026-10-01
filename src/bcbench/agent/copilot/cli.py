@@ -50,7 +50,7 @@ def invoke_copilot(
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
         if diagnostics is not None:
-            diagnostics.state["stop"]["process"] = "executable_unavailable"
+            diagnostics.state["process"] = "executable_unavailable"
             diagnostics.save()
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
