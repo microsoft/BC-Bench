@@ -100,6 +100,13 @@ def test_dirty_engine_cannot_be_reported_as_a_commit(engine_root: Path, staged: 
         get_pr_review_version(engine_root)
 
 
+def test_dirty_engine_commit_can_be_resolved_for_local_smoke_run(engine_root: Path) -> None:
+    (engine_root / "new-rule.md").write_text("New behavior", encoding="utf-8")
+    expected = subprocess.run(["git", "-C", str(engine_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+
+    assert get_pr_review_version(engine_root, require_clean=False) == expected
+
+
 def test_engine_path_must_be_the_checkout_root(engine_root: Path) -> None:
     nested = engine_root / "nested"
     _write_engine(nested)
