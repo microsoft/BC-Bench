@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.cli import invoke_copilot
+from bcbench.agent.copilot.diagnostics import CopilotDiagnostics
 from bcbench.agent.shared import (
     agent_subprocess_env,
     build_al_lsp_plugin,
@@ -14,6 +15,7 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
+from bcbench.agent.shared.mcp_diagnostics import SafeDiagnosticSnapshot, observe_al_catalog
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -74,9 +76,12 @@ def run_copilot_agent(
     )
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
-    logger.debug(f"Using prompt:\n{prompt}")
-
     try:
+        diagnostics = None
+        if runtime is not None and runtime.al_mcp:
+            snapshot = SafeDiagnosticSnapshot(output_dir)
+            diagnostics = CopilotDiagnostics(snapshot)
+            observe_al_catalog(snapshot, mcp_config_json, repo_path)
         extra_args = [
             "--log-level=debug",
             f"--log-dir={output_dir.resolve()}",
@@ -108,15 +113,16 @@ def run_copilot_agent(
                 },
                 pass_bc_credentials=category.pass_on_bc_container_credentials,
             ),
+            diagnostics=diagnostics,
         )
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
     except subprocess.TimeoutExpired:
-        logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
+        logger.error(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")  # noqa: TRY400 - traceback may contain prompts or credentials
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
-        raise AgentError(f"Copilot CLI execution failed: {e}") from None
+    except subprocess.CalledProcessError:
+        logger.error("Copilot CLI execution failed")  # noqa: TRY400 - CalledProcessError includes the sensitive command
+        raise AgentError("Copilot CLI execution failed") from None
     except Exception:
         logger.exception("Unexpected error running Copilot CLI")
         raise

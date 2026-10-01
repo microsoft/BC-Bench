@@ -146,6 +146,20 @@ Each run uploads artifacts and updates a `leaderboard/<category>/<run_id>` branc
 - Download artifacts locally.
 - For deeper analysis, see `notebooks/bug-fix/` and `notebooks/test-generation/`.
 
+#### Copilot AL MCP diagnostics
+
+With `--al-mcp`, Copilot evaluations first make a read-only MCP `initialize` / `tools/list` request and record the advertised tool names, including explicit `al_publish` and `al_run_tests` availability. This uses a **separate discovery process**, with the agent's server command and arguments but without its server environment or inherited credentials; it does not prove what the agent's own server advertised or what the model could see. The probe has a 30-second deadline, handles paginated catalogs, and records failures or partial discovery rather than treating them as missing tools. It never invokes tools. Known AL tool names are retained only when observed; unknown names are counted but withheld.
+
+The safe snapshot at `<output-dir>\<run-id>\diagnostics\al-mcp.json` then tracks the agent's JSON event stream: AL server status events when emitted, AL call starts and completions, CLI success/failure flags, MCP `isError` flags when present in a recognizable result envelope, and process exit/timeout or session-error categories. An invocation is not a successful result; a successful CLI execution is not proof that publishing or tests succeeded. Missing completions remain incomplete, and missing or malformed evidence stays unknown. A tool absent from a complete observed stream is labeled `not_invoked_in_observed_stream`, not failed. Model-visible catalog and reasons for not choosing a tool are unavailable unless exposed by the runtime; no hidden reasoning is inferred. These observations are separate from the evaluator's subsequent build/publish/test steps.
+
+Explicit error fields can also produce fixed `reported_error_markers` such as authentication, authorization, connection, timeout, compilation, or dependency. These are keyword observations, not proven causes; only the first 8 KiB per error field is inspected, and unrecognized details are withheld. Successful tool-result prose is not classified as an error.
+
+Snapshots are atomically replaced during execution so the latest observations survive agent failure or timeout. Forced runner termination can leave an earlier snapshot with the process still marked running; artifact upload still requires the runner to reach its cleanup steps. Diagnostics do not change prompts, permissions, customizations, or scoring.
+
+On Windows, diagnostic subprocesses enter a dedicated Job Object before execution starts, so descendants remain owned even after their parent exits. Parent exit is observed independently of stdout EOF; remaining descendants are stopped and buffered output is drained rather than waiting for the agent timeout on an inherited pipe. Cleanup is marked complete only after the job has no active processes and the I/O threads have stopped.
+
+The Copilot workflow uploads only this projected JSON as **`al-mcp-diagnostics-<run-id>-<entry>`**, including on agent failure/timeout, with 1-day retention for test runs and 7 days for full runs. Access follows the repository's Actions artifact permissions; there is no additional destination. Diagnostic artifacts are excluded from result summarization and external result uploads. They contain no raw prompts, task/source text, arguments, tool-result text, configuration values, stderr, or CLI debug logs. Unrecognized error details are deliberately withheld rather than risking secret disclosure; do not upload raw `.log` files as a substitute.
+
 ---
 
 ## Experiment PR Template

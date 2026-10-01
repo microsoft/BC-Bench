@@ -164,6 +164,14 @@ class TestBcMcp:
 
 
 class TestAltoolEnvForwarding:
+    def test_does_not_log_credentials_even_at_debug_level(self, entry, repo_path, caplog):
+        caplog.set_level("DEBUG")
+        secret = "secret-must-never-reach-diagnostic-logs"
+        container = ContainerConfig("bcbench", "admin", secret, "CRONUS")
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, runtime=_runtime(container, al_mcp=True))
+        assert secret in config_json
+        assert secret not in caplog.text
+
     def test_forwards_container_connection(self, entry, repo_path):
         container = ContainerConfig(
             "bcbench",

@@ -60,6 +60,7 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: ${{ inputs.results-dir }}/
+          pattern: evaluation-results-*
           merge-multiple: true
 
       - name: Summarize evaluation results

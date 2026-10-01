@@ -6,6 +6,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from bcbench.agent.copilot.diagnostics import CopilotDiagnostics
 from bcbench.agent.copilot.metrics import parse_output
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
@@ -37,6 +38,7 @@ def invoke_copilot(
     custom_instructions: bool = False,
     extra_args: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
+    diagnostics: CopilotDiagnostics | None = None,
 ) -> tuple[AgentMetrics | None, str]:
     """Run one non-interactive Copilot CLI prompt.
 
@@ -47,6 +49,9 @@ def invoke_copilot(
     """
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
+        if diagnostics is not None:
+            diagnostics.state["stop"]["process"] = "executable_unavailable"
+            diagnostics.save()
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
     tool_access_arg = "--allow-all-tools" if allow_all_tools else "--available-tools=none"
@@ -60,23 +65,24 @@ def invoke_copilot(
         *extra_args,
         f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
     ]
-    logger.debug("Copilot command args: %s", cmd_args)
+    if diagnostics is not None:
+        stdout = diagnostics.run(cmd_args, work_dir, env, timeout)
+    else:
+        result = subprocess.run(
+            cmd_args,
+            cwd=str(work_dir),
+            env=dict(env) if env is not None else None,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=True,
+        )
+        if result.stderr:
+            sys.stderr.write(result.stderr)
+            sys.stderr.flush()
+        stdout = result.stdout
 
-    result = subprocess.run(
-        cmd_args,
-        cwd=str(work_dir),
-        env=dict(env) if env is not None else None,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=True,
-    )
-
-    if result.stderr:
-        sys.stderr.write(result.stderr)
-        sys.stderr.flush()
-
-    metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True)
+    metrics, final_response = parse_output(stdout.splitlines(), log_transcript=True)
     return metrics, final_response or ""

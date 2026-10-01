@@ -127,8 +127,4 @@ def build_mcp_config(
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
-    # The BC container password (if forwarded to altool) is already masked in CI logs via ::add-mask::,
-    # and the bcmcp entry is credential-free (the gateway injects auth upstream), so no extra redaction.
-    logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
-
     return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names
