@@ -1,0 +1,10 @@
+{
+  "engineCommit": "8675e7a3f589b963ac8cdadd49589d7e19eadf87",
+  "bcQualityCommit": "fd599197788ff4c11d01d98fb809f4eb4b6d6095",
+  "datasetHash": "46A978950BE2F3B98ED647D3AF503448E74879D29E95988C1394EB90DD443EB6",
+  "entryIds": [
+    "synthetic__upgrade-demo-data-not-upgraded-01"
+  ],
+  "model": "gpt-5.6-luna",
+  "judgeModel": "gpt-5.3-codex"
+}
