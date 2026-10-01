@@ -1,6 +1,8 @@
+from importlib import import_module
+from typing import TYPE_CHECKING
+
 from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary
 from bcbench.results.display import create_console_summary, create_github_job_summary
 from bcbench.results.leaderboard import (
     CodeReviewLeaderboardAggregate,
@@ -15,6 +17,16 @@ from bcbench.results.summary import (
     ExecutionBasedEvaluationResultSummary,
     JudgeBasedEvaluationResultSummary,
 )
+
+if TYPE_CHECKING:
+    from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary
+
+
+def __getattr__(name: str) -> object:
+    if name in {"CodeReviewResult", "CodeReviewResultSummary"}:
+        return getattr(import_module("bcbench.results.codereview"), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "BaseEvaluationResult",

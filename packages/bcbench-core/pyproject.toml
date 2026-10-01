@@ -1,0 +1,28 @@
+[project]
+name = "bcbench-core"
+version = "0.1.0"
+description = "Typed building blocks for coding-agent evaluation applications"
+requires-python = ">=3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "jinja2>=3.1.6",
+    "numpy>=2.3.5",
+    "pydantic>=2.0",
+    "scipy>=1.16.3",
+]
+
+[build-system]
+requires = ["setuptools>=78.1.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["bcbench_core", "bcbench_core.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+bcbench_core = ["py.typed"]

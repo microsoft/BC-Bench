@@ -1,15 +1,13 @@
 import re
 from pathlib import Path
 
-from jinja2.sandbox import SandboxedEnvironment
+from bcbench_core.prompts import render_prompt
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.types import EvaluationCategory
 
 _config = get_config()
-
-_jinja = SandboxedEnvironment(autoescape=False)
 
 
 def _transform_image_paths(content: str) -> str:
@@ -22,18 +20,16 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
     template_str = prompt_config.get(f"{category.value}-template")
     include_project_paths = prompt_config.get("include_project_paths")
 
-    test_gen_input: str = prompt_config.get("test-generation-input", "problem-statement")
-    is_gold_patch: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("gold-patch", "both")
-    is_problem_statement: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("problem-statement", "both")
-
     task = _transform_image_paths(entry.get_task())
 
-    return _jinja.from_string(template_str).render(
-        repo_path=repo_path,
-        task=task,
-        project_paths=", ".join(entry.project_paths),
-        include_project_paths=include_project_paths,
-        is_gold_patch=is_gold_patch,  # only relevant for test-generation
-        is_problem_statement=is_problem_statement,  # only relevant for test-generation
-        al_mcp=al_mcp,  # whether AL MCP server is enabled
+    return render_prompt(
+        template_str,
+        {
+            "repo_path": repo_path,
+            "task": task,
+            "project_paths": ", ".join(entry.project_paths),
+            "include_project_paths": include_project_paths,
+            "al_mcp": al_mcp,
+            **category.definition.prompt_context(prompt_config),
+        },
     )

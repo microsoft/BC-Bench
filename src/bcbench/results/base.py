@@ -1,10 +1,9 @@
 """Base evaluation result class with shared metrics across all evaluation categories."""
 
-import json
-from pathlib import Path
 from typing import Any, Self, cast
 
-from pydantic import BaseModel, model_validator
+from bcbench_core.results import EvaluationResult
+from pydantic import model_validator
 
 from bcbench.logger import get_logger
 from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -12,10 +11,9 @@ from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext
 logger = get_logger(__name__)
 
 
-class BaseEvaluationResult(BaseModel):
+class BaseEvaluationResult(EvaluationResult):
     """Base class for all evaluation results with shared metrics across categories."""
 
-    instance_id: str
     project: str
     model: str
     agent_name: str
@@ -54,16 +52,6 @@ class BaseEvaluationResult(BaseModel):
     @classmethod
     def create_agent_timeout_failure(cls, context: "EvaluationContext") -> Self:
         return cls(**cls._base_fields(context), timeout=True, error_message="Agent timed out")
-
-    def save(self, output_dir: Path, result_file: str) -> None:
-        output_file = output_dir / result_file
-        output_dir.mkdir(parents=True, exist_ok=True)
-        with output_file.open("a", encoding="utf-8") as f:
-            result_dict = self.model_dump(mode="json")
-            # Per-instance JSONL result files are uploaded as workflow artifacts and are the only inputs required by the summarize-results workflow.
-            f.write(json.dumps(result_dict) + "\n")
-
-        logger.info(f"Saved evaluation result for {self.instance_id} to {output_file}")
 
     @property
     def status_label(self) -> str:

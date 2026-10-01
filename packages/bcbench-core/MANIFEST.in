@@ -1,0 +1,5 @@
+include LICENSE
+include pyproject.toml
+include MANIFEST.in
+recursive-include src/bcbench_core *.py py.typed
+global-exclude __pycache__ *.py[cod]

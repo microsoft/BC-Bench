@@ -7,9 +7,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
+from bcbench_core.types import AgentMetrics, AgentMetricsContract
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
+    from bcbench.categories.base import CategoryDefinition
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
@@ -62,35 +64,6 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
 
 
-class AgentMetrics(BaseModel):
-    """Metrics collected during agent execution.
-
-    Separates runtime execution data from experiment configuration.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    kind: Literal["generic"] = "generic"
-
-    # Total execution time in seconds
-    execution_time: float | None = None
-    llm_duration: float | None = None
-
-    # Session cost in AI Credits (GitHub Copilot only)
-    ai_credits: float | None = None
-
-    turn_count: int | None = None
-
-    # Token usage from LLM calls
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-
-    total_tokens: int | None = None
-
-    # Tool usage statistics from agent logs
-    tool_usage: dict[str, int] | None = None
-
-
 class PRReviewMetrics(AgentMetrics):
     kind: Literal["pr-review"] = "pr-review"
 
@@ -106,16 +79,6 @@ class PRReviewMetrics(AgentMetrics):
 
 
 type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]
-
-
-@dataclass(frozen=True)
-class AgentMetricsContract:
-    metrics_type: type[AgentMetrics]
-    required_fields: frozenset[str]
-
-    def __post_init__(self) -> None:
-        if unknown_fields := self.required_fields - self.metrics_type.model_fields.keys():
-            raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
 
 
 class ExperimentConfiguration(BaseModel):
@@ -282,252 +245,60 @@ class EvaluationCategory(StrEnum):
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
     @property
+    def definition(self) -> CategoryDefinition:
+        from bcbench.categories import categories
+
+        if self.value not in categories:
+            raise ValueError(f"Evaluation category is not registered: {self.value}")
+        return categories[self.value]
+
+    @property
     def dataset_path(self) -> Path:
         from bcbench.config import get_config
 
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return get_config().paths.dataset_dir / "bcbench.jsonl"
-            case EvaluationCategory.TEST_GENERATION:
-                return get_config().paths.dataset_dir / "bcbench.jsonl"
-            case EvaluationCategory.CODE_REVIEW:
-                return get_config().paths.dataset_dir / "codereview.jsonl"
-            case EvaluationCategory.NL2AL:
-                return get_config().paths.dataset_dir / "nl2al.jsonl"
-            case EvaluationCategory.DATA_QUERY:
-                return get_config().paths.dataset_dir / "dataquery.jsonl"
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return get_config().paths.dataset_dir / "extensibility_request_advisor.jsonl"
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return get_config().paths.dataset_dir / "extensibility_request_implement.jsonl"
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return get_config().paths.dataset_dir / "extensibility_request_triage.jsonl"
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return get_config().paths.dataset_dir / self.definition.dataset_filename
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return BugFixEntry
-            case EvaluationCategory.TEST_GENERATION:
-                return TestGenEntry
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewEntry
-            case EvaluationCategory.NL2AL:
-                return NL2ALEntry
-            case EvaluationCategory.DATA_QUERY:
-                return DataQueryEntry
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return ExtRequestAdvisorEntry
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return ExtRequestImplementEntry
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return ExtRequestTriageEntry
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.entry_class
 
     @property
     def result_class(self) -> type[BaseEvaluationResult]:
-        from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-        from bcbench.results.bugfix import BugFixResult
-        from bcbench.results.codereview import CodeReviewResult
-        from bcbench.results.testgeneration import TestGenerationResult
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return BugFixResult
-            case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationResult
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewResult
-            case EvaluationCategory.NL2AL:
-                return JudgeBasedEvaluationResult
-            case EvaluationCategory.DATA_QUERY:
-                return ExecutionBasedEvaluationResult
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedEvaluationResult
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return JudgeBasedEvaluationResult
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return JudgeBasedEvaluationResult
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.result_class
 
     @property
     def summary_class(self) -> type[EvaluationResultSummary]:
-        """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.codereview import CodeReviewResultSummary
-        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.TEST_GENERATION:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewResultSummary
-            case EvaluationCategory.NL2AL:
-                return JudgeBasedEvaluationResultSummary
-            case EvaluationCategory.DATA_QUERY:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedEvaluationResultSummary
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return JudgeBasedEvaluationResultSummary
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return JudgeBasedEvaluationResultSummary
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.summary_class
 
     @property
     def aggregate_class(self) -> type[LeaderboardAggregate]:
-        """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedLeaderboardAggregate
-            case EvaluationCategory.TEST_GENERATION:
-                return ExecutionBasedLeaderboardAggregate
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewLeaderboardAggregate
-            case EvaluationCategory.NL2AL:
-                return JudgeBasedLeaderboardAggregate
-            case EvaluationCategory.DATA_QUERY:
-                return ExecutionBasedLeaderboardAggregate
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedLeaderboardAggregate
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return JudgeBasedLeaderboardAggregate
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return JudgeBasedLeaderboardAggregate
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.aggregate_class
 
     @property
     def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import (
-            BugFixPipeline,
-            CodeReviewPipeline,
-            DataQueryPipeline,
-            ExtRequestAdvisorPipeline,
-            ExtRequestImplementPipeline,
-            ExtRequestTriagePipeline,
-            NL2ALPipeline,
-            TestGenerationPipeline,
-        )
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return BugFixPipeline()
-            case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationPipeline()
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewPipeline()
-            case EvaluationCategory.NL2AL:
-                return NL2ALPipeline()
-            case EvaluationCategory.DATA_QUERY:
-                return DataQueryPipeline()
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return ExtRequestAdvisorPipeline()
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return ExtRequestImplementPipeline()
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return ExtRequestTriagePipeline()
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.pipeline_factory()
 
     @property
     def judge_model(self) -> str | None:
-        """Pinned LLM judge model for this category, or None for categories scored without a judge."""
         from bcbench.config import get_config
 
-        judge = get_config().judge
-        match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
-                return None
-            case EvaluationCategory.CODE_REVIEW:
-                return judge.code_review_model
-            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return judge.lm_checklist_model
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.judge_model(get_config().judge)
 
     @property
     def evaluators(self) -> list[str]:
-        """
-        Names of bc-eval evaluators (from evaluator/scores.py) to run for this category.
-
-        Used for uploading evaluation results to long term storage.
-        """
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ["resolution_rate", "build_rate"]
-            case EvaluationCategory.TEST_GENERATION:
-                return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
-            case EvaluationCategory.CODE_REVIEW:
-                return ["precision_score", "recall_score", "f1_score", "valid_review_output"]
-            case EvaluationCategory.NL2AL:
-                return ["lm_checklist"]
-            case EvaluationCategory.DATA_QUERY:
-                return ["resolution_rate", "build_rate"]
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return ["lm_checklist"]
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return ["lm_checklist"]
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return ["lm_checklist"]
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return list(self.definition.evaluators)
 
     @property
     def core_score(self) -> str:
-        """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
-        match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
-                return "ResolutionRate"
-            case EvaluationCategory.CODE_REVIEW:
-                return "F1Score"
-            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return "test_passed"
-            case EvaluationCategory.DATA_QUERY:
-                return "ResolutionRate"
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.core_score
 
     @property
     def requires_container(self) -> bool:
-        """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
-        match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
-                return True
-            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return False
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.requires_container
 
     @property
     def pass_on_bc_container_credentials(self) -> bool:
-        # Categories that simulate development scenarios (e.g. Bug Fix) should have direct container access
-        # While categories that simulate production scenarios (e.g. Data Query) should only use exposed access methods, e.g. BC MCP
-        match self:
-            case EvaluationCategory.DATA_QUERY:
-                return False
-            case (
-                EvaluationCategory.BUG_FIX
-                | EvaluationCategory.TEST_GENERATION
-                | EvaluationCategory.CODE_REVIEW
-                | EvaluationCategory.NL2AL
-                | EvaluationCategory.EXT_REQUEST_ADVISOR
-                | EvaluationCategory.EXT_REQUEST_IMPLEMENT
-                | EvaluationCategory.EXT_REQUEST_TRIAGE
-            ):
-                return True
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.pass_on_bc_container_credentials
 
     @property
     def requires_repo(self) -> bool:
@@ -538,19 +309,7 @@ class EvaluationCategory(StrEnum):
 
     @property
     def runner(self) -> str:
-        """GitHub Actions runner label for evaluating this category.
-
-        Only categories that require building BaseApp needs self-hosted runners.
-        """
-        match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
-                return "GitHub-BCBench"
-            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return "ubuntu-latest"
-            case EvaluationCategory.NL2AL:
-                return "windows-latest"
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return self.definition.runner
 
 
 @dataclass(frozen=True)

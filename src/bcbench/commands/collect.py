@@ -1,17 +1,27 @@
 """CLI commands for collecting dataset entries."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from bcbench.collection import ScreeningResult, collect_codereview_entries, collect_gh_entry, screen_gh_candidate
 from bcbench.config import get_config
 from bcbench.exceptions import CollectionError
+
+if TYPE_CHECKING:
+    from bcbench.collection import ScreeningResult
 
 _config = get_config()
 
 collect_app = typer.Typer(help="Collect dataset entries from GitHub")
+
+
+def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> ScreeningResult:
+    from bcbench.collection import screen_gh_candidate as screen_candidate
+
+    return screen_candidate(pr_number=pr_number, repo=repo)
 
 
 @collect_app.command("gh")
@@ -35,6 +45,8 @@ def collect_gh(
     # Collect from custom repo
     bcbench collect gh 12345 --repo microsoft/AL --environment-setup-version 28.0
     """
+    from bcbench.collection import collect_gh_entry
+
     collect_gh_entry(pr_number=pr_number, output=output, repo=repo, environment_setup_version=environment_setup_version)
 
 
@@ -75,6 +87,8 @@ def collect_codereview(
     # --reviewer <bot-login> to restrict to the review bot)
     bcbench collect codereview 9315 --reacted --environment-setup-version 27.0
     """
+    from bcbench.collection import collect_codereview_entries
+
     try:
         entries = collect_codereview_entries(
             pr_number=pr_number,

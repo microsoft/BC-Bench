@@ -203,8 +203,8 @@ def setup_logger(verbose: bool = False) -> None:
     root_logger.addHandler(console_handler)
 
     # Configure bcbench loggers to use the desired level
-    bcbench_logger = logging.getLogger("bcbench")
-    bcbench_logger.setLevel(bcbench_level)
+    for namespace in ("bcbench", "bcbench_core"):
+        logging.getLogger(namespace).setLevel(bcbench_level)
 
     _logging_configured = True
 

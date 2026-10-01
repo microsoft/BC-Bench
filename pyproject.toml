@@ -26,6 +26,7 @@ dependencies = [
     "numpy>=2.3.5",
     "scipy>=1.16.3",
     "jinja2>=3.1.6",
+    "bcbench-core",
 ]
 
 [project.scripts]
@@ -41,6 +42,12 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 bcbench = ["agent/*.yaml", "agent/pr_review/scripts/*.ps1"]
+
+[tool.uv.workspace]
+members = ["packages/bcbench-core"]
+
+[tool.uv.sources]
+bcbench-core = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

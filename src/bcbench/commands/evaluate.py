@@ -4,7 +4,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import get_claude_version, get_copilot_version, get_pr_review_version, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -23,12 +23,10 @@ from bcbench.cli_options import (
     resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
-from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.operations import prepare_run_dir
-from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -247,6 +245,9 @@ def evaluate_bcal(
 
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
+    from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
+    from bcbench.dataset import NL2ALEntry
+
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
@@ -294,6 +295,8 @@ def evaluate_judge_calibration(
     Intended for local/ad-hoc checks of the judge; exits non-zero if accuracy drops below
     the threshold.
     """
+    from bcbench.evaluate.codereview_judge_calibration import run_calibration
+
     work_dir.mkdir(parents=True, exist_ok=True)
     report = run_calibration(work_dir, model=model)
 
@@ -386,41 +389,10 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
-        match context.category:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
-                scenarios = ["success", "build-fail"]
-            case EvaluationCategory.CODE_REVIEW:
-                scenarios = ["invalid", "valid"]
-            case EvaluationCategory.NL2AL:
-                scenarios = ["raw", "empty"]
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                scenarios = ["raw", "empty"]
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                scenarios = ["raw", "empty"]
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                scenarios = ["raw", "empty"]
-            case _:
-                raise ValueError(f"Unsupported category for mock evaluation: {context.category}")
-
-        scenario = random.choice(scenarios)
+        definition = context.category.definition
+        scenario = random.choice(definition.mock_scenarios)
         logger.info(f"Mock pipeline: Selected scenario: {scenario}")
 
-        result: BaseEvaluationResult
-        match scenario:
-            case "success":
-                result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
-            case "build-fail":
-                result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
-            case "invalid":
-                result = CodeReviewResult.create_invalid(context, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
-            case "valid":
-                result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[], matched_pairs=[], ignored_comments=[], ignored_matched_pairs=[])
-            case "raw":
-                result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
-            case "empty":
-                result = JudgeBasedEvaluationResult.create_empty_output(context)
-            case _:
-                raise ValueError("Invalid mock scenario, this should not happen")
-
+        result = definition.create_mock_result(context, scenario)
         self.save_result(context, result)
         logger.info(f"Successfully created and saved mock {scenario} result")

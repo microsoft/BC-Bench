@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import json
 import re
 from abc import abstractmethod
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
+from bcbench_core.dataset import DatasetEntry
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
-from bcbench.exceptions import EntryNotFoundError
 from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
 
 _config = get_config()
@@ -32,7 +31,7 @@ class EntryMetadata(BaseModel):
     persona: str | None = None
 
 
-class BaseDatasetEntry(BaseModel):
+class BaseDatasetEntry(DatasetEntry):
     """Base class for all dataset entries. Contains common properties shared across categories."""
 
     model_config = ConfigDict(frozen=True, populate_by_name=True)
@@ -42,46 +41,7 @@ class BaseDatasetEntry(BaseModel):
     instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
-    project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = []
-
-    @classmethod
-    def load(cls, dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[Self]:
-        if not dataset_path.exists():
-            raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
-
-        entries: list[Self] = []
-
-        with dataset_path.open(encoding="utf-8") as file:
-            for line in file:
-                stripped_line: str = line.strip()
-                if not stripped_line:
-                    continue
-
-                entry = cls.model_validate_json(stripped_line)
-
-                if entry_id:
-                    if entry.instance_id == entry_id:
-                        return [entry]
-                    continue
-
-                entries.append(entry)
-
-        if entry_id:
-            raise EntryNotFoundError(entry_id)
-
-        if random is not None and random > 0:
-            import random as random_module
-
-            return random_module.sample(entries, min(random, len(entries)))
-
-        return entries
-
-    def save_to_file(self, filepath: Path | str) -> None:
-        path = Path(filepath)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            json.dump(self.model_dump(by_alias=True, mode="json"), handle, ensure_ascii=False)
-            handle.write("\n")
+    project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = Field(default_factory=list)
 
     @abstractmethod
     def get_task(self) -> str:
@@ -140,7 +100,7 @@ class _BugFixTestGenBase(RepoGroundedEntry):
     """Shared schema for bug-fix and test-generation entries (same JSONL, different semantics)."""
 
     fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
-    pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
+    pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = Field(default_factory=list)
     test_patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
 
     @model_validator(mode="after")

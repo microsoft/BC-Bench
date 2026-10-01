@@ -11,7 +11,6 @@ import typer
 from bcbench.cli_options import CopilotModel, EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import FilePathIdentificationResult
-from bcbench.contamination.runner import load_identification_results, run_filepath_identification
 from bcbench.dataset import BugFixEntry
 from bcbench.logger import get_logger
 from bcbench.operations import prepare_run_dir
@@ -32,6 +31,8 @@ def filepath_identification(
     run_id: RunId = "contamination_identification",
 ) -> None:
     """Ask a model to identify one buggy file without repository access."""
+    from bcbench.contamination.runner import run_filepath_identification
+
     if category is not EvaluationCategory.BUG_FIX:
         raise typer.BadParameter("filepath-identification currently supports only bug-fix category", param_hint="--category")
 
@@ -48,6 +49,8 @@ def summarize(
     results_dir: Annotated[Path, typer.Option(help="Directory containing filepath-identification results")],
 ) -> None:
     """Aggregate file-path identification results."""
+    from bcbench.contamination.runner import load_identification_results
+
     results = load_identification_results(results_dir)
     if not results:
         logger.error("No filepath-identification results found under %s", results_dir)

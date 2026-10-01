@@ -4,6 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from bcbench_core.exceptions import (
+    CoreError as BCBenchError,
+)
+from bcbench_core.exceptions import (
+    DatasetError,
+    EmptyDiffError,
+    EntryNotFoundError,
+    GitOperationError,
+    PatchApplicationError,
+)
+
 if TYPE_CHECKING:
     from bcbench.types import AgentMetrics, ExperimentConfiguration
 
@@ -23,22 +34,6 @@ __all__ = [
     "PatchApplicationError",
     "TestExecutionError",
 ]
-
-
-class BCBenchError(Exception):
-    """Base exception for all BC-Bench operations."""
-
-
-class DatasetError(BCBenchError):
-    """Base class for dataset-related errors."""
-
-
-class EntryNotFoundError(DatasetError):
-    """Dataset entry not found."""
-
-    def __init__(self, entry_id: str) -> None:
-        self.entry_id = entry_id
-        super().__init__(f"Entry with instance_id '{entry_id}' not found in dataset")
 
 
 class InvalidEntryFormatError(DatasetError):
@@ -61,30 +56,6 @@ class NoEntriesFoundError(DatasetError):
         message = "No entries matched the filter criteria"
         if criteria:
             message = f"No entries found for {criteria}"
-        super().__init__(message)
-
-
-class GitOperationError(BCBenchError):
-    """Base class for git operation failures."""
-
-
-class PatchApplicationError(GitOperationError):
-    """Failed to apply a patch."""
-
-    def __init__(self, patch_name: str, stderr: str = "") -> None:
-        self.patch_name = patch_name
-        self.stderr = stderr
-        message = f"Failed to apply {patch_name}"
-        if stderr:
-            message += f": {stderr}"
-        super().__init__(message)
-
-
-class EmptyDiffError(GitOperationError):
-    """Generated diff is empty."""
-
-    def __init__(self) -> None:
-        message = "Generated diff is empty. Agent did not make any changes."
         super().__init__(message)
 
 
@@ -214,7 +185,7 @@ class AgentError(BCBenchError):
     """Agent execution errors."""
 
 
-class AgentTimeoutError(BCBenchError):
+class AgentTimeoutError(BCBenchError, TimeoutError):
     """Agent execution timeout errors."""
 
     def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None) -> None:

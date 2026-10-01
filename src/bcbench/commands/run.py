@@ -4,7 +4,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -22,7 +22,6 @@ from bcbench.cli_options import (
     resolve_agent_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import NL2ALEntry
 from bcbench.logger import get_logger
 from bcbench.types import BCalLLMBackend, EvaluationCategory
 
@@ -189,6 +188,9 @@ def run_bcal(
     Example:
         uv run bcbench run bcal nl2al__job-budget-report-1
     """
+    from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
+    from bcbench.dataset import NL2ALEntry
+
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
     category.pipeline.setup_workspace(entry, repo_path)

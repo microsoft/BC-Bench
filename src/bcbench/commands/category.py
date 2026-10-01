@@ -2,18 +2,18 @@ import sys
 
 import typer
 
+from bcbench.categories import categories
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.github_actions import write_step_outputs
-from bcbench.types import EvaluationCategory
 
 category_app = typer.Typer(help="Category-specific configuration helpers")
 
 
 @category_app.command("list")
 def list_categories() -> None:
-    """Print all evaluation category names, one per line."""
-    for category in EvaluationCategory:
-        sys.stdout.write(f"{category.value}\n")
+    """Print registered evaluation category names, one per line."""
+    for name in categories:
+        sys.stdout.write(f"{name}\n")
 
 
 @category_app.command("bceval-config")

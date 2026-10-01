@@ -1,12 +1,12 @@
 """CLI commands for dataset operations."""
 
 import json
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 
 from bcbench.cli_options import EvaluationCategoryOption
-from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
+from bcbench.dataset import BaseDatasetEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
 from bcbench.logger import get_logger
@@ -140,7 +140,10 @@ def view_entry(
         else:
             console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
-    elif isinstance(entry, CodeReviewEntry):
+    elif category.value == "code-review":
+        from bcbench.dataset.codereview import CodeReviewEntry
+
+        entry = cast(CodeReviewEntry, entry)
         console.print("\n[bold cyan]Expected Review Comments:[/bold cyan]")
         if entry.expected_comments:
             comment_table = Table()

@@ -13,7 +13,6 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.config import get_config
 from bcbench.logger import get_logger
 from bcbench.types import BCalLLMBackend
@@ -68,6 +67,7 @@ def scan(
         uv run bcbench redteam scan --language en --risk-category code_vulnerability
         uv run bcbench redteam scan --language es --seeds dataset/redteam/attack_objectives.json --attack-strategy base64
     """
+    from bcbench.agent.bcal import BCalBackendConfig
     from bcbench.redteam import build_bcal_target, run_scan
 
     # Upstream treats seeds and risk categories as alternative objective sources, so exactly one is required.
