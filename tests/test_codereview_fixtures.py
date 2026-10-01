@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import subprocess
 
 import pytest
@@ -191,7 +192,7 @@ def test_http_controls_have_no_unavailable_article_or_steering_comments(material
     for source in files.values():
         assert "Access = Internal;" in source
         assert "internal procedure " in source
-        assert "//" not in source.replace("https://", "")
+        assert re.search(r"(?<!:)//|/\*", source) is None
         assert "Record " not in source
         assert "Authorization" not in source
         assert "SecretText" not in source
