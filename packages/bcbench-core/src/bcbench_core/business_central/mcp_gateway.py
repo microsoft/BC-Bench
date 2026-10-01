@@ -62,6 +62,13 @@ def _header_safe(key: str, value: str) -> bool:
     return not any(c in key or c in value for c in ("\r", "\n"))
 
 
+def _safe_session_id(response) -> str | None:  # noqa: ANN001 - http.client.HTTPResponse
+    session_id = response.getheader("Mcp-Session-Id")
+    if not session_id or not _header_safe("Mcp-Session-Id", session_id):
+        return None
+    return session_id.replace("\r", "").replace("\n", "")
+
+
 def _jsonrpc_method_and_id(body: bytes | None) -> tuple[str | None, object]:
     if not body:
         return None, None
@@ -318,10 +325,9 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             behaves exactly like BC's for everything else.
             """
             self._response_started = True
-            forwarded_headers = [(k, v) for k, v in response.getheaders() if k.lower() not in _HOP_BY_HOP and k.lower() not in ("content-length", "content-type") and _header_safe(k, v)]
             self.send_response_only(200)
-            for key, value in forwarded_headers:
-                self.send_header(key, value)
+            if session_id := _safe_session_id(response):
+                self.send_header("Mcp-Session-Id", session_id)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Transfer-Encoding", "chunked")
             self.end_headers()
@@ -356,17 +362,14 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
         def _relay(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
             self._response_started = True
             self.send_response_only(response.status)
-            content_length: str | None = None
-            for key, value in response.getheaders():
-                lowered = key.lower()
-                if lowered == "content-length":
-                    content_length = value
-                    continue
-                if lowered in _HOP_BY_HOP:
-                    continue
-                if not _header_safe(key, value):
-                    continue
-                self.send_header(key, value)
+            content_length = response.getheader("Content-Length")
+            content_type = response.getheader("Content-Type", "") or ""
+            if content_type.startswith("application/json"):
+                self.send_header("Content-Type", "application/json")
+            elif content_type.startswith("text/event-stream"):
+                self.send_header("Content-Type", "text/event-stream")
+            if session_id := _safe_session_id(response):
+                self.send_header("Mcp-Session-Id", session_id)
 
             if content_length is not None:
                 # Parse first, then emit the re-serialised int: the raw value skips the _header_safe
