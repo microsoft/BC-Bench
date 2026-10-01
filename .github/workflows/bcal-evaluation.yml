@@ -13,6 +13,15 @@ on:
         type: choice
         options:
           - "gpt-5.2"
+      category:
+        description: "BCal-compatible evaluation category"
+        required: false
+        default: "bcal-scenario"
+        type: choice
+        options:
+          - "nl2al"
+          - "bcal-scenario"
+          - "bcal-feature"
       llm-backend:
         description: "LLM backend for bcal. In this workflow, external-command uses the bc-eval CAPI bridge."
         required: false
@@ -41,7 +50,7 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: bcal-evaluation-${{ inputs.category || 'bcal-scenario' }}-${{ inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -52,7 +61,7 @@ jobs:
     uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run || false }}
-      category: nl2al
+      category: ${{ inputs.category || 'bcal-scenario' }}
 
   evaluate-with-bcal:
     runs-on: windows-latest
@@ -150,7 +159,7 @@ jobs:
 
       - name: Resolve BC version for cache key
         id: bcversion
-        run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --github-output version
+        run: uv run bcbench dataset version "${{ matrix.entry }}" --category "${{ inputs.category || 'bcal-scenario' }}" --github-output version
 
       # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
@@ -165,7 +174,7 @@ jobs:
         shell: pwsh
         run: |
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
-          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
+          .\scripts\Download-BCSymbols.ps1 -Category "${{ inputs.category || 'bcal-scenario' }}" -InstanceId "${{ matrix.entry }}"
 
       - name: Azure Login (OIDC) for CAPI Key Vault
         if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
@@ -217,14 +226,14 @@ jobs:
             $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py"
           }
 
-          uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          uv run bcbench evaluate bcal "${{ matrix.entry }}" --category "${{ inputs.category || 'bcal-scenario' }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
@@ -238,6 +247,6 @@ jobs:
       model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-55-chat-2026-04-29') || (inputs.model || 'gpt-5.2') }}
       agent: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && 'BCal-external-command' || 'BCal' }}
       mock: ${{ inputs.test-run || false }}
-      category: nl2al
+      category: ${{ inputs.category || 'bcal-scenario' }}
       skip-leaderboard: true
     secrets: inherit

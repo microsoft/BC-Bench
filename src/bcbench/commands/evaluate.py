@@ -1,10 +1,10 @@
 import random
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_bcal_scenario, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -23,18 +23,44 @@ from bcbench.cli_options import (
     resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
+from bcbench.dataset import BaseDatasetEntry, BCalScenarioEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.operations import prepare_run_dir
-from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results import (
+    BaseEvaluationResult,
+    BCalScenarioEvaluationResult,
+    CodeReviewResult,
+    ExecutionBasedEvaluationResult,
+    IndependentBuildResult,
+    JudgeBasedEvaluationResult,
+)
 from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
+
+
+def _run_bcal_compatible_entry(
+    context: EvaluationContext[BaseDatasetEntry],
+    backend_config: BCalBackendConfig,
+) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]:
+    if isinstance(context.entry, NL2ALEntry):
+        return run_bcal_agent(
+            entry=context.entry,
+            repo_path=context.repo_path,
+            backend_config=backend_config,
+        )
+    if isinstance(context.entry, BCalScenarioEntry):
+        return run_bcal_scenario(
+            entry=context.entry,
+            repo_path=context.repo_path,
+            backend_config=backend_config,
+        )
+    raise TypeError(f"Unsupported BCal entry type: {type(context.entry).__name__}")
 
 
 @evaluate_app.command("copilot")
@@ -233,6 +259,7 @@ def evaluate_pr_review(
 @evaluate_app.command("bcal")
 def evaluate_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    category: EvaluationCategoryOption = EvaluationCategory.NL2AL,
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "bcal_test_run",
@@ -243,12 +270,22 @@ def evaluate_bcal(
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
 ) -> None:
     """
-    Evaluate BCal dotnet tool on single nl2al dataset entry.
+    Evaluate BCal dotnet tool on a BCal-compatible dataset entry.
 
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
-    category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    compatible_categories = {
+        EvaluationCategory.NL2AL,
+        EvaluationCategory.BCAL_SCENARIO,
+        EvaluationCategory.BCAL_FEATURE,
+    }
+    if category not in compatible_categories:
+        raise typer.BadParameter(
+            f"BCal only supports categories: {', '.join(sorted(item.value for item in compatible_categories))}",
+            param_hint="--category",
+        )
+
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         backend=backend,
@@ -270,14 +307,7 @@ def evaluate_bcal(
         category=category,
     )
 
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_bcal_agent(
-            entry=cast(NL2ALEntry, ctx.entry),
-            repo_path=ctx.repo_path,
-            backend_config=backend_config,
-        ),
-    )
+    category.pipeline.execute(context, lambda ctx: _run_bcal_compatible_entry(ctx, backend_config))
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -393,6 +423,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
                 scenarios = ["raw", "empty"]
+            case EvaluationCategory.BCAL_SCENARIO | EvaluationCategory.BCAL_FEATURE:
+                scenarios = ["scenario-pass", "scenario-fail"]
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
                 scenarios = ["raw", "empty"]
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
@@ -419,6 +451,25 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
             case "empty":
                 result = JudgeBasedEvaluationResult.create_empty_output(context)
+            case "scenario-pass":
+                result = BCalScenarioEvaluationResult.create(
+                    context,
+                    output="MOCK_SCENARIO_PACKET",
+                    scenario_completed=True,
+                    independent_build=IndependentBuildResult(status="passed"),
+                    trace_assertions=[],
+                    runtime_status=None,
+                )
+            case "scenario-fail":
+                result = BCalScenarioEvaluationResult.create(
+                    context,
+                    output="MOCK_SCENARIO_PACKET",
+                    scenario_completed=False,
+                    independent_build=IndependentBuildResult(status="failed", message="Mock build failure"),
+                    trace_assertions=[],
+                    runtime_status=None,
+                    error_message="Mock scenario failure",
+                )
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 
