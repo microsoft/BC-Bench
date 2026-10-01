@@ -3,7 +3,7 @@ from pathlib import Path
 
 import typer
 
-from bcbench.categories.base import JudgeCategoryDefinition
+from bcbench.categories.base import CategoryEvaluator, JudgeCategoryDefinition
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.commands.composition import build_category_registry, command_context
 from bcbench.github_actions import write_step_outputs
@@ -28,7 +28,7 @@ def bceval_config(ctx: typer.Context, category: EvaluationCategoryOption) -> Non
         "evaluators": ",".join(definition.reporting.evaluators),
         "core_score": definition.reporting.core_score,
     }
-    if "lm_checklist" in definition.reporting.evaluators and isinstance(definition, JudgeCategoryDefinition):
+    if CategoryEvaluator.LM_CHECKLIST in definition.reporting.evaluators and isinstance(definition, JudgeCategoryDefinition):
         outputs["judge_model"] = definition.judge_model
     output_path = Path(state.config.env.github_output) if state.config.env.github_output else None
     write_step_outputs(outputs, output_path=output_path)

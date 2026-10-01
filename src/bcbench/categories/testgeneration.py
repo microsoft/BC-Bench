@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 
-from bcbench.categories.base import CategoryCapabilities, CategoryReporting, ExecutionCategoryDefinition, PromptContext
+from bcbench.categories.base import CategoryCoreScore, CategoryEvaluator, CategoryReporting, CategoryRunner, ExecutionCategoryDefinition, PromptContext
 from bcbench.config import Config
 from bcbench.dataset.dataset_entry import TestGenEntry
 from bcbench.evaluate.testgeneration import TestGenerationPipeline
@@ -21,14 +21,13 @@ def build_definition(config: Config) -> ExecutionCategoryDefinition[TestGenEntry
         dataset_path=config.paths.dataset_dir / "bcbench.jsonl",
         entry_class=TestGenEntry,
         pipeline_factory=lambda: TestGenerationPipeline(result_class=TestGenerationResult, result_suffix=config.file_patterns.result_pattern),
-        capabilities=CategoryCapabilities(requires_container=True),
         reporting=CategoryReporting(
             result_class=TestGenerationResult,
             summary_class=ExecutionBasedEvaluationResultSummary,
             aggregate_class=ExecutionBasedLeaderboardAggregate,
-            evaluators=("resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"),
-            core_score="ResolutionRate",
-            runner="GitHub-BCBench",
+            evaluators=(CategoryEvaluator.RESOLUTION_RATE, CategoryEvaluator.BUILD_RATE, CategoryEvaluator.PRE_PATCH_FAILED_RATE, CategoryEvaluator.POST_PATCH_PASSED_RATE),
+            core_score=CategoryCoreScore.RESOLUTION_RATE,
+            runner=CategoryRunner.BC_BENCH,
         ),
         prompt_context=prompt_context,
     )

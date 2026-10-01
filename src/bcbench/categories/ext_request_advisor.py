@@ -1,4 +1,4 @@
-from bcbench.categories.base import CategoryCapabilities, CategoryReporting, JudgeCategoryDefinition
+from bcbench.categories.base import CategoryCapabilities, CategoryCoreScore, CategoryEvaluator, CategoryReporting, CategoryRunner, JudgeCategoryDefinition
 from bcbench.config import Config
 from bcbench.dataset.extensibility_request import ExtRequestAdvisorEntry
 from bcbench.evaluate.ext_request_advisor import ExtRequestAdvisorPipeline
@@ -19,9 +19,9 @@ def build_definition(config: Config) -> JudgeCategoryDefinition[ExtRequestAdviso
             result_class=JudgeBasedEvaluationResult,
             summary_class=JudgeBasedEvaluationResultSummary,
             aggregate_class=JudgeBasedLeaderboardAggregate,
-            evaluators=("lm_checklist",),
-            core_score="test_passed",
-            runner="ubuntu-latest",
+            evaluators=(CategoryEvaluator.LM_CHECKLIST,),
+            core_score=CategoryCoreScore.TEST_PASSED,
+            runner=CategoryRunner.UBUNTU,
         ),
         judge_model=config.judge.lm_checklist_model,
     )
