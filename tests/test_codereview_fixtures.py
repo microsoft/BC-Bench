@@ -197,7 +197,9 @@ def test_http_controls_have_no_unavailable_article_or_steering_comments(material
         assert "Authorization" not in source
         assert "SecretText" not in source
         assert "[TryFunction]" not in source
-        assert "https://public.example/" in source
+        urls = re.findall(r"Label '(https:[^']+)'", source)
+        assert urls
+        assert set(urls) <= {"https://public.example/rate", "https://public.example/heartbeat"}
 
 
 def test_http_bare_calls_check_status_without_consuming_optional_result(materialized_entries):
