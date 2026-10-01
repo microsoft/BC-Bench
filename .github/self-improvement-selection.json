@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "e89b01069c079e3e4741587ffd5b4c45eae85143",
+  "datasetHash": "46A978950BE2F3B98ED647D3AF503448E74879D29E95988C1394EB90DD443EB6",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "neg-8222ad38e67a1bf4ee3b67d2389a957f0d00c77a",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/10990#discussion_r3926331607"
+  ],
+  "entryIds": [
+    "synthetic__upgrade-demo-data-not-upgraded-01"
+  ],
+  "newEntryIds": [
+    "synthetic__upgrade-demo-data-not-upgraded-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__upgrade-demo-data-not-upgraded-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/10990#discussion_r3926331607",
+          "purpose": "calibration_context",
+          "file": "src/DemoAgentContosoModule.Codeunit.al",
+          "lineStart": 9,
+          "lineEnd": 9,
+          "rationale": "Reproduces the reviewed boundary: a Contoso demo-data module's CreateMasterData() wires a new VAT-rate seeding codeunit that inserts persisted setup records, with no Subtype = Upgrade codeunit to propagate those records to already-provisioned tenants, matching the bot's upgrade-codeunit-subtype and install-code-does-not-run-on-version-upgrade reasoning. Feedback was negative (THUMBS_DOWN) and the author replied 'Not needed here, this is Preview demo data', rejecting applicability to Contoso/demo-data tooling specifically -- a product/process judgment call, not a confirmed absence of the underlying defect pattern. Per the no-invented-clean-negative rule, the expected finding is retained rather than converted into a false_positive_guard; this is deliberately scoped as calibration_context so the disagreement is captured honestly. Limitation: does not prove the bot's generic upgrade-safety guidance extends to demo-data/Preview-tooling modules, and does not resolve whether BC's Contoso demo-data lifecycle exempts such modules from Subtype = Upgrade requirements -- that remains an open, human-reviewed question."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "B293CB4B0388B7C50273298DC004B4DDA3AE77E927446CF574641F6C6A4CCE8F",
+      "instanceId": "synthetic__upgrade-demo-data-not-upgraded-01"
+    }
+  ]
+}
