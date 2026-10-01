@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from bcbench.agent.copilot.metrics import parse_output
+from bcbench.agent.settings import AgentSettings
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
@@ -17,14 +18,15 @@ logger = get_logger(__name__)
 __all__ = ["get_copilot_version", "invoke_copilot"]
 
 
-def _find_copilot() -> str | None:
+def _find_copilot(environment: Mapping[str, str]) -> str | None:
     # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes
     # PowerShell, which re-parses arguments and corrupts prompts containing double quotes.
-    return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
+    path = environment.get("PATH", "")
+    return shutil.which("copilot.exe", path=path) or shutil.which("copilot.cmd", path=path) or shutil.which("copilot", path=path)
 
 
-def get_copilot_version() -> str:
-    return get_cli_version(_find_copilot(), "GitHub Copilot CLI")
+def get_copilot_version(settings: AgentSettings) -> str:
+    return get_cli_version(settings.copilot_executable, "GitHub Copilot CLI", environment=settings.environment)
 
 
 def invoke_copilot(
@@ -33,10 +35,11 @@ def invoke_copilot(
     model: str,
     work_dir: Path,
     timeout: int,
+    executable: str | None,
+    env: Mapping[str, str],
     allow_all_tools: bool = False,
     custom_instructions: bool = False,
     extra_args: Sequence[str] = (),
-    env: Mapping[str, str] | None = None,
 ) -> tuple[AgentMetrics | None, str]:
     """Run one non-interactive Copilot CLI prompt.
 
@@ -45,7 +48,7 @@ def invoke_copilot(
     Returns:
         A tuple containing parsed agent metrics, when available, and the final assistant response. The response is empty when none is emitted.
     """
-    copilot_cmd = _find_copilot()
+    copilot_cmd = executable
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
@@ -65,7 +68,7 @@ def invoke_copilot(
     result = subprocess.run(
         cmd_args,
         cwd=str(work_dir),
-        env=dict(env) if env is not None else None,
+        env=dict(env),
         capture_output=True,
         text=True,
         encoding="utf-8",

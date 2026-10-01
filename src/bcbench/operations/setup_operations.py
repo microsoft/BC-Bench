@@ -2,6 +2,7 @@
 
 import json
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,7 +12,7 @@ from bcbench.operations.git_operations import checkout_commit, clean_repo, commi
 
 logger = get_logger(__name__)
 
-__all__ = ["bootstrap_app_json", "set_runtime_version", "setup_repo_prebuild"]
+__all__ = ["bootstrap_app_json", "remove_table_scope_onprem", "set_runtime_version", "setup_repo_prebuild"]
 
 # Offset from BC platform major version to AL runtime version.
 # E.g. platform 25.0 (BC 2024w2) → runtime 14.0, platform 27.0 → runtime 16.0
@@ -23,7 +24,7 @@ _SCOPE_ONPREM = re.compile(
 )
 
 
-def setup_repo_prebuild(entry: RepoGroundedEntry, repo_path: Path) -> None:
+def setup_repo_prebuild(entry: RepoGroundedEntry, repo_path: Path, *, env: Mapping[str, str] | None = None) -> None:
     """Setup repository before building - clean and checkout base commit.
 
     This is the first phase of repo setup that should be called BEFORE build_and_publish_projects.
@@ -33,13 +34,13 @@ def setup_repo_prebuild(entry: RepoGroundedEntry, repo_path: Path) -> None:
         entry: Dataset entry with instance metadata
         repo_path: Path to the repository
     """
-    clean_repo(repo_path)
-    checkout_commit(repo_path, entry.base_commit)
-    if removed_count := _remove_table_scope_onprem(repo_path, entry.project_paths):
-        commit_changes(repo_path, f"Remove {removed_count} Scope = OnPrem declaration(s)")
+    clean_repo(repo_path, env=env)
+    checkout_commit(repo_path, entry.base_commit, env=env)
+    if removed_count := remove_table_scope_onprem(repo_path, entry.project_paths):
+        commit_changes(repo_path, f"Remove {removed_count} Scope = OnPrem declaration(s)", env=env)
 
 
-def _remove_table_scope_onprem(repo_path: Path, project_paths: list[str]) -> int:
+def remove_table_scope_onprem(repo_path: Path, project_paths: list[str]) -> int:
     removed_count = 0
     for project_path in dict.fromkeys(project_paths):
         project_root = repo_path / project_path

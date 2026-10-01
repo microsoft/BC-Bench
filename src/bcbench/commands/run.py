@@ -1,10 +1,11 @@
 """CLI commands for running agents."""
 
+from pathlib import Path
 from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.application import AgentSelection, EvaluationRequest, run_entry
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -16,23 +17,21 @@ from bcbench.cli_options import (
     ContainerUsername,
     CopilotModel,
     EvaluationCategoryOption,
-    OutputDir,
     PRReviewEnginePath,
-    RepoPath,
     resolve_agent_runtime,
 )
-from bcbench.config import get_config
+from bcbench.commands.composition import build_category_registry, command_context, select_agent
 from bcbench.logger import get_logger
-from bcbench.types import BCalLLMBackend, EvaluationCategory
+from bcbench.types import AgentHarness, BCalLLMBackend, EvaluationCategory
 
 logger = get_logger(__name__)
-_config = get_config()
 
 run_app = typer.Typer(help="Run agents on single dataset entry")
 
 
 @run_app.command("copilot")
 def run_copilot(
+    ctx: typer.Context,
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName = "",
@@ -43,8 +42,8 @@ def run_copilot(
     mcp_url: ContainerMcpUrl = None,
     company: ContainerCompany = "",
     model: CopilotModel = "gpt-5.6-luna",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    repo_path: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)] = None,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
@@ -69,21 +68,23 @@ def run_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
-
-    run_copilot_agent(
-        entry=entry,
-        repo_path=repo_path,
-        model=model,
-        category=category,
-        output_dir=output_dir,
-        runtime=runtime,
+    state = command_context(ctx)
+    definition = build_category_registry(state)[category]
+    run_entry(
+        definition,
+        EvaluationRequest(
+            entry_id=entry_id,
+            repo_path=repo_path or state.config.paths.testbed_path,
+            output_dir=output_dir or state.config.paths.evaluation_results_path,
+            container=runtime.container if runtime else None,
+        ),
+        select_agent(state, definition, name=AgentHarness.COPILOT, model=model, runtime=runtime, evaluate=False),
     )
 
 
 @run_app.command("claude")
 def run_claude(
+    ctx: typer.Context,
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName = "",
@@ -94,8 +95,8 @@ def run_claude(
     mcp_url: ContainerMcpUrl = None,
     company: ContainerCompany = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    repo_path: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)] = None,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
@@ -120,25 +121,27 @@ def run_claude(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
-
-    run_claude_code(
-        entry=entry,
-        repo_path=repo_path,
-        model=model,
-        category=category,
-        output_dir=output_dir,
-        runtime=runtime,
+    state = command_context(ctx)
+    definition = build_category_registry(state)[category]
+    run_entry(
+        definition,
+        EvaluationRequest(
+            entry_id=entry_id,
+            repo_path=repo_path or state.config.paths.testbed_path,
+            output_dir=output_dir or state.config.paths.evaluation_results_path,
+            container=runtime.container if runtime else None,
+        ),
+        select_agent(state, definition, name=AgentHarness.CLAUDE, model=model, runtime=runtime, evaluate=False),
     )
 
 
 @run_app.command("pr-review")
 def run_pr_review(
+    ctx: typer.Context,
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     model: CopilotModel = "gpt-5.6-luna",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    repo_path: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)] = None,
     engine_path: PRReviewEnginePath = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
@@ -155,25 +158,24 @@ def run_pr_review(
     Example:
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
-
-    run_pr_review_agent(
-        entry=entry,
-        model=model,
-        repo_path=repo_path,
-        category=category,
-        output_dir=output_dir,
-        engine_path=engine_path,
-        min_severity=min_severity,
+    state = command_context(ctx)
+    definition = build_category_registry(state)[EvaluationCategory.CODE_REVIEW]
+    run_entry(
+        definition,
+        EvaluationRequest(
+            entry_id=entry_id,
+            repo_path=repo_path or state.config.paths.testbed_path,
+            output_dir=output_dir or state.config.paths.evaluation_results_path,
+        ),
+        select_agent(state, definition, name=AgentHarness.PR_REVIEW, model=model, runtime=None, evaluate=False, engine_path=engine_path, min_severity=min_severity),
     )
 
 
 @run_app.command("bcal")
 def run_bcal(
+    ctx: typer.Context,
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    repo_path: RepoPath = _config.paths.evaluation_results_path,
+    repo_path: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
     backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.AZURE_OPENAI,
     endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
     deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
@@ -191,18 +193,19 @@ def run_bcal(
     from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
     from bcbench.dataset import NL2ALEntry
 
-    category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
-    category.pipeline.setup_workspace(entry, repo_path)
-
-    run_bcal_agent(
-        entry=entry,
-        repo_path=repo_path,
-        backend_config=BCalBackendConfig(
-            backend=backend,
-            endpoint=endpoint,
-            deployment=deployment,
-            command=llm_command,
-            model=llm_model,
+    state = command_context(ctx)
+    definition = build_category_registry(state)[EvaluationCategory.NL2AL]
+    backend_config = BCalBackendConfig(backend=backend, endpoint=endpoint, deployment=deployment, command=llm_command, model=llm_model)
+    run_entry(
+        definition,
+        EvaluationRequest(
+            entry_id=entry_id,
+            repo_path=repo_path or state.config.paths.evaluation_results_path,
+            output_dir=state.config.paths.evaluation_results_path,
+        ),
+        AgentSelection(
+            name=AgentHarness.BCAL,
+            model=backend_config.model_label(),
+            runner=lambda context: run_bcal_agent(entry=cast(NL2ALEntry, context.entry), repo_path=context.repo_path, backend_config=backend_config),
         ),
     )

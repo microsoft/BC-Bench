@@ -1,11 +1,11 @@
 import json
 from abc import ABC
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 from bcbench.logger import get_logger
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
@@ -70,15 +70,14 @@ class LeaderboardAggregate(BaseModel, ABC):
             raise ValueError("Cannot create aggregate from empty runs list")
 
         if cls is LeaderboardAggregate:
-            return runs[0].category.aggregate_class.from_runs(runs)
+            raise TypeError("Select a category-specific aggregate class before aggregating")
 
         cls._validate_consistent_runs(runs)
         return cls(**cls._base_fields(runs))
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> "LeaderboardAggregate":
-        category = EvaluationCategory(payload["category"])
-        return category.aggregate_class.model_validate(payload)
+    def from_json(cls, payload: dict[str, Any], aggregate_class: type["LeaderboardAggregate"]) -> "LeaderboardAggregate":
+        return aggregate_class.model_validate(payload)
 
 
 class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
@@ -157,7 +156,7 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
 
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":
-        from bcbench.results.codereview import CodeReviewResultSummary
+        from bcbench.categories.code_review.results import CodeReviewResultSummary
 
         base = super().from_runs(runs)
         assert isinstance(base, CodeReviewLeaderboardAggregate)
@@ -215,25 +214,23 @@ class Leaderboard(BaseModel):
     runs: list[EvaluationResultSummary]
     aggregate: list[LeaderboardAggregate]
 
-    @field_validator("runs", mode="before")
     @classmethod
-    def _deserialize_runs(cls, value: list[dict[str, Any] | EvaluationResultSummary]) -> list[EvaluationResultSummary]:
-        return [EvaluationResultSummary.from_json(item) if isinstance(item, dict) else item for item in value]
-
-    @field_validator("aggregate", mode="before")
-    @classmethod
-    def _deserialize_aggregate(cls, value: list[dict[str, Any] | LeaderboardAggregate]) -> list[LeaderboardAggregate]:
-        return [LeaderboardAggregate.from_json(item) if isinstance(item, dict) else item for item in value]
-
-    @classmethod
-    def load(cls, path: Path) -> "Leaderboard":
+    def load(
+        cls,
+        path: Path,
+        summary_classes: Mapping[EvaluationCategory, type[EvaluationResultSummary]],
+        aggregate_classes: Mapping[EvaluationCategory, type[LeaderboardAggregate]],
+    ) -> "Leaderboard":
         if not path.exists():
             return cls(runs=[], aggregate=[])
         with path.open(encoding="utf-8") as f:
             data = json.load(f)
             if not data or not isinstance(data, dict):
                 return cls(runs=[], aggregate=[])
-            return cls.model_validate(data)
+            return cls(
+                runs=[EvaluationResultSummary.from_json(item, summary_classes[EvaluationCategory(item["category"])]) for item in data.get("runs", [])],
+                aggregate=[LeaderboardAggregate.from_json(item, aggregate_classes[EvaluationCategory(item["category"])]) for item in data.get("aggregate", [])],
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -10,7 +10,7 @@ from pydantic import TypeAdapter
 
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import BugFixTestGenBase
 from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger
 from bcbench.operations.filesystem_operations import remove_tree
@@ -193,7 +193,7 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
     logger.info("All projects built and published")
 
 
-def run_tests(entry: _BugFixTestGenBase, container: ContainerConfig) -> None:
+def run_tests(entry: BugFixTestGenBase, container: ContainerConfig) -> None:
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
         run_test_suite(entry.fail_to_pass, "Pass", container)

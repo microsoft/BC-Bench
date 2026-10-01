@@ -5,12 +5,10 @@ These wrap GitHub Actions workflow features (step outputs, log groups) and are n
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from bcbench.config import get_config
 from bcbench.logger import get_logger
 
 __all__ = ["github_log_group", "write_step_outputs"]
@@ -18,7 +16,7 @@ __all__ = ["github_log_group", "write_step_outputs"]
 logger = get_logger(__name__)
 
 
-def write_step_outputs(outputs: dict[str, str]) -> None:
+def write_step_outputs(outputs: dict[str, str], *, output_path: Path | None) -> None:
     """Append ``key=value`` step outputs to the GitHub Actions output file.
 
     The values become outputs of the current workflow step, available to downstream steps via ``steps.<id>.outputs.<key>``.
@@ -29,19 +27,16 @@ def write_step_outputs(outputs: dict[str, str]) -> None:
     Note:
         When not running inside GitHub Actions (``$GITHUB_OUTPUT`` is unset), nothing is written and a warning is logged.
     """
-    github_output: str | None = os.getenv("GITHUB_OUTPUT")
-    if not github_output:
+    if output_path is None:
         logger.warning("Not running in GitHub Actions; skipping step outputs: %s", ", ".join(outputs))
         return
 
-    with Path(github_output).open("a", encoding="utf-8") as file:
+    with output_path.open("a", encoding="utf-8") as file:
         file.writelines(f"{key}={value}\n" for key, value in outputs.items())
 
 
 @contextmanager
-def github_log_group(title: str) -> Iterator[None]:
-    in_actions: bool = get_config().env.github_actions
-
+def github_log_group(title: str, *, in_actions: bool = False) -> Iterator[None]:
     if in_actions:
         print(f"::group::{title}", flush=True)  # noqa: T201
 

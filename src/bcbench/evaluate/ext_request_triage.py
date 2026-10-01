@@ -12,7 +12,6 @@ from pathlib import Path
 
 from bcbench.dataset import ExtRequestTriageEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import setup_repo_prebuild
 from bcbench.results.base import JudgeBasedEvaluationResult
@@ -36,7 +35,7 @@ class ExtRequestTriagePipeline(EvaluationPipeline[ExtRequestTriageEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     def run_agent(self, context: EvaluationContext[ExtRequestTriageEntry], agent_runner: AgentRunner[ExtRequestTriageEntry]) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
+        with self.log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext[ExtRequestTriageEntry]) -> None:

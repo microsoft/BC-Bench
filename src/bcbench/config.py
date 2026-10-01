@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast, get_args
+from typing import Any, cast, get_args
 
 import yaml
 from dotenv import load_dotenv
@@ -16,7 +17,7 @@ from bcbench.cli_options import CopilotModelName
 __all__ = ["Config", "get_config"]
 
 
-def _get_git_root() -> Path:
+def find_repository_root() -> Path:
     """Get the git root directory."""
     try:
         result = subprocess.run(
@@ -148,6 +149,10 @@ class JudgeConfig:
     @classmethod
     def from_file(cls, path: Path) -> JudgeConfig:
         shared_config = yaml.safe_load(path.read_text(encoding="utf-8"))
+        return cls.from_mapping(shared_config)
+
+    @classmethod
+    def from_mapping(cls, shared_config: Mapping[str, Any]) -> JudgeConfig:
         code_review_model: str = shared_config["judges"]["code-review"]["model"]
         lm_checklist_model: str = shared_config["judges"]["lm-checklist"]["model"]
 
@@ -155,7 +160,7 @@ class JudgeConfig:
             raise ValueError("Judge models must be non-empty strings")
 
         if code_review_model not in get_args(CopilotModelName):
-            raise ValueError(f"Unknown code-review judge model {code_review_model!r} in {path}")
+            raise ValueError(f"Unknown code-review judge model {code_review_model!r}")
 
         return cls(
             code_review_model=cast(CopilotModelName, code_review_model),
@@ -177,11 +182,15 @@ class EnvironmentConfig:
     @classmethod
     def from_environment(cls) -> EnvironmentConfig:
         """Load configuration from environment variables."""
+        return cls.from_mapping(os.environ)
+
+    @classmethod
+    def from_mapping(cls, environment: Mapping[str, str]) -> EnvironmentConfig:
         return cls(
-            github_output=os.getenv("GITHUB_OUTPUT"),
-            github_step_summary=os.getenv("GITHUB_STEP_SUMMARY"),
-            github_actions=os.getenv("GITHUB_ACTIONS") == "true",
-            runner_debug=os.getenv("RUNNER_DEBUG") == "1",
+            github_output=environment.get("GITHUB_OUTPUT"),
+            github_step_summary=environment.get("GITHUB_STEP_SUMMARY"),
+            github_actions=environment.get("GITHUB_ACTIONS") == "true",
+            runner_debug=environment.get("RUNNER_DEBUG") == "1",
         )
 
 
@@ -197,15 +206,19 @@ class Config:
 
     @classmethod
     def load(cls) -> Config:
-        root = _get_git_root()
+        root = find_repository_root()
         path_config = PathConfig.from_root(root)
+        shared_config = yaml.safe_load((path_config.agent_share_dir / "config.yaml").read_text(encoding="utf-8"))
+        return cls.from_inputs(root, os.environ, shared_config)
 
+    @classmethod
+    def from_inputs(cls, root: Path, environment: Mapping[str, str], shared_config: Mapping[str, Any]) -> Config:
         return cls(
-            paths=path_config,
-            env=EnvironmentConfig.from_environment(),
+            paths=PathConfig.from_root(root),
+            env=EnvironmentConfig.from_mapping(environment),
             timeout=TimeoutConfig.default(),
             file_patterns=FilePatternConfig.default(),
-            judge=JudgeConfig.from_file(path_config.agent_share_dir / "config.yaml"),
+            judge=JudgeConfig.from_mapping(shared_config),
         )
 
 

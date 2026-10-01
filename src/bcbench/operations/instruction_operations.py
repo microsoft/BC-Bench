@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from pathlib import Path
 from shutil import copytree, rmtree
 
@@ -8,10 +9,17 @@ from bcbench.logger import get_logger
 from bcbench.types import AgentHarness
 
 logger = get_logger(__name__)
-_config = get_config()
 
 
-def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
+def setup_instructions_from_config(
+    agent_config: Mapping,
+    entry: BaseDatasetEntry,
+    repo_path: Path,
+    harness: AgentHarness,
+    *,
+    instructions_root: Path,
+    instruction_source_naming: str,
+) -> bool:
     """
     Setup custom instructions from config if enabled.
 
@@ -28,7 +36,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
     instructions_enabled: bool = instructions_config["enabled"]
 
     if instructions_enabled:
-        source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
+        source_instructions: Path = get_source_instructions_path(entry.customization_profile, instructions_root)
         target_dir: Path = harness.get_target_dir(repo_path)
 
         logger.info(f"Setting up custom instructions for profile: {entry.customization_profile}")
@@ -37,7 +45,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
         copytree(source_instructions, target_dir)
 
         # Rename canonical instruction file to agent-specific name
-        canonical = target_dir / _config.file_patterns.instruction_source_naming
+        canonical = target_dir / instruction_source_naming
         expected = target_dir / harness.instruction_filename
         if canonical.exists() and canonical != expected:
             canonical.rename(expected)
@@ -48,7 +56,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
     return instructions_enabled
 
 
-def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> str | None:
+def setup_custom_agent(agent_config: Mapping, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness, *, instructions_root: Path) -> str | None:
     """
     Setup custom agents in the repository if available.
     """
@@ -56,7 +64,7 @@ def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: P
     custom_agent_enabled: bool = custom_agent_config["enabled"]
 
     if custom_agent_enabled:
-        source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
+        source_instructions: Path = get_source_instructions_path(entry.customization_profile, instructions_root)
         target_dir: Path = harness.get_target_dir(repo_path)
         copytree(source_instructions / "agents", target_dir / "agents", dirs_exist_ok=True)
 
@@ -66,7 +74,7 @@ def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: P
     return None
 
 
-def _get_source_instructions_path(profile: str) -> Path:
+def get_source_instructions_path(profile: str, instructions_root: Path) -> Path:
     """
     Get path to the source instruction folder for an instruction profile.
 
@@ -75,7 +83,7 @@ def _get_source_instructions_path(profile: str) -> Path:
     Raises:
         FileNotFoundError: If instruction file doesn't exist
     """
-    instructions_path = _config.paths.agent_share_dir / _config.file_patterns.instructions_dirname / profile
+    instructions_path = instructions_root / profile
 
     if not instructions_path.exists():
         raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for profile: {profile}")
@@ -83,7 +91,7 @@ def _get_source_instructions_path(profile: str) -> Path:
     return instructions_path
 
 
-def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> None:
+def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path, *, source_dir: Path | None = None, dest_dirname: str | None = None) -> None:
     """
     Copy problem statement folder to the testbed repository root.
 
@@ -93,8 +101,8 @@ def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> 
         entry: Dataset entry containing problem_statement path
         repo_path: Path to testbed repository where folder will be copied
     """
-    source_dir: Path = entry.problem_statement_dir
-    dest_dir: Path = repo_path / _config.file_patterns.problem_statement_dest_dir
+    source_dir = source_dir if source_dir is not None else get_config().paths.problem_statement_dir / entry.instance_id
+    dest_dir: Path = repo_path / (dest_dirname if dest_dirname is not None else get_config().file_patterns.problem_statement_dest_dir)
 
     if dest_dir.exists():
         rmtree(dest_dir)

@@ -10,12 +10,10 @@ import typer
 from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.category import category_app
 from bcbench.commands.collect import collect_app
+from bcbench.commands.composition import load_command_context
 from bcbench.commands.contamination import contamination_app
 from bcbench.commands.result import result_app
-from bcbench.config import get_config
 from bcbench.logger import setup_logger
-
-get_config()
 
 # Ensure UTF-8 encoding for stdout/stderr on Windows GitHub Action runner (default is cp1252)
 if isinstance(sys.stdout, io.TextIOWrapper):
@@ -72,10 +70,13 @@ _add_redteam_app()
 
 @app.callback()
 def logging_callback(
+    ctx: typer.Context,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging")] = False,
 ) -> None:
     """Setup logging for all commands."""
-    setup_logger(verbose)
+    state = load_command_context()
+    ctx.obj = state
+    setup_logger(verbose, github_actions=state.config.env.github_actions, runner_debug=state.config.env.runner_debug)
 
 
 if __name__ == "__main__":

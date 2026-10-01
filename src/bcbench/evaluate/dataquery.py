@@ -6,7 +6,6 @@ from pathlib import Path
 from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import EmptyGoldResultError
-from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import clear_directory
 from bcbench.results.base import ExecutionBasedEvaluationResult
@@ -101,7 +100,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     def run_agent(self, context: EvaluationContext[DataQueryEntry], agent_runner: Callable) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
+        with self.log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext[DataQueryEntry]) -> None:

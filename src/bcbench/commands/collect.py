@@ -7,13 +7,11 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from bcbench.config import get_config
+from bcbench.commands.composition import command_context
 from bcbench.exceptions import CollectionError
 
 if TYPE_CHECKING:
     from bcbench.collection import ScreeningResult
-
-_config = get_config()
 
 collect_app = typer.Typer(help="Collect dataset entries from GitHub")
 
@@ -26,12 +24,13 @@ def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> Scree
 
 @collect_app.command("gh")
 def collect_gh(
+    ctx: typer.Context,
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
     environment_setup_version: Annotated[
         str,
         typer.Option("--environment-setup-version", help="BC environment version to record on the entry (e.g. 28.0)"),
     ],
-    output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "bcbench.jsonl",
+    output: Annotated[Path | None, typer.Option(help="Path to output dataset file")] = None,
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
 ) -> None:
     """
@@ -47,17 +46,19 @@ def collect_gh(
     """
     from bcbench.collection import collect_gh_entry
 
+    output = output or command_context(ctx).config.paths.dataset_dir / "bcbench.jsonl"
     collect_gh_entry(pr_number=pr_number, output=output, repo=repo, environment_setup_version=environment_setup_version)
 
 
 @collect_app.command("codereview")
 def collect_codereview(
+    ctx: typer.Context,
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
     environment_setup_version: Annotated[
         str,
         typer.Option("--environment-setup-version", help="BC environment version to record on the entry (e.g. 27.0)"),
     ],
-    output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "codereview.jsonl",
+    output: Annotated[Path | None, typer.Option(help="Path to output dataset file")] = None,
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
     reviewer: Annotated[
         str | None,
@@ -89,6 +90,7 @@ def collect_codereview(
     """
     from bcbench.collection import collect_codereview_entries
 
+    output = output or command_context(ctx).config.paths.dataset_dir / "codereview.jsonl"
     try:
         entries = collect_codereview_entries(
             pr_number=pr_number,

@@ -1,9 +1,8 @@
 """Base evaluation result class with shared metrics across all evaluation categories."""
 
-from typing import Any, Self, cast
+from typing import Any, Self
 
 from bcbench_core.results import EvaluationResult
-from pydantic import model_validator
 
 from bcbench.logger import get_logger
 from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -89,9 +88,8 @@ class BaseEvaluationResult(EvaluationResult):
         return {}
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> "BaseEvaluationResult":
-        category = EvaluationCategory(payload["category"])
-        return category.result_class.model_validate(payload)
+    def from_json(cls, payload: dict[str, Any], result_class: type["BaseEvaluationResult"]) -> "BaseEvaluationResult":
+        return result_class.model_validate(payload)
 
 
 class ExecutionBasedEvaluationResult(BaseEvaluationResult):
@@ -129,25 +127,11 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
 
     judge_model: str
 
-    @model_validator(mode="before")
-    @classmethod
-    def restore_missing_timeout_judge_model(cls, payload: object) -> object:
-        if not isinstance(payload, dict):
-            return payload
-
-        payload = cast(dict[str, object], payload)
-        if payload.get("timeout") is not True or "judge_model" in payload:
-            return payload
-
-        category = EvaluationCategory(payload["category"])
-        if (judge_model := category.judge_model) is None:
-            return payload
-
-        return {**payload, "judge_model": judge_model}
-
     @classmethod
     def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
-        return {**super()._base_fields(context), "judge_model": context.category.judge_model}
+        if context.judge_model is None:
+            raise ValueError("Judge-scored results require the run's judge model")
+        return {**super()._base_fields(context), "judge_model": context.judge_model}
 
     @property
     def export_metadata(self) -> dict[str, str | int | float | bool | None]:

@@ -1,32 +1,78 @@
 """CLI commands for dataset operations."""
 
 import json
+from pathlib import Path
 from typing import Annotated, cast
 
 import typer
 
+from bcbench.categories.base import CategoryDefinition
 from bcbench.cli_options import EvaluationCategoryOption
+from bcbench.commands.composition import build_category_registry, command_context
 from bcbench.dataset import BaseDatasetEntry, RepoGroundedEntry
-from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import BugFixTestGenBase, NL2ALEntry
 from bcbench.github_actions import write_step_outputs
 from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 
+
 dataset_app = typer.Typer(help="Query and analyze dataset")
 
 
 @dataset_app.command("list")
-def list_entries(
+def list_command(
+    ctx: typer.Context,
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
 ) -> None:
     """List dataset entry IDs."""
-    entry_cls = category.entry_class
-    resolved_path = category.dataset_path
+    state = command_context(ctx)
+    definition = build_category_registry(state)[category]
+    output_path = Path(state.config.env.github_output) if state.config.env.github_output else None
+    list_entries(definition, github_output, modified_only, test_run, output_path=output_path)
+
+
+@dataset_app.command("view")
+def view_command(
+    ctx: typer.Context,
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to view")],
+    category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
+    show_patch: Annotated[bool, typer.Option(help="Show patch in output")] = False,
+) -> None:
+    """View a specific dataset entry with rich formatting."""
+    definition = build_category_registry(command_context(ctx))[category]
+    view_entry(entry_id, definition, show_patch)
+
+
+@dataset_app.command("version")
+def version_command(
+    ctx: typer.Context,
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to resolve the BC version for")],
+    category: EvaluationCategoryOption,
+    github_output: Annotated[str | None, typer.Option(help="Write the version to GITHUB_OUTPUT with this key name")] = None,
+) -> None:
+    """Print an entry's environment_setup_version (the BC sandbox version)."""
+    state = command_context(ctx)
+    definition = build_category_registry(state)[category]
+    output_path = Path(state.config.env.github_output) if state.config.env.github_output else None
+    version(entry_id, definition, github_output, output_path=output_path)
+
+
+def list_entries(
+    definition: CategoryDefinition,
+    github_output: str | None = None,
+    modified_only: bool = False,
+    test_run: bool = False,
+    *,
+    output_path: Path | None = None,
+) -> None:
+    """List dataset entry IDs."""
+    entry_cls = definition.entry_class
+    resolved_path = definition.dataset_path
 
     if modified_only:
         import subprocess
@@ -59,21 +105,20 @@ def list_entries(
         print(f"  - {entry_id}")
 
     if github_output:
-        write_step_outputs({github_output: json.dumps(entry_ids)})
+        write_step_outputs({github_output: json.dumps(entry_ids)}, output_path=output_path)
 
 
-@dataset_app.command("view")
 def view_entry(
-    entry_id: Annotated[str, typer.Argument(help="Entry ID to view")],
-    category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
-    show_patch: Annotated[bool, typer.Option(help="Show patch in output")] = False,
+    entry_id: str,
+    definition: CategoryDefinition,
+    show_patch: bool = False,
 ) -> None:
     """View a specific dataset entry with rich formatting."""
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
 
-    entry: BaseDatasetEntry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry: BaseDatasetEntry = definition.entry_class.load(definition.dataset_path, entry_id=entry_id)[0]
     console = Console()
 
     info_table = Table(show_header=False, box=None)
@@ -112,7 +157,7 @@ def view_entry(
         console.print(Panel(entry.patch or "[dim]Empty[/dim]", border_style="magenta"))
 
     # Display category-specific fields
-    if isinstance(entry, _BugFixTestGenBase):
+    if isinstance(entry, BugFixTestGenBase):
         bugfix_entry = entry
         if show_patch:
             console.print("\n[bold cyan]Test Patch:[/bold cyan]")
@@ -140,8 +185,8 @@ def view_entry(
         else:
             console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
-    elif category.value == "code-review":
-        from bcbench.dataset.codereview import CodeReviewEntry
+    elif definition.name is EvaluationCategory.CODE_REVIEW:
+        from bcbench.categories.code_review.entry import CodeReviewEntry
 
         entry = cast(CodeReviewEntry, entry)
         console.print("\n[bold cyan]Expected Review Comments:[/bold cyan]")
@@ -172,17 +217,18 @@ def view_entry(
             console.print("[dim]No expected assertions[/dim]")
 
 
-@dataset_app.command("version")
 def version(
-    entry_id: Annotated[str, typer.Argument(help="Entry ID to resolve the BC version for")],
-    category: EvaluationCategoryOption,
-    github_output: Annotated[str | None, typer.Option(help="Write the version to GITHUB_OUTPUT with this key name")] = None,
+    entry_id: str,
+    definition: CategoryDefinition,
+    github_output: str | None = None,
+    *,
+    output_path: Path | None = None,
 ) -> None:
     """Print an entry's environment_setup_version (the BC sandbox version)."""
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = definition.entry_class.load(definition.dataset_path, entry_id=entry_id)[0]
     print(entry.environment_setup_version)
     if github_output:
-        write_step_outputs({github_output: entry.environment_setup_version})
+        write_step_outputs({github_output: entry.environment_setup_version}, output_path=output_path)
 
 
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:

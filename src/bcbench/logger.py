@@ -5,8 +5,6 @@ import re
 import sys
 from typing import ClassVar
 
-from bcbench.config import get_config
-
 __all__ = ["get_logger", "setup_logger"]
 
 
@@ -158,7 +156,7 @@ class GitHubActionsSkipFilter(logging.Filter):
 _logging_configured = False
 
 
-def setup_logger(verbose: bool = False) -> None:
+def setup_logger(verbose: bool = False, *, github_actions: bool = False, runner_debug: bool = False) -> None:
     """
     Configure logging for the entire bcbench package.
 
@@ -170,12 +168,10 @@ def setup_logger(verbose: bool = False) -> None:
     if _logging_configured:
         return
 
-    config = get_config()
-
     bcbench_level = logging.DEBUG if verbose else logging.INFO
 
     # Check for GitHub Actions debug mode
-    if config.env.runner_debug:
+    if runner_debug:
         bcbench_level = logging.DEBUG
 
     # Configure root logger (for 3rd party libraries) to WARNING
@@ -188,7 +184,7 @@ def setup_logger(verbose: bool = False) -> None:
 
     # Add GitHub Actions handler FIRST if running in GitHub Actions
     # This ensures records are marked before the console handler sees them
-    if config.env.github_actions:
+    if github_actions:
         github_handler = GitHubActionsHandler()
         github_handler.setLevel(logging.WARNING)  # Only warnings and errors
         github_handler.setFormatter(logging.Formatter("%(message)s"))

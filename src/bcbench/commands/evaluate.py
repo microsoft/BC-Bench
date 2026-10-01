@@ -1,10 +1,9 @@
-import random
 from pathlib import Path
 from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import get_claude_version, get_copilot_version, get_pr_review_version, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.application import AgentSelection, EvaluationRequest, evaluate_entry
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -15,28 +14,24 @@ from bcbench.cli_options import (
     ContainerServerUrl,
     ContainerUsername,
     CopilotModel,
+    CopilotModelName,
     EvaluationCategoryOption,
-    OutputDir,
     PRReviewEnginePath,
-    RepoPath,
     RunId,
     resolve_evaluation_runtime,
 )
-from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry
-from bcbench.evaluate import AgentRunner, EvaluationPipeline
+from bcbench.commands.composition import agent_settings, build_category_registry, command_context, judge_invoker, select_agent
 from bcbench.logger import get_logger
-from bcbench.operations import prepare_run_dir
-from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentHarness, BCalLLMBackend, EvaluationCategory
 
 logger = get_logger(__name__)
-_config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
 
 
 @evaluate_app.command("copilot")
 def evaluate_copilot(
+    ctx: typer.Context,
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName = "",
@@ -47,8 +42,8 @@ def evaluate_copilot(
     mcp_url: ContainerMcpUrl = None,
     company: ContainerCompany = "",
     model: CopilotModel = "gpt-5.6-luna",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    repo_path: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)] = None,
     run_id: RunId = "copilot_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
@@ -59,8 +54,10 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
+    state = command_context(ctx)
+    definition = build_category_registry(state)[category]
     runtime = resolve_evaluation_runtime(
-        category=category,
+        category=definition,
         container_name=container_name,
         username=username,
         container_password=password,
@@ -72,41 +69,25 @@ def evaluate_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = prepare_run_dir(output_dir, run_id)
-
-    logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=runtime.container if runtime else None,
-        model=model,
-        agent_name=AgentHarness.COPILOT,
-        agent_version=get_copilot_version(),
-        category=category,
-    )
-
-    pipeline = category.pipeline
-    pipeline.execute(
-        context,
-        lambda ctx: run_copilot_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            runtime=runtime,
+    context = evaluate_entry(
+        definition,
+        EvaluationRequest(
+            entry_id=entry_id,
+            repo_path=repo_path or state.config.paths.testbed_path,
+            output_dir=output_dir or state.config.paths.evaluation_results_path,
+            container=runtime.container if runtime else None,
         ),
+        select_agent(state, definition, name=AgentHarness.COPILOT, model=model, runtime=runtime, evaluate=True),
+        run_id=run_id,
     )
 
     logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
+    logger.info(f"Results saved to: {context.result_dir}")
 
 
 @evaluate_app.command("claude")
 def evaluate_claude_code(
+    ctx: typer.Context,
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName = "",
@@ -117,8 +98,8 @@ def evaluate_claude_code(
     mcp_url: ContainerMcpUrl = None,
     company: ContainerCompany = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    repo_path: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)] = None,
     run_id: RunId = "claude_code_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
@@ -129,8 +110,10 @@ def evaluate_claude_code(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
+    state = command_context(ctx)
+    definition = build_category_registry(state)[category]
     runtime = resolve_evaluation_runtime(
-        category=category,
+        category=definition,
         container_name=container_name,
         username=username,
         container_password=password,
@@ -142,45 +125,29 @@ def evaluate_claude_code(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = prepare_run_dir(output_dir, run_id)
-
-    logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=runtime.container if runtime else None,
-        model=model,
-        agent_name=AgentHarness.CLAUDE,
-        agent_version=get_claude_version(),
-        category=category,
-    )
-
-    pipeline = category.pipeline
-    pipeline.execute(
-        context,
-        lambda ctx: run_claude_code(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            runtime=runtime,
+    context = evaluate_entry(
+        definition,
+        EvaluationRequest(
+            entry_id=entry_id,
+            repo_path=repo_path or state.config.paths.testbed_path,
+            output_dir=output_dir or state.config.paths.evaluation_results_path,
+            container=runtime.container if runtime else None,
         ),
+        select_agent(state, definition, name=AgentHarness.CLAUDE, model=model, runtime=runtime, evaluate=True),
+        run_id=run_id,
     )
 
     logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
+    logger.info(f"Results saved to: {context.result_dir}")
 
 
 @evaluate_app.command("pr-review")
 def evaluate_pr_review(
+    ctx: typer.Context,
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     model: CopilotModel = "gpt-5.6-luna",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    repo_path: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)] = None,
     run_id: RunId = "pr_review_test_run",
     engine_path: PRReviewEnginePath = None,
 ) -> None:
@@ -195,44 +162,29 @@ def evaluate_pr_review(
 
     To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = prepare_run_dir(output_dir, run_id)
-
-    logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=None,
-        model=model,
-        agent_name=AgentHarness.PR_REVIEW,
-        agent_version=get_pr_review_version(engine_path),
-        category=category,
-    )
-
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_pr_review_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            engine_path=engine_path,
+    state = command_context(ctx)
+    definition = build_category_registry(state)[EvaluationCategory.CODE_REVIEW]
+    context = evaluate_entry(
+        definition,
+        EvaluationRequest(
+            entry_id=entry_id,
+            repo_path=repo_path or state.config.paths.testbed_path,
+            output_dir=output_dir or state.config.paths.evaluation_results_path,
         ),
+        select_agent(state, definition, name=AgentHarness.PR_REVIEW, model=model, runtime=None, evaluate=True, engine_path=engine_path),
+        run_id=run_id,
     )
 
     logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
+    logger.info(f"Results saved to: {context.result_dir}")
 
 
 @evaluate_app.command("bcal")
 def evaluate_bcal(
+    ctx: typer.Context,
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    repo_path: RepoPath = _config.paths.evaluation_results_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    repo_path: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)] = None,
     run_id: RunId = "bcal_test_run",
     backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.EXTERNAL_COMMAND,
     endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
@@ -248,9 +200,8 @@ def evaluate_bcal(
     from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
     from bcbench.dataset import NL2ALEntry
 
-    category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
-    run_dir = prepare_run_dir(output_dir, run_id)
+    state = command_context(ctx)
+    definition = build_category_registry(state)[EvaluationCategory.NL2AL]
     backend_config = BCalBackendConfig(
         backend=backend,
         endpoint=endpoint,
@@ -261,33 +212,30 @@ def evaluate_bcal(
 
     logger.info(f"Running evaluation on entry {entry_id} with BCal")
 
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=None,
-        model=backend_config.model_label(),
-        agent_name=AgentHarness.BCAL,
-        category=category,
-    )
-
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_bcal_agent(
-            entry=cast(NL2ALEntry, ctx.entry),
-            repo_path=ctx.repo_path,
-            backend_config=backend_config,
+    context = evaluate_entry(
+        definition,
+        EvaluationRequest(
+            entry_id=entry_id,
+            repo_path=repo_path or state.config.paths.evaluation_results_path,
+            output_dir=output_dir or state.config.paths.evaluation_results_path,
         ),
+        AgentSelection(
+            name=AgentHarness.BCAL,
+            model=backend_config.model_label(),
+            runner=lambda context: run_bcal_agent(entry=cast(NL2ALEntry, context.entry), repo_path=context.repo_path, backend_config=backend_config),
+        ),
+        run_id=run_id,
     )
 
     logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
+    logger.info(f"Results saved to: {context.result_dir}")
 
 
 @evaluate_app.command("judge-calibration")
 def evaluate_judge_calibration(
-    model: CopilotModel = _config.judge.code_review_model,
-    work_dir: RepoPath = _config.paths.testbed_path,
+    ctx: typer.Context,
+    model: Annotated[CopilotModelName | None, typer.Option(help="Judge model to use")] = None,
+    work_dir: Annotated[Path | None, typer.Option(help="Path to repository")] = None,
     min_accuracy: Annotated[float, typer.Option(help="Fail if judge accuracy falls below this")] = 0.8,
 ) -> None:
     """Run the LLM judge over the hand-labeled calibration set and report its precision/recall.
@@ -295,12 +243,28 @@ def evaluate_judge_calibration(
     Intended for local/ad-hoc checks of the judge; exits non-zero if accuracy drops below
     the threshold.
     """
-    from bcbench.evaluate.codereview_judge_calibration import run_calibration
+    from functools import partial
 
+    from bcbench.categories.code_review.calibration import run_calibration
+    from bcbench.categories.code_review.judge import judge_verdicts
+
+    state = command_context(ctx)
+    judge_model = model or state.config.judge.code_review_model
+    work_dir = work_dir or state.config.paths.testbed_path
     work_dir.mkdir(parents=True, exist_ok=True)
-    report = run_calibration(work_dir, model=model)
+    report = run_calibration(
+        work_dir,
+        dataset=state.config.paths.dataset_dir / "judge_calibration.jsonl",
+        judge=partial(
+            judge_verdicts,
+            invoke=judge_invoker(agent_settings(state)),
+            model=judge_model,
+            timeout=state.config.timeout.agent_execution,
+            result_filename=state.config.judge.result_file,
+        ),
+    )
 
-    logger.info(f"Judge calibration ({model}) over {report.total} labeled pairs:")
+    logger.info(f"Judge calibration ({judge_model}) over {report.total} labeled pairs:")
     logger.info(f"  precision={report.precision:.3f}  recall={report.recall:.3f}  accuracy={report.accuracy:.3f}")
     logger.info(f"  TP={report.true_positives} FP={report.false_positives} TN={report.true_negatives} FN={report.false_negatives}")
     for note in report.misclassified_notes:
@@ -309,90 +273,3 @@ def evaluate_judge_calibration(
     if report.accuracy < min_accuracy:
         logger.error(f"Judge accuracy {report.accuracy:.3f} is below the required {min_accuracy:.3f}")
         raise typer.Exit(code=1)
-
-
-@evaluate_app.command("mock", hidden=True)
-def evaluate_mock(
-    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    category: EvaluationCategoryOption,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
-    run_id: RunId = "mock_run",
-) -> None:
-    """
-    Evaluate mock agent on single dataset entry for testing purposes.
-    """
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = prepare_run_dir(output_dir, run_id)
-
-    logger.info(f"Running evaluation on entry {entry_id} with mock agent")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=Path(),
-        result_dir=run_dir,
-        model="mock-model",
-        agent_name=AgentHarness.MOCK,
-        category=category,
-    )
-
-    pipeline = MockEvaluationPipeline()
-    pipeline.execute(context, lambda ctx: (None, None))
-
-    logger.info("Mock evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
-
-
-class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
-    """Mock pipeline for testing evaluation infrastructure.
-
-    This pipeline simulates agent execution without requiring actual BC container setup.
-    It randomly generates different scenarios to test result handling and serialization.
-    """
-
-    def setup_workspace(self, entry: BaseDatasetEntry, repo_path: Path) -> None:
-        logger.info("Mock pipeline: Skipping workspace setup")
-
-    def setup(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
-        logger.info("Mock pipeline: Skipping setup")
-
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], agent_runner: AgentRunner[BaseDatasetEntry]) -> None:
-        """Generate random agent metrics and experiment configuration."""
-        logger.info("Mock pipeline: Generating random metrics and experiment configuration")
-
-        # Randomize agent metrics to test different scenarios
-        metrics_scenarios: list[AgentMetrics | None] = [
-            AgentMetrics(execution_time=0.1, llm_duration=0.05, prompt_tokens=100, completion_tokens=50, tool_usage={"bash": 5, "view": 3, "edit": 2}, turn_count=7),
-            AgentMetrics(execution_time=0.2, llm_duration=0.1, prompt_tokens=250, tool_usage={"bash": 10, "search": 4}),
-            AgentMetrics(execution_time=0.15, llm_duration=0.07, tool_usage={"view": 8}, turn_count=4),
-            AgentMetrics(),
-            None,
-            AgentMetrics(prompt_tokens=500, completion_tokens=100, tool_usage={"bash": 3, "view": 2, "edit": 1, "search": 5}),
-        ]
-        context.metrics = random.choice(metrics_scenarios)
-
-        # Randomize experiment configuration to test different scenarios
-        experiment_config_scenarios: list[ExperimentConfiguration | None] = [
-            ExperimentConfiguration(mcp_servers=["magic-mcp"], custom_instructions=True, custom_agent="custom-agent-v1"),
-            ExperimentConfiguration(mcp_servers=["magic-mcp"]),
-            ExperimentConfiguration(custom_instructions=True),
-            None,
-            ExperimentConfiguration(),
-            ExperimentConfiguration(custom_agent="custom-agent-v1"),
-            ExperimentConfiguration(plugins=["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99"]),
-        ]
-        context.experiment = random.choice(experiment_config_scenarios)
-
-        logger.info(f"Using agent metrics: {context.metrics}")
-        logger.info(f"Using experiment configuration: {context.experiment}")
-
-    def evaluate(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
-        """Create random evaluation result to test different outcome scenarios."""
-        logger.info("Mock pipeline: Generating random evaluation result")
-
-        definition = context.category.definition
-        scenario = random.choice(definition.mock_scenarios)
-        logger.info(f"Mock pipeline: Selected scenario: {scenario}")
-
-        result = definition.create_mock_result(context, scenario)
-        self.save_result(context, result)
-        logger.info(f"Successfully created and saved mock {scenario} result")

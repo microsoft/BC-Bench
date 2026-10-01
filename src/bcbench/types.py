@@ -11,12 +11,7 @@ from bcbench_core.types import AgentMetrics, AgentMetricsContract
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
-    from bcbench.categories.base import CategoryDefinition
     from bcbench.dataset import BaseDatasetEntry
-    from bcbench.evaluate.base import EvaluationPipeline
-    from bcbench.results.base import BaseEvaluationResult
-    from bcbench.results.leaderboard import LeaderboardAggregate
-    from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
     "AgentHarness",
@@ -167,7 +162,6 @@ class AgentHarness(StrEnum):
     COPILOT = "GitHub Copilot"
     CLAUDE = "Claude Code"
     BCAL = "BCal"
-    MOCK = "mock-agent"
     PR_REVIEW = "BC PR Review"
 
     @property
@@ -187,7 +181,7 @@ class AgentHarness(StrEnum):
                     turn_count=None,
                     tool_usage=None,
                 )
-            case AgentHarness.CLAUDE | AgentHarness.MOCK:
+            case AgentHarness.CLAUDE:
                 metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
@@ -243,73 +237,6 @@ class EvaluationCategory(StrEnum):
     EXT_REQUEST_IMPLEMENT = "extensibility-request-implement"
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
-
-    @property
-    def definition(self) -> CategoryDefinition:
-        from bcbench.categories import categories
-
-        if self.value not in categories:
-            raise ValueError(f"Evaluation category is not registered: {self.value}")
-        return categories[self.value]
-
-    @property
-    def dataset_path(self) -> Path:
-        from bcbench.config import get_config
-
-        return get_config().paths.dataset_dir / self.definition.dataset_filename
-
-    @property
-    def entry_class(self) -> type[BaseDatasetEntry]:
-        return self.definition.entry_class
-
-    @property
-    def result_class(self) -> type[BaseEvaluationResult]:
-        return self.definition.result_class
-
-    @property
-    def summary_class(self) -> type[EvaluationResultSummary]:
-        return self.definition.summary_class
-
-    @property
-    def aggregate_class(self) -> type[LeaderboardAggregate]:
-        return self.definition.aggregate_class
-
-    @property
-    def pipeline(self) -> EvaluationPipeline:
-        return self.definition.pipeline_factory()
-
-    @property
-    def judge_model(self) -> str | None:
-        from bcbench.config import get_config
-
-        return self.definition.judge_model(get_config().judge)
-
-    @property
-    def evaluators(self) -> list[str]:
-        return list(self.definition.evaluators)
-
-    @property
-    def core_score(self) -> str:
-        return self.definition.core_score
-
-    @property
-    def requires_container(self) -> bool:
-        return self.definition.requires_container
-
-    @property
-    def pass_on_bc_container_credentials(self) -> bool:
-        return self.definition.pass_on_bc_container_credentials
-
-    @property
-    def requires_repo(self) -> bool:
-        """Whether evaluating this category works on a cloned dataset repository."""
-        from bcbench.dataset import RepoGroundedEntry
-
-        return issubclass(self.entry_class, RepoGroundedEntry)
-
-    @property
-    def runner(self) -> str:
-        return self.definition.runner
 
 
 @dataclass(frozen=True)
@@ -382,6 +309,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     container: ContainerConfig | None = None
 
     agent_version: str | None = None
+    judge_model: str | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

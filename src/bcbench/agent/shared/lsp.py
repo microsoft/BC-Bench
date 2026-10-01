@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from bcbench.agent.settings import AgentSettings
 from bcbench.agent.shared.altool_paths import (
     build_assembly_probing_paths,
     compiler_symbol_folder_for_container,
@@ -22,18 +23,20 @@ def _resolve_symbol_paths(
     category: EvaluationCategory,
     container: ContainerConfig,
     country: str = "w1",
+    *,
+    settings: AgentSettings,
 ) -> tuple[list[str], list[str]]:
     """Resolve (package_cache_paths, assembly_probing_paths) for the LSP server.
 
     Prefers the container's compiler folder when available — its single flat layout is the exact same arg shape AL-MCP uses.
     Falls back to the raw BC artifact cache when compiler-folder symbols are unavailable. Raises a clear error pointing at the symbol-download script when neither is present.
     """
-    compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
+    compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name, compiler_root=settings.compiler_root)
     if symbols_folder.is_dir():
         logger.info(f"Using container compiler-folder symbols: {symbols_folder}")
-        return [str(symbols_folder)], build_assembly_probing_paths(compiler_folder)
+        return [str(symbols_folder)], build_assembly_probing_paths(compiler_folder, dotnet_shared=settings.dotnet_shared)
 
-    artifact_paths = resolve_artifact_lsp_paths(entry.environment_setup_version, country)
+    artifact_paths = resolve_artifact_lsp_paths(entry.environment_setup_version, country, cache_root=settings.artifact_cache_root, dotnet_shared=settings.dotnet_shared)
     if artifact_paths is not None:
         package_cache_paths, assembly_probing_paths = artifact_paths
         logger.info(f"Using BC artifact cache symbols for v{entry.environment_setup_version}: {package_cache_paths}")
@@ -80,6 +83,8 @@ def build_al_lsp_plugin(
     repo_path: Path,
     harness: AgentHarness,
     runtime: AgentRuntimeConfig | None,
+    *,
+    settings: AgentSettings,
 ) -> Path | None:
     """Build a per-task AL-LSP plugin folder, return its path or None.
 
@@ -89,15 +94,15 @@ def build_al_lsp_plugin(
     ``.lsp.json`` differs (see :func:`_lsp_config_for`).
     """
     if runtime is None or not runtime.al_lsp:
-        remove_agent_plugin(_AL_LSP_PLUGIN_FOLDER)
+        remove_agent_plugin(_AL_LSP_PLUGIN_FOLDER, settings=settings)
         return None
 
     container: ContainerConfig = runtime.container
     project_paths = [str(repo_path / p) for p in entry.project_paths]
-    package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container)
+    package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container, settings=settings)
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
     lsp_config = _lsp_config_for(harness, args)
 
-    plugin_dir = write_agent_plugin(_AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
+    plugin_dir = write_agent_plugin(_AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config}, settings=settings)
     logger.debug(f"AL LSP configuration for {harness.value}: {lsp_config}")
     return plugin_dir

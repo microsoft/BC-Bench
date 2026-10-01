@@ -1,4 +1,4 @@
-import os
+from collections.abc import Mapping
 
 from bcbench_core.process import scrub_environment
 
@@ -14,9 +14,9 @@ _WITHHELD_ENV_PREFIXES = ("BC_SERVER_", "BC_MCP_")
 _WITHHELD_ENV_VARS = frozenset({"BC_COMPANY", "BC_CONTAINER_NAME"})
 
 
-def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:
+def agent_subprocess_env(environment: Mapping[str, str], overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:
     return scrub_environment(
-        os.environ,
+        environment,
         excluded_prefixes=() if pass_bc_credentials else _WITHHELD_ENV_PREFIXES,
         excluded_names=frozenset() if pass_bc_credentials else _WITHHELD_ENV_VARS,
         overrides=overrides,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field
@@ -20,7 +21,7 @@ class ExtRequestAdvisorEntry(RepoGroundedEntry):
     comments: str = ""
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
 
-    def get_task(self) -> str:
+    def get_task(self, problem_statement_dir: Path | None = None) -> str:
         sections = [f"# {self.title}", "", self.description.rstrip()]
         if self.comments.strip():
             sections += ["", "## Additional requester context", "", self.comments.rstrip()]
@@ -83,7 +84,7 @@ class ExtRequestTriageEntry(RepoGroundedEntry):
     # LLM-judge checklist: expected labels_to_set, issue_state and advisory-comment substance.
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
 
-    def get_task(self) -> str:
+    def get_task(self, problem_statement_dir: Path | None = None) -> str:
         sections = [f"# {self.title}", "", self.description.rstrip()]
         if self.current_labels:
             sections += ["", f"Current labels: {', '.join(self.current_labels)}"]

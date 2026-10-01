@@ -8,12 +8,9 @@ from typing import Annotated, Literal, Self
 from bcbench_core.dataset import DatasetEntry
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from bcbench.config import get_config
 from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
 
-_config = get_config()
-
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "BugFixTestGenBase", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -38,13 +35,13 @@ class BaseDatasetEntry(DatasetEntry):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
+    instance_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$")
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
     project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = Field(default_factory=list)
 
     @abstractmethod
-    def get_task(self) -> str:
+    def get_task(self, problem_statement_dir: Path | None = None) -> str:
         pass
 
     @abstractmethod
@@ -87,16 +84,14 @@ class RepoGroundedEntry(BaseDatasetEntry):
     def customization_profile(self) -> str:
         return self.repo.replace("/", "-")
 
-    @property
-    def problem_statement_dir(self) -> Path:
-        return _config.paths.problem_statement_dir / self.instance_id
-
-    def get_task(self) -> str:
-        readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
+    def get_task(self, problem_statement_dir: Path | None = None) -> str:
+        if problem_statement_dir is None:
+            raise ValueError("Repository tasks require an explicit problem statement directory")
+        readme_path = problem_statement_dir / self.instance_id / "README.md"
         return readme_path.read_text(encoding="utf-8")
 
 
-class _BugFixTestGenBase(RepoGroundedEntry):
+class BugFixTestGenBase(RepoGroundedEntry):
     """Shared schema for bug-fix and test-generation entries (same JSONL, different semantics)."""
 
     fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
@@ -121,14 +116,17 @@ class _BugFixTestGenBase(RepoGroundedEntry):
         return self
 
 
-class BugFixEntry(_BugFixTestGenBase):
+_BugFixTestGenBase = BugFixTestGenBase
+
+
+class BugFixEntry(BugFixTestGenBase):
     """Dataset entry for the bug-fix category."""
 
     def get_expected_output(self) -> str:
         return self.patch
 
 
-class TestGenEntry(_BugFixTestGenBase):
+class TestGenEntry(BugFixTestGenBase):
     """Dataset entry for the test-generation category."""
 
     def get_expected_output(self) -> str:
@@ -147,7 +145,7 @@ class NL2ALEntry(BaseDatasetEntry):
     def customization_profile(self) -> str:
         return "nl2al"
 
-    def get_task(self) -> str:
+    def get_task(self, problem_statement_dir: Path | None = None) -> str:
         return self.nl_prompt
 
     def get_expected_output(self) -> Checklist:
@@ -173,7 +171,7 @@ class DataQueryEntry(BaseDatasetEntry):
     def customization_profile(self) -> str:
         return "dataquery"
 
-    def get_task(self) -> str:
+    def get_task(self, problem_statement_dir: Path | None = None) -> str:
         return self.nl_prompt
 
     def get_expected_output(self) -> str:

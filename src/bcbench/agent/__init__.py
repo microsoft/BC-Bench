@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
     from bcbench.agent.claude import get_claude_version, run_claude_code
     from bcbench.agent.copilot import get_copilot_version, run_copilot_agent
+    from bcbench.agent.settings import AgentSettings, PRReviewSettings
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 
@@ -30,10 +31,10 @@ def __getattr__(name: str) -> object:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def get_pr_review_version(engine_path: Path | None) -> str:
+def get_pr_review_version(engine_path: Path | None, *, settings: AgentSettings) -> str:
     from bcbench.agent.pr_review import get_pr_review_version as get_version
 
-    return get_version(engine_path)
+    return get_version(engine_path, settings=settings)
 
 
 def run_pr_review_agent(
@@ -42,8 +43,10 @@ def run_pr_review_agent(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
-    engine_path: Path | None = None,
-    min_severity: str | None = None,
+    *,
+    settings: AgentSettings,
+    engine: PRReviewSettings,
+    pass_bc_credentials: bool,
 ) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
     from bcbench.agent.pr_review import run_pr_review_agent as run_agent
 
@@ -53,8 +56,9 @@ def run_pr_review_agent(
         category=category,
         repo_path=repo_path,
         output_dir=output_dir,
-        engine_path=engine_path,
-        min_severity=min_severity,
+        settings=settings,
+        engine=engine,
+        pass_bc_credentials=pass_bc_credentials,
     )
 
 

@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import typer
 from azure.ai.evaluation.red_team import AttackStrategy, RiskCategory, SupportedLanguages
@@ -13,18 +13,16 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from bcbench.config import get_config
+from bcbench.commands.composition import build_category_registry, command_context
+from bcbench.dataset.dataset_entry import NL2ALEntry
 from bcbench.logger import get_logger
-from bcbench.types import BCalLLMBackend
+from bcbench.types import BCalLLMBackend, EvaluationCategory
 
 # Loose JSON alias (aliasing keeps `Any` out of function signatures, satisfying ANN401).
 type Json = dict[str, Any]
 
 logger = get_logger(__name__)
-_config = get_config()
 _console = Console()
-
-redteam_app = typer.Typer(help="Red team BC-Bench agents using azure-ai-evaluation[redteam]")
 
 
 class RedTeamTarget(StrEnum):
@@ -32,8 +30,12 @@ class RedTeamTarget(StrEnum):
     BCAL = "bcal"
 
 
+redteam_app = typer.Typer(help="Red team BC-Bench agents using azure-ai-evaluation[redteam]")
+
+
 @redteam_app.command("scan")
 def scan(
+    ctx: typer.Context,
     subscription_id: Annotated[str, typer.Option(envvar="AZURE_SUBSCRIPTION_ID", help="Azure subscription ID of the Foundry Hub project for AI Red Teaming Agent.")],
     resource_group: Annotated[str, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Resource group of the Foundry Hub project for AI Red Teaming Agent.")],
     project_name: Annotated[str, typer.Option(envvar="AZURE_PROJECT_NAME", help="Name of the Foundry Hub project for AI Red Teaming Agent.")],
@@ -54,32 +56,26 @@ def scan(
     deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend).")] = None,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (external-command backend).")] = None,
-    output: Annotated[Path, typer.Option(help="Where the SDK writes the scan output. It creates a *directory* at this path holding evaluation_results.json.")] = _config.paths.redteam_scorecard,
+    output: Annotated[Path | None, typer.Option(help="Where the SDK writes the scan output. It creates a *directory* at this path holding evaluation_results.json.")] = None,
     scan_name: Annotated[str | None, typer.Option(help="Scan name shown in the shared Foundry project. Defaults to bcbench-redteam-<timestamp>.")] = None,
 ) -> None:
-    """
-    Run an AI red teaming Agent scan against a BC-Bench agent.
-
-    Requires the optional redteam dependency group (`uv sync --group redteam`) and a Foundry Hub project via the AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME env vars (plus Azure credentials, e.g. `az login`).
-    The bcal symbol cache is auto-populated from the BC artifacts cache (run scripts/Download-BCSymbols.ps1 first).
-
-    Examples:
-        uv run bcbench redteam scan --language en --risk-category code_vulnerability
-        uv run bcbench redteam scan --language es --seeds dataset/redteam/attack_objectives.json --attack-strategy base64
-    """
+    """Run an AI red teaming Agent scan against a BC-Bench agent."""
     from bcbench.agent.bcal import BCalBackendConfig
     from bcbench.redteam import build_bcal_target, run_scan
 
-    # Upstream treats seeds and risk categories as alternative objective sources, so exactly one is required.
     if bool(seeds) == bool(risk_category):
         raise typer.BadParameter("Pass exactly one of --seeds or --risk-category (they are alternative attack-objective sources).")
 
+    state = command_context(ctx)
+    config = state.config
+    output = output if output is not None else config.paths.redteam_scorecard
     scan_name = scan_name or f"bcbench-redteam-{datetime.now(UTC):%Y%m%d-%H%M%S}"
     output.parent.mkdir(parents=True, exist_ok=True)
-
-    # Only support NL2AL for now, we will think about extensibility later.
+    definition = build_category_registry(state)[EvaluationCategory.NL2AL]
+    entry = cast(NL2ALEntry, definition.entry_class.load(definition.dataset_path)[0])
     scan_target = build_bcal_target(
-        package_cache_path=_config.paths.evaluation_results_path / "redteam" / _config.file_patterns.alpackages_dirname,
+        entry=entry,
+        package_cache_path=config.paths.evaluation_results_path / "redteam" / config.file_patterns.alpackages_dirname,
         export_base=output.parent / "bcal-exports",
         backend_config=BCalBackendConfig(
             backend=backend,
@@ -111,14 +107,11 @@ def scan(
 
 @redteam_app.command("report")
 def report(
-    path: Annotated[Path, typer.Argument(help="Scorecard to render: the scan --output, its directory, or an evaluation_results.json file.")] = _config.paths.redteam_scorecard,
+    ctx: typer.Context,
+    path: Annotated[Path | None, typer.Argument(help="Scorecard to render: the scan --output, its directory, or an evaluation_results.json file.")] = None,
 ) -> None:
-    """
-    Render a saved red team scorecard as tables in the terminal.
-
-    Example:
-        uv run bcbench redteam report evaluation_results/redteam/scorecard.json
-    """
+    """Render a saved red team scorecard as tables in the terminal."""
+    path = path if path is not None else command_context(ctx).config.paths.redteam_scorecard
     _render_scorecard(_load_scorecard(path))
 
 

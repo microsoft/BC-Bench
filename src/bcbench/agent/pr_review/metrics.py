@@ -76,8 +76,8 @@ def _load_run_metrics(path: Path) -> _RunMetrics:
         raise AgentError(f"Engine run metrics artifact {path} does not satisfy schema version 1: {exc}") from exc
 
 
-def build_pr_review_metrics(output_dir: Path, execution_time: float) -> PRReviewMetrics:
-    run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
+def build_pr_review_metrics(output_dir: Path, execution_time: float, *, filename: str = RUN_METRICS_FILE_NAME) -> PRReviewMetrics:
+    run = _load_run_metrics(output_dir / filename)
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
     usage_values_available = run.malformed_records == 0

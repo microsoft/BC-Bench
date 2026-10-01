@@ -1,19 +1,22 @@
+from collections.abc import Mapping
 from pathlib import Path
 from shutil import copytree, rmtree
 
 from bcbench.dataset.dataset_entry import BaseDatasetEntry
 from bcbench.logger import get_logger
-from bcbench.operations.instruction_operations import _get_source_instructions_path
+from bcbench.operations.instruction_operations import get_source_instructions_path
 from bcbench.types import AgentHarness
 
 logger = get_logger(__name__)
 
 
 def setup_agent_skills(
-    agent_config: dict,
+    agent_config: Mapping,
     entry: BaseDatasetEntry,
     repo_path: Path,
     harness: AgentHarness,
+    *,
+    instructions_root: Path,
 ) -> bool:
     """Copy skills into the repository when enabled via ``config.yaml``'s ``skills.enabled``.
 
@@ -23,7 +26,7 @@ def setup_agent_skills(
     skills_enabled: bool = agent_config["skills"]["enabled"]
 
     if skills_enabled:
-        source_skills: Path = _get_source_instructions_path(entry.customization_profile)
+        source_skills: Path = get_source_instructions_path(entry.customization_profile, instructions_root)
         source_skills_dir = source_skills / "skills"
 
         if not source_skills_dir.exists():

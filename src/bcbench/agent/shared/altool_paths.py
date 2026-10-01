@@ -8,7 +8,6 @@ from pathlib import Path
 from packaging.version import InvalidVersion, Version
 
 from bcbench.logger import get_logger
-from bcbench.operations import resolve_artifact_version_root
 
 logger = get_logger(__name__)
 
@@ -18,8 +17,7 @@ _EXCLUDED_DOTNET_MAJORS = {9, 10}
 _DOTNET_SHARED = Path(r"C:\Program Files\dotnet\shared")
 
 
-def _detect_dotnet_runtime_version() -> Version | None:
-    dotnet_shared = _DOTNET_SHARED
+def _detect_dotnet_runtime_version(dotnet_shared: Path = _DOTNET_SHARED) -> Version | None:
     netcore_folder = dotnet_shared / "Microsoft.NETCore.App"
     aspnetcore_folder = dotnet_shared / "Microsoft.AspNetCore.App"
 
@@ -40,21 +38,21 @@ def _detect_dotnet_runtime_version() -> Version | None:
     return max(versions) if versions else None
 
 
-def _dotnet_runtime_probing_paths() -> list[str]:
+def _dotnet_runtime_probing_paths(dotnet_shared: Path = _DOTNET_SHARED) -> list[str]:
     """Probing paths for the latest compatible system .NET runtime (empty if none found)."""
-    dotnet_version = _detect_dotnet_runtime_version()
+    dotnet_version = _detect_dotnet_runtime_version(dotnet_shared)
     if not dotnet_version:
         logger.warning("No compatible .NET runtime found. DotNet interop types may not resolve.")
         return []
 
     logger.info(f"Using system .NET runtime {dotnet_version} for assembly probing")
     return [
-        str(_DOTNET_SHARED / "Microsoft.NETCore.App" / str(dotnet_version)),
-        str(_DOTNET_SHARED / "Microsoft.AspNetCore.App" / str(dotnet_version)),
+        str(dotnet_shared / "Microsoft.NETCore.App" / str(dotnet_version)),
+        str(dotnet_shared / "Microsoft.AspNetCore.App" / str(dotnet_version)),
     ]
 
 
-def build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
+def build_assembly_probing_paths(compiler_folder: Path, *, dotnet_shared: Path = _DOTNET_SHARED) -> list[str]:
     """Build list of assembly probing paths for the AL compiler.
 
     The AL compiler recursively searches subdirectories (AssemblyLocatorBase.cs uses
@@ -77,7 +75,7 @@ def build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
     if shared_folder.is_dir():
         paths.append(str(shared_folder))
     else:
-        paths.extend(_dotnet_runtime_probing_paths())
+        paths.extend(_dotnet_runtime_probing_paths(dotnet_shared))
 
     # dlls\ after dotnet — recursively covers Service, OpenXML, Mock Assemblies, etc.
     if dlls_path.is_dir():
@@ -86,13 +84,13 @@ def build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
     return paths
 
 
-def compiler_symbol_folder_for_container(container_name: str) -> tuple[Path, Path]:
+def compiler_symbol_folder_for_container(container_name: str, *, compiler_root: Path = Path(r"C:\ProgramData\BcContainerHelper\compiler")) -> tuple[Path, Path]:
     """Return the BCContainerHelper compiler and symbol folder for a given container."""
-    folder = Path(r"C:\ProgramData\BcContainerHelper\compiler") / container_name
+    folder = compiler_root / container_name
     return folder, folder / "symbols"
 
 
-def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w1") -> tuple[list[str], list[str]] | None:
+def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w1", *, cache_root: Path, dotnet_shared: Path = _DOTNET_SHARED) -> tuple[list[str], list[str]] | None:
     """Resolve (package_cache_paths, assembly_probing_paths) from the BC artifact cache.
 
     BCContainerHelper's `Download-Artifacts` (driven by `scripts/Download-BCSymbols.ps1`
@@ -106,9 +104,10 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     Returns None when the artifact has not been downloaded yet — caller should fall
     back or surface an actionable error.
     """
-    version_root = resolve_artifact_version_root(environment_setup_version)
-    if version_root is None:
+    version_roots = sorted((cache_root / "sandbox").glob(f"{environment_setup_version}.*"))
+    if not version_roots:
         return None
+    version_root = version_roots[-1]
 
     # Country-specific app symbols (e.g. w1 BaseApp), then platform symbols (System app etc.)
     package_cache_paths = [str(p) for p in (version_root / country / "Extensions", version_root / "platform" / "Applications") if p.is_dir()]
@@ -121,6 +120,6 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     assembly_probing_paths = [str(platform_dir)] if platform_dir.is_dir() else []
 
     # System .NET runtime — same fallback as the container-derived path so DotNet interop types resolve even without BC-shipped reference assemblies.
-    assembly_probing_paths.extend(_dotnet_runtime_probing_paths())
+    assembly_probing_paths.extend(_dotnet_runtime_probing_paths(dotnet_shared))
 
     return package_cache_paths, assembly_probing_paths

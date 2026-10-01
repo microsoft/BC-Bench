@@ -1,20 +1,16 @@
-import shutil
 import subprocess
 from pathlib import Path
 
-import yaml
-
 from bcbench.agent.claude.metrics import parse_stream_output
+from bcbench.agent.settings import AgentSettings
 from bcbench.agent.shared import (
     agent_subprocess_env,
     build_al_lsp_plugin,
     build_mcp_config,
-    build_prompt,
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
 from bcbench.agent.shared.version import get_cli_version
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
@@ -22,11 +18,10 @@ from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_ins
 from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
-_config = get_config()
 
 
-def get_claude_version() -> str:
-    return get_cli_version(shutil.which("claude"), "Claude Code")
+def get_claude_version(settings: AgentSettings) -> str:
+    return get_cli_version(settings.claude_executable, "Claude Code", environment=settings.environment)
 
 
 def run_claude_code(
@@ -36,22 +31,24 @@ def run_claude_code(
     repo_path: Path,
     output_dir: Path,
     runtime: AgentRuntimeConfig | None = None,
+    *,
+    settings: AgentSettings,
+    prompt: str,
+    pass_bc_credentials: bool,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run Claude Code on a single dataset entry.
 
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used
     """
-    config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
-    claude_config = yaml.safe_load(config_file.read_text())
+    claude_config = settings.shared_config
 
-    claude_cmd = shutil.which("claude")
+    claude_cmd = settings.claude_executable
     if not claude_cmd:
         raise AgentError("Claude Code not found in PATH. Please ensure it is installed and available.")
 
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=bool(runtime and runtime.al_mcp))
     bc_gateway = start_bc_mcp_gateway(runtime)
     mcp_config_json, mcp_server_names = build_mcp_config(
         claude_config,
@@ -59,6 +56,7 @@ def run_claude_code(
         repo_path,
         runtime=runtime,
         bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
+        settings=settings,
     )
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(
         entry,
@@ -66,11 +64,14 @@ def run_claude_code(
         repo_path,
         AgentHarness.CLAUDE,
         runtime=runtime,
+        settings=settings,
     )
-    instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
+    instructions_enabled: bool = setup_instructions_from_config(
+        claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, instructions_root=settings.instructions_root, instruction_source_naming=settings.instruction_source_naming
+    )
+    skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, instructions_root=settings.instructions_root)
+    custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, instructions_root=settings.instructions_root)
+    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, settings=settings, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
@@ -123,6 +124,7 @@ def run_claude_code(
             cmd_args,
             cwd=str(repo_path),
             env=agent_subprocess_env(
+                settings.environment,
                 {
                     "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
                     # BC MCP's first tools/list compiles the tool catalog and can take ~45s on a cold
@@ -132,9 +134,9 @@ def run_claude_code(
                     "MCP_TIMEOUT": "180000",
                     "MCP_TOOL_TIMEOUT": "180000",
                 },
-                pass_bc_credentials=category.pass_on_bc_container_credentials,
+                pass_bc_credentials=pass_bc_credentials,
             ),
-            timeout=_config.timeout.agent_execution,
+            timeout=settings.timeout,
             check=True,
             capture_output=True,
         )
@@ -144,8 +146,8 @@ def run_claude_code(
 
         metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
     except subprocess.TimeoutExpired:
-        logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
+        logger.exception(f"Claude Code timed out after {settings.timeout} seconds")
+        metrics = AgentMetrics(execution_time=settings.timeout)
         raise AgentTimeoutError("Claude Code timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"Claude Code execution failed with error {e.stderr}")

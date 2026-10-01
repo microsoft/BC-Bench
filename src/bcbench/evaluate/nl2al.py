@@ -5,7 +5,6 @@ from pathlib import Path
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import EmptyDiffError
-from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import copy_symbol_apps, remove_tree, stage_and_get_diff
 from bcbench.results.base import JudgeBasedEvaluationResult
@@ -64,7 +63,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
     def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: AgentRunner[NL2ALEntry]) -> None:
         # Single attempt — retries are disabled. An empty diff (the agent asked for clarification
         # instead of editing) is scored as a failure in evaluate(), not re-run.
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
+        with self.log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:

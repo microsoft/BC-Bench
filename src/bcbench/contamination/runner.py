@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import tempfile
+import shutil
+import uuid
 from pathlib import Path
 
 from bcbench.agent.copilot.cli import invoke_copilot
+from bcbench.agent.settings import AgentSettings
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.config import get_config
+from bcbench.config import Config
 from bcbench.contamination.filepath_identification import (
     FilePathIdentificationResult,
     build_identification_prompt,
@@ -19,24 +21,27 @@ from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
-_config = get_config()
-
-_RESULT_SUFFIX = f".filepath-identification{_config.file_patterns.result_pattern}"
 
 
-def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path) -> FilePathIdentificationResult:
+def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path, config: Config, settings: AgentSettings) -> FilePathIdentificationResult:
     task = entry.get_task()
     prompt: str = build_identification_prompt(task, repo=entry.repo)
 
     logger.info("Running context-free filepath identification on %s (model=%s)", entry.instance_id, model)
-    with tempfile.TemporaryDirectory(prefix="bcbench-fpid-") as tmp:
+    workspace = result_dir / f".filepath-identification-{uuid.uuid4().hex}"
+    workspace.mkdir(parents=True)
+    try:
         metrics, raw_output = invoke_copilot(
             prompt=prompt,
             model=model,
-            work_dir=Path(tmp),
-            timeout=_config.timeout.filepath_identification,
+            work_dir=workspace,
+            timeout=config.timeout.filepath_identification,
+            executable=settings.copilot_executable,
+            env=settings.environment,
             allow_all_tools=False,
         )
+    finally:
+        shutil.rmtree(workspace)
 
     gold_files: list[str] = extract_file_paths_from_patch(entry.patch)
     try:
@@ -55,15 +60,15 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
         metrics=metrics,
         raw_output=raw_output,
     )
-    save_identification_result(result, result_dir)
+    save_identification_result(result, result_dir, config.file_patterns.result_pattern)
     return result
 
 
-def save_identification_result(result: FilePathIdentificationResult, result_dir: Path) -> Path:
-    path = result_dir / f"{result.instance_id}{_RESULT_SUFFIX}"
+def save_identification_result(result: FilePathIdentificationResult, result_dir: Path, result_suffix: str) -> Path:
+    path = result_dir / f"{result.instance_id}.filepath-identification{result_suffix}"
     path.write_text(result.model_dump_json() + "\n", encoding="utf-8")
     return path
 
 
-def load_identification_results(results_dir: Path) -> list[FilePathIdentificationResult]:
-    return [FilePathIdentificationResult.model_validate_json(path.read_text(encoding="utf-8")) for path in sorted(results_dir.rglob(f"*{_RESULT_SUFFIX}"))]
+def load_identification_results(results_dir: Path, result_suffix: str) -> list[FilePathIdentificationResult]:
+    return [FilePathIdentificationResult.model_validate_json(path.read_text(encoding="utf-8")) for path in sorted(results_dir.rglob(f"*.filepath-identification{result_suffix}"))]

@@ -1,10 +1,12 @@
 import json
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from jinja2.sandbox import SandboxedEnvironment
 
+from bcbench.agent.settings import AgentSettings, mutable_config
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, compiler_symbol_folder_for_container
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
@@ -19,7 +21,7 @@ _jinja = SandboxedEnvironment(autoescape=False)
 _BC_MCP_SERVER_NAME = "bcmcp"
 
 
-def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any], *, environment: Mapping[str, str]) -> tuple[str, dict[str, Any]]:
     server_type: str = server["type"]
     server_name: str = server["name"]
 
@@ -36,7 +38,7 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
         case "stdio":
             args: list[str] = server["args"]
             rendered_args = [_jinja.from_string(arg).render(**template_context) for arg in args]
-            command: str = shutil.which(server["command"]) or server["command"]
+            command: str = shutil.which(server["command"], path=environment.get("PATH", "")) or server["command"]
             stdio_entry: dict[str, Any] = {
                 "type": server_type,
                 "command": command,
@@ -67,13 +69,15 @@ def _configure_bc_mcp_server(server: dict[str, Any], gateway_base_url: str | Non
 
 
 def build_mcp_config(
-    config: dict[str, Any],
+    config: Mapping[str, Any],
     entry: BaseDatasetEntry,
     repo_path: Path,
     runtime: AgentRuntimeConfig | None = None,
     bc_mcp_gateway_url: str | None = None,
+    *,
+    settings: AgentSettings,
 ) -> tuple[str | None, list[str] | None]:
-    mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
+    mcp_servers = cast(list[dict[str, Any]], mutable_config(config.get("mcp", {}).get("servers", ())))
 
     if runtime is None or not runtime.al_mcp:
         mcp_servers = list(filter(lambda s: s.get("name") != "altool", mcp_servers))
@@ -91,7 +95,7 @@ def build_mcp_config(
 
     if runtime is not None and runtime.al_mcp:
         container: ContainerConfig = runtime.container
-        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
+        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name, compiler_root=settings.compiler_root)
         template_context["package_cache_path"] = str(symbols_folder)
 
         al_server = next(s for s in mcp_servers if s["name"] == "altool")
@@ -102,7 +106,7 @@ def build_mcp_config(
         al_server["args"][insert_idx:insert_idx] = project_paths
 
         # Each path must be a separate arg (System.CommandLine expects space-separated values)
-        assembly_probing_paths = build_assembly_probing_paths(compiler_folder)
+        assembly_probing_paths = build_assembly_probing_paths(compiler_folder, dotnet_shared=settings.dotnet_shared)
         if assembly_probing_paths:
             al_server["args"].extend(["--assemblyprobingpaths", *assembly_probing_paths])
             logger.info(f"Assembly probing paths: {assembly_probing_paths}")
@@ -124,7 +128,7 @@ def build_mcp_config(
             logger.info(f"Forwarding env vars to altool MCP: {list(forwarded.keys())}")
 
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
-    mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
+    mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context, environment=settings.environment), mcp_servers))}
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
     # The BC container password (if forwarded to altool) is already masked in CI logs via ::add-mask::,

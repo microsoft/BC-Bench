@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 
 import typer
 
+from bcbench.categories.base import CategoryDefinition
 from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationCategory
 
 # Type aliases for cleaner command signatures
@@ -83,7 +84,7 @@ def resolve_agent_runtime(
 
 def resolve_evaluation_runtime(
     *,
-    category: EvaluationCategory,
+    category: CategoryDefinition,
     container_name: str,
     username: str,
     container_password: str,
@@ -108,8 +109,8 @@ def resolve_evaluation_runtime(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    if category.requires_container and runtime is None:
-        raise typer.BadParameter(f"The {category.value} category requires a container", param_hint="--container-name")
+    if category.capabilities.requires_container and runtime is None:
+        raise typer.BadParameter(f"The {category.name.value} category requires a container", param_hint="--container-name")
     return runtime
 
 
