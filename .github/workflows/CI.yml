@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
@@ -48,13 +48,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
 
       - name: Checkout BCQuality
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: microsoft/BCQuality
           path: bcquality
@@ -70,7 +70,7 @@ jobs:
       category: ${{ steps.random.outputs.category }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
@@ -103,7 +103,7 @@ jobs:
     name: Test Run for ${{ matrix.entry }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
@@ -112,7 +112,7 @@ jobs:
         run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category ${{ needs.select-category.outputs.category }} --output-dir evaluation_results --run-id ${{ github.run_id }}
 
       - name: Upload mock evaluation results
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
