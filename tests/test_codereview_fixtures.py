@@ -210,6 +210,8 @@ def test_http_bare_calls_check_status_without_consuming_optional_result(material
     assert "        Client.Post(HeartbeatUrlTok, Content, Response);\n        if not Response.IsSuccessStatusCode() then\n            Error(RequestErr);" in source
     assert "Evaluate(Rate, ResponseBody, 9);" in source
     assert "Content.WriteFrom('{}');" in source
+    assert source.splitlines()[11] == "        Client.Get(RateUrlTok, Response);"
+    assert source.splitlines()[26] == "        Client.Post(HeartbeatUrlTok, Content, Response);"
 
 
 def test_http_consumed_false_reports_success_but_does_not_read_invalid_response(materialized_entries):
@@ -217,15 +219,19 @@ def test_http_consumed_false_reports_success_but_does_not_read_invalid_response(
     source = files["src/BCBHttpDelivery.Codeunit.al"]
     assert len(entry.expected_comments) == 1
     assert entry.expected_comments[0].severity == Severity.MEDIUM
-    assert source.splitlines()[13:17] == [
-        "        if not RequestSucceeded then",
-        "            exit(true);",
+    gold = entry.expected_comments[0]
+    assert gold.line_start == gold.line_end == 12
+    assert source.splitlines()[gold.line_start - 1 : gold.line_end] == [
+        "        if not Client.Post(HeartbeatUrlTok, Content, Response) then exit(true);",
+    ]
+    assert source.splitlines()[12:15] == [
         "        if not Response.IsSuccessStatusCode() then",
         "            Error(RequestErr);",
+        "        exit(true);",
     ]
-    assert "RequestSucceeded := Client.Post(HeartbeatUrlTok, Content, Response);" in source
+    assert "RequestSucceeded" not in source
     assert "Response.Content" not in source
-    assert "returns true when it is false" in entry.expected_comments[0].body
+    assert "returns true on the same line when Post returns false" in gold.body
 
 
 def test_http_completed_error_body_reaches_numeric_success_path(materialized_entries):

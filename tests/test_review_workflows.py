@@ -318,7 +318,6 @@ def test_focused_http_experiment_has_exact_matrix_and_no_publish_route() -> None
 
     entries = [
         "synthetic__privacy-008",
-        "synthetic__privacy-010",
         "synthetic__privacy-015",
         "synthetic__security-clean-02",
         "synthetic__errh-tryfunction-swallowed-01",
@@ -330,9 +329,11 @@ def test_focused_http_experiment_has_exact_matrix_and_no_publish_route() -> None
     dataset = {entry.instance_id: entry for entry in CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path)}
     matrix = json.loads(dispatch_entries)
     assert matrix == entries
-    assert len(matrix) == len(set(matrix)) == 8
-    assert sum(bool(dataset[entry_id].expected_comments or dataset[entry_id].ignored_comments) for entry_id in matrix) == 6
-    assert sum(len(dataset[entry_id].expected_comments) for entry_id in matrix) == 10
+    assert len(matrix) == len(set(matrix)) == 7
+    assert "synthetic__privacy-010" not in matrix
+    assert "synthetic__privacy-010" in dataset
+    assert sum(bool(dataset[entry_id].expected_comments or dataset[entry_id].ignored_comments) for entry_id in matrix) == 5
+    assert sum(len(dataset[entry_id].expected_comments) for entry_id in matrix) == 8
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
     jobs = workflow["jobs"]
     assert jobs["evaluate-with-pr-review"]["strategy"]["matrix"]["entry"] == "${{ fromJson(inputs.entries != '' && inputs.entries || needs.get-entries.outputs.entries) }}"
