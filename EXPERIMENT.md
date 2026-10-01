@@ -152,6 +152,8 @@ This temporary investigation is off unless `BCBENCH_AL_MCP_DIAGNOSTICS=1` and AL
 
 The artifact **`al-mcp-diagnostics-<run-id>-<entry>`** retains minimal parent process status in `diagnostics\al-mcp.json` and separately owned connection snapshots in `diagnostics\al-mcp-transport\<invocation-id>\<connection-id>.json`, including on failure, for one day. Snapshots include safe numeric startup/exit failures and incomplete-observation indicators, never raw prompts, credentials, arguments, results, IDs/cursors or stderr. Forwarding does not wait for snapshot writes; queue/size limits are explicit, and forced shutdown may leave partial evidence. Windows process-tree ownership prevents orphaned servers. Diagnostics add no EOF/tool-completion deadline, inject no MCP requests, and are excluded from result summarization.
 
+The explicit-validation experiment changes only the AL-MCP-enabled bug-fix prompt: it requires `al_publish` followed by `al_run_tests` against relevant existing tests, without modifying test files, and requires reporting blocked validation. Copilot PAT authentication and scoring remain unchanged. Compare with commit `c4cf1405` for the unprompted baseline; test runs sample four entries, so separate runs are not necessarily a paired comparison.
+
 ---
 
 ## Experiment PR Template

@@ -1,6 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import yaml
 
 from bcbench.agent.shared import build_prompt
@@ -8,6 +9,25 @@ from bcbench.config import get_config
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry, create_ext_advisor_entry, create_problem_statement_dir
+
+
+@pytest.mark.parametrize("al_mcp", [False, True])
+def test_bug_fix_publish_and_test_instruction_requires_al_mcp(tmp_path: Path, al_mcp: bool):
+    config = yaml.safe_load((get_config().paths.agent_share_dir / "config.yaml").read_text(encoding="utf-8"))
+    entry = create_dataset_entry()
+    problem_dir = create_problem_statement_dir(tmp_path, "Fix the reported issue")
+    with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
+        prompt = build_prompt(entry, tmp_path, config, EvaluationCategory.BUG_FIX, al_mcp=al_mcp)
+
+    assert ("al_publish" in prompt) is al_mcp
+    assert ("al_run_tests" in prompt) is al_mcp
+    assert ("Do NOT try to build or run tests" in prompt) is not al_mcp
+    assert "Do NOT modify any testing logic or test files" in prompt
+    if al_mcp:
+        assert prompt.index("al_publish") < prompt.index("al_run_tests")
+        assert "relevant existing tests" in prompt
+        assert "report the tool error" in prompt
+        assert "Do not stop at compilation" in prompt
 
 
 def test_build_prompt_without_project_paths(tmp_path: Path):

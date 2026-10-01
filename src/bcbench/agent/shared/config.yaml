@@ -23,6 +23,9 @@ prompt:
     - Focus solely on fixing the reported issue
     {% if not al_mcp %}
     - Do NOT try to build or run tests, just provide the code changes needed
+    {% else %}
+    - Before finishing, use the AL MCP tool al_publish to publish the changed app to the configured BC test container, then use al_run_tests to run relevant existing tests. Publish the existing test app as needed before running tests. Do not stop at compilation.
+    - If publishing or test execution is blocked, report the tool error and which validation steps remain unverified. Do not claim that unexecuted tests passed.
     {% endif %}
     - Do NOT commit any changes to the repository
     - Focus on W1 localization, do NOT worry about other localizations (e.g. DK, APAC)
