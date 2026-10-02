@@ -4,6 +4,7 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 
 - **Dataset**: Benchmark entries following SWE-Bench schema with BC-specific adjustments
 - **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
+- **Core Library** (`packages/bcbench-core/`): Reusable, distributable evaluation library consumed by `bcbench`; must never import `bcbench`, read environment variables, or contain BC-Bench policy
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
 - **Tools** (`tools/`): Ad-hoc scripts for GitHub Artifacts download, etc
 - **Agent Evaluations**: Focuses on GitHub Copilot CLI and Claude Code
@@ -52,7 +53,7 @@ def test_full_metrics_flow_to_success_result(self, sample_context):
 ```
 
 ### Linting and formatting
-Ruff is the single source of truth (`uv run ruff check --fix`, `uv run ruff format`); config lives in `pyproject.toml`.
+Ruff is the single source of truth (`uv run ruff check --fix`, `uv run ruff format`); the baseline lives in `packages/bcbench-core/pyproject.toml` and the root `pyproject.toml` extends it.
 Lean on ruff's default rule set rather than growing `extend-select`, and prefer fixing violations over suppressing them. If a violation is genuinely intentional, use a targeted `# noqa: RULE - rationale` at that line instead of a repo-wide `ignore` entry.
 
 ## No Backward compatibility
