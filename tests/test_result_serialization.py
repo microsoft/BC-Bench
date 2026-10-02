@@ -161,6 +161,19 @@ class TestCategorySerialization:
         assert "pre_patch_failed" in data
         assert data["pre_patch_failed"] is True
 
+    def test_bugfix_verification_gates_in_jsonl(self, tmp_path):
+        result = create_bugfix_result(instance_id="test__dual-verification", resolved=True)
+
+        output_file = tmp_path / "result.jsonl"
+        result.save(tmp_path, "result.jsonl")
+
+        with output_file.open() as f:
+            data = json.loads(f.readline())
+
+        assert data["generated_test_pre_patch_failed"] is True
+        assert data["generated_test_post_patch_passed"] is True
+        assert data["benchmark_test_passed"] is True
+
     def test_no_experiment_saves_as_none(self, tmp_path, sample_result_bug_fix):
         output_file = tmp_path / "result.jsonl"
         sample_result_bug_fix.save(tmp_path, "result.jsonl")

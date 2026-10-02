@@ -16,13 +16,15 @@ prompt:
   bug-fix-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
-    Task: Fix the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+    Task: Fix the issue described below and add ONE NEW regression test {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
 
     Important constraints:
-    - Do NOT modify any testing logic or test files
-    - Focus solely on fixing the reported issue
+    - Add the test to an existing test codeunit in the provided test project
+    - The new test must fail against the original product code and pass with your fix
+    - Do NOT weaken, delete, or repurpose existing tests
+    - Keep both the product-code fix and the regression test focused on the reported issue
     {% if not al_mcp %}
-    - Do NOT try to build or run tests, just provide the code changes needed
+    - Do NOT try to build or run tests; still provide both the product-code fix and regression test
     {% endif %}
     - Do NOT commit any changes to the repository
     - Focus on W1 localization, do NOT worry about other localizations (e.g. DK, APAC)
@@ -150,8 +152,8 @@ skills:
 #    - Claude: copies to repo/.claude/agents/
 # 2. whether to pass --agent=<agent-name> to copilot or claude
 agents:
-  enabled: false
-  name: ALTest
+  enabled: true
+  name: fix-bug
 
 # controls loading agent plugins for the run, only enabled entries are validated and loaded.
 # Each plugin gets its own entry, and is passed to the CLI via `--plugin-dir` (session-scoped).
