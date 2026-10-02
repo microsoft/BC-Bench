@@ -309,7 +309,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.0" },
     { name = "ruff", specifier = ">=0.16.0" },
-    { name = "ty", specifier = ">=0.0.33" },
+    { name = "ty", specifier = ">=0.0.84" },
 ]
 redteam = [
     { name = "azure-ai-evaluation", extras = ["redteam"], specifier = ">=1.18.2" },
@@ -2335,26 +2335,27 @@ wheels = [
 
 [[package]]
 name = "ty"
-version = "0.0.33"
+version = "0.0.84"
 source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
-sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33.tar.gz", hash = "sha256:46d63bda07403322cb6c28ccfdd5536be916e13df725c29f7ccd0a21f06bd9e8" }
+sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84.tar.gz", hash = "sha256:0cefdb0cd5d399418dbe83c349ba605047b7dff815ae6f460c80e8522b40be67" }
 wheels = [
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-linux_armv6l.whl", hash = "sha256:94d0a9d2234261a8911396d59e506b5923fe0971dbda43b9dcea287936887fcc" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:e4a2b5ba078f90de342f56b5f7979bb77c9b9b1d8625a041352ffc6ee93c4073" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-macosx_11_0_arm64.whl", hash = "sha256:84ff5707825e9af9668d2bcf66975f93e520a63b524ab494e3a8265735be2563" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e375285736f57886868e7af0b11c7b0ec5b6543fa15e7ad2a714fed9f077d4e0" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:5680f6350c3b4e46b8bff6d7bb132366ea239463d6cad4892725d06046e65464" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:c5535538bad8d0f7e62bcdff02197cdb30e41451d80b35d27e17d128f2e1dc5d" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:da196c42bbbc069e1e21e3e52107c061aa9660352dae57a41930690b56e2c02d" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:9281672921ef6d4460e03146b5e6c18cb1a3e3a3b8a1a88f6f33226d05a469b7" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:82c1b8f303f82da64e878108e764be3ecbcd7c9903ac0a7f7031614ed00b97ab" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:efe3af412c9ff67bce5fa37d0a2b0d8555c24072b145a5bac6c79637f1c83abe" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:aeec29c91ea768601747da546c3efc20b72c2fb1bd52bcc786a5c6eeff51d27b" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-musllinux_1_2_i686.whl", hash = "sha256:a535977c52bbb5f7e96b8b70a6ad375ad077f4a9ff2492508ea3816a2b403819" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:1d732facf39fcb221ba279d469c5040d37883e964f123b1563888efd34818180" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-win32.whl", hash = "sha256:d90960b574428dc252f85e8598ec5fcb7f619794196b2fc95a90da075ed4681c" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-win_amd64.whl", hash = "sha256:c1c3aec62c44de610c6e95f0a4e97ac3dbc07934bfdbf1fd90d758c9ff72f48e" },
-    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.33/ty-0.0.33-py3-none-win_arm64.whl", hash = "sha256:0d44f99ba1b441e55e2aa301b2ac0a21112784931b46a5f66f4ea9efe5620d97" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-linux_armv6l.whl", hash = "sha256:868438e2b9abfc835dd5b5b07ed693db95d8348ac40e3228252511d63ae87695" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:b00f39b521f0b559cde0f6abf8dd47213b513b04f33d58efeb9b98486a16bb17" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-macosx_11_0_arm64.whl", hash = "sha256:8f78c2915567f2ee62ce0c24d86091bc76f81577677755e242d09951db588b9a" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:61155cad0921e890d86d1d911a40b3a0e924ef4bdc3b4f3865a6c89c7e3012dc" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:417c3bf14947ed16b0b92976ab333c27915590354e96d4f581709068d3811355" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:e06ef117759f654f5379efe9ae79bda8a186016c016f1023d05c34f8e15c1546" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:a05d1d53db8b64410ab38c6e32c5898510584869d1d5dd9c0605db81c9aef7df" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:b92400494ab855cfb1204ac1101e3f53b2d09a8e21d171758b2cf9acdab1809e" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:af17eb391ae3027fed9be1780bea555c2b8a25ba68e184c627b4981b2c9eaab7" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-manylinux_2_31_riscv64.whl", hash = "sha256:44cf06af0e7ec78ea6d8ff33a3450fc19627756a4fba681f7410d4e3ef63047a" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:c6e56b443ff9ba462e34bfbc1e582004c2719ed35f8f93a433744b0ba0afb2d9" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:8b6562fcc48820c1030e2a4509ef2c14ef93043ca4860280074314ac3a825b95" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-musllinux_1_2_i686.whl", hash = "sha256:dee7421451efcbd70f03e95a8f2c8d9e5ec3d35edcd27b4095ee00ee062abfc4" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:31e96307cf621babe969307dd657783d672e2d8bdbd06493710da635bf63fa07" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-win32.whl", hash = "sha256:4bdc85f91cbaae35825f2b17bb4ac5de0563367875cb0f42b2bf07a1bf7ff2ba" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-win_amd64.whl", hash = "sha256:71cc9aa7a7c89d4e12c6a814e9c0c3310ad5bee44efedbd6f5a42d91e9ac0f0d" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/ty/0.0.84/ty-0.0.84-py3-none-win_arm64.whl", hash = "sha256:6c9d3718c4a0d318bc9c92af9b2aa85c3294e7dff54cf1d69ad79568f56516da" },
 ]
 
 [[package]]
