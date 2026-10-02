@@ -98,18 +98,40 @@ def test_prepare_bcquality_root_ignores_ambient_overrides(tmp_path: Path, monkey
 
 @pytest.mark.parametrize("value", ["", "latest", "1.0", "1.0.83; injected"])
 def test_pr_review_cli_version_requires_pinned_semver(value: str) -> None:
-    with pytest.raises(AgentError, match="COPILOT_REVIEW_CLI_VERSION must be"):
+    with (
+        patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"),
+        pytest.raises(AgentError, match="Copilot CLI version must be"),
+    ):
         _resolve_pr_review_cli_version(value)
 
 
 def test_pr_review_cli_version_uses_workflow_selected_pin() -> None:
-    assert _resolve_pr_review_cli_version("1.0.83") == "1.0.83"
+    with patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"):
+        assert _resolve_pr_review_cli_version("1.0.83") == "1.0.83"
+
+
+def test_pr_review_cli_version_rejects_mismatched_workflow_pin() -> None:
+    with (
+        patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.88"),
+        pytest.raises(AgentError, match="does not match installed version"),
+    ):
+        _resolve_pr_review_cli_version("1.0.83")
 
 
 def test_pr_review_cli_version_uses_installed_cli_when_no_workflow_pin(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("COPILOT_REVIEW_CLI_VERSION", raising=False)
+    monkeypatch.setenv("COPILOT_REVIEW_CLI_VERSION", "1.0.88")
     with patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"):
         assert _resolve_pr_review_cli_version() == "1.0.83"
+
+
+def test_partial_engine_report_is_not_scoreable(tmp_path: Path) -> None:
+    out, repo = _dirs(tmp_path)
+    _write_output(out, json.dumps({"outcome": "partial", "findings": []}))
+
+    with pytest.raises(AgentError, match="review was partial"):
+        _write_review_json(out, repo)
+
+    assert not (repo / "review.json").exists()
 
 
 def test_valid_empty_findings_is_a_clean_review(tmp_path: Path) -> None:
@@ -148,7 +170,6 @@ def test_invalid_output_raises_instead_of_clean_review(tmp_path: Path, text: str
     "report",
     [
         {"outcome": "completed"},
-        {"outcome": "partial", "findings": None},
         {"outcome": "no-knowledge", "findings": "nope"},
     ],
 )
@@ -184,7 +205,6 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "microsoft/BC-Bench")
     monkeypatch.setenv("BCQUALITY_REF", "ambient-override")
-    monkeypatch.setenv("COPILOT_REVIEW_CLI_VERSION", "1.0.83")
     monkeypatch.setenv("COPILOT_REVIEW_LEAF_MODEL", "gpt-5.4")
     monkeypatch.setenv("COPILOT_REVIEW_LEAF_EXECUTION", "serial")
     monkeypatch.setenv("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "4")
@@ -233,6 +253,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root) as prepare_bcquality,
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
+        patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[10.0, 12.5]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
     ):
@@ -338,6 +359,7 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
+        patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[1.0, 2.0]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
     ):

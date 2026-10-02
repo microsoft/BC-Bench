@@ -81,7 +81,7 @@ def build_pr_review_metrics(output_dir: Path, execution_time: float, manifest: R
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
-    if manifest:
+    if manifest is not None:
         expected_models = {manifest.configuration.root_model, manifest.configuration.leaf_model}
         if (
             run.cli_version != manifest.configuration.copilot_cli_version
