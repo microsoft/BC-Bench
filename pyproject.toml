@@ -115,6 +115,13 @@ ban-relative-imports = "all"
 "src/bcbench/commands/**" = ["T20"]   # CLI commands print user-facing output
 "tools/**" = ["T20"]                  # standalone CLI scripts
 
+[tool.ty.src]
+exclude = ["notebooks/"]
+
+[tool.ty.analysis]
+# bc-eval[capi] is internal and installed only into a separate venv by bcal-evaluation.yml
+allowed-unresolved-imports = ["bc_eval.**"]
+
 [dependency-groups]
 analysis = [
     "ipykernel>=7.1.0",
@@ -127,7 +134,7 @@ dev = [
     "pytest-cov>=7.0",
     "ruff>=0.16.0",
     "pre-commit>=4.3.0",
-    "ty>=0.0.33",
+    "ty>=0.0.84",
 ]
 # `bcbench redteam` only, and not in default-groups: azure-ai-evaluation[redteam] pulls in ~76
 # packages (pyrit, transformers, datasets, ...) that no other command needs.
