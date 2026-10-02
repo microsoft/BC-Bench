@@ -154,7 +154,6 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-          COPILOT_REVIEW_CLI_VERSION: ${{ steps.install-harnesses.outputs.copilot-version }}
           COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}
           COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}
           COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}
@@ -165,6 +164,7 @@ jobs:
             --model "${{ inputs.model }}" `
             --engine-path "${{ steps.install-harnesses.outputs.bc-alagents-path }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --cli-version "${{ steps.install-harnesses.outputs.copilot-version }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results

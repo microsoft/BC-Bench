@@ -7,7 +7,7 @@ inputs:
     required: false
     default: ""
   copilot-version:
-    description: GitHub Copilot CLI version (defaults to 1.0.88)
+    description: GitHub Copilot CLI version
     required: false
     default: "1.0.88"
 
