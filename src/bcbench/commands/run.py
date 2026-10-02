@@ -149,7 +149,7 @@ def run_pr_review(
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
     cli_version: PRReviewCliVersion = None,
     leaf_model: PRReviewLeafModel = None,
-    leaf_execution: PRReviewLeafExecution = None,
+    leaf_execution: PRReviewLeafExecution = "serial",
     max_leaf_concurrency: PRReviewMaxLeafConcurrency = 4,
     cli_timeout_minutes: PRReviewCliTimeoutMinutes = 30,
 ) -> None:

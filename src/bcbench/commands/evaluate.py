@@ -192,7 +192,7 @@ def evaluate_pr_review(
     engine_path: PRReviewEnginePath = None,
     cli_version: PRReviewCliVersion = None,
     leaf_model: PRReviewLeafModel = None,
-    leaf_execution: PRReviewLeafExecution = None,
+    leaf_execution: PRReviewLeafExecution = "serial",
     max_leaf_concurrency: PRReviewMaxLeafConcurrency = 4,
     cli_timeout_minutes: PRReviewCliTimeoutMinutes = 30,
 ) -> None:
