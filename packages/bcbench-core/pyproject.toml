@@ -20,6 +20,14 @@ classifiers = [
 ]
 dependencies = []
 
+[dependency-groups]
+dev = ["pytest>=9.0.3"]
+
+[tool.pytest]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib"]
+strict = true
+
 [tool.ruff]
 target-version = "py313"
 line-length = 200
@@ -72,6 +80,9 @@ ignore = [
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "bcbench".msg = "bcbench-core must not depend on the BC-Bench application."

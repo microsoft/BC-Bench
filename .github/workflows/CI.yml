@@ -39,6 +39,9 @@ jobs:
       - name: Run tests with coverage
         run: uv run pytest --cov=src/bcbench --cov-report=term-missing
 
+      - name: Run bcbench-core tests with coverage
+        run: uv run pytest packages/bcbench-core --cov=bcbench_core --cov-report=term-missing
+
   e2e:
     strategy:
       fail-fast: false

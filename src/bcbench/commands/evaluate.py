@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Annotated, cast
 
 import typer
+from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
@@ -27,7 +28,6 @@ from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
-from bcbench.operations import prepare_run_dir
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from bcbench.operations.project_operations import _is_test_project, categorize_projects
+from bcbench_core.projects import _is_test_project, categorize_projects
 
 
 class TestIsTestProject:

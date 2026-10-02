@@ -3,6 +3,7 @@
 import subprocess
 from pathlib import Path
 
+from bcbench_core.projects import DEFAULT_TEST_PROJECT_IDENTIFIERS
 from unidiff import PatchSet
 from unidiff.errors import UnidiffParseError
 
@@ -76,7 +77,7 @@ def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_p
     if not patch:
         raise CollectionError("No patch data found between the specified commits")
 
-    return separate_patches(patch, _config.file_patterns.test_project_identifiers)
+    return separate_patches(patch, DEFAULT_TEST_PROJECT_IDENTIFIERS)
 
 
 def find_project_paths_from_diff(patch: str) -> list[str]:

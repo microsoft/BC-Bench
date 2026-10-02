@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import yaml
+from bcbench_core.projects import categorize_projects
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
@@ -12,7 +13,6 @@ from bcbench.logger import get_logger
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
-    categorize_projects,
     clean_project_paths,
     copy_problem_statement_folder,
     extract_tests_from_patch,

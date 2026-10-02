@@ -4,10 +4,11 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from bcbench_core.filesystem import remove_tree
+
 from bcbench.config import get_config
 from bcbench.exceptions import EmptyDiffError, PatchApplicationError
 from bcbench.logger import get_logger
-from bcbench.operations.filesystem_operations import remove_tree
 
 logger = get_logger(__name__)
 _config = get_config()

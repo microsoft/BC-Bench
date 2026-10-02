@@ -1,4 +1,4 @@
-"""Filesystem operations."""
+"""Filesystem helpers that tolerate read-only files on Windows."""
 
 import shutil
 import stat

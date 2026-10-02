@@ -329,6 +329,16 @@ name = "bcbench-core"
 version = "0.1.0"
 source = { editable = "packages/bcbench-core" }
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0.3" }]
+
 [[package]]
 name = "certifi"
 version = "2025.10.5"
