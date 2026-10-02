@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.cli_options import CopilotModel, EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
@@ -14,7 +15,6 @@ from bcbench.contamination.filepath_identification import FilePathIdentification
 from bcbench.contamination.runner import load_identification_results, run_filepath_identification
 from bcbench.dataset import BugFixEntry
 from bcbench.logger import get_logger
-from bcbench.operations import prepare_run_dir
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)

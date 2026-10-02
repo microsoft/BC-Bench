@@ -2,29 +2,29 @@
 
 import pytest
 
-from bcbench.operations.project_operations import _is_test_project, categorize_projects
+from bcbench_core.projects import categorize_projects, is_test_project
 
 
 class TestIsTestProject:
-    """Test suite for _is_test_project helper function."""
+    """Test suite for is_test_project."""
 
     def test_is_test_project_with_test_identifier(self):
-        assert _is_test_project("src/test", ("test", "tests")) is True
+        assert is_test_project("src/test", ("test", "tests")) is True
 
     def test_is_test_project_with_tests_identifier(self):
-        assert _is_test_project("src/tests", ("test", "tests")) is True
+        assert is_test_project("src/tests", ("test", "tests")) is True
 
     def test_is_test_project_with_windows_separator(self):
-        assert _is_test_project("src\\test", ("test", "tests")) is True
+        assert is_test_project("src\\test", ("test", "tests")) is True
 
     def test_is_test_project_case_insensitive(self):
-        assert _is_test_project("src/Test", ("test", "tests")) is True
+        assert is_test_project("src/Test", ("test", "tests")) is True
 
     def test_is_test_project_substring_not_path_component(self):
-        assert _is_test_project("src/contest", ("test", "tests")) is False
+        assert is_test_project("src/contest", ("test", "tests")) is False
 
     def test_is_test_project_without_identifier(self):
-        assert _is_test_project("src/app", ("test", "tests")) is False
+        assert is_test_project("src/app", ("test", "tests")) is False
 
 
 class TestCategorizeProjects:

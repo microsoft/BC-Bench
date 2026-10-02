@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from bcbench_core.projects import categorize_projects
+
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
@@ -8,7 +10,6 @@ from bcbench.logger import get_logger
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
-    categorize_projects,
     clean_project_paths,
     copy_problem_statement_folder,
     run_tests,
