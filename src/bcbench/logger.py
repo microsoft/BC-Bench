@@ -5,8 +5,6 @@ import re
 import sys
 from typing import ClassVar
 
-from bcbench.config import get_config
-
 __all__ = ["get_logger", "setup_logger"]
 
 
@@ -155,28 +153,26 @@ class GitHubActionsSkipFilter(logging.Filter):
         return not getattr(record, "gh_actions_handled", False)
 
 
+# Loggers owned by BC-Bench; everything else (third-party libraries) stays at WARNING
+_APPLICATION_LOGGERS = ("bcbench", "bcbench_core")
+
 _logging_configured = False
 
 
-def setup_logger(verbose: bool = False) -> None:
+def setup_logger(*, debug: bool, github_actions: bool) -> None:
     """
-    Configure logging for the entire bcbench package.
+    Configure logging for bcbench and bcbench-core.
 
     Args:
-        verbose: If True, set bcbench loggers to DEBUG level, otherwise INFO.
+        debug: If True, set bcbench and bcbench-core loggers to DEBUG level, otherwise INFO.
+        github_actions: If True, also emit warnings and errors as GitHub Actions annotations.
     """
     global _logging_configured  # noqa: PLW0603
 
     if _logging_configured:
         return
 
-    config = get_config()
-
-    bcbench_level = logging.DEBUG if verbose else logging.INFO
-
-    # Check for GitHub Actions debug mode
-    if config.env.runner_debug:
-        bcbench_level = logging.DEBUG
+    bcbench_level = logging.DEBUG if debug else logging.INFO
 
     # Configure root logger (for 3rd party libraries) to WARNING
     root_logger = logging.getLogger()
@@ -188,7 +184,7 @@ def setup_logger(verbose: bool = False) -> None:
 
     # Add GitHub Actions handler FIRST if running in GitHub Actions
     # This ensures records are marked before the console handler sees them
-    if config.env.github_actions:
+    if github_actions:
         github_handler = GitHubActionsHandler()
         github_handler.setLevel(logging.WARNING)  # Only warnings and errors
         github_handler.setFormatter(logging.Formatter("%(message)s"))
@@ -202,9 +198,9 @@ def setup_logger(verbose: bool = False) -> None:
     console_handler.addFilter(GitHubActionsSkipFilter())
     root_logger.addHandler(console_handler)
 
-    # Configure bcbench loggers to use the desired level
-    bcbench_logger = logging.getLogger("bcbench")
-    bcbench_logger.setLevel(bcbench_level)
+    # Configure bcbench and bcbench-core loggers to use the desired level
+    for name in _APPLICATION_LOGGERS:
+        logging.getLogger(name).setLevel(bcbench_level)
 
     _logging_configured = True
 
