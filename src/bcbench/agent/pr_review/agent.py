@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 
@@ -86,11 +86,14 @@ def _resolve_pwsh() -> str:
 
 
 def _resolve_pr_review_cli_version(cli_version: str | None = None) -> str:
-    selected_version = cli_version.strip() if cli_version is not None else get_copilot_version()
-    cli_version = selected_version.strip()
-    if re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", cli_version) is None:
-        raise AgentError(f"{_COPILOT_CLI_VERSION_ENV} must be the installed pinned Copilot CLI semantic version.")
-    return cli_version
+    if cli_version is not None and re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", cli_version.strip()) is None:
+        raise AgentError("Copilot CLI version must be a pinned semantic version.")
+    installed_version = get_copilot_version().strip()
+    if re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", installed_version) is None:
+        raise AgentError("Installed Copilot CLI version must be a pinned semantic version.")
+    if cli_version is not None and cli_version.strip() != installed_version:
+        raise AgentError(f"Requested Copilot CLI version {cli_version.strip()!r} does not match installed version {installed_version!r}.")
+    return installed_version
 
 
 def _environment_without_bcquality_overrides() -> dict[str, str]:
@@ -155,7 +158,9 @@ def _write_review_json(output_dir: Path, repo_path: Path) -> int:
         raise AgentError(f"Engine review failed: {reason}")
     if outcome == "not-applicable":
         raise AgentError("Engine review was not applicable. BC-Bench code-review entries must contain AL changes.")
-    if outcome not in {"completed", "partial", "no-knowledge"}:
+    if outcome == "partial":
+        raise AgentError("Engine review was partial; refusing to score an incomplete result.")
+    if outcome not in {"completed", "no-knowledge"}:
         raise AgentError(f"Engine {_FINDINGS_OUTPUT_FILE} has unsupported outcome {outcome!r}.")
     if not isinstance(report.get("findings"), list):
         raise AgentError(f"Engine report in {_FINDINGS_OUTPUT_FILE} has no findings list (got {type(report.get('findings')).__name__}); refusing to score it as a clean review.")
@@ -175,9 +180,9 @@ def run_pr_review_agent(
     min_severity: str | None = None,
     cli_version: str | None = None,
     leaf_model: str | None = None,
-    leaf_execution: str | None = None,
-    max_leaf_concurrency: int | None = None,
-    cli_timeout_minutes: int | None = None,
+    leaf_execution: Literal["serial", "parallel"] = "serial",
+    max_leaf_concurrency: int = 4,
+    cli_timeout_minutes: int = 30,
 ) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
 
@@ -210,15 +215,10 @@ def run_pr_review_agent(
     leaf_model = (leaf_model or model).strip()
     if not leaf_model:
         raise AgentError("PR Review leaf model must not be empty.")
-    leaf_execution = (leaf_execution or "serial").strip().lower()
     if leaf_execution not in {"serial", "parallel"}:
         raise AgentError("PR Review leaf execution must be 'serial' or 'parallel'.")
-    if max_leaf_concurrency is None:
-        max_leaf_concurrency = 4
     if max_leaf_concurrency < 1:
         raise AgentError("PR Review max leaf concurrency must be a positive integer.")
-    if cli_timeout_minutes is None:
-        cli_timeout_minutes = 30
     if cli_timeout_minutes < 0:
         raise AgentError("PR Review CLI timeout minutes must be a non-negative integer.")
 
@@ -268,9 +268,6 @@ def run_pr_review_agent(
             leaf_model=leaf_model,
             leaf_execution=leaf_execution,
             max_leaf_concurrency=max_leaf_concurrency,
-            cli_timeout_minutes=cli_timeout_minutes,
-            minimum_severity=settings["min_severity"],
-            agent_minimum_severity=severity,
         )
         count = _write_review_json(output_dir, repo_path)
         logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")

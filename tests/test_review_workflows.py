@@ -93,7 +93,8 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
         "default": "4",
         "type": "string",
     }
-    assert "COPILOT_REVIEW_CLI_VERSION: ${{ steps.install-harnesses.outputs.copilot-version }}" in workflow
+    assert '--cli-version "${{ steps.install-harnesses.outputs.copilot-version }}" `' in workflow
+    assert "COPILOT_REVIEW_CLI_VERSION:" not in workflow
     assert install["with"]["copilot-version"] == "1.0.83"
     assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
     assert "COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}" in workflow
@@ -191,7 +192,7 @@ def test_agent_harness_action_pins_published_copilot_version() -> None:
     claude_install = next(step for step in action["runs"]["steps"] if step["name"] == "Install Claude Code")
 
     assert action["inputs"]["copilot-version"] == {
-        "description": "GitHub Copilot CLI version (defaults to 1.0.88)",
+        "description": "GitHub Copilot CLI version",
         "required": False,
         "default": "1.0.88",
     }

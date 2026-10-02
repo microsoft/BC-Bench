@@ -28,8 +28,7 @@ PRReviewCliVersion = Annotated[
     str | None,
     typer.Option(
         "--cli-version",
-        envvar="COPILOT_REVIEW_CLI_VERSION",
-        help="GitHub Copilot CLI version expected in the PR Review engine manifest; omitted probes the installed CLI",
+        help="GitHub Copilot CLI version installed by the harness; defaults to the installed CLI version",
     ),
 ]
 
@@ -43,11 +42,11 @@ PRReviewLeafModel = Annotated[
 ]
 
 PRReviewLeafExecution = Annotated[
-    str | None,
+    Literal["serial", "parallel"],
     typer.Option(
         "--leaf-execution",
         envvar="COPILOT_REVIEW_LEAF_EXECUTION",
-        help="PR Review leaf scheduling mode: serial or parallel",
+        help="PR Review leaf scheduling mode",
     ),
 ]
 

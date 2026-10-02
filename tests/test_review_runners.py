@@ -129,6 +129,29 @@ def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
     get_version.assert_called_once_with(tmp_path, require_clean=False)
 
 
+def test_pr_review_run_rejects_unsupported_leaf_execution(tmp_path: Path) -> None:
+    with (
+        patch.object(CodeReviewEntry, "load", return_value=[object()]),
+        patch.object(CodeReviewPipeline, "setup_workspace"),
+        patch.object(run_commands, "run_pr_review_agent") as agent_runner,
+    ):
+        result = CliRunner().invoke(
+            app,
+            [
+                "run",
+                "pr-review",
+                "synthetic__style-018",
+                "--leaf-execution",
+                "random",
+                "--repo-path",
+                str(tmp_path),
+            ],
+        )
+
+    assert result.exit_code != 0
+    agent_runner.assert_not_called()
+
+
 def test_pr_review_is_public_command() -> None:
     runner = CliRunner()
 
