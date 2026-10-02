@@ -75,7 +75,8 @@ def logging_callback(
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging")] = False,
 ) -> None:
     """Setup logging for all commands."""
-    setup_logger(verbose)
+    env = get_config().env
+    setup_logger(debug=verbose or env.runner_debug, github_actions=env.github_actions)
 
 
 if __name__ == "__main__":

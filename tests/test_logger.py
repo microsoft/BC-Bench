@@ -1,10 +1,12 @@
-"""Tests for logger module, focusing on sensitive data filtering."""
+"""Tests for logging setup, sensitive data filtering, and GitHub Actions annotations."""
 
 import logging
+from collections.abc import Iterator
 
 import pytest
 
-from bcbench.logger import GitHubActionsHandler, GitHubActionsSkipFilter, SensitiveDataFilter
+from bcbench import logger as bcbench_logger
+from bcbench.logger import ColoredFormatter, GitHubActionsHandler, GitHubActionsSkipFilter, SensitiveDataFilter, setup_logger
 
 
 class TestSensitiveDataFilter:
@@ -123,3 +125,55 @@ class TestGitHubActionsSkipFilter:
     def test_skips_handled_records(self, filter_instance, log_record):
         log_record.gh_actions_handled = True
         assert filter_instance.filter(log_record) is False
+
+
+class TestSetupLogger:
+    @pytest.fixture(autouse=True)
+    def isolated_logging(self, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+        root = logging.getLogger()
+        root_level = root.level
+        application_levels = {name: logging.getLogger(name).level for name in ("bcbench", "bcbench_core")}
+        monkeypatch.setattr(bcbench_logger, "_logging_configured", False)
+
+        yield
+
+        # Remove only the handlers setup_logger installed; pytest manages its own capture handlers
+        for handler in root.handlers[:]:
+            if isinstance(handler, GitHubActionsHandler) or isinstance(handler.formatter, ColoredFormatter):
+                root.removeHandler(handler)
+        root.setLevel(root_level)
+        for name, level in application_levels.items():
+            logging.getLogger(name).setLevel(level)
+
+    def test_application_loggers_log_info_while_third_party_stays_at_warning(self, capsys):
+        setup_logger(debug=False, github_actions=False)
+
+        logging.getLogger("bcbench.evaluate").info("app info")
+        logging.getLogger("bcbench_core.projects").info("core info")
+        logging.getLogger("urllib3").info("library info")
+        logging.getLogger("bcbench_core.projects").debug("core debug")
+
+        err = capsys.readouterr().err
+        assert "app info" in err
+        assert "core info" in err
+        assert "library info" not in err
+        assert "core debug" not in err
+
+    def test_debug_enables_debug_for_application_loggers(self, capsys):
+        setup_logger(debug=True, github_actions=False)
+
+        logging.getLogger("bcbench.evaluate").debug("app debug")
+        logging.getLogger("bcbench_core.projects").debug("core debug")
+
+        err = capsys.readouterr().err
+        assert "app debug" in err
+        assert "core debug" in err
+
+    def test_github_actions_annotates_errors_without_duplicating_console_output(self, capsys):
+        setup_logger(debug=False, github_actions=True)
+
+        logging.getLogger("bcbench_core.projects").error("categorization failed")
+
+        captured = capsys.readouterr()
+        assert "::error title=bcbench_core.projects::categorization failed" in captured.out
+        assert "categorization failed" not in captured.err
