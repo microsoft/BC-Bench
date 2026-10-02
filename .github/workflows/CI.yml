@@ -46,8 +46,8 @@ jobs:
         run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage to GitHub Code Quality
-        # One upload per label: the Ubuntu run reports; fork PRs cannot get code-quality: write
-        if: matrix.os == 'ubuntu-latest' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        # main pushes set the baseline and same-repo PRs are compared to it; other runs (forks, dispatch) cannot upload
+        if: matrix.os == 'ubuntu-latest' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
         uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1.4.4
         with:
           file: coverage.xml
