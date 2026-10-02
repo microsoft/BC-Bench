@@ -1,5 +1,6 @@
 import json
 import shutil
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -72,8 +73,14 @@ def build_mcp_config(
     repo_path: Path,
     runtime: AgentRuntimeConfig | None = None,
     bc_mcp_gateway_url: str | None = None,
+    history_gateway_url: str | None = None,
 ) -> tuple[str | None, list[str] | None]:
-    mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
+    mcp_servers: list[dict[str, Any]] = deepcopy(config.get("mcp", {}).get("servers", []))
+
+    if history_gateway_url:
+        if any(server.get("name") == "history" for server in mcp_servers):
+            raise AgentError("'history' is reserved for the task-pinned history capability; use the history configuration section")
+        mcp_servers.append({"name": "history", "type": "http", "url": history_gateway_url.rstrip("/") + "/mcp"})
 
     if runtime is None or not runtime.al_mcp:
         mcp_servers = list(filter(lambda s: s.get("name") != "altool", mcp_servers))

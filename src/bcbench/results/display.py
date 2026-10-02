@@ -33,6 +33,9 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     console.print(f"Skills: [bold]{'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}[/bold]")
     console.print(f"Custom Agent: [bold]{results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else 'N/A'}[/bold]")
     console.print(f"Plugins: [bold]{', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}[/bold]")
+    if results[0].experiment and results[0].experiment.history:
+        history = results[0].experiment.history
+        console.print(f"Scope experiment: [bold]{'History enabled' if history.enabled else 'Source-only control'}[/bold]")
 
     metrics = summary.render_console_metrics()
     if metrics is not None:
@@ -102,6 +105,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             f"- Skills: {'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}",
             f"- Custom Agent: {results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else 'N/A'}",
             f"- Plugins: {', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}",
+            *([f"- Scope experiment: {'History enabled' if results[0].experiment.history.enabled else 'Source-only control'}"] if results[0].experiment and results[0].experiment.history else []),
         ]
     )
     sections: list[str] = [header_section, *(section for section in [metrics_section, tool_usage_section] if section), "## Detailed Results\n\n"]

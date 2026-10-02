@@ -26,8 +26,8 @@ def test_invoke_copilot_defaults_to_none_tool_argument_and_no_custom_instruction
         "--disable-builtin-mcps",
         "--no-custom-instructions",
         "--model=test-model",
-        "--prompt=do the task",
     ]
+    assert mock_run.call_args.kwargs["input"] == "do the task"
 
 
 def test_invoke_copilot_can_enable_custom_instructions(tmp_path: Path):
@@ -64,6 +64,22 @@ def test_invoke_copilot_logs_readable_transcript(tmp_path: Path, caplog):
 
     assert "Copilot: working" in caplog.messages
     assert output not in caplog.text
+
+
+def test_invoke_copilot_pipes_long_prompt_through_stdin(tmp_path: Path):
+    prompt = "x" * 40_000
+    with (
+        patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.copilot.cli.parse_output", return_value=(None, None)),
+        patch(
+            "bcbench.agent.copilot.cli.subprocess.run",
+            return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
+        ) as mock_run,
+    ):
+        invoke_copilot(prompt=prompt, model="test-model", work_dir=tmp_path, timeout=60)
+
+    assert all(not arg.startswith("--prompt=") for arg in mock_run.call_args.args[0])
+    assert mock_run.call_args.kwargs["input"] == prompt
 
 
 def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Path, monkeypatch):
@@ -106,8 +122,8 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
         "--model=copilot-test-model",
         "--log-level=debug",
         f"--log-dir={output_dir.resolve()}",
-        "--prompt=line one line two",
     ]
+    assert mock_run.call_args.kwargs["input"] == "line one\nline two"
     assert mock_run.call_args.kwargs["capture_output"] is True
     assert mock_run.call_args.kwargs["text"] is True
     assert "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS" not in mock_run.call_args.kwargs["env"]

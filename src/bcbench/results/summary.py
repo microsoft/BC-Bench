@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.investigation import InvestigatedExecutionResult, InvestigationSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 if TYPE_CHECKING:
@@ -163,9 +164,16 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
     # Per-instance pass/fail for aggregate metrics (pass^k, CI)
     instance_results: dict[str, bool] = Field(default_factory=dict)
+    investigation: InvestigationSummary | None = Field(default=None, exclude_if=lambda value: value is None)
 
     def render_github_metrics_markdown(self) -> str:
-        return f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
+        headline = f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
+        return headline + ("\n" + self.investigation.render_markdown() if self.investigation else "")
+
+    def render_console_metrics(self) -> "RenderableType | None":
+        from rich.markdown import Markdown
+
+        return Markdown(self.investigation.render_markdown()) if self.investigation else None
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "ExecutionBasedEvaluationResultSummary":
@@ -178,6 +186,7 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
         resolved = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.resolved)
         build = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.build)
         instance_results = {r.instance_id: (isinstance(r, ExecutionBasedEvaluationResult) and r.resolved) for r in results}
+        measurements = [result.investigation for result in results if isinstance(result, InvestigatedExecutionResult) and result.investigation is not None]
 
         return summary.model_copy(
             update={
@@ -186,6 +195,7 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
                 "build": build,
                 "percentage": round(resolved / total * 100, 1) if total else 0.0,
                 "instance_results": instance_results,
+                "investigation": InvestigationSummary.from_measurements(measurements),
             }
         )
 

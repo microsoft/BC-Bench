@@ -149,6 +149,9 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          # History mints fresh read tokens with the same OIDC identity used by repository setup.
+          BCBENCH_HISTORY_AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          BCBENCH_HISTORY_AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 

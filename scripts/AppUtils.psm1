@@ -58,12 +58,15 @@ function Invoke-AppBuildAndPublish {
             nowarn               = 'AL0432;AL0523;AL0547;AL0551;AL0602;AL0659;AL0684;AL0685;AL0748;AL0254;AL0667'
         }
 
+        [System.Collections.Generic.List[object]]$compileOutput = [System.Collections.Generic.List[object]]::new()
         if ($env:RUNNER_DEBUG -eq '1') {
             # debug mode
             Compile-AppInBcContainer @compileParams
         }
         else {
-            $compileOutput = Compile-AppInBcContainer @compileParams 2>&1
+            # Populate the list incrementally so output emitted before a terminating compiler error
+            # remains available to the outer catch block. A direct assignment loses partial output.
+            Compile-AppInBcContainer @compileParams 2>&1 | ForEach-Object { $compileOutput.Add($_) }
         }
 
         if ($env:CI) {
@@ -105,9 +108,9 @@ function Invoke-AppBuildAndPublish {
         Write-Log "Failed to compile and publish app from ${appProjectFolder}: $($_.Exception.Message)" -Level Error
 
         if ($env:RUNNER_DEBUG -ne '1') {
-            if ($compileOutput) {
+            if ($compileOutput.Count -gt 0) {
                 Write-Log "Compilation output:" -Level Error
-                Write-Log $compileOutput -Level Error
+                Write-Log ($compileOutput | Out-String) -Level Error
             }
         }
         throw

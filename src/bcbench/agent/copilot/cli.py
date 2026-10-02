@@ -50,6 +50,7 @@ def invoke_copilot(
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
     tool_access_arg = "--allow-all-tools" if allow_all_tools else "--available-tools=none"
+    normalized_prompt = prompt.replace("\r\n", "\n").replace("\r", "\n")
     cmd_args = [
         copilot_cmd,
         "--output-format=json",
@@ -58,7 +59,6 @@ def invoke_copilot(
         *(("--no-custom-instructions",) if not custom_instructions else ()),
         f"--model={model}",
         *extra_args,
-        f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
     ]
     logger.debug("Copilot command args: %s", cmd_args)
 
@@ -72,6 +72,7 @@ def invoke_copilot(
         errors="replace",
         timeout=timeout,
         check=True,
+        input=normalized_prompt,
     )
 
     if result.stderr:
