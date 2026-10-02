@@ -31,6 +31,10 @@ dependencies = [
 [project.scripts]
 bcbench = "bcbench.cli:app"
 
+[tool.uv]
+# ty's uv integration (TY_UV=1, used for missing-direct-dependency) needs uv >= 0.12.3
+required-version = ">=0.12.19"
+
 [[tool.uv.index]]
 name = "microsoft-cfs"
 url = "https://packagefeedproxy.microsoft.io/pypi/simple"

@@ -30,7 +30,7 @@ BC-Bench/
 ## Setup
 
 Prerequisites:
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) 0.12.19 or later (`uv self update`)
 - [GitHub CLI](https://cli.github.com/)
 - [GitHub Copilot CLI](https://github.com/github/copilot-cli)
 
