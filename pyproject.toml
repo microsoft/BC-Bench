@@ -57,6 +57,11 @@ markers = [
 ]
 collect_imported_tests = false
 
+[tool.coverage.run]
+# Repo-relative paths in coverage.xml so GitHub Code Quality can map them onto PR files
+relative_files = true
+include = ["src/bcbench/*", "packages/bcbench-core/src/bcbench_core/*"]
+
 [tool.ruff]
 # The app inherits the bcbench-core lint baseline; tables redefined below replace the inherited ones.
 extend = "packages/bcbench-core/pyproject.toml"

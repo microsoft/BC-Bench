@@ -62,7 +62,7 @@ uv run bcbench --help
 uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
 
 # Run tests (bcbench and bcbench-core)
-uv run pytest --cov=src/bcbench --cov=packages/bcbench-core/src/bcbench_core --cov-report=term-missing
+uv run pytest --cov --cov-report=term-missing
 
 # Lint and format
 uv run pre-commit run --all-files
