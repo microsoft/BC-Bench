@@ -8,7 +8,6 @@ from bcbench.results.leaderboard import (
     Leaderboard,
     LeaderboardAggregate,
 )
-from bcbench.results.metrics import bootstrap_ci
 from bcbench.results.summary import (
     BaseEvaluationResult,
     EvaluationResultSummary,
@@ -29,7 +28,6 @@ __all__ = [
     "JudgeBasedEvaluationResultSummary",
     "Leaderboard",
     "LeaderboardAggregate",
-    "bootstrap_ci",
     "create_console_summary",
     "create_github_job_summary",
     "write_bceval_results",

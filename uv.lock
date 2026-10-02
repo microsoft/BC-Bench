@@ -328,6 +328,10 @@ redteam = [
 name = "bcbench-core"
 version = "0.1.0"
 source = { editable = "packages/bcbench-core" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -335,6 +339,10 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.3.5" },
+    { name = "scipy", specifier = ">=1.16.3" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.3" }]

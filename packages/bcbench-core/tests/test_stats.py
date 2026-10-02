@@ -2,7 +2,7 @@
 
 import pytest
 
-from bcbench.results.metrics import bootstrap_ci
+from bcbench_core.stats import bootstrap_ci
 
 
 class TestBootstrapCI:

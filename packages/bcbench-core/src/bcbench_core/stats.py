@@ -1,3 +1,5 @@
+"""Statistics for aggregating evaluation results across runs."""
+
 import numpy as np
 from scipy.stats import bootstrap as scipy_bootstrap
 

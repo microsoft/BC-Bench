@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import typer
-from bcbench_core.projects import DEFAULT_TEST_PROJECT_IDENTIFIERS
 
 from bcbench.collection.gh_client import GHClient
 from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_project_paths_from_diff, separate_patches
@@ -61,7 +60,7 @@ def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> Scree
         raise CollectionError(f"Failed to fetch PR #{pr_number} from {repo}: {exc}") from exc
 
     try:
-        patch, patch_fix, patch_test = separate_patches(diff, DEFAULT_TEST_PROJECT_IDENTIFIERS)
+        patch, patch_fix, patch_test = separate_patches(diff, _config.file_patterns.test_project_identifiers)
         project_paths = find_project_paths_from_diff(patch)
     except CollectionError as exc:
         raise CollectionError(f"Failed to parse PR diff: {exc}") from exc
@@ -104,7 +103,7 @@ def _build_bugfix_entry(
 
     diff = gh_client.get_pr_diff(pr_number)
 
-    patch, patch_fix, patch_test = separate_patches(diff, DEFAULT_TEST_PROJECT_IDENTIFIERS)
+    patch, patch_fix, patch_test = separate_patches(diff, _config.file_patterns.test_project_identifiers)
 
     # Extract problem statement from PR
     title = pr_data.get("title", "")

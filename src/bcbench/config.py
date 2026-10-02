@@ -110,6 +110,7 @@ class FilePatternConfig:
     result_pattern: str
     instruction_source_naming: str
     instructions_dirname: str
+    test_project_identifiers: tuple[str, ...]
     problem_statement_readme: str
     problem_statement_dest_dir: str
     alpackages_dirname: str
@@ -126,6 +127,7 @@ class FilePatternConfig:
             result_pattern=".jsonl",
             instruction_source_naming="AGENTS.md",
             instructions_dirname="instructions",
+            test_project_identifiers=("test", "tests"),
             problem_statement_readme="README.md",
             problem_statement_dest_dir="problem",
             alpackages_dirname=".alpackages",

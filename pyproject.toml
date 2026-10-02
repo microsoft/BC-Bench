@@ -49,7 +49,7 @@ url = "https://packagefeedproxy.microsoft.io/pypi/simple"
 default = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "packages/bcbench-core/tests"]
 addopts = ["-v", "--strict-markers", "-m", "not e2e"]
 markers = [
     "integration",
