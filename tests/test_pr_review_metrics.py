@@ -43,10 +43,30 @@ def _write_run_metrics(root: Path, **overrides: object) -> None:
     (root / RUN_METRICS_FILE_NAME).write_text(json.dumps(_run_metrics(**overrides)), encoding="utf-8")
 
 
+def _manifest(
+    *,
+    cli_version: str = "1.0.81-0",
+    root_model: str = "gpt-5.6-sol",
+    leaf_model: str = "gpt-5.4-mini",
+) -> RunManifest:
+    configuration = SimpleNamespace(
+        copilot_cli_version=cli_version,
+        root_model=root_model,
+        leaf_model=leaf_model,
+        leaf_execution="serial",
+        max_leaf_concurrency=4,
+    )
+    provenance = SimpleNamespace(commit=None, source_snapshot=None)
+    return cast(
+        RunManifest,
+        SimpleNamespace(configuration=configuration, bcquality=provenance, processes=[object()]),
+    )
+
+
 def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> None:
     _write_run_metrics(tmp_path)
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=12.5)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=12.5, manifest=_manifest())
 
     assert isinstance(metrics, PRReviewMetrics)
     assert metrics.kind == "pr-review"
@@ -80,7 +100,7 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
         models=["gpt-5.4-mini", "gpt-5.6-sol"],
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
 
     assert metrics.ai_credits is None
     assert metrics.total_tokens == 178
@@ -90,22 +110,13 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
     "overrides",
     [
         {"cli_version": "1.0.82"},
-        {"usage_complete": False},
-        {"malformed_records": 1},
         {"models": ["gpt-5.4-mini", "unexpected-model"]},
     ],
 )
 def test_validated_manifest_rejects_mismatched_aggregate_metrics(tmp_path: Path, overrides: dict[str, object]) -> None:
     _write_run_metrics(tmp_path, **overrides)
-    configuration = SimpleNamespace(
-        copilot_cli_version="1.0.81-0",
-        root_model="gpt-5.6-sol",
-        leaf_model="gpt-5.4-mini",
-    )
-    manifest = cast(RunManifest, SimpleNamespace(configuration=configuration))
-
     with pytest.raises(AgentError, match="aggregate metrics"):
-        build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=manifest)
+        build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
 
 
 @pytest.mark.parametrize("has_token_usage", [False, True], ids=["no-chat-spans", "chat-without-billing"])
@@ -131,7 +142,7 @@ def test_valid_engine_metrics_without_billing_preserve_unknown_credits_through_e
         malformed_records=0,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.5)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.5, manifest=_manifest())
     assert metrics.ai_credits is None
     assert metrics.total_tokens == (178 if has_token_usage else None)
     result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
@@ -165,7 +176,7 @@ def test_malformed_records_suppress_all_usage_metrics(tmp_path: Path) -> None:
         malformed_records=3,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
 
     assert metrics.prompt_tokens is None
     assert metrics.completion_tokens is None
@@ -187,7 +198,7 @@ def test_incomplete_usage_preserves_observed_values_and_completeness_flag(tmp_pa
         malformed_records=0,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
 
     assert metrics.prompt_tokens == 25
     assert metrics.completion_tokens == 5
@@ -199,14 +210,14 @@ def test_incomplete_usage_preserves_observed_values_and_completeness_flag(tmp_pa
 
 def test_missing_run_metrics_raises(tmp_path: Path) -> None:
     with pytest.raises(AgentError, match="run metrics artifact not found"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
 
 
 def test_invalid_run_metrics_json_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text("not json", encoding="utf-8")
 
     with pytest.raises(AgentError, match="Could not read engine run metrics artifact"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
 
 
 @pytest.mark.parametrize(
@@ -227,7 +238,7 @@ def test_invalid_run_metrics_contract_raises(tmp_path: Path, overrides: dict[str
     _write_run_metrics(tmp_path, **overrides)
 
     with pytest.raises(AgentError, match="does not satisfy schema version 1"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
 
 
 def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
@@ -236,7 +247,7 @@ def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(AgentError, match="does not satisfy schema version 1"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
 
 
 def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
@@ -262,7 +273,7 @@ def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
     )
 
     with pytest.raises(AgentError, match="must contain AL changes"):
-        build_pr_review_metrics(tmp_path, execution_time=0.25)
+        build_pr_review_metrics(tmp_path, execution_time=0.25, manifest=_manifest())
 
 
 @pytest.mark.parametrize(
@@ -302,4 +313,4 @@ def test_not_applicable_rejects_noncanonical_shape(tmp_path: Path, field: str, v
     _write_run_metrics(tmp_path, **not_applicable)
 
     with pytest.raises(AgentError, match="not-applicable metrics have invalid fields"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
