@@ -1,13 +1,13 @@
 import logging
 from pathlib import Path
 
-from bcbench_core.container import ContainerConfig
-
-from bcbench.agent.shared.altool_paths import (
+from bcbench_core.altool_paths import (
     build_assembly_probing_paths,
     compiler_symbol_folder_for_container,
     resolve_artifact_lsp_paths,
 )
+from bcbench_core.container import ContainerConfig
+
 from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
