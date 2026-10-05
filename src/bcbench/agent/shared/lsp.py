@@ -1,11 +1,7 @@
 import logging
 from pathlib import Path
 
-from bcbench_core.altool_paths import (
-    build_assembly_probing_paths,
-    compiler_symbol_folder_for_container,
-    resolve_artifact_lsp_paths,
-)
+from bcbench_core.altool import build_lsp_args, resolve_symbol_paths
 from bcbench_core.container import ContainerConfig
 
 from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
@@ -19,39 +15,13 @@ _AL_LSP_PLUGIN_FOLDER = "al-lsp-plugin"
 _AL_LSP_MANIFEST = {"name": "al-lsp"}
 
 
-def _resolve_symbol_paths(
-    entry: BaseDatasetEntry,
-    category: EvaluationCategory,
-    container: ContainerConfig,
-    country: str = "w1",
-) -> tuple[list[str], list[str]]:
-    """Resolve (package_cache_paths, assembly_probing_paths) for the LSP server.
-
-    Prefers the container's compiler folder when available — its single flat layout is the exact same arg shape AL-MCP uses.
-    Falls back to the raw BC artifact cache when compiler-folder symbols are unavailable. Raises a clear error pointing at the symbol-download script when neither is present.
-    """
-    compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
-    if symbols_folder.is_dir():
-        logger.info(f"Using container compiler-folder symbols: {symbols_folder}")
-        return [str(symbols_folder)], build_assembly_probing_paths(compiler_folder)
-
-    artifact_paths = resolve_artifact_lsp_paths(entry.environment_setup_version, country)
-    if artifact_paths is not None:
-        package_cache_paths, assembly_probing_paths = artifact_paths
-        logger.info(f"Using BC artifact cache symbols for v{entry.environment_setup_version}: {package_cache_paths}")
-        return package_cache_paths, assembly_probing_paths
-
-    raise AgentError(
-        f"No AL symbols found for BC v{entry.environment_setup_version}. Run `./scripts/Download-BCSymbols.ps1 -Category {category.value} -InstanceId {entry.instance_id}` (no container required) and retry."
-    )
-
-
-def _build_lsp_args(project_paths: list[str], package_cache_paths: list[str], assembly_probing_paths: list[str]) -> list[str]:
-    # `launchlspserver [<projects>...] [options]` — projects come first as positional args.
-    args: list[str] = ["launchlspserver", *project_paths, "--packagecachepath", *package_cache_paths]
-    if assembly_probing_paths:
-        args.extend(["--assemblyprobingpaths", *assembly_probing_paths])
-    return args
+def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory, container: ContainerConfig) -> tuple[list[str], list[str]]:
+    symbol_paths = resolve_symbol_paths(container.name, entry.environment_setup_version)
+    if symbol_paths is None:
+        raise AgentError(
+            f"No AL symbols found for BC v{entry.environment_setup_version}. Run `./scripts/Download-BCSymbols.ps1 -Category {category.value} -InstanceId {entry.instance_id}` (no container required) and retry."
+        )
+    return symbol_paths
 
 
 def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict:
@@ -97,7 +67,7 @@ def build_al_lsp_plugin(
     container: ContainerConfig = runtime.container
     project_paths = [str(repo_path / p) for p in entry.project_paths]
     package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container)
-    args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
+    args = build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
     lsp_config = _lsp_config_for(harness, args)
 
     plugin_dir = write_agent_plugin(_AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})

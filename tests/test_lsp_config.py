@@ -32,7 +32,7 @@ def repo_path(tmp_path) -> Path:
 @pytest.fixture
 def artifact_paths():
     with patch(
-        "bcbench.agent.shared.lsp.resolve_artifact_lsp_paths",
+        "bcbench_core.altool.resolve_artifact_lsp_paths",
         return_value=(["C:/cache/w1/Extensions", "C:/cache/platform/Applications"], ["C:/cache/platform"]),
     ) as m:
         yield m
@@ -40,7 +40,7 @@ def artifact_paths():
 
 @pytest.fixture
 def no_artifacts():
-    with patch("bcbench.agent.shared.lsp.resolve_artifact_lsp_paths", return_value=None) as m:
+    with patch("bcbench_core.altool.resolve_artifact_lsp_paths", return_value=None) as m:
         yield m
 
 
@@ -133,7 +133,7 @@ class TestSharedBehavior:
         compiler_root = tmp_path / "compiler" / "test-container"
         (compiler_root / "symbols").mkdir(parents=True)
         with patch(
-            "bcbench.agent.shared.lsp.compiler_symbol_folder_for_container",
+            "bcbench_core.altool.compiler_symbol_folder_for_container",
             return_value=(compiler_root, compiler_root / "symbols"),
         ):
             _build(entry, repo_path, harness, _runtime(container=ContainerConfig("test-container", "", "", "CRONUS")))
@@ -150,7 +150,7 @@ class TestSharedBehavior:
         compiler_root = tmp_path / "compiler" / "test-container"
         (compiler_root / "symbols").mkdir(parents=True)
         with patch(
-            "bcbench.agent.shared.lsp.compiler_symbol_folder_for_container",
+            "bcbench_core.altool.compiler_symbol_folder_for_container",
             return_value=(compiler_root, compiler_root / "symbols"),
         ):
             _build(entry, repo_path, harness, _runtime(container=ContainerConfig("test-container", "", "", "CRONUS")))
