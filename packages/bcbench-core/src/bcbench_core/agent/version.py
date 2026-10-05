@@ -1,7 +1,7 @@
 import re
 import subprocess
 
-from bcbench.exceptions import AgentError
+from bcbench_core.exceptions import AgentError
 
 
 def get_cli_version(command: str | None, name: str) -> str:

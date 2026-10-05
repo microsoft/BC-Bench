@@ -3,10 +3,11 @@
 import json
 
 import pytest
+from bcbench_core.agent.copilot.metrics import parse_output
+from bcbench_core.agent.metrics import AgentMetrics
 
-from bcbench.agent.copilot.metrics import parse_output
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import AgentHarness, AgentMetrics
+from bcbench.types import AgentHarness
 from tests.conftest import create_evaluation_context
 
 

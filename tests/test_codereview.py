@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.exceptions import AgentError
 
 from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
@@ -13,7 +14,6 @@ from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
 from bcbench.evaluate.review_parsing import parse_review_output
-from bcbench.exceptions import AgentError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
 from bcbench.types import EvaluationCategory

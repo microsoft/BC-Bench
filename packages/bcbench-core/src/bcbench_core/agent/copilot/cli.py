@@ -7,10 +7,10 @@ import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from bcbench.agent.copilot.metrics import parse_output
-from bcbench.agent.shared.version import get_cli_version
-from bcbench.exceptions import AgentError
-from bcbench.types import AgentMetrics
+from bcbench_core.agent.copilot.metrics import parse_output
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.agent.version import get_cli_version
+from bcbench_core.exceptions import AgentError
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,6 @@ def get_copilot_version() -> str:
 
 
 def invoke_copilot(
-    *,
     prompt: str,
     model: str,
     work_dir: Path,

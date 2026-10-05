@@ -1,4 +1,5 @@
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
 
 import bcbench.contamination.runner as runner_mod
 from bcbench.contamination.filepath_identification import (
@@ -7,7 +8,7 @@ from bcbench.contamination.filepath_identification import (
     matches_any_gold_path,
     parse_prediction,
 )
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry, create_problem_statement_dir
 
 FULL_PATCH = """diff --git a/App/Foo/Bar.Table.al b/App/Foo/Bar.Table.al

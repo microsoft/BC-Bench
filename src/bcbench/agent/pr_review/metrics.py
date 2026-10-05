@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 from typing import Annotated, Literal
 
+from bcbench_core.exceptions import AgentError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from bcbench.exceptions import AgentError
 from bcbench.types import PRReviewMetrics
 
 RUN_METRICS_FILE_NAME = "_run-metrics.json"

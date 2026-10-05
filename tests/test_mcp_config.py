@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths as _build_assembly_probing_paths
 from bcbench.agent.shared.mcp import build_mcp_config
-from bcbench.exceptions import AgentError
 from bcbench.types import AgentRuntimeConfig
 from tests.conftest import create_dataset_entry
 

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.exceptions import AgentError
 from rich.console import Console
 
 # Red teaming ships as the optional `redteam` dependency group, so skip when it is not installed.
@@ -20,7 +21,6 @@ from bcbench import redteam
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.commands.redteam import _asr_table, _attack_result, _rows_table
-from bcbench.exceptions import AgentError
 from bcbench.types import BCalLLMBackend
 
 

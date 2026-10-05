@@ -1,8 +1,8 @@
 import os
 
 import pytest
+from bcbench_core.agent.copilot.cli import _find_copilot
 
-from bcbench.agent.copilot.cli import _find_copilot
 from bcbench.evaluate.codereview_judge_calibration import (
     _load_calibration_cases,
     run_calibration,

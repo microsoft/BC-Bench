@@ -1,9 +1,10 @@
 import logging
 
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import AgentHarness, AgentMetrics, PRReviewMetrics
+from bcbench.types import AgentHarness, PRReviewMetrics
 from tests.conftest import create_evaluation_context
 
 

@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
+from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -19,7 +20,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AgentHarness",
-    "AgentMetrics",
     "AgentMetricsContract",
     "AnyAgentMetrics",
     "BCalLLMBackend",
@@ -60,35 +60,6 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
-
-
-class AgentMetrics(BaseModel):
-    """Metrics collected during agent execution.
-
-    Separates runtime execution data from experiment configuration.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    kind: Literal["generic"] = "generic"
-
-    # Total execution time in seconds
-    execution_time: float | None = None
-    llm_duration: float | None = None
-
-    # Session cost in AI Credits (GitHub Copilot only)
-    ai_credits: float | None = None
-
-    turn_count: int | None = None
-
-    # Token usage from LLM calls
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-
-    total_tokens: int | None = None
-
-    # Tool usage statistics from agent logs
-    tool_usage: dict[str, int] | None = None
 
 
 class PRReviewMetrics(AgentMetrics):

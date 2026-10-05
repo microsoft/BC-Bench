@@ -4,9 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
-from bcbench.exceptions import AgentError
 from bcbench.types import EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry
 
