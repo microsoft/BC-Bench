@@ -1,4 +1,4 @@
-"""Paths for `altool`, the AL compiler and language tooling: package caches and assembly probing paths.
+"""Launch support for `altool`, the AL compiler and language tooling: symbol paths, arguments, and connection settings.
 
 Both `altool launchmcpserver` and `altool launchlspserver` need the same package-cache layout and assembly probing paths.
 """
@@ -9,6 +9,7 @@ from pathlib import Path
 from packaging.version import InvalidVersion, Version
 
 from bcbench_core.artifacts import DEFAULT_ARTIFACTS_CACHE, resolve_artifact_version_root
+from bcbench_core.container import ContainerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -122,3 +123,44 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     assembly_probing_paths.extend(_dotnet_runtime_probing_paths())
 
     return package_cache_paths, assembly_probing_paths
+
+
+def resolve_symbol_paths(
+    container_name: str, version: str, country: str = "w1", compiler_root: Path = DEFAULT_COMPILER_ROOT, artifacts_cache: Path = DEFAULT_ARTIFACTS_CACHE
+) -> tuple[list[str], list[str]] | None:
+    """Resolve (package_cache_paths, assembly_probing_paths) for altool.
+
+    Prefers the container's compiler folder when available, then falls back to the BC artifact cache.
+    Returns None when neither has symbols.
+    """
+    compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container_name, compiler_root)
+    if symbols_folder.is_dir():
+        logger.info(f"Using container compiler-folder symbols: {symbols_folder}")
+        return [str(symbols_folder)], build_assembly_probing_paths(compiler_folder)
+
+    artifact_paths = resolve_artifact_lsp_paths(version, country, artifacts_cache)
+    if artifact_paths is not None:
+        logger.info(f"Using BC artifact cache symbols for v{version}: {artifact_paths[0]}")
+    return artifact_paths
+
+
+def build_lsp_args(project_paths: list[str], package_cache_paths: list[str], assembly_probing_paths: list[str]) -> list[str]:
+    # `launchlspserver [<projects>...] [options]` — projects come first as positional args.
+    args: list[str] = ["launchlspserver", *project_paths, "--packagecachepath", *package_cache_paths]
+    if assembly_probing_paths:
+        args.extend(["--assemblyprobingpaths", *assembly_probing_paths])
+    return args
+
+
+def connection_env(container: ContainerConfig) -> dict[str, str]:
+    """Environment variables altool reads to connect to a BC server; empty values are omitted."""
+    return {
+        key: value
+        for key, value in {
+            "BC_SERVER_URL": container.server_url,
+            "BC_SERVER_INSTANCE": container.server_instance,
+            "BC_SERVER_USERNAME": container.username,
+            "BC_SERVER_PASSWORD": container.password,
+        }.items()
+        if value
+    }
