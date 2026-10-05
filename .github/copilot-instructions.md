@@ -36,7 +36,7 @@ Preserve one-way dependency flow from orchestration toward lower-level abstracti
 
 `bcbench.types` is the central category registry. Extend `EvaluationCategory` for category-owned mappings such as datasets, pipelines, results, and scoring behavior instead of duplicating those decisions elsewhere. Keep imports following the existing direction and avoid circular dependencies.
 
-Only the CLI entry point configures logging (`bcbench.logger.setup_logger`); library and runtime code never add handlers or set levels.
+Only the CLI entry point configures logging (`bcbench_core.logs.setup_logging`); library and runtime code never add handlers or set levels.
 
 ### Readable code over documentation or comments
 Function names should be self-explanatory. Do NOT add docstrings to functions unless absolutely necessary.

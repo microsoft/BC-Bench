@@ -6,6 +6,7 @@ from importlib import import_module
 from typing import Annotated
 
 import typer
+from bcbench_core.logs import setup_logging
 
 from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.category import category_app
@@ -13,7 +14,6 @@ from bcbench.commands.collect import collect_app
 from bcbench.commands.contamination import contamination_app
 from bcbench.commands.result import result_app
 from bcbench.config import get_config
-from bcbench.logger import setup_logger
 
 get_config()
 
@@ -76,7 +76,7 @@ def logging_callback(
 ) -> None:
     """Setup logging for all commands."""
     env = get_config().env
-    setup_logger(debug=verbose or env.runner_debug, github_actions=env.github_actions)
+    setup_logging(app_loggers=("bcbench",), debug=verbose or env.runner_debug, github_actions=env.github_actions)
 
 
 if __name__ == "__main__":
