@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "6fe2d36319d9198f64696f027eaaef495916531d",
+  "datasetHash": "39B118C1CDE2A4BA879BA544288C777E80D99B14F7882870045CC993BBE830B5",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "neg-3926331607-source-faithful-20261005",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/10990#discussion_r3926331607"
+  ],
+  "entryIds": [
+    "synthetic__upgrade-contoso-demo-data-no-upgrade-wiring-01"
+  ],
+  "newEntryIds": [
+    "synthetic__upgrade-contoso-demo-data-no-upgrade-wiring-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__upgrade-contoso-demo-data-no-upgrade-wiring-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/10990#discussion_r3926331607",
+          "purpose": "false_positive_guard",
+          "file": "src/Apps/W1/ExpenseAgent/demo data/Demo Data/ExpenseAgentContosoModule.Codeunit.al",
+          "lineStart": 40,
+          "lineEnd": 40,
+          "rationale": "Exact pipeline-validated negative snapshot (base_commit 1e3872168af58518ac2a02e8cf5934cbc28eee32) reproducing the reviewed hunk: Codeunit.Run(Codeunit::\"Create Expense VAT Rates\") added inside CreateMasterData() of a codeunit implementing \"Contoso Demo Data Module\". The maintainer rejected the request for an Upgrade-subtype entry point because this is Preview demo data invoked only through the explicit Contoso Demo Data tool, never automatically on install or version upgrade -- no subscriber or Subtype=Install/Upgrade exists anywhere in this module for any of its demo-data procedures, so the alleged upgrade-coverage gap is not a defect introduced by this change. Limitation: this guard covers only Contoso demo-data-module seeding helpers invoked exclusively through the demo-data tool; it does not generalize to codeunits that genuinely participate in the install/upgrade pipeline, nor does it certify every Preview-labelled feature as upgrade-exempt."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "B2A8C1E20FEEE3A08984CFC606F74BB8ECF78666DB6649320C6759E1A065E7BA",
+      "instanceId": "synthetic__upgrade-contoso-demo-data-no-upgrade-wiring-01"
+    }
+  ],
+  "sourceSnapshots": [
+    {
+      "commentUrl": "https://github.com/microsoft/BCApps/pull/10990#discussion_r3926331607",
+      "repo": "microsoft/BCApps",
+      "file": "src/Apps/W1/ExpenseAgent/demo data/Demo Data/ExpenseAgentContosoModule.Codeunit.al",
+      "prBaseCommit": "b149af232025ef8709bf1d3b6de175a48eabc8e6",
+      "headCommit": "b473dbdd1077047bec2860841efba8f1c04330b2",
+      "reviewCommit": "233457072db3f9fbb9e01ad5e425abfa42b8cffa",
+      "baseCommit": "1e3872168af58518ac2a02e8cf5934cbc28eee32",
+      "lineStart": 40,
+      "lineEnd": 40,
+      "patch": "diff --git a/src/Apps/W1/ExpenseAgent/demo data/Demo Data/ExpenseAgentContosoModule.Codeunit.al b/src/Apps/W1/ExpenseAgent/demo data/Demo Data/ExpenseAgentContosoModule.Codeunit.al\n--- a/src/Apps/W1/ExpenseAgent/demo data/Demo Data/ExpenseAgentContosoModule.Codeunit.al\t\n+++ b/src/Apps/W1/ExpenseAgent/demo data/Demo Data/ExpenseAgentContosoModule.Codeunit.al\t\n@@ -37,6 +37,7 @@ codeunit 8202 \"Expense Agent Contoso Module\" implements \"Contoso Demo Data Modul\n         CreateExpenseCountryData: Codeunit \"Create Expense Country Data\";\n     begin\n         CreateExpenseCountryData.CreateMasterData();\n+        Codeunit.Run(Codeunit::\"Create Expense VAT Rates\");\n     end;\n \n     procedure CreateTransactionalData()\n"
+    }
+  ]
+}
