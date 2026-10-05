@@ -175,6 +175,28 @@ class TestStageAndGetDiff:
         with pytest.raises(EmptyDiffError):
             stage_and_get_diff(temp_git_repo)
 
+    def test_stage_and_get_diff_excludes_app_json_by_default(self, temp_git_repo):
+        (temp_git_repo / "app" / "file.al").write_text("modified app content")
+        (temp_git_repo / "app" / "app.json").write_text("{}")
+        subprocess.run(["git", "add", "app/app.json"], cwd=temp_git_repo, check=True, capture_output=True)
+
+        diff = stage_and_get_diff(temp_git_repo)
+
+        assert "app/file.al" in diff
+        assert "app.json" not in diff
+
+    def test_stage_and_get_diff_uses_custom_exclude(self, temp_git_repo):
+        (temp_git_repo / "app" / "file.al").write_text("modified app content")
+        (temp_git_repo / "test" / "file.al").write_text("modified test content")
+        (temp_git_repo / "app" / "app.json").write_text("{}")
+        subprocess.run(["git", "add", "app/app.json"], cwd=temp_git_repo, check=True, capture_output=True)
+
+        diff = stage_and_get_diff(temp_git_repo, exclude=("test/*",))
+
+        assert "app/file.al" in diff
+        assert "app/app.json" in diff
+        assert "test/file.al" not in diff
+
     def test_stage_and_get_diff_no_al_files_raises_empty_diff(self, tmp_path):
         # Repro for CI failure: agent didn't write any *.al files. `git add '*.al'`
         # would otherwise fail with exit 128 ("pathspec did not match"); we expect
