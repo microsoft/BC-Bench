@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import yaml
@@ -9,7 +10,6 @@ from bcbench.dataset import TestEntry, TestGenEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
 from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
@@ -24,7 +24,7 @@ from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 __all__ = ["TestGenerationPipeline", "_get_test_generation_input_mode"]

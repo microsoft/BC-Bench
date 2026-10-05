@@ -1,14 +1,14 @@
+import logging
 from pathlib import Path
 
 from bcbench.dataset import ExtRequestAdvisorEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
 from bcbench.operations import setup_repo_prebuild
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["ADVISOR_RESULT_FILE", "ExtRequestAdvisorPipeline"]
 

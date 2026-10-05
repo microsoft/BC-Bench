@@ -1,5 +1,6 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+import logging
 import shutil
 import subprocess
 import time
@@ -10,10 +11,9 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, BCalLLMBackend, ExperimentConfiguration
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 _BCAL_TOOL = "bcal"

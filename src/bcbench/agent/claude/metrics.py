@@ -1,11 +1,11 @@
 import json
+import logging
 from collections import Counter
 from collections.abc import Sequence
 
-from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _as_float(value: object) -> float | None:

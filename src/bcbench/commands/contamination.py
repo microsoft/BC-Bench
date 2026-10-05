@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Annotated
@@ -14,10 +15,9 @@ from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import FilePathIdentificationResult
 from bcbench.contamination.runner import load_identification_results, run_filepath_identification
 from bcbench.dataset import BugFixEntry
-from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 contamination_app = typer.Typer(help="Contamination diagnostics for the dataset")

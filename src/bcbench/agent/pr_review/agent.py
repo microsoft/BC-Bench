@@ -11,6 +11,7 @@ to ``review.json`` in the repo root so the existing code-review scorer runs unch
 """
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -27,11 +28,10 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.logger import get_logger
 from bcbench.operations import commit_changes, has_changes, init_repo
 from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 _FINDINGS_OUTPUT_FILE = "al-code-review-findings.json"

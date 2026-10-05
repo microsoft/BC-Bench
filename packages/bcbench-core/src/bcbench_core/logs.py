@@ -162,13 +162,13 @@ _GITHUB_HANDLER_NAME = f"{_CORE_LOGGER}.github_actions"
 _CONSOLE_HANDLER_NAME = f"{_CORE_LOGGER}.console"
 
 
-def setup_logging(*, app_loggers: tuple[str, ...], debug: bool, github_actions: bool) -> None:
+def setup_logging(*, app_logger: str, debug: bool, github_actions: bool) -> None:
     """Configure process-wide logging; call once from the application entry point.
 
     Calling again replaces the handlers installed by a previous call; other root handlers are kept.
 
     Args:
-        app_loggers: Top-level logger names of the application; bcbench-core's logger is always included.
+        app_logger: Top-level logger name of the application, usually its package name; bcbench-core's logger is always included.
         debug: If True, set application and bcbench-core loggers to DEBUG level, otherwise INFO.
         github_actions: If True, also emit warnings and errors as GitHub Actions annotations.
     """
@@ -201,5 +201,5 @@ def setup_logging(*, app_loggers: tuple[str, ...], debug: bool, github_actions: 
     console_handler.addFilter(GitHubActionsSkipFilter())
     root_logger.addHandler(console_handler)
 
-    for name in (*app_loggers, _CORE_LOGGER):
+    for name in (app_logger, _CORE_LOGGER):
         logging.getLogger(name).setLevel(app_level)

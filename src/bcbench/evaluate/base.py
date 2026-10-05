@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Protocol
@@ -7,11 +8,10 @@ from typing import Protocol
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
-from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 __all__ = ["AgentRunner", "EvaluationPipeline"]

@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -8,12 +9,11 @@ from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import EmptyDiffError
 from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
 from bcbench.operations import copy_symbol_apps, stage_and_get_diff
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # bcal nondeterministically asks for clarification instead of editing, producing no *.al file
 # (an empty diff). Retries were removed: a stalled agent is scored as a failure rather than re-run,

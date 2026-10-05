@@ -1,5 +1,6 @@
 """Business Central specific operations for building, publishing, and testing."""
 
+import logging
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,11 +14,10 @@ from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
-from bcbench.logger import get_logger
 from bcbench.operations.setup_operations import bootstrap_app_json
 from bcbench.types import ContainerConfig
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 

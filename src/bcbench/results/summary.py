@@ -1,4 +1,5 @@
 import json
+import logging
 import tomllib
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -10,14 +11,13 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def get_benchmark_version() -> str:

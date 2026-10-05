@@ -1,6 +1,7 @@
 """CLI command for AI red teaming BC-Bench agents (POC)."""
 
 import json
+import logging
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -15,13 +16,12 @@ from rich.text import Text
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.config import get_config
-from bcbench.logger import get_logger
 from bcbench.types import BCalLLMBackend
 
 # Loose JSON alias (aliasing keeps `Any` out of function signatures, satisfying ANN401).
 type Json = dict[str, Any]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 _console = Console()
 

@@ -14,6 +14,7 @@ from typed container configuration populated at the CLI boundary.
 
 import base64
 import json
+import logging
 import threading
 import time
 from http.client import HTTPConnection
@@ -22,10 +23,9 @@ from typing import cast
 from urllib.parse import urlsplit
 
 from bcbench.exceptions import AgentError
-from bcbench.logger import get_logger
 from bcbench.types import AgentRuntimeConfig, ContainerConfig
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Must match the configuration name the setup-time AL app creates (scripts/al/mcp-config-setup).
 _CONFIGURATION_NAME = "BCBench"

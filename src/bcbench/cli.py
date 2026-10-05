@@ -76,7 +76,7 @@ def logging_callback(
 ) -> None:
     """Setup logging for all commands."""
     env = get_config().env
-    setup_logging(app_loggers=("bcbench",), debug=verbose or env.runner_debug, github_actions=env.github_actions)
+    setup_logging(app_logger="bcbench", debug=verbose or env.runner_debug, github_actions=env.github_actions)
 
 
 if __name__ == "__main__":
