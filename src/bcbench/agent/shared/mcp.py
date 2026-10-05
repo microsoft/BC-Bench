@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from bcbench_core.altool_paths import build_assembly_probing_paths, compiler_symbol_folder_for_container
+from bcbench_core.altool import build_assembly_probing_paths, compiler_symbol_folder_for_container, connection_env
 from bcbench_core.container import ContainerConfig
 from jinja2.sandbox import SandboxedEnvironment
 
@@ -108,18 +108,7 @@ def build_mcp_config(
             al_server["args"].extend(["--assemblyprobingpaths", *assembly_probing_paths])
             logger.info(f"Assembly probing paths: {assembly_probing_paths}")
 
-        # altool defines these environment variable names as its connection-config interface. Values
-        # are sourced from typed CLI configuration rather than reading the harness environment here.
-        forwarded = {
-            key: value
-            for key, value in {
-                "BC_SERVER_URL": container.server_url,
-                "BC_SERVER_INSTANCE": container.server_instance,
-                "BC_SERVER_USERNAME": container.username,
-                "BC_SERVER_PASSWORD": container.password,
-            }.items()
-            if value
-        }
+        forwarded = connection_env(container)
         if forwarded:
             al_server["env"] = forwarded
             logger.info(f"Forwarding env vars to altool MCP: {list(forwarded.keys())}")

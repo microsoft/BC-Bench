@@ -2,8 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from bcbench_core import altool_paths
-from bcbench_core.altool_paths import build_assembly_probing_paths as _build_assembly_probing_paths
+from bcbench_core import altool
+from bcbench_core.altool import build_assembly_probing_paths as _build_assembly_probing_paths
+from bcbench_core.container import ContainerConfig
 
 
 class TestBuildAssemblyProbingPaths:
@@ -46,7 +47,7 @@ class TestBuildAssemblyProbingPaths:
 @pytest.fixture
 def dotnet_shared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     shared = tmp_path / "dotnet" / "shared"
-    monkeypatch.setattr(altool_paths, "_DOTNET_SHARED", shared)
+    monkeypatch.setattr(altool, "_DOTNET_SHARED", shared)
     return shared
 
 
@@ -58,8 +59,8 @@ def _install_runtime(shared: Path, version: str, *, aspnetcore: bool = True) -> 
 
 class TestDotnetRuntimeDetection:
     def test_none_without_dotnet(self, dotnet_shared):
-        assert altool_paths._detect_dotnet_runtime_version() is None
-        assert altool_paths._dotnet_runtime_probing_paths() == []
+        assert altool._detect_dotnet_runtime_version() is None
+        assert altool._dotnet_runtime_probing_paths() == []
 
     def test_picks_newest_runtime_with_matching_aspnetcore_excluding_unstable_majors(self, dotnet_shared):
         _install_runtime(dotnet_shared, "8.0.11")
@@ -68,26 +69,26 @@ class TestDotnetRuntimeDetection:
         _install_runtime(dotnet_shared, "not-a-version")
         (dotnet_shared / "Microsoft.NETCore.App" / "README.txt").write_text("x")
 
-        assert str(altool_paths._detect_dotnet_runtime_version()) == "8.0.11"
-        assert altool_paths._dotnet_runtime_probing_paths() == [
+        assert str(altool._detect_dotnet_runtime_version()) == "8.0.11"
+        assert altool._dotnet_runtime_probing_paths() == [
             str(dotnet_shared / "Microsoft.NETCore.App" / "8.0.11"),
             str(dotnet_shared / "Microsoft.AspNetCore.App" / "8.0.11"),
         ]
 
 
 def test_compiler_symbol_folder_defaults_to_bccontainerhelper(tmp_path):
-    assert altool_paths.compiler_symbol_folder_for_container("bc") == (altool_paths.DEFAULT_COMPILER_ROOT / "bc", altool_paths.DEFAULT_COMPILER_ROOT / "bc" / "symbols")
-    assert altool_paths.compiler_symbol_folder_for_container("bc", tmp_path) == (tmp_path / "bc", tmp_path / "bc" / "symbols")
+    assert altool.compiler_symbol_folder_for_container("bc") == (altool.DEFAULT_COMPILER_ROOT / "bc", altool.DEFAULT_COMPILER_ROOT / "bc" / "symbols")
+    assert altool.compiler_symbol_folder_for_container("bc", tmp_path) == (tmp_path / "bc", tmp_path / "bc" / "symbols")
 
 
 class TestResolveArtifactLspPaths:
     def test_none_without_downloaded_artifact(self, tmp_path):
-        assert altool_paths.resolve_artifact_lsp_paths("27.2", artifacts_cache=tmp_path) is None
+        assert altool.resolve_artifact_lsp_paths("27.2", artifacts_cache=tmp_path) is None
 
     def test_none_without_symbol_folders(self, tmp_path):
         (tmp_path / "sandbox" / "27.2.1.0").mkdir(parents=True)
 
-        assert altool_paths.resolve_artifact_lsp_paths("27.2", artifacts_cache=tmp_path) is None
+        assert altool.resolve_artifact_lsp_paths("27.2", artifacts_cache=tmp_path) is None
 
     def test_country_and_platform_paths(self, tmp_path, dotnet_shared):
         root = tmp_path / "sandbox" / "27.2.1.0"
@@ -95,11 +96,52 @@ class TestResolveArtifactLspPaths:
         (root / "platform" / "Applications").mkdir(parents=True)
         _install_runtime(dotnet_shared, "8.0.11")
 
-        resolved = altool_paths.resolve_artifact_lsp_paths("27.2", artifacts_cache=tmp_path)
+        resolved = altool.resolve_artifact_lsp_paths("27.2", artifacts_cache=tmp_path)
 
         assert resolved is not None
         package_cache_paths, probing_paths = resolved
 
         assert package_cache_paths == [str(root / "w1" / "Extensions"), str(root / "platform" / "Applications")]
         assert probing_paths[0] == str(root / "platform")
-        assert probing_paths[1:] == altool_paths._dotnet_runtime_probing_paths()
+        assert probing_paths[1:] == altool._dotnet_runtime_probing_paths()
+
+
+class TestResolveSymbolPaths:
+    def test_prefers_container_compiler_folder(self, tmp_path):
+        compiler = tmp_path / "compiler"
+        (compiler / "bc" / "symbols").mkdir(parents=True)
+        (compiler / "bc" / "dlls" / "shared").mkdir(parents=True)
+        (tmp_path / "cache" / "sandbox" / "27.2.1.0" / "w1" / "Extensions").mkdir(parents=True)
+
+        assert altool.resolve_symbol_paths("bc", "27.2", compiler_root=compiler, artifacts_cache=tmp_path / "cache") == (
+            [str(compiler / "bc" / "symbols")],
+            [str(compiler / "bc" / "dlls" / "shared"), str(compiler / "bc" / "dlls")],
+        )
+
+    def test_falls_back_to_artifact_cache(self, tmp_path, dotnet_shared):
+        extensions = tmp_path / "cache" / "sandbox" / "27.2.1.0" / "w1" / "Extensions"
+        extensions.mkdir(parents=True)
+
+        resolved = altool.resolve_symbol_paths("bc", "27.2", compiler_root=tmp_path / "compiler", artifacts_cache=tmp_path / "cache")
+
+        assert resolved == ([str(extensions)], [])
+
+    def test_none_without_symbols(self, tmp_path):
+        assert altool.resolve_symbol_paths("bc", "27.2", compiler_root=tmp_path / "compiler", artifacts_cache=tmp_path / "cache") is None
+
+
+@pytest.mark.parametrize(
+    ("probing_paths", "expected"),
+    [
+        ([], ["launchlspserver", "app", "test", "--packagecachepath", "cache"]),
+        (["dlls"], ["launchlspserver", "app", "test", "--packagecachepath", "cache", "--assemblyprobingpaths", "dlls"]),
+    ],
+)
+def test_build_lsp_args_puts_projects_before_options(probing_paths, expected):
+    assert altool.build_lsp_args(["app", "test"], ["cache"], probing_paths) == expected
+
+
+def test_connection_env_omits_empty_values():
+    container = ContainerConfig("bc", "admin", "", "CRONUS", server_url="http://bc")
+
+    assert altool.connection_env(container) == {"BC_SERVER_URL": "http://bc", "BC_SERVER_USERNAME": "admin"}
