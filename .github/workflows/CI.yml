@@ -27,9 +27,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Test the PR head rather than the merge commit so coverage lines map onto the PR diff
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
