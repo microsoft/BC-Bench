@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from bcbench_core.git import commit_changes, has_changes, init_repo
 
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
@@ -28,7 +29,6 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.operations import commit_changes, has_changes, init_repo
 from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 
 logger = logging.getLogger(__name__)

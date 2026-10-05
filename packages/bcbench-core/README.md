@@ -15,6 +15,10 @@ Reusable, strongly typed building blocks for evaluating coding agents on Busines
 
 The import and environment rules are enforced by ruff (`banned-api` in [`pyproject.toml`](pyproject.toml)); imports of undeclared dependencies are rejected by ty's `missing-direct-dependency` rule.
 
+## Prerequisites
+
+`bcbench_core.git` shells out to `git` (2.49+, for `git clone --revision`) and to the [GitHub CLI](https://cli.github.com/) (`gh`), which must be installed and authenticated (`gh auth login`, or `GH_TOKEN` in CI) to clone repositories.
+
 ## Logging
 
 Modules log through `logging.getLogger(__name__)`, so every record is under the `bcbench_core` logger namespace. Importing the library never adds handlers or sets levels.

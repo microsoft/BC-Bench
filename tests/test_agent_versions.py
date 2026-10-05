@@ -3,13 +3,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.git import commit_changes, init_repo
 
 from bcbench.agent.claude import get_claude_version
 from bcbench.agent.copilot import get_copilot_version
 from bcbench.agent.pr_review import get_pr_review_version
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
-from bcbench.operations import commit_changes, init_repo
 
 
 @pytest.mark.parametrize(

@@ -105,7 +105,6 @@ class FilePatternConfig:
     """File patterns and naming conventions."""
 
     trajectory_pattern: str
-    patch_pattern: str
     instance_pattern: str
     result_pattern: str
     instruction_source_naming: str
@@ -122,7 +121,6 @@ class FilePatternConfig:
         """Get default file pattern configuration."""
         return cls(
             trajectory_pattern=".traj.json",
-            patch_pattern=".patch",
             instance_pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$",
             result_pattern=".jsonl",
             instruction_source_naming="AGENTS.md",

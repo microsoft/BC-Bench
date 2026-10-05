@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 import yaml
+from bcbench_core.git import apply_patch, clean_project_paths, stage_and_get_diff
 from bcbench_core.projects import categorize_projects
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
@@ -10,15 +11,7 @@ from bcbench.dataset import TestEntry, TestGenEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
 from bcbench.github_actions import github_log_group
-from bcbench.operations import (
-    apply_patch,
-    build_and_publish_projects,
-    clean_project_paths,
-    copy_problem_statement_folder,
-    extract_tests_from_patch,
-    setup_repo_prebuild,
-    stage_and_get_diff,
-)
+from bcbench.operations import build_and_publish_projects, copy_problem_statement_folder, extract_tests_from_patch, setup_repo_prebuild
 from bcbench.operations.bc_operations import run_test_suite
 from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
