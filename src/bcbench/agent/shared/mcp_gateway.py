@@ -23,8 +23,8 @@ from typing import cast
 from urllib.parse import urlsplit
 
 from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import AgentError
 
-from bcbench.exceptions import AgentError
 from bcbench.types import AgentRuntimeConfig
 
 logger = logging.getLogger(__name__)

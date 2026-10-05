@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared.plugin import resolve_config_plugins
 from bcbench.config import get_config
-from bcbench.exceptions import AgentError
 from bcbench.types import PluginConfig
 
 _MANIFEST = get_config().file_patterns.plugin_manifest

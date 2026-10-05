@@ -1,11 +1,12 @@
 from pathlib import Path
 
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import TypeAdapter
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentHarness, AgentMetrics, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
+from bcbench.types import AgentHarness, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
 
 
 def test_repository_harnesses_have_target_dir():

@@ -6,7 +6,8 @@ import logging
 import tempfile
 from pathlib import Path
 
-from bcbench.agent.copilot.cli import invoke_copilot
+from bcbench_core.agent.copilot.cli import invoke_copilot
+
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import (

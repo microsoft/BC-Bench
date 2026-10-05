@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.config import get_config
@@ -12,7 +13,7 @@ from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_nl2al_entry
 
 

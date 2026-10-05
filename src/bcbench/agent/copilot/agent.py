@@ -5,8 +5,10 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from bcbench_core.agent.copilot.cli import invoke_copilot
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentError
 
-from bcbench.agent.copilot.cli import invoke_copilot
 from bcbench.agent.shared import (
     agent_subprocess_env,
     build_al_lsp_plugin,
@@ -17,9 +19,9 @@ from bcbench.agent.shared import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentError, AgentTimeoutError
+from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
 _config = get_config()

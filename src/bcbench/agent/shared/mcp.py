@@ -6,10 +6,10 @@ from typing import Any
 
 from bcbench_core.altool import build_assembly_probing_paths, compiler_symbol_folder_for_container, connection_env
 from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import AgentError
 from jinja2.sandbox import SandboxedEnvironment
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentError
 from bcbench.types import AgentRuntimeConfig
 
 logger = logging.getLogger(__name__)

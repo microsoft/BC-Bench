@@ -4,6 +4,9 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.agent.version import get_cli_version
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.claude.metrics import parse_stream_output
 from bcbench.agent.shared import (
@@ -14,12 +17,11 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
-from bcbench.agent.shared.version import get_cli_version
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentError, AgentTimeoutError
+from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
 _config = get_config()

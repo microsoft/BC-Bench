@@ -3,7 +3,7 @@ import logging
 from collections import Counter
 from collections.abc import Sequence
 
-from bcbench.types import AgentMetrics
+from bcbench_core.agent.metrics import AgentMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def _milliseconds_to_seconds(value: object) -> float | None:
     return None if milliseconds is None else milliseconds / 1000.0
 
 
-def _tool_label(data: dict) -> str | None:
+def _tool_label(data: dict[str, object]) -> str | None:
     tool_name = data.get("toolName")
     if not isinstance(tool_name, str) or not tool_name:
         return None
@@ -33,7 +33,7 @@ def _tool_label(data: dict) -> str | None:
     return tool_name
 
 
-def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -> tuple[AgentMetrics | None, str | None]:
+def parse_output(output_lines: Sequence[str], log_transcript: bool = False) -> tuple[AgentMetrics | None, str | None]:
     """Parse metrics and the agent's final response from `copilot --output-format=json` (JSONL) stdout.
 
     Relevant events (CLI 1.0.82):
