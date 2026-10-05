@@ -37,8 +37,6 @@ Prerequisites:
 - [GitHub CLI](https://cli.github.com/)
 - [GitHub Copilot CLI](https://github.com/github/copilot-cli)
 
-Python dependencies must use the configured Microsoft feed (`https://packagefeedproxy.microsoft.io/pypi/simple`), including dependency and security updates. Regenerate affected lockfile entries with `uv lock --upgrade-package <package>` and retain Microsoft-hosted artifact URLs. If the feed is unavailable or a patched version is missing, report the blocker rather than falling back to PyPI.
-
 ```bash
 # Folder layout example
 #   C:\depot\BCApps     -> cloned evaluation target repository
