@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from bcbench.categories import category_definition
 from bcbench.commands.result import _rebuild_aggregates, result_update
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult
@@ -33,7 +34,7 @@ def test_agent_version_round_trips_through_results_and_summaries(tmp_path: Path,
 def test_timeout_result_keeps_version_resolved_before_execution(tmp_path: Path) -> None:
     context = create_evaluation_context(tmp_path)
     context.agent_version = "1.2.3"
-    pipeline = context.category.pipeline
+    pipeline = category_definition(context.category).make_pipeline()
     with (
         patch.object(type(pipeline), "setup"),
         patch.object(type(pipeline), "run_agent", side_effect=AgentTimeoutError("timeout")),

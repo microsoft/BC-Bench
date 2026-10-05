@@ -16,10 +16,10 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from bcbench_core.dataset import TestEntry
 
+from bcbench.categories.code_review.review_parsing import parse_review_output
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
-from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult

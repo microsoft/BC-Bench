@@ -4,11 +4,11 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
+from bcbench.categories.code_review.pipeline import CodeReviewPipeline
 from bcbench.cli import app
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.types import AgentHarness, EvaluationCategory
 
 

@@ -15,6 +15,7 @@ This doc is a map; the source files and their comments are the source of truth. 
 A category's `definition.py` declares ([src/bcbench/categories/definition.py](src/bcbench/categories/definition.py)):
 
 - `dataset_file` / `entry_type` — the dataset file for raw tasks and the typed Python model for one dataset row (aka one task). `requires_repo` follows from the entry type.
+- `make_pipeline` — builds the category's pipeline (`pipeline.py` in the category package): setup, agent run, and evaluation behavior.
 - `evaluators` / `core_score` — the bc-eval evaluator list and headline score, emitted to workflows by [src/bcbench/commands/category.py](src/bcbench/commands/category.py).
 - `requires_container` / `runner` — whether the category needs a BC container, and which runner evaluates it.
 - `pass_bc_credentials` — whether the agent may see the BC container credentials.
@@ -23,7 +24,6 @@ Still mapped from `EvaluationCategory` while the redesign continues:
 
 - `result_class` — the recorded outcome for one evaluated task.
 - `summary_class` / `aggregate_class` — the aggregate views used by result summaries and leaderboards.
-- `pipeline` — the category-specific setup, agent run, and evaluation behavior.
 - `judge_model` — the pinned LLM judge for judge-scored categories.
 - Prompt template — the category-specific prompt in [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml), loaded by [src/bcbench/agent/shared/prompt.py](src/bcbench/agent/shared/prompt.py).
 
@@ -36,7 +36,7 @@ Use the existing implementations as examples: `bug-fix` and `test-generation` fo
 1. Add the enum value and remaining mappings in [src/bcbench/types.py](src/bcbench/types.py), and a category package with `definition.py` under [src/bcbench/categories/](src/bcbench/categories/), wired into `category_definition()`.
 2. Add the category dataset JSONL and entry class in [src/bcbench/dataset/dataset_entry.py](src/bcbench/dataset/dataset_entry.py).
 3. Add a result class under [src/bcbench/results/](src/bcbench/results/) and map it from `EvaluationCategory.result_class`.
-4. Add a pipeline under [src/bcbench/evaluate/](src/bcbench/evaluate/).
+4. Add a `pipeline.py` to the category package, subclassing `EvaluationPipeline` from [src/bcbench/evaluate/base.py](src/bcbench/evaluate/base.py).
 5. Add the prompt template to [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml).
 6. Add the category to workflow choice lists in [.github/workflows/](.github/workflows/), especially evaluation workflows and CI category selection.
 7. Add docs, leaderboard data, notebooks, and tests for the category where relevant.

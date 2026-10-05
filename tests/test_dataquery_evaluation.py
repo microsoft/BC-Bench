@@ -5,10 +5,11 @@ import pytest
 from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import BuildError
 
+from bcbench.categories.data_query import operations as dataquery_operations
+from bcbench.categories.data_query.operations import wrap_query_as_api
+from bcbench.categories.data_query.pipeline import DataQueryPipeline, _load_answer_rows, result_sets_match
 from bcbench.dataset import DataQueryEntry
-from bcbench.evaluate.dataquery import DataQueryPipeline, _load_answer_rows, result_sets_match
 from bcbench.exceptions import EmptyGoldResultError
-from bcbench.operations import dataquery_operations, wrap_query_as_api
 from bcbench.types import AgentHarness, EvaluationCategory, EvaluationContext
 from tests.conftest import create_data_query_entry
 
@@ -95,14 +96,14 @@ class TestGoldRowsEmptyGuard:
     def test_empty_gold_raises(self, tmp_path, monkeypatch):
         # An empty gold means the environment/harness is broken, not a valid expected answer. It must
         # fail loudly so a run that retrieved nothing can't score as resolved via empty-vs-empty.
-        monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: [])
+        monkeypatch.setattr("bcbench.categories.data_query.pipeline.execute_al_query", lambda *args, **kwargs: [])
 
         with pytest.raises(EmptyGoldResultError):
             DataQueryPipeline()._gold_rows(self._context(tmp_path))
 
     def test_non_empty_gold_returned(self, tmp_path, monkeypatch):
         rows = [{"CountryRegionCode": "US", "CustomerCount": 3}]
-        monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: rows)
+        monkeypatch.setattr("bcbench.categories.data_query.pipeline.execute_al_query", lambda *args, **kwargs: rows)
 
         assert DataQueryPipeline()._gold_rows(self._context(tmp_path)) == rows
 

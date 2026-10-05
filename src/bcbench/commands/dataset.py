@@ -9,7 +9,7 @@ import typer
 from bcbench.categories import category_definition
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
+from bcbench.dataset import CodeReviewEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
 from bcbench.types import EvaluationCategory
@@ -54,7 +54,7 @@ def list_entries(
         diff_output: str = result.stdout
         entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
     else:
-        entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path, random=4 if test_run else None)
+        entries = entry_cls.load(resolved_path, random=4 if test_run else None)
         entry_ids: list[str] = [e.instance_id for e in entries]
 
     print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")
@@ -76,7 +76,7 @@ def view_entry(
     from rich.panel import Panel
     from rich.table import Table
 
-    entry: BaseDatasetEntry = category_definition(category).load_entries(get_config().paths.dataset_dir, entry_id)[0]
+    entry = category_definition(category).load_entries(get_config().paths.dataset_dir, entry_id)[0]
     console = Console()
 
     info_table = Table(show_header=False, box=None)

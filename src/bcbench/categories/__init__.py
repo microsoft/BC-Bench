@@ -1,6 +1,6 @@
 """Evaluation categories: each package under bcbench.categories owns one category's definition and behaviour."""
 
-from typing import assert_never
+from typing import Any, assert_never
 
 from bcbench.categories.bug_fix.definition import DEFINITION as BUG_FIX
 from bcbench.categories.code_review.definition import DEFINITION as CODE_REVIEW
@@ -11,13 +11,13 @@ from bcbench.categories.ext_request_implement.definition import DEFINITION as EX
 from bcbench.categories.ext_request_triage.definition import DEFINITION as EXT_REQUEST_TRIAGE
 from bcbench.categories.nl2al.definition import DEFINITION as NL2AL
 from bcbench.categories.test_generation.definition import DEFINITION as TEST_GENERATION
-from bcbench.dataset import BaseDatasetEntry
 from bcbench.types import EvaluationCategory
 
 __all__ = ["CategoryDefinition", "category_definition"]
 
 
-def category_definition(category: EvaluationCategory) -> CategoryDefinition[BaseDatasetEntry]:
+def category_definition(category: EvaluationCategory) -> CategoryDefinition[Any]:
+    """The CLI selects categories at runtime, so the entry type is only known inside each definition, where it is checked."""
     match category:
         case EvaluationCategory.BUG_FIX:
             return BUG_FIX

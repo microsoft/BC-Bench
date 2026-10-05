@@ -1,25 +1,24 @@
 """The contract every evaluation category fulfils."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, Literal, TypeVar
+from typing import Literal
 
 from bcbench.dataset import BaseDatasetEntry, RepoGroundedEntry
+from bcbench.evaluate import EvaluationPipeline
 from bcbench.types import EvaluationCategory
-
-# Covariant so a definition for a specific entry type is usable wherever any definition is expected
-E_co = TypeVar("E_co", bound=BaseDatasetEntry, covariant=True)
 
 # GitHub Actions runner labels; only categories that build BaseApp need the self-hosted runners
 type Runner = Literal["GitHub-BCBench", "ubuntu-latest", "windows-latest"]
 
 
 @dataclass(frozen=True)
-class CategoryDefinition(Generic[E_co]):  # noqa: UP046 - PEP 695 syntax cannot declare covariance explicitly
+class CategoryDefinition[E: BaseDatasetEntry]:
     category: EvaluationCategory
     dataset_file: str
-    entry_type: type[E_co]
+    entry_type: type[E]
+    make_pipeline: Callable[[], EvaluationPipeline[E]]
     # bc-eval evaluators (evaluator/scores.py) uploaded for this category, and the one reported as CoreScore
     evaluators: tuple[str, ...]
     core_score: str
@@ -37,5 +36,5 @@ class CategoryDefinition(Generic[E_co]):  # noqa: UP046 - PEP 695 syntax cannot 
     def dataset_path(self, dataset_dir: Path) -> Path:
         return dataset_dir / self.dataset_file
 
-    def load_entries(self, dataset_dir: Path, entry_id: str | None = None) -> Sequence[E_co]:
+    def load_entries(self, dataset_dir: Path, entry_id: str | None = None) -> Sequence[E]:
         return self.entry_type.load(self.dataset_path(dataset_dir), entry_id=entry_id)

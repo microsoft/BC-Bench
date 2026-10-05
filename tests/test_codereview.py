@@ -9,12 +9,12 @@ import pytest
 from bcbench_core.exceptions import AgentError
 
 from bcbench.categories import category_definition
+from bcbench.categories.code_review.judge import LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
+from bcbench.categories.code_review.pipeline import CodeReviewPipeline
+from bcbench.categories.code_review.review_parsing import parse_review_output
 from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
-from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
 from bcbench.types import EvaluationCategory
@@ -916,7 +916,7 @@ class TestCodeReviewLeaderboardAggregate:
 
 class TestCodeReviewPipeline:
     def test_pipeline_instantiates(self):
-        pipeline = EvaluationCategory.CODE_REVIEW.pipeline
+        pipeline = category_definition(EvaluationCategory.CODE_REVIEW).make_pipeline()
         assert pipeline is not None
 
     def test_entry_class_is_codereview(self):
@@ -933,9 +933,9 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with (
-            patch("bcbench.evaluate.codereview.fetch_commit_if_missing"),
-            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
-            patch("bcbench.evaluate.codereview.apply_patch") as mock_apply,
+            patch("bcbench.categories.code_review.pipeline.fetch_commit_if_missing"),
+            patch("bcbench.categories.code_review.pipeline.setup_repo_prebuild") as mock_setup,
+            patch("bcbench.categories.code_review.pipeline.apply_patch") as mock_apply,
         ):
             pipeline.setup_workspace(entry, Path(tmp_path))
 
@@ -966,8 +966,8 @@ class TestCodeReviewPipeline:
         )
 
         with (
-            patch("bcbench.evaluate.codereview.fetch_commit_if_missing"),
-            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
+            patch("bcbench.categories.code_review.pipeline.fetch_commit_if_missing"),
+            patch("bcbench.categories.code_review.pipeline.setup_repo_prebuild") as mock_setup,
         ):
             pipeline.setup_workspace(entry, Path(tmp_path))
 
@@ -1014,7 +1014,7 @@ class TestCodeReviewPipeline:
         (context.repo_path / "review.json").write_text(json.dumps([c.model_dump(mode="json") for c in generated]), encoding="utf-8")
         pipeline = CodeReviewPipeline()
 
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge:
+        with patch("bcbench.categories.code_review.judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge:
             pipeline.evaluate(context)
 
         result = BaseEvaluationResult.from_json(json.loads(next(context.result_dir.glob("*.jsonl")).read_text(encoding="utf-8")))
@@ -1048,7 +1048,7 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with (
-            patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge,
+            patch("bcbench.categories.code_review.judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge,
             patch.object(pipeline, "save_result") as save,
         ):
             pipeline.evaluate(context)
@@ -1080,7 +1080,7 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with (
-            patch("bcbench.evaluate.codereview_judge.invoke_copilot", return_value=(None, '[{"pair":1,"match":true}]')) as invoke,
+            patch("bcbench.categories.code_review.judge.invoke_copilot", return_value=(None, '[{"pair":1,"match":true}]')) as invoke,
             patch.object(pipeline, "save_result") as save,
         ):
             pipeline.evaluate(context)
@@ -1100,7 +1100,7 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with (
-            patch("bcbench.evaluate.codereview_judge.invoke_copilot", return_value=(None, judge_output)) as invoke,
+            patch("bcbench.categories.code_review.judge.invoke_copilot", return_value=(None, judge_output)) as invoke,
             patch.object(pipeline, "save_result") as save,
         ):
             if judge_output == "not json":
@@ -1121,7 +1121,7 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with (
-            patch("bcbench.evaluate.codereview_judge.invoke_copilot", side_effect=AgentError("Judge unavailable")) as invoke,
+            patch("bcbench.categories.code_review.judge.invoke_copilot", side_effect=AgentError("Judge unavailable")) as invoke,
             patch.object(pipeline, "save_result") as save,
             pytest.raises(LLMJudgeError, match="Judge unavailable"),
         ):
@@ -1302,7 +1302,7 @@ class TestJudge:
         assert run.call_args.kwargs["env"]["BCBENCH_JUDGE_ENV_SENTINEL"] == "inherited"
 
     def test_raises_when_copilot_not_found(self, tmp_path):
-        with patch("bcbench.evaluate.codereview_judge.invoke_copilot", side_effect=AgentError("Copilot CLI not found")), pytest.raises(LLMJudgeError, match="Copilot CLI not found"):
+        with patch("bcbench.categories.code_review.judge.invoke_copilot", side_effect=AgentError("Copilot CLI not found")), pytest.raises(LLMJudgeError, match="Copilot CLI not found"):
             judge_verdicts([self._pair(10)], work_dir=tmp_path)
 
     def test_raises_when_subprocess_fails(self, tmp_path):
@@ -1335,7 +1335,7 @@ class TestJudge:
             (tmp_path / _config.judge.result_file).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
             return None, ""
 
-        with patch("bcbench.evaluate.codereview_judge.invoke_copilot", side_effect=fake_invoke):
+        with patch("bcbench.categories.code_review.judge.invoke_copilot", side_effect=fake_invoke):
             result = judge_verdicts(pairs, work_dir=tmp_path)
 
         assert result == [True, False]
@@ -1344,7 +1344,7 @@ class TestJudge:
         pairs = [self._pair(10), self._pair(20)]
 
         with patch(
-            "bcbench.evaluate.codereview_judge.invoke_copilot",
+            "bcbench.categories.code_review.judge.invoke_copilot",
             return_value=(None, '[{"pair": 1, "match": false}, {"pair": 2, "match": true}]'),
         ):
             result = judge_verdicts(pairs, work_dir=tmp_path)
@@ -1353,7 +1353,7 @@ class TestJudge:
 
     def test_invalid_response_propagates_without_retry(self, tmp_path):
         with (
-            patch("bcbench.evaluate.codereview_judge.invoke_copilot", return_value=(None, '{"verdicts":[{"pair":1,"match":true}]')) as mock_invoke,
+            patch("bcbench.categories.code_review.judge.invoke_copilot", return_value=(None, '{"verdicts":[{"pair":1,"match":true}]')) as mock_invoke,
             pytest.raises(LLMJudgeError),
         ):
             judge_verdicts([self._pair(10)], work_dir=tmp_path)
@@ -1372,7 +1372,7 @@ class TestJudgeExpectedAndIgnored:
         expected_pairs = [self._pair(10, "exp-a"), self._pair(20, "exp-b")]
         ignored_pairs = [self._pair(30, "ign-a"), self._pair(40, "ign-b")]
 
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True, False, False, True]) as mock_verdicts:
+        with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[True, False, False, True]) as mock_verdicts:
             validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
 
         # A single judge pass over the concatenation — no second call, so no stale-verdict risk.
@@ -1382,13 +1382,13 @@ class TestJudgeExpectedAndIgnored:
         assert validated_ignored == [ignored_pairs[1]]
 
     def test_empty_buckets_return_empty(self, tmp_path):
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[]):
+        with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[]):
             assert judge_expected_and_ignored([], [], work_dir=tmp_path) == ([], [])
 
     def test_only_ignored_bucket(self, tmp_path):
         ignored_pairs = [self._pair(30, "ign-a")]
 
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True]):
+        with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[True]):
             validated_expected, validated_ignored = judge_expected_and_ignored([], ignored_pairs, work_dir=tmp_path)
 
         assert validated_expected == []
@@ -1404,7 +1404,7 @@ class TestJudgeExpectedAndIgnored:
         expected_pairs = [(expected, generated)]
         ignored_pairs = [(ignored, generated)]
 
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True, True]):
+        with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[True, True]):
             validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
 
         assert validated_expected == expected_pairs
@@ -1420,7 +1420,7 @@ class TestJudgeExpectedAndIgnored:
         expected_pairs = [(expected, generated)]
         ignored_pairs = [(ignored, generated)]
 
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[False, True]):
+        with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[False, True]):
             validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
 
         assert validated_expected == []
@@ -1432,7 +1432,7 @@ class TestJudgeExpectedAndIgnored:
         expected_pairs = [(expected, generated), (expected, alternative)]
         ignored_pairs = [(ignored, generated), (ignored, alternative)]
 
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True, True, True, False]) as judge:
+        with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[True, True, True, False]) as judge:
             matched, neutral = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
 
         judge.assert_called_once_with(expected_pairs + ignored_pairs, tmp_path, model=_config.judge.code_review_model)
@@ -1445,7 +1445,7 @@ class TestJudgeExpectedAndIgnored:
         generated = [comment.model_copy(), comment.model_copy()]
         pairs = candidate_comment_pairs(expected, generated)
 
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[False, True, True, False]):
+        with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[False, True, True, False]):
             matched, neutral = judge_expected_and_ignored(pairs, [], work_dir=tmp_path)
 
         assert len(matched) == 2
@@ -1460,7 +1460,7 @@ class TestJudgeExpectedAndIgnored:
         pairs = [self._pair(10, "first"), self._pair(20, "second")]
 
         with (
-            patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=verdicts),
+            patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=verdicts),
             pytest.raises(ValueError, match="zip"),
         ):
             judge_expected_and_ignored(pairs, [], work_dir=tmp_path)

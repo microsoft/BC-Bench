@@ -65,7 +65,7 @@ def test_pr_review_metrics_extend_generic_metrics():
 
 def test_all_categories_have_pipelines():
     for category in EvaluationCategory:
-        pipeline = category.pipeline
+        pipeline = category_definition(category).make_pipeline()
         assert pipeline is not None
 
 

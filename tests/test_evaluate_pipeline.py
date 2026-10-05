@@ -129,9 +129,10 @@ def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
 
 @pytest.mark.parametrize("category", [EvaluationCategory.BUG_FIX, EvaluationCategory.TEST_GENERATION, EvaluationCategory.NL2AL, EvaluationCategory.EXT_REQUEST_IMPLEMENT])
 def test_al_evaluation_pipelines_pass_recommended_diff_exclusions(tmp_path, category):
-    entry = category_definition(category).entry_type.model_validate(_entry_for_category(category).model_dump())
+    definition = category_definition(category)
+    entry = definition.entry_type.model_validate(_entry_for_category(category).model_dump())
     ctx = create_evaluation_context(tmp_path, entry=entry, category=category)
-    pipeline = category.pipeline
+    pipeline = definition.make_pipeline()
     module = type(pipeline).__module__
 
     with (

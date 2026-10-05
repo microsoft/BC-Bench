@@ -15,7 +15,7 @@ parsing and filtering stages. Each finding is shaped like::
 
 BC-Bench's code-review scorer instead reads ``review.json`` from the repo root as
 a flat list of ``{file, line_start, line_end, severity, body}`` objects (see
-``bcbench.evaluate.review_parsing.parse_review_output``). This module performs the
+``bcbench.categories.code_review.review_parsing.parse_review_output``). This module performs the
 one transform between the two so the production engine plugs into the existing
 scoring pipeline unchanged.
 """
