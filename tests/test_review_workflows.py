@@ -10,7 +10,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "2c5cb809115233419cb8bb6e0573698240ae781f"
+DEFAULT_ENGINE_SHA = "7c7c12c2188dd7bee063f925b9d055d05075beff"
 PWSH = shutil.which("pwsh")
 
 
@@ -352,15 +352,100 @@ def test_focused_http_experiment_has_exact_matrix_and_no_publish_route() -> None
     assert "repetition-id" not in _workflow("pr-review-evaluation.yml")
 
 
-def test_pr_review_diagnostics_are_allowlisted_without_raw_otel_or_checkout_upload() -> None:
+@pytest.fixture
+def review_diagnostics_upload() -> dict:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
     steps = workflow["jobs"]["evaluate-with-pr-review"]["steps"]
-    upload = next(step for step in steps if step["name"] == "Upload allowlisted review diagnostics")
+    return next(step for step in steps if step["name"] == "Upload allowlisted review diagnostics")
+
+
+def test_pr_review_diagnostics_are_allowlisted_without_raw_otel_or_checkout_upload(review_diagnostics_upload: dict) -> None:
+    upload = review_diagnostics_upload
     assert upload["if"] == "always()"
-    paths = upload["with"]["path"].splitlines()
-    assert len(paths) == 12
-    assert all(not path.endswith(("**", "**/*", "**/*.json", "**/*.log")) for path in paths)
-    for filename in ("_run-manifest.json", "_run-metrics.json", "_review-report.json", "al-code-review-findings.json", "judge_results.json", "review.json"):
-        assert any(path.endswith("/" + filename) for path in paths)
-    assert "_copilot-otel" not in upload["with"]["path"]
+    assert upload["uses"] == "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    assert upload["with"]["name"] == "review-diagnostics-${{ github.run_id }}-${{ matrix.entry }}"
+    assert upload["with"]["path"].splitlines() == [
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_run-manifest.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_run-metrics.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.raw.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-source-bounds.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/al-code-review-findings.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/agent-output.txt",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/agent-transcript.log",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/leaf-results/*/stdout.txt",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/leaf-results/*/stderr.txt",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_filter-report.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/bcquality/schemas/findings-report.schema.json",
+        "${{ steps.setup-env.outputs.repo_path }}/review.json",
+        "${{ steps.setup-env.outputs.repo_path }}/judge_results.json",
+    ]
+    assert upload["with"]["if-no-files-found"] == "warn"
     assert upload["with"]["retention-days"] == 7
+    assert upload["with"].get("include-hidden-files", False) is False
+
+
+@pytest.fixture
+def review_diagnostics_globs(review_diagnostics_upload: dict) -> list[str]:
+    return review_diagnostics_upload["with"]["path"].replace("${{ env.EVALUATION_RESULTS_DIR }}", "evaluation_results").replace("${{ steps.setup-env.outputs.repo_path }}", "repo").splitlines()
+
+
+def test_pr_review_diagnostics_include_nested_normalization_evidence(review_diagnostics_globs: list[str], tmp_path: Path) -> None:
+    entry = Path("evaluation_results") / "entry"
+    leaf = entry / "leaf-results" / "01-al-privacy-review"
+    raw = b'\xef\xbb\xbf{\r\n  "findings": [], "outcome": "completed"\r\n}\r\n'
+    accepted = b'{"findings":[],"outcome":"completed"}\n'
+    manifest = b'{"processes":[{"normalization":{"raw_report_path":"leaf-results/01-al-privacy-review/_review-report.raw.json","changes":[]}}]}\n'
+    expected = {
+        entry / "_run-manifest.json": manifest,
+        entry / "_review-report.json": accepted,
+        entry / "_review-source-bounds.json": b"[]\n",
+        entry / "bcquality" / "_review-report.json": accepted,
+        entry / "bcquality" / "_review-source-bounds.json": b"[]\n",
+        leaf / "_review-report.json": accepted,
+        leaf / "_review-report.raw.json": raw,
+        leaf / "_review-source-bounds.json": b"[]\n",
+        entry / "leaf-results" / "02-al-security-review" / "_review-report.raw.json": b"{invalid report\r\n",
+        entry / "nested" / "_run-manifest.json": manifest,
+    }
+    for relative, content in expected.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    selected = {path.relative_to(tmp_path): path.read_bytes() for pattern in review_diagnostics_globs for path in tmp_path.glob(pattern)}
+    assert selected == expected
+
+
+def test_pr_review_diagnostics_exclude_unapproved_artifacts(review_diagnostics_globs: list[str], tmp_path: Path) -> None:
+    excluded = [
+        "evaluation_results/entry/_copilot-otel.jsonl",
+        "evaluation_results/entry/bcquality/_copilot-otel.jsonl",
+        "evaluation_results/entry/leaf-results/01-al-privacy-review/_copilot-otel.jsonl",
+        "evaluation_results/entry/.env",
+        "evaluation_results/entry/credentials.json",
+        "evaluation_results/entry/arbitrary.json",
+        "evaluation_results/entry/arbitrary.log",
+        "evaluation_results/entry/_review-report.raw.json.bak",
+        "evaluation_results/entry/_review-source-bounds.json.bak",
+        "evaluation_results/entry/leaf-results/01-al-privacy-review/private.txt",
+        "evaluation_results/entry/bcquality/.git/config",
+        "evaluation_results/entry/bcquality/knowledge-index.json",
+        "repo/.env",
+        "repo/.git/config",
+        "repo/src/Secrets.al",
+        "repo/_review-report.raw.json",
+        "repo/nested/review.json",
+        "repo/review.json.bak",
+        "outside/_run-manifest.json",
+        ".agent-harnesses/bc-alagents/_review-report.raw.json",
+        "docs/_data/code-review.json",
+    ]
+    allowed = [Path("repo") / "review.json", Path("repo") / "judge_results.json"]
+    for relative in [*map(Path, excluded), *allowed]:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"{}\n")
+
+    selected = {path.relative_to(tmp_path) for pattern in review_diagnostics_globs for path in tmp_path.glob(pattern)}
+    assert selected == set(allowed)
