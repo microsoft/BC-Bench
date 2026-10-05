@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from typing import NamedTuple, Self
 
 import numpy as np
+from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
 from pydantic import Field
 from rich.console import Group, RenderableType
 from rich.panel import Panel
@@ -10,7 +11,6 @@ from scipy.optimize import linear_sum_assignment
 
 from bcbench.dataset import ReviewComment
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
-from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext
 

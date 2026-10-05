@@ -61,8 +61,8 @@ uv run bcbench --help
 # This is very fast, give it a go and see it live!
 uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
 
-# Run tests
-uv run pytest --cov=src/bcbench --cov-report=term-missing
+# Run tests (bcbench and bcbench-core)
+uv run pytest --cov=src/bcbench --cov=packages/bcbench-core/src/bcbench_core --cov-report=term-missing
 
 # Lint and format
 uv run pre-commit run --all-files

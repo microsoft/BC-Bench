@@ -3,12 +3,13 @@ from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from bcbench_core.filesystem import clear_directory
+
 from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
-from bcbench.operations import clear_directory
 from bcbench.results.base import ExecutionBasedEvaluationResult
 from bcbench.types import EvaluationContext
 

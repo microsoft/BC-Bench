@@ -23,5 +23,6 @@ The package is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/work
 uv sync --all-groups
 uv run ruff check packages/bcbench-core
 uv check --package bcbench-core --preview-features check-command
+uv run pytest packages/bcbench-core
 uv build --package bcbench-core
 ```
