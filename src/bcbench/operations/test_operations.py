@@ -1,7 +1,8 @@
 import logging
 import re
 
-from bcbench.dataset import TestEntry
+from bcbench_core.dataset import TestEntry
+
 from bcbench.exceptions import NoTestsExtractedError
 
 logger = logging.getLogger(__name__)

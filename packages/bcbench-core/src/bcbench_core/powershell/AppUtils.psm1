@@ -1,5 +1,14 @@
-using module .\BCBenchUtils.psm1
-using module .\DatasetEntry.psm1
+using module .\Dataset.psm1
+
+<#
+.SYNOPSIS
+    Business Central build, publish, and test functions for AL apps in BcContainerHelper containers
+.DESCRIPTION
+    Shipped with bcbench-core (bcbench_core.bc.APP_UTILS_MODULE). Requires the BcContainerHelper module.
+#>
+
+Import-Module (Join-Path $PSScriptRoot "BCBenchUtils.psm1") -DisableNameChecking
+
 
 <#
     .Synopsis
@@ -107,7 +116,7 @@ function Invoke-AppBuildAndPublish {
         if ($env:RUNNER_DEBUG -ne '1') {
             if ($compileOutput) {
                 Write-Log "Compilation output:" -Level Error
-                Write-Log $compileOutput -Level Error
+                Write-Log ($compileOutput | Out-String) -Level Error
             }
         }
         throw
@@ -250,3 +259,5 @@ function Invoke-DatasetTests {
         Write-Output "::endgroup::"
     }
 }
+
+Export-ModuleMember -Function Invoke-AppBuildAndPublish, Invoke-BCTest, Invoke-DatasetTests

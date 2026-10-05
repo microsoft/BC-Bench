@@ -6,6 +6,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
+from bcbench_core.dataset import TestEntry
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
@@ -14,14 +15,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
-
-
-class TestEntry(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    codeunitID: Annotated[int, Field(gt=0)]
-    functionName: Annotated[frozenset[str], Field(min_length=1)]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestGenEntry"]
 
 
 class EntryMetadata(BaseModel):

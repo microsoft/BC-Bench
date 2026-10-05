@@ -162,7 +162,7 @@ _GITHUB_HANDLER_NAME = f"{_CORE_LOGGER}.github_actions"
 _CONSOLE_HANDLER_NAME = f"{_CORE_LOGGER}.console"
 
 
-def setup_logging(*, app_logger: str, debug: bool, github_actions: bool) -> None:
+def setup_logging(app_logger: str, debug: bool, github_actions: bool) -> None:
     """Configure process-wide logging; call once from the application entry point.
 
     Calling again replaces the handlers installed by a previous call; other root handlers are kept.

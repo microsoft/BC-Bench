@@ -9,6 +9,7 @@ from typing import Annotated, Any
 
 import typer
 from azure.ai.evaluation.red_team import AttackStrategy, RiskCategory, SupportedLanguages
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -79,7 +80,7 @@ def scan(
 
     # Only support NL2AL for now, we will think about extensibility later.
     scan_target = build_bcal_target(
-        package_cache_path=_config.paths.evaluation_results_path / "redteam" / _config.file_patterns.alpackages_dirname,
+        package_cache_path=_config.paths.evaluation_results_path / "redteam" / ALPACKAGES_DIRNAME,
         export_base=output.parent / "bcal-exports",
         backend_config=BCalBackendConfig(
             backend=backend,

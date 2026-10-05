@@ -22,8 +22,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import cast
 from urllib.parse import urlsplit
 
+from bcbench_core.container import ContainerConfig
+
 from bcbench.exceptions import AgentError
-from bcbench.types import AgentRuntimeConfig, ContainerConfig
+from bcbench.types import AgentRuntimeConfig
 
 logger = logging.getLogger(__name__)
 
