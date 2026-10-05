@@ -28,6 +28,7 @@ def run_copilot_agent(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
+    pass_bc_credentials: bool,
     runtime: AgentRuntimeConfig | None = None,
     timeout: int = 60 * 60,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -93,7 +94,7 @@ def run_copilot_agent(
             model=model,
             work_dir=repo_path,
             timeout=timeout,
-            env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
+            env=agent_subprocess_env(pass_bc_credentials=pass_bc_credentials),
             options=options,
         )
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")

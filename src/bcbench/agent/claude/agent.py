@@ -34,6 +34,7 @@ def run_claude_code(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
+    pass_bc_credentials: bool,
     runtime: AgentRuntimeConfig | None = None,
     timeout: int = 60 * 60,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -132,7 +133,7 @@ def run_claude_code(
                     "MCP_TIMEOUT": "180000",
                     "MCP_TOOL_TIMEOUT": "180000",
                 },
-                pass_bc_credentials=category.pass_on_bc_container_credentials,
+                pass_bc_credentials=pass_bc_credentials,
             ),
             timeout=timeout,
             check=True,

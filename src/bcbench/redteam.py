@@ -13,7 +13,6 @@ from bcbench_core.artifacts import copy_symbol_apps
 
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
 from bcbench.dataset.dataset_entry import NL2ALEntry
-from bcbench.types import EvaluationCategory
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +60,9 @@ def _message_content(message: object) -> str:
     return content
 
 
-def build_bcal_target(package_cache_path: Path, export_base: Path, backend_config: BCalBackendConfig) -> RedTeamCallback:
+def build_bcal_target(entry: NL2ALEntry, package_cache_path: Path, export_base: Path, backend_config: BCalBackendConfig) -> RedTeamCallback:
     """Wrap the nl2al (BCal) as a red-team target callback."""
 
-    category = EvaluationCategory.NL2AL
-    # bcal always requires --page/--audience, but red teaming has no dataset entry of its own at the moment.
-    entry = category.entry_class.load(category.dataset_path)[0]
     _ensure_package_cache(package_cache_path, entry.environment_setup_version)
 
     # Azure's simple string callback converts exceptions into assistant responses. Its full
@@ -82,7 +78,7 @@ def build_bcal_target(package_cache_path: Path, export_base: Path, backend_confi
 
         query = _message_content(messages[-1])
         export_folder = export_base / f"query-{uuid.uuid4().hex[:8]}"
-        response = await asyncio.to_thread(run_bcal_prompt, cast(NL2ALEntry, entry), query, package_cache_path, export_folder, backend_config)
+        response = await asyncio.to_thread(run_bcal_prompt, entry, query, package_cache_path, export_folder, backend_config)
         return {
             "messages": [{"role": "assistant", "content": response}],
             "stream": stream,

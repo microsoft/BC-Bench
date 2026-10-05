@@ -6,7 +6,8 @@ from typing import Annotated, Literal
 import typer
 from bcbench_core.container import ContainerConfig
 
-from bcbench.types import AgentRuntimeConfig, EvaluationCategory
+from bcbench.categories import category_definition
+from bcbench.types import AgentRuntimeConfig, CopilotModelName, EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here
@@ -109,21 +110,10 @@ def resolve_evaluation_runtime(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    if category.requires_container and runtime is None:
+    if category_definition(category).requires_container and runtime is None:
         raise typer.BadParameter(f"The {category.value} category requires a container", param_hint="--container-name")
     return runtime
 
-
-CopilotModelName = Literal[
-    "claude-sonnet-5",
-    "claude-opus-5",
-    "gpt-5.6-sol",
-    "gpt-5.6-terra",
-    "gpt-5.6-luna",
-    "gpt-5.3-codex",
-    "mai-code-1.1-flash",
-    "gemini-3.7-flash",
-]
 
 CopilotModel = Annotated[CopilotModelName, typer.Option(help="Copilot model to use")]
 

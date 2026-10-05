@@ -12,6 +12,8 @@ from bcbench.analysis.bcquality_article_coverage import (
     enumerate_inventory,
     resolve_bcquality_root,
 )
+from bcbench.categories import category_definition
+from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry, ReviewComment
 from bcbench.dataset.codereview import ArticleId, CodeReviewEntryMetadata
 from bcbench.types import EvaluationCategory
@@ -181,7 +183,7 @@ class TestDatasetArticleSlugs:
     @pytest.mark.e2e
     def test_declared_slugs_exist_in_bcquality(self):
         bcquality_root = _require_bcquality_root()
-        entries = CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path)
+        entries = CodeReviewEntry.load(category_definition(EvaluationCategory.CODE_REVIEW).dataset_path(get_config().paths.dataset_dir))
         declared = collect_declared_articles(entries)
         report = build_coverage_report(entries, inventory=enumerate_inventory(bcquality_root))
         unknown = {article: declared[article] for article in report.unknown_articles}
