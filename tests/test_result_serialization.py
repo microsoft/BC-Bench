@@ -3,8 +3,8 @@ import json
 import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 
-from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.summary import EvaluationResultSummary
+from bcbench.categories.results import load_result, load_summary, summarize_results
+from bcbench.config import get_config
 from bcbench.types import AgentHarness, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
@@ -59,7 +59,7 @@ class TestCategorySerialization:
             "output": "patch",
         }
 
-        result = BaseEvaluationResult.from_json(payload)
+        result = load_result(payload, get_config().judge)
 
         assert result.category == EvaluationCategory.BUG_FIX
 
@@ -75,7 +75,7 @@ class TestCategorySerialization:
             "output": "test patch",
         }
 
-        result = BaseEvaluationResult.from_json(payload)
+        result = load_result(payload, get_config().judge)
 
         assert result.category == EvaluationCategory.TEST_GENERATION
 
@@ -89,7 +89,7 @@ class TestCategorySerialization:
         with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
-        loaded = BaseEvaluationResult.from_json(data)
+        loaded = load_result(data, get_config().judge)
 
         assert loaded.category == original.category
         assert loaded.category == EvaluationCategory.BUG_FIX
@@ -104,13 +104,13 @@ class TestCategorySerialization:
         with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
-        loaded = BaseEvaluationResult.from_json(data)
+        loaded = load_result(data, get_config().judge)
 
         assert loaded.category == original.category
         assert loaded.category == EvaluationCategory.TEST_GENERATION
 
     def test_summary_category_saves_as_string(self, sample_result_bug_fix, tmp_path):
-        summary = EvaluationResultSummary.from_results([sample_result_bug_fix], "test_run")
+        summary = summarize_results([sample_result_bug_fix], "test_run")
         summary.save(tmp_path, "summary.json")
 
         with (tmp_path / "summary.json").open() as f:
@@ -137,9 +137,7 @@ class TestCategorySerialization:
             "benchmark_version": "0.1.0",
         }
 
-        from bcbench.results.summary import EvaluationResultSummary
-
-        summary = EvaluationResultSummary.from_json(payload)
+        summary = load_summary(payload)
 
         # Pydantic handles the enum conversion automatically
         assert summary.category == EvaluationCategory.TEST_GENERATION
@@ -223,7 +221,7 @@ class TestCategorySerialization:
             },
         }
 
-        result = BaseEvaluationResult.from_json(payload)
+        result = load_result(payload, get_config().judge)
 
         assert result.metrics is not None
         assert result.metrics.tool_usage is not None
@@ -243,7 +241,7 @@ class TestCategorySerialization:
         original.save(tmp_path, "result.jsonl")
 
         payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
-        loaded = BaseEvaluationResult.from_json(payload)
+        loaded = load_result(payload, get_config().judge)
 
         assert payload["metrics"]["kind"] == "pr-review"
         assert isinstance(loaded.metrics, PRReviewMetrics)
@@ -267,7 +265,7 @@ class TestCategorySerialization:
         with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
-        loaded = BaseEvaluationResult.from_json(data)
+        loaded = load_result(data, get_config().judge)
 
         assert loaded.metrics is not None
         assert loaded.metrics.tool_usage is not None

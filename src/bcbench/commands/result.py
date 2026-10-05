@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 
 from bcbench.categories import category_definition
+from bcbench.categories.results import aggregate_runs, load_leaderboard, load_result, load_summary, summarize_results
 from bcbench.cli_options import EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import INSTANCE_ID_PATTERN
@@ -68,7 +69,7 @@ def result_summarize(
     for results_path in result_files:
         logger.info(f"Reading results from: {results_path}")
         with results_path.open() as f:
-            results.extend(BaseEvaluationResult.from_json(json.loads(line)) for line in f if line.strip())
+            results.extend(load_result(json.loads(line), _config.judge) for line in f if line.strip())
 
     if not results:
         logger.error("No results found in the result files")
@@ -76,7 +77,7 @@ def result_summarize(
 
     write_bceval_results(results, run_dir, run_id, bceval_output, category_definition(category).load_entries(_config.paths.dataset_dir), git_ref=git_ref)
 
-    summary = EvaluationResultSummary.from_results(results, run_id=run_id)
+    summary = summarize_results(results, run_id=run_id)
 
     if _config.env.github_actions:
         create_github_job_summary(results, summary)
@@ -90,7 +91,7 @@ def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[Leaderboard
     grouped: defaultdict[tuple[str | None, ...], list[EvaluationResultSummary]] = defaultdict(list)
     for run in runs:
         grouped[run.combination_key()].append(run)
-    return [group[0].category.aggregate_class.from_runs(group) for group in grouped.values()]
+    return [aggregate_runs(group) for group in grouped.values()]
 
 
 @result_app.command("update")
@@ -107,7 +108,7 @@ def result_update(
     """
     logger.info(f"Loading evaluation summary from: {evaluation_summary}")
     with evaluation_summary.open(encoding="utf-8") as f:
-        new_result = EvaluationResultSummary.from_json(json.load(f))
+        new_result = load_summary(json.load(f))
 
     logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}' in category '{new_result.category.value}'")
 
@@ -115,7 +116,7 @@ def result_update(
     logger.info(f"Using leaderboard file: {leaderboard_path}")
 
     # Load existing leaderboard
-    leaderboard: Leaderboard = Leaderboard.load(leaderboard_path)
+    leaderboard: Leaderboard = load_leaderboard(leaderboard_path)
     runs: list[EvaluationResultSummary] = list(leaderboard.runs)
     logger.info(f"Loaded {len(runs)} existing runs")
 
@@ -166,7 +167,7 @@ def result_refresh(
     for leaderboard_path in leaderboard_files:
         logger.info(f"Refreshing: {leaderboard_path.name}")
 
-        leaderboard: Leaderboard = Leaderboard.load(leaderboard_path)
+        leaderboard: Leaderboard = load_leaderboard(leaderboard_path)
         runs: list[EvaluationResultSummary] = list(leaderboard.runs)
 
         if not runs:

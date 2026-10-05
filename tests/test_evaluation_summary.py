@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 
+from bcbench.categories.results import aggregate_runs, load_leaderboard, summarize_results
 from bcbench.config import get_config
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
@@ -76,8 +77,6 @@ class TestEvaluationResultSummary:
         assert output_file.exists()
 
     def test_loading_existing_results(self):
-        from bcbench.results.leaderboard import Leaderboard
-
         for category in EvaluationCategory:
             leaderboard_path = _config.paths.leaderboard_dir / f"{category.value}.json"
             if not leaderboard_path.exists():
@@ -87,7 +86,7 @@ class TestEvaluationResultSummary:
                 data = json.load(f)
                 # New format: {"runs": [...], "aggregate": [...]}
                 if "runs" in data and "aggregate" in data:
-                    Leaderboard.model_validate(data)
+                    load_leaderboard(leaderboard_path)
                 else:
                     # Old format: array of items
                     for item in data:
@@ -692,14 +691,14 @@ class TestLeaderboard:
         assert agg.average == 0.5
 
     def test_leaderboard_to_dict(self):
-        from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
+        from bcbench.results.leaderboard import Leaderboard
 
         run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [create_bugfix_result(instance_id="test__1", resolved=True)],
             run_id="run_1",
         )
 
-        agg = LeaderboardAggregate.from_runs([run1])
+        agg = aggregate_runs([run1])
         leaderboard = Leaderboard(runs=[run1], aggregate=[agg])
         data = leaderboard.to_dict()
 
@@ -739,21 +738,19 @@ class TestLeaderboard:
         assert agg.pass_hat_5 is None
 
     def test_aggregate_includes_benchmark_version_from_runs(self):
-        from bcbench.results.leaderboard import LeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [create_bugfix_result(instance_id="test__1", resolved=True)],
             run_id="run_1",
         )
 
-        agg = LeaderboardAggregate.from_runs([run1])
+        agg = aggregate_runs([run1])
 
         # Should inherit benchmark_version from the runs
         assert agg.benchmark_version == run1.benchmark_version
         assert agg.benchmark_version is not None
 
     def test_aggregate_allows_same_benchmark_versions(self):
-        from bcbench.results.leaderboard import LeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary(
             total=3,
@@ -788,12 +785,11 @@ class TestLeaderboard:
             benchmark_version="0.1.0",  # Same version
         )
 
-        agg = LeaderboardAggregate.from_runs([run1, run2])
+        agg = aggregate_runs([run1, run2])
 
         assert agg.benchmark_version == "0.1.0"
 
     def test_aggregate_rejects_runs_from_different_combinations(self):
-        from bcbench.results.leaderboard import LeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary(
             total=3,
@@ -829,20 +825,17 @@ class TestLeaderboard:
         )
 
         with pytest.raises(ValueError, match="different combinations"):
-            LeaderboardAggregate.from_runs([run1, run2])
+            aggregate_runs([run1, run2])
 
     def test_aggregate_rejects_runs_with_different_judge_models(self):
-        from bcbench.results.leaderboard import LeaderboardAggregate
-        from bcbench.results.summary import EvaluationResultSummary
 
-        run1 = EvaluationResultSummary.from_results([create_codereview_result()], run_id="run_1")
+        run1 = summarize_results([create_codereview_result()], run_id="run_1")
         run2 = run1.model_copy(update={"judge_model": "different-judge"})
 
         with pytest.raises(ValueError, match="different combinations"):
-            LeaderboardAggregate.from_runs([run1, run2])
+            aggregate_runs([run1, run2])
 
     def test_aggregate_rejects_runs_with_different_totals(self):
-        from bcbench.results.leaderboard import LeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary(
             total=3,
@@ -878,26 +871,24 @@ class TestLeaderboard:
         )
 
         with pytest.raises(ValueError, match="different totals"):
-            LeaderboardAggregate.from_runs([run1, run2])
+            aggregate_runs([run1, run2])
 
     def test_load_empty_leaderboard_file(self, tmp_path):
-        from bcbench.results.leaderboard import Leaderboard
 
         empty_file = tmp_path / "empty.json"
         empty_file.write_text("[]")
 
-        leaderboard = Leaderboard.load(empty_file)
+        leaderboard = load_leaderboard(empty_file)
 
         assert leaderboard.runs == []
         assert leaderboard.aggregate == []
 
     def test_load_empty_object_leaderboard_file(self, tmp_path):
-        from bcbench.results.leaderboard import Leaderboard
 
         empty_file = tmp_path / "empty.json"
         empty_file.write_text("{}")
 
-        leaderboard = Leaderboard.load(empty_file)
+        leaderboard = load_leaderboard(empty_file)
 
         assert leaderboard.runs == []
         assert leaderboard.aggregate == []

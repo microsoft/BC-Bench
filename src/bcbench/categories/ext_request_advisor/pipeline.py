@@ -19,6 +19,8 @@ ADVISOR_RESULT_FILE = "advisor_result.json"
 class ExtRequestAdvisorPipeline(EvaluationPipeline[ExtRequestAdvisorEntry]):
     """Offline single-shot proxy for the interactive extensibility advisor."""
 
+    result_type = JudgeBasedEvaluationResult
+
     @override
     def setup_workspace(self, entry: ExtRequestAdvisorEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)

@@ -14,9 +14,6 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
-    from bcbench.results.base import BaseEvaluationResult
-    from bcbench.results.leaderboard import LeaderboardAggregate
-    from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
     "AL_MCP_SERVER_NAME",
@@ -258,100 +255,6 @@ class EvaluationCategory(StrEnum):
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
-    @property
-    def result_class(self) -> type[BaseEvaluationResult]:
-        from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-        from bcbench.results.bugfix import BugFixResult
-        from bcbench.results.codereview import CodeReviewResult
-        from bcbench.results.testgeneration import TestGenerationResult
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return BugFixResult
-            case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationResult
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewResult
-            case EvaluationCategory.NL2AL:
-                return JudgeBasedEvaluationResult
-            case EvaluationCategory.DATA_QUERY:
-                return ExecutionBasedEvaluationResult
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedEvaluationResult
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return JudgeBasedEvaluationResult
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return JudgeBasedEvaluationResult
-
-        raise ValueError(f"Unknown evaluation category: {self}")
-
-    @property
-    def summary_class(self) -> type[EvaluationResultSummary]:
-        """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.codereview import CodeReviewResultSummary
-        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.TEST_GENERATION:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewResultSummary
-            case EvaluationCategory.NL2AL:
-                return JudgeBasedEvaluationResultSummary
-            case EvaluationCategory.DATA_QUERY:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedEvaluationResultSummary
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return JudgeBasedEvaluationResultSummary
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return JudgeBasedEvaluationResultSummary
-
-        raise ValueError(f"Unknown evaluation category: {self}")
-
-    @property
-    def aggregate_class(self) -> type[LeaderboardAggregate]:
-        """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedLeaderboardAggregate
-            case EvaluationCategory.TEST_GENERATION:
-                return ExecutionBasedLeaderboardAggregate
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewLeaderboardAggregate
-            case EvaluationCategory.NL2AL:
-                return JudgeBasedLeaderboardAggregate
-            case EvaluationCategory.DATA_QUERY:
-                return ExecutionBasedLeaderboardAggregate
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedLeaderboardAggregate
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return JudgeBasedLeaderboardAggregate
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return JudgeBasedLeaderboardAggregate
-
-        raise ValueError(f"Unknown evaluation category: {self}")
-
-    @property
-    def judge_model(self) -> str | None:
-        """Pinned LLM judge model for this category, or None for categories scored without a judge."""
-        from bcbench.config import get_config
-
-        judge = get_config().judge
-        match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
-                return None
-            case EvaluationCategory.CODE_REVIEW:
-                return judge.code_review_model
-            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return judge.lm_checklist_model
-
-        raise ValueError(f"Unknown evaluation category: {self}")
-
 
 type TestGenerationInput = Literal["problem-statement", "gold-patch", "both"]
 
@@ -491,6 +394,8 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # Evaluation category
     category: EvaluationCategory
+    # Pinned LLM judge for judge-scored categories
+    judge_model: str | None
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
