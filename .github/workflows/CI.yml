@@ -15,9 +15,6 @@ env:
 
 jobs:
   lint-and-test:
-    permissions:
-      contents: read
-      code-quality: write
     strategy:
       fail-fast: false
       matrix:
@@ -39,12 +36,33 @@ jobs:
           # Render ruff lint findings as inline PR annotations (CI-only; local runs stay human-readable)
           RUFF_OUTPUT_FORMAT: github
 
+      - name: Run tests
+        run: uv run pytest
+
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      code-quality: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Test the PR head rather than the merge commit so coverage lines map onto the PR diff; lint-and-test covers the merge
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Python with UV
+        uses: $/.github/actions/setup-python-uv
+        with:
+          all-groups: true
+
       - name: Run tests with coverage
         run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage to GitHub Code Quality
         # The action skips fork PRs and branches without a PR itself; dispatch runs have no PR number, which the API rejects
-        if: matrix.os == 'ubuntu-latest' && github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1.4.4
         with:
           file: coverage.xml
