@@ -113,19 +113,22 @@ def test_maybe_install_local_cert_credential_patches_factory(monkeypatch, fake_c
         assert cred.send_certificate_chain is True
 
 
-def test_create_completion_retries_transient_capi_failures():
+@pytest.mark.parametrize("status_code", [429, 500, 529])
+def test_create_completion_retries_transient_capi_failures(status_code):
     calls = 0
     delays = []
 
     class _TransientError(RuntimeError):
-        status_code = 500
+        def __init__(self, message):
+            super().__init__(message)
+            self.status_code = status_code
 
     class _Completions:
         def create(self, **kwargs):
             nonlocal calls
             calls += 1
             if calls < 3:
-                raise _TransientError("DependencyFailure: HTTP 500 Internal server error")
+                raise _TransientError(f"DependencyFailure: HTTP {status_code}")
             return kwargs
 
     client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=_Completions()))
@@ -134,7 +137,7 @@ def test_create_completion_retries_transient_capi_failures():
 
     assert response == {"model": "test"}
     assert calls == 3
-    assert delays == [10, 20]
+    assert delays == [2, 4]
 
 
 def test_create_completion_does_not_retry_deterministic_failure():

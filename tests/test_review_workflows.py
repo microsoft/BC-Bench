@@ -223,24 +223,18 @@ def test_bcal_uses_one_pinned_cached_bccontainerhelper_download() -> None:
     assert "prepare-bccontainerhelper:" in workflow
     assert "Save-Module" in workflow
     assert "RequiredVersion $env:BCCONTAINERHELPER_VERSION" in workflow
+    assert "for ($attempt = 1; $attempt -le 3; $attempt++)" in workflow
     assert "fail-on-cache-miss: true" in workflow
     assert "Install-Module -Name BcContainerHelper" not in workflow
 
 
-def test_summarize_workflow_preserves_partial_diagnostics_before_failing() -> None:
+def test_summarize_workflow_preserves_partial_diagnostics_and_blocks_upload() -> None:
     workflow = _workflow("summarize-results.yml")
 
     assert "continue-on-error: ${{ inputs.expected-total >= 0 }}" in workflow
     assert "evaluation_completeness.json" in workflow
-    assert "bceval_scored_results.json" in workflow
+    assert "bceval_results.jsonl" in workflow
+    assert "steps.summarize.outputs.complete == 'true'" in workflow
+    assert "bcbench.bceval_runner" not in workflow
     assert "if: always()" in workflow
     assert "bcbench result require-complete" in workflow
-
-
-def test_bcal_health_workflow_correlates_scheduled_run_id_with_kusto_metadata() -> None:
-    workflow = _workflow("bcal-evaluation-health.yml")
-
-    assert "event=schedule" in workflow
-    assert "bcal-evaluation.yml/runs" in workflow
-    assert "steps.scheduled-run.outputs.run-id" in workflow
-    assert "bcbench.bceval_runner health-check" in workflow

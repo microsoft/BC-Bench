@@ -47,7 +47,6 @@ on:
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
-  BCEVAL_SCORED_FILE: bceval_scored_results.json
   SUMMARY_OUTPUT_FILE: evaluation_summary.json
   COMPLETENESS_OUTPUT_FILE: evaluation_completeness.json
 
@@ -90,7 +89,7 @@ jobs:
           --github-output
 
       - name: Azure Login with OIDC for bceval package
-        if: steps.summarize.outputs.has-results == 'true'
+        if: steps.summarize.outputs.has-results == 'true' && steps.summarize.outputs.complete == 'true'
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -98,51 +97,40 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Resolve bceval evaluator config for category
-        if: steps.summarize.outputs.has-results == 'true'
+        if: steps.summarize.outputs.has-results == 'true' && steps.summarize.outputs.complete == 'true'
         id: bceval
         run: uv run bcbench category bceval-config --category "${{ inputs.category }}"
 
-      - name: Score and upload result using bceval
-        if: steps.summarize.outputs.has-results == 'true'
+      - name: Score and upload complete result using bceval
+        if: steps.summarize.outputs.has-results == 'true' && steps.summarize.outputs.complete == 'true'
         env:
           BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           JUDGE_MODEL: ${{ steps.bceval.outputs.judge_model }}
-          BCEVAL_METADATA: '{"github_run_attempt": "${{ github.run_attempt }}"}'
         run: |
           # Get Azure DevOps access token from Azure CLI (uses the OIDC token from azure/login)
           ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$ADO_TOKEN"
 
-          uv venv .bceval-venv --python 3.12
-          uv pip install \
-            --python .bceval-venv/bin/python \
-            "bc-eval[capi]==0.3.14" \
-            --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          uv tool install bc-eval[capi]==0.3.14 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
           MODEL_TAG="${{ inputs.model }}"
           MODEL_TAG="${MODEL_TAG//./-}"
           BRANCH_TAG="${{ inputs.git-ref || github.ref_name }}"
           BRANCH_TAG="${BRANCH_TAG//./-}"
-          export PYTHONPATH="${GITHUB_WORKSPACE}/src"
-          .bceval-venv/bin/python -m bcbench.bceval_runner calculate \
-            --run-id "${{ github.run_id }}" \
-            --run-attempt "${{ github.run_attempt }}" \
+          bceval metrics calculate \
             --feature-name "BC-Bench" \
             --eval-suite-name "${{ inputs.category }}" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \
             --tags "${{ inputs.agent }},${MODEL_TAG},${BRANCH_TAG}" \
             --source "${{ github.sha }}" \
             --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
-            --output-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_SCORED_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
             --evaluators "${{ steps.bceval.outputs.evaluators }}" \
             --core-score "${{ steps.bceval.outputs.core_score }}" \
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
-            --metadata "$BCEVAL_METADATA" \
-            --use-capi \
-            ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
+            --use-capi ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
 
       - name: Upload evaluation summary to artifacts
         if: always()
@@ -153,7 +141,6 @@ jobs:
             ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}
             ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.COMPLETENESS_OUTPUT_FILE }}
             ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}
-            ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_SCORED_FILE }}
           if-no-files-found: error
           retention-days: ${{ inputs.mock && 1 || 30 }}
 

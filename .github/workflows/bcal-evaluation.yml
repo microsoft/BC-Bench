@@ -76,7 +76,7 @@ jobs:
           New-Item -ItemType Directory -Path $moduleRoot -Force | Out-Null
           $transientPattern = 'No match was found|429|5\d{2}|temporarily unavailable|timed out|Unable to resolve package source|underlying connection was closed|NameResolutionFailure'
 
-          for ($attempt = 1; $attempt -le 4; $attempt++) {
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
             try {
               Save-Module `
                 -Name BcContainerHelper `
@@ -89,7 +89,7 @@ jobs:
             }
             catch {
               $message = $_.Exception.ToString()
-              if ($attempt -eq 4 -or $message -notmatch $transientPattern) {
+              if ($attempt -eq 3 -or $message -notmatch $transientPattern) {
                 throw
               }
               $delay = [Math]::Min(60, 10 * [Math]::Pow(2, $attempt - 1))
