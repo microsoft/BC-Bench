@@ -1,0 +1,83 @@
+name: Scheduled BCal evaluation health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * 0"
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: bcal-evaluation-health
+  cancel-in-progress: false
+
+jobs:
+  verify-latest-scheduled-run:
+    runs-on: ubuntu-latest
+    environment:
+      name: ado-read
+      deployment: false
+    steps:
+      - name: Resolve latest scheduled BCal run
+        id: scheduled-run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_json=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/bcal-evaluation.yml/runs?event=schedule&per_page=1" \
+            --jq '.workflow_runs[0]')
+
+          if [[ -z "$run_json" || "$run_json" == "null" ]]; then
+            echo "::error::No scheduled bcal-evaluation.yml run was found."
+            exit 1
+          fi
+
+          status=$(jq -r '.status' <<< "$run_json")
+          if [[ "$status" != "completed" ]]; then
+            echo "::error::Latest scheduled BCal run is not complete (status: $status)."
+            exit 1
+          fi
+
+          echo "run-id=$(jq -r '.id' <<< "$run_json")" >> "$GITHUB_OUTPUT"
+          echo "run-url=$(jq -r '.html_url' <<< "$run_json")" >> "$GITHUB_OUTPUT"
+          echo "head-sha=$(jq -r '.head_sha' <<< "$run_json")" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$(jq -r '.conclusion' <<< "$run_json")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout evaluated revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.scheduled-run.outputs.head-sha }}
+
+      - name: Setup Python with UV
+        uses: $/.github/actions/setup-python-uv
+
+      - name: Resolve expected nl2al entry count
+        id: expected
+        run: uv run bcbench dataset list --category nl2al --count-output entry-count
+
+      - name: Azure Login with OIDC for bceval and Kusto
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Verify scheduled run ingestion
+        run: |
+          ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
+          echo "::add-mask::$ADO_TOKEN"
+
+          uv venv .bceval-venv --python 3.12
+          uv pip install \
+            --python .bceval-venv/bin/python \
+            "bc-eval[capi]==0.3.14" \
+            --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+
+          export PYTHONPATH="${GITHUB_WORKSPACE}/src"
+          .bceval-venv/bin/python -m bcbench.bceval_runner health-check \
+            --run-id "${{ steps.scheduled-run.outputs.run-id }}" \
+            --run-url "${{ steps.scheduled-run.outputs.run-url }}" \
+            --expected-total "${{ steps.expected.outputs.entry-count }}"

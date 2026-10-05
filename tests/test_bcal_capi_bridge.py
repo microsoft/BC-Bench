@@ -111,3 +111,44 @@ def test_maybe_install_local_cert_credential_patches_factory(monkeypatch, fake_c
         # SNI (x5c) auth is required by the CAPI app registration; without it
         # AAD rejects the client assertion with AADSTS700027.
         assert cred.send_certificate_chain is True
+
+
+def test_create_completion_retries_transient_capi_failures():
+    calls = 0
+    delays = []
+
+    class _TransientError(RuntimeError):
+        status_code = 500
+
+    class _Completions:
+        def create(self, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                raise _TransientError("DependencyFailure: HTTP 500 Internal server error")
+            return kwargs
+
+    client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=_Completions()))
+
+    response = bc_eval_capi_bridge._create_completion(client, {"model": "test"}, sleep=delays.append)
+
+    assert response == {"model": "test"}
+    assert calls == 3
+    assert delays == [10, 20]
+
+
+def test_create_completion_does_not_retry_deterministic_failure():
+    calls = 0
+
+    class _Completions:
+        def create(self, **kwargs):
+            nonlocal calls
+            calls += 1
+            raise RuntimeError("HTTP 400 invalid request")
+
+    client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=_Completions()))
+
+    with pytest.raises(RuntimeError, match="400"):
+        bc_eval_capi_bridge._create_completion(client, {"model": "test"}, sleep=lambda _: None)
+
+    assert calls == 1

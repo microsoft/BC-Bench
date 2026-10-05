@@ -34,10 +34,22 @@ on:
         required: false
         type: string
         default: ""
+      expected-total:
+        description: "Expected unique matrix entry count; negative disables completeness enforcement"
+        required: false
+        type: number
+        default: -1
+      artifact-pattern:
+        description: "Artifact glob to download"
+        required: false
+        type: string
+        default: "*"
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
+  BCEVAL_SCORED_FILE: bceval_scored_results.json
   SUMMARY_OUTPUT_FILE: evaluation_summary.json
+  COMPLETENESS_OUTPUT_FILE: evaluation_completeness.json
 
 jobs:
   summarize-results:
@@ -58,22 +70,27 @@ jobs:
 
       - name: Download all evaluation results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: ${{ inputs.expected-total >= 0 }}
         with:
           path: ${{ inputs.results-dir }}/
+          pattern: ${{ inputs.artifact-pattern }}
           merge-multiple: true
 
       - name: Summarize evaluation results
-        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "${{ inputs.git-ref || github.ref_name }}"
-
-      - name: Upload evaluation summary to artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: evaluation-summary
-          path: ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}
-          if-no-files-found: error
-          retention-days: ${{ inputs.mock && 1 || 30 }}
+        id: summarize
+        run: >-
+          uv run bcbench result summarize
+          --category "${{ inputs.category }}"
+          --result-dir "${{ inputs.results-dir }}"
+          --bceval-output "${{ env.BCEVAL_RESULT_FILE }}"
+          --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}"
+          --completeness-output "${{ env.COMPLETENESS_OUTPUT_FILE }}"
+          --expected-total "${{ inputs.expected-total }}"
+          --git-ref "${{ inputs.git-ref || github.ref_name }}"
+          --github-output
 
       - name: Azure Login with OIDC for bceval package
+        if: steps.summarize.outputs.has-results == 'true'
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -81,42 +98,67 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Resolve bceval evaluator config for category
+        if: steps.summarize.outputs.has-results == 'true'
         id: bceval
         run: uv run bcbench category bceval-config --category "${{ inputs.category }}"
 
-      - name: Upload result using bceval
+      - name: Score and upload result using bceval
+        if: steps.summarize.outputs.has-results == 'true'
         env:
           BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           JUDGE_MODEL: ${{ steps.bceval.outputs.judge_model }}
+          BCEVAL_METADATA: '{"github_run_attempt": "${{ github.run_attempt }}"}'
         run: |
           # Get Azure DevOps access token from Azure CLI (uses the OIDC token from azure/login)
           ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$ADO_TOKEN"
 
-          uv tool install bc-eval[capi]==0.3.14 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          uv venv .bceval-venv --python 3.12
+          uv pip install \
+            --python .bceval-venv/bin/python \
+            "bc-eval[capi]==0.3.14" \
+            --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
-          # Upload summary using bc-eval
           MODEL_TAG="${{ inputs.model }}"
           MODEL_TAG="${MODEL_TAG//./-}"
           BRANCH_TAG="${{ inputs.git-ref || github.ref_name }}"
           BRANCH_TAG="${BRANCH_TAG//./-}"
-          bceval metrics calculate \
+          export PYTHONPATH="${GITHUB_WORKSPACE}/src"
+          .bceval-venv/bin/python -m bcbench.bceval_runner calculate \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
             --feature-name "BC-Bench" \
             --eval-suite-name "${{ inputs.category }}" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \
             --tags "${{ inputs.agent }},${MODEL_TAG},${BRANCH_TAG}" \
             --source "${{ github.sha }}" \
             --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
+            --output-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_SCORED_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
             --evaluators "${{ steps.bceval.outputs.evaluators }}" \
             --core-score "${{ steps.bceval.outputs.core_score }}" \
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
-            --use-capi ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
+            --metadata "$BCEVAL_METADATA" \
+            --use-capi \
+            ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
+
+      - name: Upload evaluation summary to artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evaluation-summary-${{ github.run_attempt }}
+          path: |
+            ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}
+            ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.COMPLETENESS_OUTPUT_FILE }}
+            ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}
+            ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_SCORED_FILE }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.mock && 1 || 30 }}
 
       - name: Update leaderboard in a new branch
-        if: ${{ !inputs.mock && !inputs.skip-leaderboard }}
+        if: ${{ !inputs.mock && !inputs.skip-leaderboard && steps.summarize.outputs.complete == 'true' }}
         run: |
           git fetch origin main
 
@@ -150,3 +192,13 @@ jobs:
           git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }}) - Run ${{ github.run_id }}"
 
           git push --set-upstream origin $branchName
+
+      - name: Require complete matrix
+        if: ${{ always() && inputs.expected-total >= 0 }}
+        run: |
+          completeness_file="${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.COMPLETENESS_OUTPUT_FILE }}"
+          if [[ ! -f "$completeness_file" ]]; then
+            echo "::error::Completeness metadata was not produced."
+            exit 1
+          fi
+          uv run bcbench result require-complete "$completeness_file"

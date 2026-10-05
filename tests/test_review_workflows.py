@@ -203,3 +203,44 @@ def test_agent_workflows_select_al_tool_dotnet_version_for_bc_version() -> None:
     for workflow_name in ("claude-evaluation.yml", "copilot-evaluation.yml"):
         workflow = _workflow(workflow_name)
         assert '--framework "net${{ steps.setup-env.outputs.al_tool_dotnet_version }}"' in workflow
+
+
+def test_bcal_summary_runs_after_matrix_failures_and_enforces_completeness() -> None:
+    workflow = yaml.safe_load(_workflow("bcal-evaluation.yml"))
+    summarize = workflow["jobs"]["summarize-results"]
+
+    assert summarize["needs"] == ["get-entries", "evaluate-with-bcal"]
+    assert "always()" in summarize["if"]
+    assert summarize["with"]["expected-total"] == "${{ fromJSON(needs.get-entries.outputs.entry-count) }}"
+    assert summarize["with"]["results-dir"] == "evaluation_results"
+    assert summarize["with"]["artifact-pattern"] == "evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*"
+
+
+def test_bcal_uses_one_pinned_cached_bccontainerhelper_download() -> None:
+    workflow = _workflow("bcal-evaluation.yml")
+
+    assert "BCCONTAINERHELPER_VERSION: 6.1.18" in workflow
+    assert "prepare-bccontainerhelper:" in workflow
+    assert "Save-Module" in workflow
+    assert "RequiredVersion $env:BCCONTAINERHELPER_VERSION" in workflow
+    assert "fail-on-cache-miss: true" in workflow
+    assert "Install-Module -Name BcContainerHelper" not in workflow
+
+
+def test_summarize_workflow_preserves_partial_diagnostics_before_failing() -> None:
+    workflow = _workflow("summarize-results.yml")
+
+    assert "continue-on-error: ${{ inputs.expected-total >= 0 }}" in workflow
+    assert "evaluation_completeness.json" in workflow
+    assert "bceval_scored_results.json" in workflow
+    assert "if: always()" in workflow
+    assert "bcbench result require-complete" in workflow
+
+
+def test_bcal_health_workflow_correlates_scheduled_run_id_with_kusto_metadata() -> None:
+    workflow = _workflow("bcal-evaluation-health.yml")
+
+    assert "event=schedule" in workflow
+    assert "bcal-evaluation.yml/runs" in workflow
+    assert "steps.scheduled-run.outputs.run-id" in workflow
+    assert "bcbench.bceval_runner health-check" in workflow

@@ -415,6 +415,75 @@ def test_result_summarize_with_custom_pattern(sample_results_directory, problem_
 
 
 @pytest.mark.integration
+def test_result_summarize_records_partial_matrix_completeness(sample_results_directory, problem_statement_dir, tmp_path, monkeypatch):
+    base_path, run_id, dataset_path = sample_results_directory
+    github_output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
+
+    with (
+        patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "result",
+                "summarize",
+                "--category",
+                "bug-fix",
+                "--run-id",
+                run_id,
+                "--result-dir",
+                str(base_path),
+                "--expected-total",
+                "4",
+                "--github-output",
+            ],
+        )
+
+    assert result.exit_code == 0, result.exception
+    run_dir = base_path / run_id
+    completeness = json.loads((run_dir / "evaluation_completeness.json").read_text())
+    assert completeness["expected_entry_count"] == 4
+    assert completeness["produced_entry_count"] == 3
+    assert completeness["missing_entry_count"] == 1
+    assert completeness["complete"] is False
+
+    summary = json.loads((run_dir / "evaluation_summary.json").read_text())
+    assert summary["completeness"] == completeness
+    exported = [json.loads(line) for line in (run_dir / "bceval_results.jsonl").read_text().splitlines()]
+    assert {row["metadata"]["evaluation_complete"] for row in exported} == {False}
+    assert "complete=false" in github_output.read_text()
+
+
+@pytest.mark.integration
+def test_result_summarize_zero_results_still_writes_completeness(tmp_path):
+    run_id = "empty-matrix"
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "summarize",
+            "--category",
+            "nl2al",
+            "--run-id",
+            run_id,
+            "--result-dir",
+            str(tmp_path),
+            "--expected-total",
+            "110",
+        ],
+    )
+
+    assert result.exit_code == 0
+    completeness = json.loads((tmp_path / run_id / "evaluation_completeness.json").read_text())
+    assert completeness["produced_entry_count"] == 0
+    assert completeness["missing_entry_count"] == 110
+    assert completeness["complete"] is False
+    assert not (tmp_path / run_id / "evaluation_summary.json").exists()
+
+
+@pytest.mark.integration
 def test_dataset_list_displays_all_entries(sample_dataset_file_for_cli):
     with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file_for_cli):
         result = runner.invoke(
@@ -430,6 +499,18 @@ def test_dataset_list_displays_all_entries(sample_dataset_file_for_cli):
     assert "microsoftInternal__NAV-2" in result.stdout
     assert "microsoftInternal__NAV-3" in result.stdout
     assert "Found 3 entry(ies)" in result.stdout
+
+
+@pytest.mark.integration
+def test_dataset_list_writes_entry_count_output(sample_dataset_file_for_cli, tmp_path, monkeypatch):
+    github_output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
+
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file_for_cli):
+        result = runner.invoke(app, ["dataset", "list", "--count-output", "entry-count"])
+
+    assert result.exit_code == 0
+    assert github_output.read_text() == "entry-count=3\n"
 
 
 @pytest.mark.integration

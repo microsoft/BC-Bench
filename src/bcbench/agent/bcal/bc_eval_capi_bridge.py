@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import BinaryIO, cast
+
+from bcbench.retry import RetryPolicy, retry_transient
 
 _CERT_FILE_ENV = "CAPI_CERT_FILE"
 _CERT_TENANT_ENV = "CAPI_TENANT_ID"
@@ -15,6 +18,7 @@ _CERT_CLIENT_ENV = "CAPI_CLIENT_ID"
 # Reasoning effort (not all models support this parameter), different models might have different available values:
 # Set to None to omit the parameter entirely (lets the model/service use its own default).
 _DEFAULT_REASONING_EFFORT: str | None = None
+_CAPI_RETRY_POLICY = RetryPolicy(max_attempts=4, initial_delay_seconds=10, max_delay_seconds=60)
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -105,6 +109,21 @@ def _maybe_install_local_cert_credential() -> None:
     _patch_credential_from_local_file(cert_file)
 
 
+def _create_completion(client: object, kwargs: dict[str, object], *, sleep: Callable[[float], None] | None = None) -> object:
+    def create() -> object:
+        return client.chat.completions.create(**kwargs)  # ty: ignore[unresolved-attribute]
+
+    def log_retry(error: BaseException, attempt: int, delay: float) -> None:
+        sys.stderr.write(
+            f"CAPI request attempt {attempt} failed with a transient dependency error: {error}. Retrying in {delay:g}s.",
+        )
+        sys.stderr.write("\n")
+
+    if sleep is None:
+        return retry_transient(create, policy=_CAPI_RETRY_POLICY, on_retry=log_retry)
+    return retry_transient(create, policy=_CAPI_RETRY_POLICY, sleep=sleep, on_retry=log_retry)
+
+
 def main() -> int:
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
@@ -134,7 +153,7 @@ def main() -> int:
     if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
 
-    response = client.chat.completions.create(**kwargs)
+    response = _create_completion(client, kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
     return 0
 
