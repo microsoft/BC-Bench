@@ -5,7 +5,7 @@ import pytest
 
 from bcbench.evaluate.dataquery import DataQueryPipeline, _load_answer_rows, result_sets_match
 from bcbench.exceptions import BuildError, EmptyGoldResultError
-from bcbench.operations import bc_operations, wrap_query_as_api
+from bcbench.operations import dataquery_operations, wrap_query_as_api
 from bcbench.types import AgentHarness, ContainerConfig, EvaluationCategory, EvaluationContext
 from tests.conftest import create_data_query_entry
 
@@ -198,9 +198,9 @@ def test_execute_al_query_bootstraps_app_manifest(tmp_path, monkeypatch):
     def write_empty_result(*args, **kwargs):
         (app_dir / "result.json").write_text("[]", encoding="utf-8")
 
-    monkeypatch.setattr(bc_operations.subprocess, "run", write_empty_result)
+    monkeypatch.setattr(dataquery_operations.subprocess, "run", write_empty_result)
 
-    rows = bc_operations.execute_al_query(
+    rows = dataquery_operations.execute_al_query(
         'query 50100 MyQuery { elements { dataitem(Customer; Customer) { column(No; "No.") { } } } }',
         ContainerConfig(name="bcserver", username="admin", password="password", company="CRONUS"),
         "26.0.12345.0",
@@ -218,7 +218,7 @@ def test_execute_al_query_bootstraps_app_manifest(tmp_path, monkeypatch):
 
 class TestQueryRunTemplate:
     def _render(self):
-        return bc_operations._QUERY_RUN_TEMPLATE.substitute(
+        return dataquery_operations._QUERY_RUN_TEMPLATE.substitute(
             app_utils_path="AppUtils.psm1",
             suffix="generated",
             container_name="c",
@@ -227,10 +227,10 @@ class TestQueryRunTemplate:
             app_dir="d",
             app_name="BC-Bench Query generated",
             app_publisher="BC-Bench",
-            publisher=bc_operations._QUERY_API_PUBLISHER,
-            group=bc_operations._QUERY_API_GROUP,
-            version=bc_operations._QUERY_API_VERSION,
-            entity_set=bc_operations._entity_set_name(50100),
+            publisher=dataquery_operations._QUERY_API_PUBLISHER,
+            group=dataquery_operations._QUERY_API_GROUP,
+            version=dataquery_operations._QUERY_API_VERSION,
+            entity_set=dataquery_operations._entity_set_name(50100),
             result_file="r",
             company="CRONUS",
         )
