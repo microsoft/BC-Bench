@@ -1,16 +1,17 @@
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import yaml
+from bcbench_core.agent.env import agent_subprocess_env
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.claude.metrics import parse_stream_output
 from bcbench.agent.shared import (
-    agent_subprocess_env,
     build_al_lsp_plugin,
     build_mcp_config,
     build_prompt,
@@ -125,6 +126,7 @@ def run_claude_code(
             cmd_args,
             cwd=str(repo_path),
             env=agent_subprocess_env(
+                os.environ,
                 {
                     "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
                     # BC MCP's first tools/list compiles the tool catalog and can take ~45s on a cold

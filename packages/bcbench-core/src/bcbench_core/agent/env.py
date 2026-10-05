@@ -1,4 +1,6 @@
-import os
+"""Process environment for launched coding agents."""
+
+from collections.abc import Mapping
 
 # BC container connection details/credentials the harness uses to build the MCP config and to reach the
 # container. They must NOT leak into a launched agent's own process environment: otherwise the agent can
@@ -12,8 +14,8 @@ _WITHHELD_ENV_PREFIXES = ("BC_SERVER_", "BC_MCP_")
 _WITHHELD_ENV_VARS = frozenset({"BC_COMPANY", "BC_CONTAINER_NAME"})
 
 
-def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:
-    env = dict(os.environ)
+def agent_subprocess_env(parent_env: Mapping[str, str], overrides: Mapping[str, str] | None = None, pass_bc_credentials: bool = False) -> dict[str, str]:
+    env = dict(parent_env)
     if not pass_bc_credentials:
         env = {k: v for k, v in env.items() if not k.startswith(_WITHHELD_ENV_PREFIXES) and k not in _WITHHELD_ENV_VARS}
     if overrides:
