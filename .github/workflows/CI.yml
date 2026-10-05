@@ -50,6 +50,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Test the PR head rather than the merge commit so coverage lines map onto the PR diff; lint-and-test covers the merge
+          # https://docs.github.com/en/code-security/how-tos/maintain-quality-code/set-up-code-coverage#manual-setup
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Python with UV
