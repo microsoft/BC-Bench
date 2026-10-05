@@ -7,11 +7,11 @@ from unittest.mock import patch
 import pytest
 from bcbench_core.exceptions import AgentError
 
-from bcbench.agent.shared.plugin import resolve_config_plugins
-from bcbench.config import get_config
+from bcbench.agent.shared.plugin import PLUGIN_MANIFEST, resolve_config_plugins
+from bcbench.paths import AGENT_SHARE_DIR, SHARED_CONFIG_FILE
 from bcbench.types import AgentConfig, PluginConfig
 
-_MANIFEST = get_config().file_patterns.plugin_manifest
+_MANIFEST = PLUGIN_MANIFEST
 
 
 def _make_plugin(root: Path, name: str = "probe-plugin") -> Path:
@@ -31,7 +31,7 @@ def _github_entry(**overrides) -> dict[str, Any]:
 
 
 def _shipped_config() -> AgentConfig:
-    return AgentConfig.from_file(get_config().paths.agent_share_dir / "config.yaml")
+    return AgentConfig.from_file(SHARED_CONFIG_FILE)
 
 
 def _plugins_config(*entries: dict[str, Any]) -> AgentConfig:
@@ -218,6 +218,6 @@ class TestShippedConfig:
         assert [PluginConfig.model_validate(entry).name for entry in _shipped_config().plugins if entry["source"] == "github"]
 
     def test_bundled_example_is_a_loadable_plugin(self):
-        example = get_config().paths.agent_share_dir / "plugins" / "bcbench-example"
+        example = AGENT_SHARE_DIR / "plugins" / "bcbench-example"
 
         assert (example / _MANIFEST).is_file()

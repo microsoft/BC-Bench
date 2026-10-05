@@ -9,16 +9,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry, RepoGroundedEntry
 from bcbench.operations.instruction_operations import (
+    INSTRUCTION_SOURCE_FILE,
     _get_source_instructions_path,
     setup_custom_agent,
     setup_instructions_from_config,
 )
 from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory
-
-_config = get_config()
 
 
 def test_get_instructions_path():
@@ -45,7 +43,7 @@ def test_setup_custom_instructions():
         assert target_path.exists(), ".github directory should be created"
 
         # Verify files were copied (AGENTS.md gets renamed to agent-specific filename)
-        source_naming = _config.file_patterns.instruction_source_naming
+        source_naming = INSTRUCTION_SOURCE_FILE
         for item in instructions_source.iterdir():
             target_item = target_path / AgentHarness.COPILOT.instruction_filename if item.name == source_naming else target_path / item.name
             assert target_item.exists(), f"{target_item} should exist"
@@ -159,7 +157,7 @@ def test_overwrite_existing_instructions():
         assert target_path.exists(), "Instruction file should exist"
         new_content = target_path.read_text(encoding="utf-8")
         assert new_content != original_content, "Content should be overwritten"
-        source_file = instructions_source / _config.file_patterns.instruction_source_naming
+        source_file = instructions_source / INSTRUCTION_SOURCE_FILE
         assert new_content == source_file.read_text(encoding="utf-8"), "Content should match source"
 
 
@@ -234,10 +232,10 @@ def test_claude_instructions_renamed():
         assert claude_dir.exists(), ".claude directory should be created"
 
         # AGENTS.md should be renamed to CLAUDE.md
-        assert not (claude_dir / _config.file_patterns.instruction_source_naming).exists(), "Source file should be renamed"
+        assert not (claude_dir / INSTRUCTION_SOURCE_FILE).exists(), "Source file should be renamed"
         claude_md = claude_dir / AgentHarness.CLAUDE.instruction_filename
         assert claude_md.exists(), "CLAUDE.md should exist"
 
         # Content should match the original source file
-        source_content = (instructions_source / _config.file_patterns.instruction_source_naming).read_text(encoding="utf-8")
+        source_content = (instructions_source / INSTRUCTION_SOURCE_FILE).read_text(encoding="utf-8")
         assert claude_md.read_text(encoding="utf-8") == source_content, "CLAUDE.md content should match source"
