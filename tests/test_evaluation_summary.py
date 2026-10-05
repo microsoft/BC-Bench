@@ -6,7 +6,7 @@ import pytest
 from bcbench.config import get_config
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
-from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
+from tests.conftest import create_bugfix_result, create_testgen_result
 
 _config = get_config()
 
@@ -830,15 +830,26 @@ class TestLeaderboard:
         with pytest.raises(ValueError, match="different combinations"):
             LeaderboardAggregate.from_runs([run1, run2])
 
-    def test_aggregate_rejects_runs_with_different_judge_models(self):
+    def test_aggregate_rejects_retired_lmchecklist_judge_baseline(self):
         from bcbench.results.leaderboard import LeaderboardAggregate
-        from bcbench.results.summary import EvaluationResultSummary
+        from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 
-        run1 = EvaluationResultSummary.from_results([create_codereview_result()], run_id="run_1")
-        run2 = run1.model_copy(update={"judge_model": "different-judge"})
+        current_run = JudgeBasedEvaluationResultSummary(
+            total=110,
+            date=datetime.now(UTC).date(),
+            model="gpt-5.3-codex",
+            agent_name="copilot",
+            category=EvaluationCategory.NL2AL,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            benchmark_version="0.1.0",
+            judge_model="gpt-56-reasoning-nano-luna",
+        )
+        retired_shortco_run = current_run.model_copy(update={"judge_model": "gpt-41-2025-04-14"})
 
         with pytest.raises(ValueError, match="different combinations"):
-            LeaderboardAggregate.from_runs([run1, run2])
+            LeaderboardAggregate.from_runs([current_run, retired_shortco_run])
 
     def test_aggregate_rejects_runs_with_different_totals(self):
         from bcbench.results.leaderboard import LeaderboardAggregate
