@@ -1,4 +1,4 @@
-"""Shared altool helpers used by both AL-MCP and AL-LSP integrations.
+"""Paths for `altool`, the AL compiler and language tooling: package caches and assembly probing paths.
 
 Both `altool launchmcpserver` and `altool launchlspserver` need the same package-cache layout and assembly probing paths.
 """
@@ -6,8 +6,9 @@ Both `altool launchmcpserver` and `altool launchlspserver` need the same package
 import logging
 from pathlib import Path
 
-from bcbench_core.artifacts import resolve_artifact_version_root
 from packaging.version import InvalidVersion, Version
+
+from bcbench_core.artifacts import DEFAULT_ARTIFACTS_CACHE, resolve_artifact_version_root
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,8 @@ logger = logging.getLogger(__name__)
 # See: navcontainerhelper/InitializeModule.ps1 line 62
 _EXCLUDED_DOTNET_MAJORS = {9, 10}
 _DOTNET_SHARED = Path(r"C:\Program Files\dotnet\shared")
+# BcContainerHelper's default compiler folder root, one subfolder per container
+DEFAULT_COMPILER_ROOT = Path(r"C:\ProgramData\BcContainerHelper\compiler")
 
 
 def _detect_dotnet_runtime_version() -> Version | None:
@@ -85,27 +88,23 @@ def build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
     return paths
 
 
-def compiler_symbol_folder_for_container(container_name: str) -> tuple[Path, Path]:
+def compiler_symbol_folder_for_container(container_name: str, compiler_root: Path = DEFAULT_COMPILER_ROOT) -> tuple[Path, Path]:
     """Return the BCContainerHelper compiler and symbol folder for a given container."""
-    folder = Path(r"C:\ProgramData\BcContainerHelper\compiler") / container_name
+    folder = compiler_root / container_name
     return folder, folder / "symbols"
 
 
-def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w1") -> tuple[list[str], list[str]] | None:
+def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w1", artifacts_cache: Path = DEFAULT_ARTIFACTS_CACHE) -> tuple[list[str], list[str]] | None:
     """Resolve (package_cache_paths, assembly_probing_paths) from the BC artifact cache.
 
-    BCContainerHelper's `Download-Artifacts` (driven by `scripts/Download-BCSymbols.ps1`
-    or by the CI container setup) lands the artifact under
-    ``C:\\bcartifacts.cache\\sandbox\\<full-version>\\``. The dataset's
-    ``environment_setup_version`` is major.minor (e.g. "27.2"); BCContainerHelper
-    expands that to a full ``<major>.<minor>.<build>.<revision>``. We glob the cache
-    for matching versions, lexically sort, and pick the newest — BC's full-version
-    fields are constant-width in practice, so a lexical sort matches a numeric one.
+    BCContainerHelper's `Download-Artifacts` lands the artifact under
+    ``<artifacts_cache>\\sandbox\\<full-version>\\``; see `resolve_artifact_version_root`
+    for how a major.minor version (e.g. "27.2") is matched.
 
     Returns None when the artifact has not been downloaded yet — caller should fall
     back or surface an actionable error.
     """
-    version_root = resolve_artifact_version_root(environment_setup_version)
+    version_root = resolve_artifact_version_root(environment_setup_version, artifacts_cache)
     if version_root is None:
         return None
 
@@ -117,7 +116,7 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     # platform/ alone — the AL compiler recursively scans `--assemblyprobingpaths`
     # (SearchOption.AllDirectories), so a single root covers ServiceTier, Test Assemblies, etc.
     platform_dir = version_root / "platform"
-    assembly_probing_paths = [str(platform_dir)] if platform_dir.is_dir() else []
+    assembly_probing_paths: list[str] = [str(platform_dir)] if platform_dir.is_dir() else []
 
     # System .NET runtime — same fallback as the container-derived path so DotNet interop types resolve even without BC-shipped reference assemblies.
     assembly_probing_paths.extend(_dotnet_runtime_probing_paths())
