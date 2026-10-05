@@ -1,0 +1,10 @@
+{
+  "engineCommit": "0df2f2c5eaf3e51f289571c68c6d0cb55212dd09",
+  "bcQualityCommit": "ac249ba4c95eaef14edbe9818fcdd65561bf6a2f",
+  "datasetHash": "39B118C1CDE2A4BA879BA544288C777E80D99B14F7882870045CC993BBE830B5",
+  "entryIds": [
+    "synthetic__upgrade-contoso-demo-data-no-upgrade-wiring-01"
+  ],
+  "model": "gpt-5.6-luna",
+  "judgeModel": "gpt-5.3-codex"
+}
