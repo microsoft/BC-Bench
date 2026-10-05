@@ -15,6 +15,12 @@ Reusable, strongly typed building blocks for evaluating coding agents on Busines
 
 The import and environment rules are enforced by ruff (`banned-api` in [`pyproject.toml`](pyproject.toml)); imports of undeclared dependencies are rejected by ty's `missing-direct-dependency` rule.
 
+## Logging
+
+Modules log through `logging.getLogger(__name__)`, so every record is under the `bcbench_core` logger namespace. Importing the library never adds handlers or sets levels.
+
+Applications opt in by calling `bcbench_core.logs.setup_logging` once from their entry point, passing their top-level logger name and the debug/GitHub Actions flags; `bcbench_core` is always included. It sets those loggers to INFO (or DEBUG), keeps third-party loggers at WARNING, writes colored console output with secrets redacted, and, on GitHub Actions, turns warnings and errors into annotations. Calling it again replaces only the handlers it installed.
+
 ## Development
 
 The package is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) member of the BC-Bench repository. From the repository root:

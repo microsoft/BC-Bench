@@ -1,15 +1,15 @@
 """Base evaluation result class with shared metrics across all evaluation categories."""
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Self, cast
 
 from pydantic import BaseModel, model_validator
 
-from bcbench.logger import get_logger
 from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class BaseEvaluationResult(BaseModel):

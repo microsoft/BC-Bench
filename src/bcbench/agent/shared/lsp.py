@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from bcbench.agent.shared.altool_paths import (
@@ -8,10 +9,9 @@ from bcbench.agent.shared.altool_paths import (
 from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
-from bcbench.logger import get_logger
 from bcbench.types import AgentHarness, AgentRuntimeConfig, ContainerConfig, EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _AL_LSP_PLUGIN_FOLDER = "al-lsp-plugin"
 _AL_LSP_MANIFEST = {"name": "al-lsp"}

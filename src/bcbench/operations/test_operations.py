@@ -1,10 +1,10 @@
+import logging
 import re
 
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import NoTestsExtractedError
-from bcbench.logger import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def extract_codeunit_id_from_content(content: str, file_path: str) -> int:

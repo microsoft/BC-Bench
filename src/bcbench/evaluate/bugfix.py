@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from bcbench_core.projects import categorize_projects
@@ -6,7 +7,6 @@ from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
@@ -20,7 +20,7 @@ from bcbench.operations import (
 from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationContext
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["BugFixPipeline"]
 

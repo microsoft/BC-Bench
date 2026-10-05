@@ -1,3 +1,4 @@
+import logging
 import subprocess
 from pathlib import Path
 
@@ -6,12 +7,11 @@ from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge import judge_expected_and_ignored
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
 from bcbench.operations import apply_patch, fetch_commit_if_missing, setup_repo_prebuild
 from bcbench.results.codereview import CodeReviewResult, candidate_comment_pairs
 from bcbench.types import EvaluationContext
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 REVIEW_OUTPUT_FILE = "review.json"
 

@@ -1,6 +1,7 @@
 """CLI commands for dataset operations."""
 
 import json
+import logging
 from typing import Annotated
 
 import typer
@@ -9,10 +10,9 @@ from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
-from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 dataset_app = typer.Typer(help="Query and analyze dataset")
 

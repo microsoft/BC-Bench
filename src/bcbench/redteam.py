@@ -12,11 +12,10 @@ from azure.identity import DefaultAzureCredential
 
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
 from bcbench.dataset.dataset_entry import NL2ALEntry
-from bcbench.logger import get_logger
 from bcbench.operations import copy_symbol_apps
 from bcbench.types import EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["build_bcal_target", "run_scan"]
 

@@ -36,6 +36,8 @@ Preserve one-way dependency flow from orchestration toward lower-level abstracti
 
 `bcbench.types` is the central category registry. Extend `EvaluationCategory` for category-owned mappings such as datasets, pipelines, results, and scoring behavior instead of duplicating those decisions elsewhere. Keep imports following the existing direction and avoid circular dependencies.
 
+Logging setup lives in bcbench-core (`bcbench_core.logs.setup_logging`) so applications reuse it rather than copy it; the CLI calls it once, and modules only use `logging.getLogger(__name__)`.
+
 ### Readable code over documentation or comments
 Function names should be self-explanatory. Do NOT add docstrings to functions unless absolutely necessary.
 When a docstring is necessary, keep it short and use Google style. Include only useful sections such as `Args:` and `Returns:`; skip details that are obvious from names and type hints.

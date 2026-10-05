@@ -1,13 +1,13 @@
 import json
+import logging
 import re
 from typing import Any
 
 from pydantic import ValidationError
 
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.logger import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["parse_review_output"]
 
