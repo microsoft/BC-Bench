@@ -19,13 +19,16 @@ A very high-level overview of the repository structure:
 
 ```
 BC-Bench/
-├── src/bcbench/    # Evaluation harness — agent orchestration, build/test pipeline, results
-├── dataset/        # Benchmark dataset tasks
-├── scripts/        # Scripts for container setup & test execution; not needed for local development
-├── notebooks/      # Analysis and visualization of results
-├── evaluator/      # Braintrust scorer integration, used only when uploading result to Braintrust
-└── docs/           # GitHub Page for the leaderboard site
+├── src/bcbench/              # Evaluation harness — agent orchestration, build/test pipeline, results
+├── packages/bcbench-core/    # Reusable evaluation library consumed by src/bcbench (uv workspace member)
+├── dataset/                  # Benchmark dataset tasks
+├── scripts/                  # Scripts for container setup & test execution; not needed for local development
+├── notebooks/                # Analysis and visualization of results
+├── evaluator/                # Braintrust scorer integration, used only when uploading result to Braintrust
+└── docs/                     # GitHub Page for the leaderboard site
 ```
+
+The repository is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) with two Python projects: the `bcbench` application at the root and the `bcbench-core` library. `bcbench` depends on `bcbench-core`; never the reverse. The ruff baseline lives in `packages/bcbench-core/pyproject.toml` and the root config extends it with application-only settings. See [packages/bcbench-core/README.md](packages/bcbench-core/README.md) for the library boundary.
 
 ## Setup
 
