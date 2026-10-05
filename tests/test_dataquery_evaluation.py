@@ -2,11 +2,13 @@ import json
 from pathlib import Path
 
 import pytest
+from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import BuildError
 
 from bcbench.evaluate.dataquery import DataQueryPipeline, _load_answer_rows, result_sets_match
-from bcbench.exceptions import BuildError, EmptyGoldResultError
+from bcbench.exceptions import EmptyGoldResultError
 from bcbench.operations import dataquery_operations, wrap_query_as_api
-from bcbench.types import AgentHarness, ContainerConfig, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentHarness, EvaluationCategory, EvaluationContext
 from tests.conftest import create_data_query_entry
 
 

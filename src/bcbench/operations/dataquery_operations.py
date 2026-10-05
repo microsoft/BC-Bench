@@ -6,13 +6,13 @@ from pathlib import Path
 from string import Template
 from typing import Literal
 
+from bcbench_core.bc import APP_UTILS_MODULE, escape_ps_string
+from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import BuildError, BuildTimeoutExpired
 from bcbench_core.filesystem import remove_tree
 
 from bcbench.config import get_config
-from bcbench.exceptions import BuildError, BuildTimeoutExpired
-from bcbench.operations.bc_operations import escape_ps_string
 from bcbench.operations.setup_operations import bootstrap_app_json
-from bcbench.types import ContainerConfig
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -186,9 +186,8 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
     # Symbols are downloaded into an explicit .alpackages folder by Invoke-AppBuildAndPublish (below).
 
     result_file = app_dir / "result.json"
-    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
     ps_script = _QUERY_RUN_TEMPLATE.substitute(
-        app_utils_path=escape_ps_string(str(app_utils_path)),
+        app_utils_path=escape_ps_string(str(APP_UTILS_MODULE)),
         suffix=suffix,
         container_name=escape_ps_string(container.name),
         username=escape_ps_string(container.username),

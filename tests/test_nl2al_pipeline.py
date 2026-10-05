@@ -1,7 +1,7 @@
 """Tests for NL2ALPipeline.evaluate() — empty-diff handling is nl2al-specific."""
 
 import pytest
-from bcbench_core.git import EmptyDiffError
+from bcbench_core.exceptions import EmptyDiffError
 
 from bcbench.config import get_config
 from bcbench.evaluate.nl2al import NL2ALPipeline

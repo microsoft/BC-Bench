@@ -6,9 +6,8 @@ Both `altool launchmcpserver` and `altool launchlspserver` need the same package
 import logging
 from pathlib import Path
 
+from bcbench_core.artifacts import resolve_artifact_version_root
 from packaging.version import InvalidVersion, Version
-
-from bcbench.operations import resolve_artifact_version_root
 
 logger = logging.getLogger(__name__)
 

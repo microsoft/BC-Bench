@@ -5,9 +5,8 @@ from unittest.mock import patch
 
 import pytest
 
+from bcbench_core.exceptions import EmptyDiffError, PatchApplicationError
 from bcbench_core.git import (
-    EmptyDiffError,
-    PatchApplicationError,
     apply_patch,
     checkout_commit,
     clean_project_paths,

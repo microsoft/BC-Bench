@@ -1,7 +1,8 @@
 import logging
 from pathlib import Path
 
-from bcbench_core.git import EmptyDiffError, stage_and_get_diff
+from bcbench_core.exceptions import EmptyDiffError
+from bcbench_core.git import stage_and_get_diff
 
 from bcbench.dataset import ExtRequestImplementEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline

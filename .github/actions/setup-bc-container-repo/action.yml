@@ -80,7 +80,7 @@ runs:
       if: inputs.skip-container != 'true'
       shell: pwsh
       run: |
-        Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
+        Import-Module ./scripts/BenchmarkUtils.psm1 -Force -DisableNameChecking
         $version = Get-BCBenchEntryVersion -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}"
         $alToolDotNetVersion = if (([System.Version]$version).Major -lt 29) { "8.0" } else { "10.0" }
         "al_tool_dotnet_version=$alToolDotNetVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
