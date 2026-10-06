@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.results.codereview import CodeReviewResultSummary
@@ -44,7 +45,18 @@ def _metrics(*, duration: float, scale: int) -> PRReviewMetrics:
 
 
 def test_pr_review_provenance_fields_are_code_review_specific() -> None:
-    provenance_fields = {"copilot_cli_version", "bcquality_repository", "bcquality_commit", "bcquality_version"}
+    provenance_fields = {
+        "copilot_cli_version",
+        "bcquality_repository",
+        "bcquality_commit",
+        "bcquality_version",
+        "models",
+        "leaf_model",
+        "leaf_execution",
+        "max_leaf_concurrency",
+        "bcquality_source_snapshot",
+        "review_process_count",
+    }
 
     assert provenance_fields <= CodeReviewResultSummary.model_fields.keys()
     assert provenance_fields <= CodeReviewLeaderboardAggregate.model_fields.keys()
@@ -87,6 +99,14 @@ def test_summary_aggregates_public_pr_review_metrics() -> None:
     assert summary.bcquality_repository == "microsoft/BCQuality"
     assert summary.bcquality_commit == "a" * 40
     assert summary.bcquality_version == "1.6"
+    assert summary.models == ["claude-sonnet-5", "gpt-5.4"]
+    assert summary.leaf_model == "gpt-5.4"
+    assert summary.leaf_execution == "serial"
+    assert summary.max_leaf_concurrency == 4
+    assert summary.bcquality_source_snapshot == "b" * 64
+    assert summary.review_process_count == 2
+    assert summary.metric_counts["knowledge_used"] == 2
+    assert summary.metric_sums["knowledge_used"] == 15
 
 
 def test_summary_preserves_unavailable_usage_as_none() -> None:
@@ -137,6 +157,46 @@ def test_summary_omits_inconsistent_runtime_provenance(caplog) -> None:
 
     assert summary.bcquality_commit is None
     assert "inconsistent bcquality_commit" in caplog.text
+
+
+def test_leaderboard_rejects_runs_with_different_review_configuration() -> None:
+    first = CodeReviewResultSummary.from_results(
+        [create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=4.0, scale=1))],
+        run_id="one",
+    )
+    second = first.model_copy(update={"leaf_model": "different-leaf"})
+
+    with pytest.raises(ValueError, match="different combinations"):
+        CodeReviewLeaderboardAggregate.from_runs([first, second])
+
+
+def test_aggregate_weights_sparse_diagnostics_by_contributing_task_count() -> None:
+    template = CodeReviewResultSummary.from_results(
+        [create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=4.0, scale=1))],
+        run_id="template",
+    )
+    sparse = template.model_copy(
+        update={
+            "total": 51,
+            "average_knowledge_used": 100.0,
+            "metric_counts": {"knowledge_used": 1},
+            "metric_sums": {"knowledge_used": 100.0},
+        }
+    )
+    dense = template.model_copy(
+        update={
+            "total": 51,
+            "average_knowledge_used": 0.0,
+            "metric_counts": {"knowledge_used": 50},
+            "metric_sums": {"knowledge_used": 0.0},
+        }
+    )
+
+    aggregate = CodeReviewLeaderboardAggregate.from_runs([sparse, dense])
+
+    assert aggregate.average_knowledge_used == pytest.approx(100 / 51)
+    assert aggregate.metric_counts["knowledge_used"] == 51
+    assert aggregate.metric_sums["knowledge_used"] == 100
 
 
 def test_summary_excludes_unavailable_findings_diagnostics() -> None:
@@ -218,6 +278,12 @@ def test_leaderboard_propagates_public_pr_review_metrics() -> None:
     assert aggregate.bcquality_repository == "microsoft/BCQuality"
     assert aggregate.bcquality_commit == "a" * 40
     assert aggregate.bcquality_version == "1.6"
+    assert aggregate.models == ["claude-sonnet-5", "gpt-5.4"]
+    assert aggregate.leaf_model == "gpt-5.4"
+    assert aggregate.leaf_execution == "serial"
+    assert aggregate.max_leaf_concurrency == 4
+    assert aggregate.bcquality_source_snapshot == "b" * 64
+    assert aggregate.review_process_count == 2
 
 
 def test_github_summary_renders_only_public_performance_metrics() -> None:
@@ -295,5 +361,13 @@ def test_summary_and_leaderboard_schemas_include_pr_review_diagnostics() -> None
             "average_sub_skills_skipped",
             "token_coverage_rate",
             "credit_coverage_rate",
+            "models",
+            "leaf_model",
+            "leaf_execution",
+            "max_leaf_concurrency",
+            "bcquality_source_snapshot",
+            "review_process_count",
+            "metric_counts",
+            "metric_sums",
         ):
             assert diagnostic in payload
