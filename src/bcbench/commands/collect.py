@@ -35,7 +35,13 @@ def collect_gh(
     # Collect from custom repo
     bcbench collect gh 12345 --repo microsoft/AL --environment-setup-version 28.0
     """
-    collect_gh_entry(pr_number=pr_number, output=output, repo=repo, environment_setup_version=environment_setup_version)
+    collect_gh_entry(
+        pr_number=pr_number,
+        output=output,
+        repo=repo,
+        environment_setup_version=environment_setup_version,
+        problem_statement_dir=_config.paths.problem_statement_dir,
+    )
 
 
 @collect_app.command("codereview")

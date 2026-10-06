@@ -10,10 +10,10 @@ from bcbench_core.exceptions import AgentError
 
 from bcbench.categories.code_review.entry import ReviewComment
 from bcbench.categories.code_review.result import assign_comment_matches
-from bcbench.config import get_config
 from bcbench.exceptions import LLMJudgeError
 
-_config = get_config()
+# File the judge writes its verdicts to, inside its work dir
+JUDGE_RESULT_FILE = "judge_results.json"
 
 
 _JUDGE_PROMPT_TEMPLATE = """
@@ -105,7 +105,7 @@ def judge_expected_and_ignored(
     expected_pairs: list[tuple[ReviewComment, ReviewComment]],
     ignored_pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
-    model: str = _config.judge.code_review_model,
+    model: str,
 ) -> tuple[list[tuple[ReviewComment, ReviewComment]], list[tuple[ReviewComment, ReviewComment]]]:
     """Judge both candidate buckets once, then assign only confirmed edges one-to-one.
 
@@ -125,7 +125,7 @@ def judge_expected_and_ignored(
 def judge_verdicts(
     pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
-    model: str = _config.judge.code_review_model,
+    model: str,
 ) -> list[bool]:
     """Run the semantic judge over comment pairs and return one match verdict per pair.
 
@@ -135,8 +135,8 @@ def judge_verdicts(
     if not pairs:
         return []
 
-    result_path = work_dir / _config.judge.result_file
-    prompt = " ".join(_build_judge_prompt(pairs, _config.judge.result_file).split())
+    result_path = work_dir / JUDGE_RESULT_FILE
+    prompt = " ".join(_build_judge_prompt(pairs, JUDGE_RESULT_FILE).split())
 
     try:
         _, final_response = invoke_copilot(

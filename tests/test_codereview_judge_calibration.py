@@ -4,12 +4,15 @@ import pytest
 from bcbench_core.agent.copilot.agent import _find_copilot
 
 from bcbench.categories.code_review.judge_calibration import (
+    CALIBRATION_DATASET_FILE,
     _load_calibration_cases,
     run_calibration,
     score_calibration,
 )
+from bcbench.config import get_config
 
-CALIBRATION_CASES = _load_calibration_cases()
+CALIBRATION_DATASET = get_config().paths.dataset_dir / CALIBRATION_DATASET_FILE
+CALIBRATION_CASES = _load_calibration_cases(CALIBRATION_DATASET)
 
 
 class TestCalibrationDataset:
@@ -61,5 +64,5 @@ class TestScoreCalibration:
     reason="Live judge calibration is opt-in (set BCBENCH_RUN_JUDGE_CALIBRATION and install the Copilot CLI)",
 )
 def test_live_judge_meets_accuracy_threshold(tmp_path):
-    report = run_calibration(tmp_path)
+    report = run_calibration(tmp_path, model=get_config().judge.code_review_model, dataset=CALIBRATION_DATASET)
     assert report.accuracy >= 0.8, f"Judge accuracy {report.accuracy:.3f} below threshold; misclassified: {report.misclassified_notes}"

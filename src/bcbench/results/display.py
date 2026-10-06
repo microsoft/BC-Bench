@@ -5,7 +5,6 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from bcbench.config import get_config
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary, calculate_average_tool_usage
 
@@ -78,7 +77,7 @@ def _get_short_error_message(error_message: str | None) -> str:
     return first_line.replace("|", "\\|")
 
 
-def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
+def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary, step_summary_file: Path | None) -> None:
     metrics_section: str = summary.render_github_metrics_markdown().strip()
 
     # Calculate average tool usage
@@ -129,13 +128,13 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
         else:
             markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {error_msg} |\n"
 
-    _write_github_step_summary(markdown_summary)
+    _write_github_step_summary(markdown_summary, step_summary_file)
 
 
-def _write_github_step_summary(content: str) -> None:
-    config = get_config()
-    if config.env.github_step_summary:
-        with Path(config.env.github_step_summary).open("a", encoding="utf-8") as f:
-            f.write(content)
-            f.write("\n")
-        logger.info("Wrote evaluation summary to GitHub Actions step summary")
+def _write_github_step_summary(content: str, step_summary_file: Path | None) -> None:
+    if step_summary_file is None:
+        return
+    with step_summary_file.open("a", encoding="utf-8") as f:
+        f.write(content)
+        f.write("\n")
+    logger.info("Wrote evaluation summary to GitHub Actions step summary")

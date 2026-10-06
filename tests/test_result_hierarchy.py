@@ -31,20 +31,6 @@ from bcbench.results.summary import (
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
 
-
-def _make_config_with_summary(summary_path: str):
-    """Create a config mock with github_step_summary set."""
-    from bcbench.config import get_config
-
-    config = get_config()
-    # Return a shallow copy-like object that overrides env.github_step_summary
-    from unittest.mock import MagicMock
-
-    mock = MagicMock(wraps=config)
-    mock.env.github_step_summary = summary_path
-    return mock
-
-
 # ---------------------------------------------------------------------------
 # BaseEvaluationResult
 # ---------------------------------------------------------------------------
@@ -408,9 +394,9 @@ class TestAgentVersionDisplay:
         result.agent_version = agent_version
         summary = summarize_results([result], run_id="")
         sections = []
-        monkeypatch.setattr("bcbench.results.display._write_github_step_summary", sections.append)
+        monkeypatch.setattr("bcbench.results.display._write_github_step_summary", lambda content, _file: sections.append(content))
 
-        create_github_job_summary([result], summary)
+        create_github_job_summary([result], summary, None)
 
         content = sections[0]
         assert f"- Agent Version: {agent_version or 'Unrecorded'}\n" in content
@@ -445,12 +431,11 @@ class TestConsoleSummary:
 class TestGitHubJobSummary:
     def test_github_summary_renders_markdown(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"
-        monkeypatch.setattr("bcbench.results.display.get_config", lambda: _make_config_with_summary(str(summary_file)))
         results = [
             create_bugfix_result(instance_id="test__1", resolved=True),
             create_bugfix_result(instance_id="test__2", resolved=False, error_message="Build failed"),
         ]
-        create_github_job_summary(results, summarize_results(results, run_id=""))
+        create_github_job_summary(results, summarize_results(results, run_id=""), summary_file)
         content = summary_file.read_text()
         assert "test__1" in content
         assert "test__2" in content
@@ -461,7 +446,6 @@ class TestGitHubJobSummary:
 
     def test_github_summary_shows_plugins_when_present(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"
-        monkeypatch.setattr("bcbench.results.display.get_config", lambda: _make_config_with_summary(str(summary_file)))
         plugins = ["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99", "bcbench-example@local"]
         results = [
             create_bugfix_result(
@@ -470,24 +454,22 @@ class TestGitHubJobSummary:
                 experiment=ExperimentConfiguration(plugins=plugins),
             ),
         ]
-        create_github_job_summary(results, summarize_results(results, run_id=""))
+        create_github_job_summary(results, summarize_results(results, run_id=""), summary_file)
         content = summary_file.read_text()
         assert "- Plugins: superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99, bcbench-example@local" in content
 
     def test_github_summary_includes_testgen_columns(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"
-        monkeypatch.setattr("bcbench.results.display.get_config", lambda: _make_config_with_summary(str(summary_file)))
         results = [
             create_testgen_result(instance_id="test__1", resolved=True, pre_patch_failed=True, post_patch_passed=True),
         ]
-        create_github_job_summary(results, summarize_results(results, run_id=""))
+        create_github_job_summary(results, summarize_results(results, run_id=""), summary_file)
         content = summary_file.read_text()
         assert "Pre-Patch Failed" in content
         assert "Post-Patch Passed" in content
 
     def test_github_summary_includes_tool_usage(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"
-        monkeypatch.setattr("bcbench.results.display.get_config", lambda: _make_config_with_summary(str(summary_file)))
         results = [
             create_bugfix_result(
                 instance_id="test__1",
@@ -495,7 +477,7 @@ class TestGitHubJobSummary:
                 metrics=AgentMetrics(execution_time=100.0, tool_usage={"bash": 5, "view": 3}),
             ),
         ]
-        create_github_job_summary(results, summarize_results(results, run_id=""))
+        create_github_job_summary(results, summarize_results(results, run_id=""), summary_file)
         content = summary_file.read_text()
         assert "Tool Usage" in content
         assert "bash" in content

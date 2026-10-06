@@ -82,6 +82,7 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 expected_candidates,
                 ignored_candidates,
                 work_dir=context.repo_path,
+                model=context.get_judge_model(),
             )
             result = CodeReviewResult.create(
                 context,

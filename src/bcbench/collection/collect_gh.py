@@ -9,14 +9,12 @@ import typer
 
 from bcbench.collection.gh_client import GHClient
 from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_project_paths_from_diff, separate_patches
-from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
 from bcbench.dataset.dataset_entry import PROBLEM_STATEMENT_README
 from bcbench.exceptions import CollectionError, NoTestsExtractedError
 from bcbench.operations import extract_tests_from_patch
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 MIN_PROJECT_PATHS = 2
 
@@ -32,7 +30,7 @@ class ScreeningResult:
 def _save_problem_statement(
     instance_id: str,
     problem_statement: str,
-    problem_statement_dir: Path = _config.paths.problem_statement_dir,
+    problem_statement_dir: Path,
     filename: str = PROBLEM_STATEMENT_README,
 ) -> None:
     output_dir = problem_statement_dir / instance_id
@@ -97,6 +95,7 @@ def _build_bugfix_entry(
     pr_number: int,
     repo: str,
     environment_setup_version: str,
+    problem_statement_dir: Path,
 ) -> BugFixEntry:
     logger.info("Collecting dataset entry for PR #%s from %s", pr_number, repo)
 
@@ -129,7 +128,7 @@ def _build_bugfix_entry(
 
     instance_id = f"{repo.replace('/', '__')}-{pr_number}"
 
-    _save_problem_statement(instance_id=instance_id, problem_statement=problem_statement)
+    _save_problem_statement(instance_id=instance_id, problem_statement=problem_statement, problem_statement_dir=problem_statement_dir)
 
     return BugFixEntry(
         repo=repo,
@@ -148,12 +147,13 @@ def collect_gh_entry(
     pr_number: int,
     output: Path,
     environment_setup_version: str,
+    problem_statement_dir: Path,
     repo: str = "microsoft/BCApps",
 ) -> None:
     gh_client = GHClient(repo)
 
     try:
-        entry = _build_bugfix_entry(gh_client, pr_number, repo, environment_setup_version)
+        entry = _build_bugfix_entry(gh_client, pr_number, repo, environment_setup_version, problem_statement_dir)
     except Exception as exc:
         logger.exception("Failed to collect dataset entry")
         raise typer.Exit(code=1) from exc

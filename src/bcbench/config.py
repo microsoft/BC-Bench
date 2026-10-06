@@ -70,7 +70,6 @@ class JudgeConfig(BaseModel):
 
     code_review_model: CopilotModelName = Field(validation_alias=AliasPath("judges", "code-review", "model"))
     lm_checklist_model: str = Field(min_length=1, validation_alias=AliasPath("judges", "lm-checklist", "model"))
-    result_file: str = "judge_results.json"
 
     @classmethod
     def from_file(cls, path: Path) -> JudgeConfig:

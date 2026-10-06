@@ -9,7 +9,7 @@ import pytest
 from bcbench_core.exceptions import AgentError
 
 from bcbench.categories.code_review.entry import CodeReviewEntry, ReviewComment, Severity
-from bcbench.categories.code_review.judge import LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
+from bcbench.categories.code_review.judge import JUDGE_RESULT_FILE, LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
 from bcbench.categories.code_review.pipeline import CodeReviewPipeline
 from bcbench.categories.code_review.result import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
 from bcbench.categories.code_review.review_parsing import parse_review_output
@@ -20,6 +20,7 @@ from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
 _config = get_config()
+JUDGE_MODEL = _config.judge.code_review_model
 
 
 class TestSeverity:
@@ -1142,30 +1143,30 @@ class TestJudge:
 
     def test_parse_raises_when_result_file_missing(self, tmp_path):
         with pytest.raises(LLMJudgeError, match="no result file"):
-            _parse_judge_results(tmp_path / _config.judge.result_file, num_pairs=1)
+            _parse_judge_results(tmp_path / JUDGE_RESULT_FILE, num_pairs=1)
 
     def test_parse_raises_on_invalid_json(self, tmp_path):
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         result_path.write_text("not json", encoding="utf-8")
 
         with pytest.raises(LLMJudgeError, match="not valid JSON"):
             _parse_judge_results(result_path, num_pairs=1)
 
     def test_parse_raises_when_not_a_list(self, tmp_path):
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         result_path.write_text('{"pair": 1, "match": true}', encoding="utf-8")
 
         with pytest.raises(LLMJudgeError, match="must be a JSON list"):
             _parse_judge_results(result_path, num_pairs=1)
 
     def test_parse_missing_pair_counts_as_not_confirmed(self, tmp_path):
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         result_path.write_text('[{"pair": 1, "match": true}]', encoding="utf-8")
 
         assert _parse_judge_results(result_path, num_pairs=2) == [True, False]
 
     def test_parse_falls_back_to_stdout_when_file_missing(self, tmp_path):
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
 
         assert _parse_judge_results(result_path, num_pairs=1, stdout='```json\n[{"pair": 1, "match": true}]\n```') == [True]
 
@@ -1173,7 +1174,7 @@ class TestJudge:
     def test_parse_patch_with_identical_repeated_array(self, tmp_path, source):
         verdict = '[{"pair":1,"match":true,"reasoning":"Both identify the unchecked TryFunction result."}]'
         output = f"*** Begin Patch\n*** Add File: judge_results.json\n+{verdict}\n*** End Patch\n{verdict}"
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         if source == "file":
             result_path.write_text(output, encoding="utf-8")
 
@@ -1199,7 +1200,7 @@ class TestJudge:
             ]
         )
         output = wrapper.format(verdict=verdict)
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         if source == "file":
             result_path.write_text(output, encoding="utf-8")
 
@@ -1208,7 +1209,7 @@ class TestJudge:
     def test_parse_accepts_identical_arrays_with_different_json_formatting(self, tmp_path):
         output = '[{"pair":1,"match":true,"reasoning":"same"}]\n[\n  {"reasoning":"s\\u0061me", "match":true, "pair":1}\n]'
 
-        assert _parse_judge_results(tmp_path / _config.judge.result_file, num_pairs=1, stdout=output) == [True]
+        assert _parse_judge_results(tmp_path / JUDGE_RESULT_FILE, num_pairs=1, stdout=output) == [True]
 
     @pytest.mark.parametrize(
         "other",
@@ -1223,7 +1224,7 @@ class TestJudge:
     @pytest.mark.parametrize("source", ["file", "stdout"])
     def test_parse_rejects_conflicting_arrays(self, tmp_path, source, wrapper, other):
         output = wrapper.format(first='[{"pair":1,"match":true,"reasoning":"same"}]', other=other)
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         if source == "file":
             result_path.write_text(output, encoding="utf-8")
 
@@ -1251,7 +1252,7 @@ class TestJudge:
     )
     @pytest.mark.parametrize("source", ["file", "stdout"])
     def test_parse_rejects_empty_or_malformed_outer_json(self, tmp_path, source, output):
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         if source == "file":
             result_path.write_text(output, encoding="utf-8")
 
@@ -1267,24 +1268,24 @@ class TestJudge:
     )
     def test_parse_does_not_extract_array_from_non_list_json(self, tmp_path, output):
         with pytest.raises(LLMJudgeError, match="must be a JSON list"):
-            _parse_judge_results(tmp_path / _config.judge.result_file, num_pairs=1, stdout=output)
+            _parse_judge_results(tmp_path / JUDGE_RESULT_FILE, num_pairs=1, stdout=output)
 
     def test_parse_prefers_result_file_over_conflicting_stdout(self, tmp_path):
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         result_path.write_text('[{"pair":1,"match":false}]', encoding="utf-8")
 
         assert _parse_judge_results(result_path, num_pairs=1, stdout='[{"pair":1,"match":true}]') == [False]
 
     @pytest.mark.parametrize("output", ["", "not json", '{"verdicts":[{"pair":1,"match":true}]'])
     def test_parse_does_not_fall_back_from_invalid_result_file(self, tmp_path, output):
-        result_path = tmp_path / _config.judge.result_file
+        result_path = tmp_path / JUDGE_RESULT_FILE
         result_path.write_text(output, encoding="utf-8")
 
         with pytest.raises(LLMJudgeError):
             _parse_judge_results(result_path, num_pairs=1, stdout='[{"pair":1,"match":true}]')
 
     def test_empty_pairs_skips_judge(self):
-        assert judge_verdicts([], work_dir=Path()) == []
+        assert judge_verdicts([], work_dir=Path(), model=JUDGE_MODEL) == []
 
     def test_judge_core_execution_enables_file_writing_tools_without_custom_instructions(self, tmp_path, monkeypatch):
         monkeypatch.setenv("BCBENCH_JUDGE_ENV_SENTINEL", "inherited")
@@ -1296,7 +1297,7 @@ class TestJudge:
                 return_value=subprocess.CompletedProcess([], 0, stdout=output, stderr=""),
             ) as run,
         ):
-            assert judge_verdicts([self._pair(10)], work_dir=tmp_path) == [True]
+            assert judge_verdicts([self._pair(10)], work_dir=tmp_path, model=JUDGE_MODEL) == [True]
 
         assert "--allow-all-tools" in run.call_args.args[0]
         assert "--available-tools=none" not in run.call_args.args[0]
@@ -1305,7 +1306,7 @@ class TestJudge:
 
     def test_raises_when_copilot_not_found(self, tmp_path):
         with patch("bcbench.categories.code_review.judge.invoke_copilot", side_effect=AgentError("Copilot CLI not found")), pytest.raises(LLMJudgeError, match="Copilot CLI not found"):
-            judge_verdicts([self._pair(10)], work_dir=tmp_path)
+            judge_verdicts([self._pair(10)], work_dir=tmp_path, model=JUDGE_MODEL)
 
     def test_raises_when_subprocess_fails(self, tmp_path):
         with (
@@ -1319,7 +1320,7 @@ class TestJudge:
             ),
             pytest.raises(LLMJudgeError, match="Judge subprocess failed"),
         ):
-            judge_verdicts([self._pair(10)], work_dir=tmp_path)
+            judge_verdicts([self._pair(10)], work_dir=tmp_path, model=JUDGE_MODEL)
 
     def test_subprocess_failure_surfaces_copilot_output(self, tmp_path):
         error = subprocess.CalledProcessError(1, "copilot", output="partial stdout", stderr="model gpt-5.3-codex is not available")
@@ -1328,17 +1329,17 @@ class TestJudge:
             patch("bcbench_core.agent.copilot.agent.subprocess.run", side_effect=error),
             pytest.raises(LLMJudgeError, match="model gpt-5\\.3-codex is not available"),
         ):
-            judge_verdicts([self._pair(10)], work_dir=tmp_path)
+            judge_verdicts([self._pair(10)], work_dir=tmp_path, model=JUDGE_MODEL)
 
     def test_returns_verdicts_from_result_file(self, tmp_path):
         pairs = [self._pair(10), self._pair(20)]
 
         def fake_invoke(**_kwargs):
-            (tmp_path / _config.judge.result_file).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
+            (tmp_path / JUDGE_RESULT_FILE).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
             return None, ""
 
         with patch("bcbench.categories.code_review.judge.invoke_copilot", side_effect=fake_invoke):
-            result = judge_verdicts(pairs, work_dir=tmp_path)
+            result = judge_verdicts(pairs, work_dir=tmp_path, model=JUDGE_MODEL)
 
         assert result == [True, False]
 
@@ -1349,7 +1350,7 @@ class TestJudge:
             "bcbench.categories.code_review.judge.invoke_copilot",
             return_value=(None, '[{"pair": 1, "match": false}, {"pair": 2, "match": true}]'),
         ):
-            result = judge_verdicts(pairs, work_dir=tmp_path)
+            result = judge_verdicts(pairs, work_dir=tmp_path, model=JUDGE_MODEL)
 
         assert result == [False, True]
 
@@ -1358,7 +1359,7 @@ class TestJudge:
             patch("bcbench.categories.code_review.judge.invoke_copilot", return_value=(None, '{"verdicts":[{"pair":1,"match":true}]')) as mock_invoke,
             pytest.raises(LLMJudgeError),
         ):
-            judge_verdicts([self._pair(10)], work_dir=tmp_path)
+            judge_verdicts([self._pair(10)], work_dir=tmp_path, model=JUDGE_MODEL)
 
         mock_invoke.assert_called_once()
 
@@ -1375,7 +1376,7 @@ class TestJudgeExpectedAndIgnored:
         ignored_pairs = [self._pair(30, "ign-a"), self._pair(40, "ign-b")]
 
         with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[True, False, False, True]) as mock_verdicts:
-            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
+            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path, model=JUDGE_MODEL)
 
         # A single judge pass over the concatenation — no second call, so no stale-verdict risk.
         mock_verdicts.assert_called_once()
@@ -1385,13 +1386,13 @@ class TestJudgeExpectedAndIgnored:
 
     def test_empty_buckets_return_empty(self, tmp_path):
         with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[]):
-            assert judge_expected_and_ignored([], [], work_dir=tmp_path) == ([], [])
+            assert judge_expected_and_ignored([], [], work_dir=tmp_path, model=JUDGE_MODEL) == ([], [])
 
     def test_only_ignored_bucket(self, tmp_path):
         ignored_pairs = [self._pair(30, "ign-a")]
 
         with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[True]):
-            validated_expected, validated_ignored = judge_expected_and_ignored([], ignored_pairs, work_dir=tmp_path)
+            validated_expected, validated_ignored = judge_expected_and_ignored([], ignored_pairs, work_dir=tmp_path, model=JUDGE_MODEL)
 
         assert validated_expected == []
         assert validated_ignored == ignored_pairs
@@ -1407,7 +1408,7 @@ class TestJudgeExpectedAndIgnored:
         ignored_pairs = [(ignored, generated)]
 
         with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[True, True]):
-            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
+            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path, model=JUDGE_MODEL)
 
         assert validated_expected == expected_pairs
         assert validated_ignored == []
@@ -1423,7 +1424,7 @@ class TestJudgeExpectedAndIgnored:
         ignored_pairs = [(ignored, generated)]
 
         with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[False, True]):
-            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
+            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path, model=JUDGE_MODEL)
 
         assert validated_expected == []
         assert validated_ignored == ignored_pairs
@@ -1435,7 +1436,7 @@ class TestJudgeExpectedAndIgnored:
         ignored_pairs = [(ignored, generated), (ignored, alternative)]
 
         with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[True, True, True, False]) as judge:
-            matched, neutral = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
+            matched, neutral = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path, model=JUDGE_MODEL)
 
         judge.assert_called_once_with(expected_pairs + ignored_pairs, tmp_path, model=_config.judge.code_review_model)
         assert matched == [(expected, alternative)]
@@ -1448,7 +1449,7 @@ class TestJudgeExpectedAndIgnored:
         pairs = candidate_comment_pairs(expected, generated)
 
         with patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=[False, True, True, False]):
-            matched, neutral = judge_expected_and_ignored(pairs, [], work_dir=tmp_path)
+            matched, neutral = judge_expected_and_ignored(pairs, [], work_dir=tmp_path, model=JUDGE_MODEL)
 
         assert len(matched) == 2
         assert matched[0][0] is expected[0]
@@ -1465,7 +1466,7 @@ class TestJudgeExpectedAndIgnored:
             patch("bcbench.categories.code_review.judge.judge_verdicts", return_value=verdicts),
             pytest.raises(ValueError, match="zip"),
         ):
-            judge_expected_and_ignored(pairs, [], work_dir=tmp_path)
+            judge_expected_and_ignored(pairs, [], work_dir=tmp_path, model=JUDGE_MODEL)
 
 
 class TestScoreCounts:
