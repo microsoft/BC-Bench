@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Sequence
-from typing import NamedTuple, Self
+from typing import Literal, NamedTuple, Self
 
 import numpy as np
 from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
@@ -16,6 +16,27 @@ from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext, PRReviewMetrics
 
 logger = logging.getLogger(__name__)
+_PR_REVIEW_METRICS = (
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "ai_credits",
+    "cached_tokens",
+    "cache_creation_tokens",
+    "reasoning_tokens",
+    "api_calls",
+    "failed_api_calls",
+    "usage_api_calls",
+    "premium_requests",
+    "malformed_records",
+    "knowledge_files",
+    "knowledge_pruned",
+    "knowledge_used",
+    "knowledge_suppressed",
+    "sub_skills_executed",
+    "sub_skills_skipped",
+    "usage_complete",
+)
 _METRIC_EXPLANATIONS = """\
 <details>
 <summary>📖 How to read these metrics</summary>
@@ -278,6 +299,14 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     bcquality_repository: str | None = None
     bcquality_commit: str | None = None
     bcquality_version: str | None = None
+    models: list[str] | None = None
+    leaf_model: str | None = None
+    leaf_execution: Literal["serial", "parallel"] | None = None
+    max_leaf_concurrency: int | None = Field(default=None, ge=1)
+    bcquality_source_snapshot: str | None = None
+    review_process_count: int | None = Field(default=None, ge=1)
+    metric_counts: dict[str, int] = Field(default_factory=dict)
+    metric_sums: dict[str, float] = Field(default_factory=dict)
 
     generated_comment_count: int = Field(default=0, ge=0)
     expected_comment_count: int = Field(default=0, ge=0)
@@ -324,13 +353,19 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
 
-    def combination_key(self) -> tuple[str | None, ...]:
+    def combination_key(self) -> tuple[str | int | tuple[str, ...] | None, ...]:
         return (
             *super().combination_key(),
             self.copilot_cli_version,
             self.bcquality_repository,
             self.bcquality_commit,
             self.bcquality_version,
+            tuple(self.models) if self.models is not None else None,
+            self.leaf_model,
+            self.leaf_execution,
+            self.max_leaf_concurrency,
+            self.bcquality_source_snapshot,
+            self.review_process_count,
         )
 
     def _performance_markdown(self) -> str:
@@ -505,14 +540,17 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
         def metric_values(name: str) -> list[int | float | None]:
             return [getattr(result.metrics, name, None) if result.metrics else None for result in code_review_results]
 
-        def consistent_provenance(name: str) -> str | None:
-            values = {value for result in code_review_results if isinstance(result.metrics, PRReviewMetrics) and (value := getattr(result.metrics, name)) is not None}
-            if len(values) > 1:
+        def consistent_runtime_value(name: str) -> str | int | list[str] | None:
+            values = [value for result in code_review_results if isinstance(result.metrics, PRReviewMetrics) and (value := getattr(result.metrics, name)) is not None]
+            unique_values = {tuple(value) if isinstance(value, list) else value for value in values}
+            if len(unique_values) > 1:
                 logger.warning(f"Omitting inconsistent {name} from code-review summary")
                 return None
-            return next(iter(values), None)
+            value = next(iter(unique_values), None)
+            return list(value) if isinstance(value, tuple) else value
 
-        usage_completeness = [value for value in metric_values("usage_complete") if value is not None]
+        metric_counts = {name: sum(value is not None for value in metric_values(name)) for name in _PR_REVIEW_METRICS}
+        metric_sums = {name: float(sum(value for value in metric_values(name) if value is not None)) for name in _PR_REVIEW_METRICS}
 
         return summary.model_copy(
             update={
@@ -553,12 +591,20 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "average_knowledge_suppressed": average_metric(metric_values("knowledge_suppressed")),
                 "average_sub_skills_executed": average_metric(metric_values("sub_skills_executed")),
                 "average_sub_skills_skipped": average_metric(metric_values("sub_skills_skipped")),
-                "token_coverage_rate": sum(value is not None for value in metric_values("total_tokens")) / total_results,
-                "credit_coverage_rate": sum(value is not None for value in metric_values("ai_credits")) / total_results,
-                "usage_complete_rate": sum(value is True for value in usage_completeness) / len(usage_completeness) if usage_completeness else None,
-                "copilot_cli_version": consistent_provenance("copilot_cli_version"),
-                "bcquality_repository": consistent_provenance("bcquality_repository"),
-                "bcquality_commit": consistent_provenance("bcquality_commit"),
-                "bcquality_version": consistent_provenance("bcquality_version"),
+                "token_coverage_rate": metric_counts["total_tokens"] / total_results,
+                "credit_coverage_rate": metric_counts["ai_credits"] / total_results,
+                "usage_complete_rate": metric_sums["usage_complete"] / metric_counts["usage_complete"] if metric_counts["usage_complete"] else None,
+                "copilot_cli_version": consistent_runtime_value("copilot_cli_version"),
+                "bcquality_repository": consistent_runtime_value("bcquality_repository"),
+                "bcquality_commit": consistent_runtime_value("bcquality_commit"),
+                "bcquality_version": consistent_runtime_value("bcquality_version"),
+                "models": consistent_runtime_value("models"),
+                "leaf_model": consistent_runtime_value("leaf_model"),
+                "leaf_execution": consistent_runtime_value("leaf_execution"),
+                "max_leaf_concurrency": consistent_runtime_value("max_leaf_concurrency"),
+                "bcquality_source_snapshot": consistent_runtime_value("bcquality_source_snapshot"),
+                "review_process_count": consistent_runtime_value("review_process_count"),
+                "metric_counts": metric_counts,
+                "metric_sums": metric_sums,
             }
         )

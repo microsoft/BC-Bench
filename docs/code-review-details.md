@@ -39,7 +39,7 @@ title: Code Review Advanced Metrics - BC-Bench
 
 This view exposes every quality, performance, configuration, and usage metric persisted in the public code-review leaderboard data. The [default leaderboard](code-review.html) keeps only the headline metrics.
 
-Diagnostic averages use only tasks that reported the metric. Coverage columns show what share of tasks contributed complete token or credit telemetry.
+Diagnostic averages use only tasks that reported the metric. Cross-run averages pool each metric's persisted sum and sample count, rather than giving sparsely reported runs the same weight as fully reported runs. Coverage columns show what share of tasks contributed complete token or credit telemetry.
 
 ## Aggregate metrics
 
@@ -51,6 +51,12 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Agent</th>
       <th>Model</th>
       <th>Configuration</th>
+      <th>Models (leaf → root)</th>
+      <th>Leaf Model</th>
+      <th>Leaf Execution</th>
+      <th>Max Leaf Concurrency</th>
+      <th>BCQuality Snapshot</th>
+      <th>Review Processes</th>
       <th>Runs</th>
       <th>Tasks</th>
       <th>Micro Precision</th>
@@ -102,6 +108,12 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
       <td>{% if agg.experiment %}<code>{{ agg.experiment | jsonify }}</code>{% else %}Baseline{% endif %}</td>
+      <td>{% if agg.models and agg.models.size > 0 %}<code>{{ agg.models | join: " → " }}</code>{% else %}—{% endif %}</td>
+      <td>{% if agg.leaf_model %}{{ agg.leaf_model }}{% else %}—{% endif %}</td>
+      <td>{% if agg.leaf_execution %}{{ agg.leaf_execution }}{% else %}—{% endif %}</td>
+      <td>{% if agg.max_leaf_concurrency != null %}{{ agg.max_leaf_concurrency }}{% else %}—{% endif %}</td>
+      <td>{% if agg.bcquality_source_snapshot %}<code>{{ agg.bcquality_source_snapshot | slice: 0, 12 }}</code>{% else %}—{% endif %}</td>
+      <td>{% if agg.review_process_count != null %}{{ agg.review_process_count }}{% else %}—{% endif %}</td>
       <td>{{ agg.num_runs }}</td>
       <td>{{ agg.total }}</td>
       <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
@@ -164,6 +176,12 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Agent</th>
       <th>Model</th>
       <th>Configuration</th>
+      <th>Models (leaf → root)</th>
+      <th>Leaf Model</th>
+      <th>Leaf Execution</th>
+      <th>Max Leaf Concurrency</th>
+      <th>BCQuality Snapshot</th>
+      <th>Review Processes</th>
       <th>Date</th>
       <th>Tasks</th>
       <th>Generated</th>
@@ -222,6 +240,12 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{{ run.agent_name }}</td>
       <td>{{ run.model }}</td>
       <td>{% if run.experiment %}<code>{{ run.experiment | jsonify }}</code>{% else %}Baseline{% endif %}</td>
+      <td>{% if run.models and run.models.size > 0 %}<code>{{ run.models | join: " → " }}</code>{% else %}—{% endif %}</td>
+      <td>{% if run.leaf_model %}{{ run.leaf_model }}{% else %}—{% endif %}</td>
+      <td>{% if run.leaf_execution %}{{ run.leaf_execution }}{% else %}—{% endif %}</td>
+      <td>{% if run.max_leaf_concurrency != null %}{{ run.max_leaf_concurrency }}{% else %}—{% endif %}</td>
+      <td>{% if run.bcquality_source_snapshot %}<code>{{ run.bcquality_source_snapshot | slice: 0, 12 }}</code>{% else %}—{% endif %}</td>
+      <td>{% if run.review_process_count != null %}{{ run.review_process_count }}{% else %}—{% endif %}</td>
       <td>{{ run.date }}</td>
       <td>{{ run.total }}</td>
       <td>{{ run.generated_comment_count }}</td>

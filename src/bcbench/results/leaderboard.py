@@ -4,11 +4,11 @@ from abc import ABC
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from bcbench_core.scoring import pass_hat_k
 from bcbench_core.stats import bootstrap_ci
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
@@ -159,6 +159,14 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     average_completion_tokens: float | None = None
     average_total_tokens: float | None = None
     average_ai_credits: float | None = None
+    models: list[str] | None = None
+    leaf_model: str | None = None
+    leaf_execution: Literal["serial", "parallel"] | None = None
+    max_leaf_concurrency: int | None = Field(default=None, ge=1)
+    bcquality_source_snapshot: str | None = None
+    review_process_count: int | None = Field(default=None, ge=1)
+    metric_counts: dict[str, int] = Field(default_factory=dict)
+    metric_sums: dict[str, float] = Field(default_factory=dict)
     average_cached_tokens: float | None = None
     average_cache_creation_tokens: float | None = None
     average_reasoning_tokens: float | None = None
@@ -189,6 +197,12 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
             "bcquality_repository": first_run.bcquality_repository,
             "bcquality_commit": first_run.bcquality_commit,
             "bcquality_version": first_run.bcquality_version,
+            "models": first_run.models,
+            "leaf_model": first_run.leaf_model,
+            "leaf_execution": first_run.leaf_execution,
+            "max_leaf_concurrency": first_run.max_leaf_concurrency,
+            "bcquality_source_snapshot": first_run.bcquality_source_snapshot,
+            "review_process_count": first_run.review_process_count,
         }
 
     @classmethod
@@ -201,10 +215,6 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
         cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
         n = len(cr_runs)
 
-        def mean_metric(values: Sequence[float | None]) -> float | None:
-            available = [value for value in values if value is not None]
-            return sum(available) / len(available) if available else None
-
         # The micro headline pools every comment across the dataset, so there is no per-task
         # decomposition to resample; its CI is intentionally over run-level means and captures
         # run-to-run reproducibility (None unless >=2 runs with variance).
@@ -215,6 +225,35 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
         # single run. This deliberately differs from the per-run micro CI above.
         pooled_task_f1 = [score for r in cr_runs for score in r.instance_results.values()]
         macro_f1_ci = bootstrap_ci(pooled_task_f1)
+
+        metric_names = sorted({name for run in cr_runs for name in (*run.metric_counts, *run.metric_sums)})
+        metric_counts = {name: sum(run.metric_counts.get(name, 0) for run in cr_runs) for name in metric_names}
+        metric_sums = {name: sum(run.metric_sums.get(name, 0.0) for run in cr_runs) for name in metric_names}
+        average_fields = {
+            "average_prompt_tokens": "prompt_tokens",
+            "average_completion_tokens": "completion_tokens",
+            "average_total_tokens": "total_tokens",
+            "average_ai_credits": "ai_credits",
+            "average_cached_tokens": "cached_tokens",
+            "average_cache_creation_tokens": "cache_creation_tokens",
+            "average_reasoning_tokens": "reasoning_tokens",
+            "average_api_calls": "api_calls",
+            "average_failed_api_calls": "failed_api_calls",
+            "average_usage_api_calls": "usage_api_calls",
+            "average_premium_requests": "premium_requests",
+            "average_malformed_records": "malformed_records",
+            "average_knowledge_files": "knowledge_files",
+            "average_knowledge_pruned": "knowledge_pruned",
+            "average_knowledge_used": "knowledge_used",
+            "average_knowledge_suppressed": "knowledge_suppressed",
+            "average_sub_skills_executed": "sub_skills_executed",
+            "average_sub_skills_skipped": "sub_skills_skipped",
+        }
+        weighted_averages = {field: metric_sums[metric] / metric_counts[metric] if metric_counts.get(metric, 0) else None for field, metric in average_fields.items()}
+        total_tasks = sum(run.total for run in cr_runs)
+        token_count = metric_counts.get("total_tokens")
+        credit_count = metric_counts.get("ai_credits")
+        usage_count = metric_counts.get("usage_complete", 0)
 
         return base.model_copy(
             update={
@@ -233,27 +272,12 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
                 "macro_precision": sum(r.macro_precision for r in cr_runs) / n,
                 "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
                 "valid_review_output_rate": sum(r.valid_review_output_rate for r in cr_runs) / n,
-                "average_prompt_tokens": mean_metric([run.average_prompt_tokens for run in cr_runs]),
-                "average_completion_tokens": mean_metric([run.average_completion_tokens for run in cr_runs]),
-                "average_total_tokens": mean_metric([run.average_total_tokens for run in cr_runs]),
-                "average_ai_credits": mean_metric([run.average_ai_credits for run in cr_runs]),
-                "average_cached_tokens": mean_metric([run.average_cached_tokens for run in cr_runs]),
-                "average_cache_creation_tokens": mean_metric([run.average_cache_creation_tokens for run in cr_runs]),
-                "average_reasoning_tokens": mean_metric([run.average_reasoning_tokens for run in cr_runs]),
-                "average_api_calls": mean_metric([run.average_api_calls for run in cr_runs]),
-                "average_failed_api_calls": mean_metric([run.average_failed_api_calls for run in cr_runs]),
-                "average_usage_api_calls": mean_metric([run.average_usage_api_calls for run in cr_runs]),
-                "average_premium_requests": mean_metric([run.average_premium_requests for run in cr_runs]),
-                "average_malformed_records": mean_metric([run.average_malformed_records for run in cr_runs]),
-                "average_knowledge_files": mean_metric([run.average_knowledge_files for run in cr_runs]),
-                "average_knowledge_pruned": mean_metric([run.average_knowledge_pruned for run in cr_runs]),
-                "average_knowledge_used": mean_metric([run.average_knowledge_used for run in cr_runs]),
-                "average_knowledge_suppressed": mean_metric([run.average_knowledge_suppressed for run in cr_runs]),
-                "average_sub_skills_executed": mean_metric([run.average_sub_skills_executed for run in cr_runs]),
-                "average_sub_skills_skipped": mean_metric([run.average_sub_skills_skipped for run in cr_runs]),
-                "token_coverage_rate": mean_metric([run.token_coverage_rate for run in cr_runs]),
-                "credit_coverage_rate": mean_metric([run.credit_coverage_rate for run in cr_runs]),
-                "usage_complete_rate": mean_metric([run.usage_complete_rate for run in cr_runs]),
+                **weighted_averages,
+                "metric_counts": metric_counts,
+                "metric_sums": metric_sums,
+                "token_coverage_rate": token_count / total_tasks if token_count is not None and total_tasks else None,
+                "credit_coverage_rate": credit_count / total_tasks if credit_count is not None and total_tasks else None,
+                "usage_complete_rate": metric_sums["usage_complete"] / usage_count if usage_count else None,
             }
         )
 
