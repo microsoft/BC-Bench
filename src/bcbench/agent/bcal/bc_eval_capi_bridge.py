@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
-import time
-from collections.abc import Callable
 from pathlib import Path
 from typing import BinaryIO, cast
 
@@ -18,9 +15,6 @@ _CERT_CLIENT_ENV = "CAPI_CLIENT_ID"
 # Reasoning effort (not all models support this parameter), different models might have different available values:
 # Set to None to omit the parameter entirely (lets the model/service use its own default).
 _DEFAULT_REASONING_EFFORT: str | None = None
-_CAPI_RETRY_DELAYS_SECONDS = (2.0, 4.0)
-_HTTP_STATUS_PATTERN = re.compile(r"\b(?:http(?: status)?|status[_ ]?code|response|error code|server returned)[^0-9\n]{0,16}(429|5\d{2})\b", re.IGNORECASE)
-_TRANSIENT_MESSAGE_MARKERS = ("dependencyfailure", "dependency failure", "temporarily unavailable", "circuit breaker")
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -111,40 +105,6 @@ def _maybe_install_local_cert_credential() -> None:
     _patch_credential_from_local_file(cert_file)
 
 
-def _is_transient_capi_failure(error: BaseException) -> bool:
-    seen: set[int] = set()
-    current: BaseException | None = error
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        status_codes = (
-            getattr(current, "status_code", None),
-            getattr(current, "status", None),
-            getattr(getattr(current, "response", None), "status_code", None),
-        )
-        if any(isinstance(status, int) and (status == 429 or 500 <= status <= 599) for status in status_codes):
-            return True
-
-        message = str(current).lower()
-        if _HTTP_STATUS_PATTERN.search(message) or any(marker in message for marker in _TRANSIENT_MESSAGE_MARKERS):
-            return True
-        current = current.__cause__ or current.__context__
-    return False
-
-
-def _create_completion(client: object, kwargs: dict[str, object], *, sleep: Callable[[float], None] = time.sleep) -> object:
-    for attempt in range(1, len(_CAPI_RETRY_DELAYS_SECONDS) + 2):
-        try:
-            return client.chat.completions.create(**kwargs)  # ty: ignore[unresolved-attribute]
-        except Exception as error:
-            if attempt > len(_CAPI_RETRY_DELAYS_SECONDS) or not _is_transient_capi_failure(error):
-                raise
-            delay = _CAPI_RETRY_DELAYS_SECONDS[attempt - 1]
-            sys.stderr.write(f"CAPI request attempt {attempt} failed with a transient dependency error: {error}. Retrying in {delay:g}s.\n")
-            sleep(delay)
-
-    raise AssertionError("CAPI retry loop exhausted without returning or raising")
-
-
 def main() -> int:
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
@@ -174,7 +134,7 @@ def main() -> int:
     if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
 
-    response = _create_completion(client, kwargs)
+    response = client.chat.completions.create(**kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
     return 0
 

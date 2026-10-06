@@ -216,16 +216,18 @@ def test_bcal_summary_runs_after_matrix_failures_and_enforces_completeness() -> 
     assert summarize["with"]["artifact-pattern"] == "evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*"
 
 
-def test_bcal_uses_one_pinned_cached_bccontainerhelper_download() -> None:
-    workflow = _workflow("bcal-evaluation.yml")
+def test_bcal_downloads_one_pinned_cached_bccontainerhelper() -> None:
+    workflow_text = _workflow("bcal-evaluation.yml")
+    workflow = yaml.safe_load(workflow_text)
+    prepare_steps = workflow["jobs"]["prepare-bccontainerhelper"]["steps"]
+    download_step = next(step for step in prepare_steps if step["name"] == "Download pinned BcContainerHelper")
+    download_script = download_step["run"]
 
-    assert "BCCONTAINERHELPER_VERSION: 6.1.18" in workflow
-    assert "prepare-bccontainerhelper:" in workflow
-    assert "Save-Module" in workflow
-    assert "RequiredVersion $env:BCCONTAINERHELPER_VERSION" in workflow
-    assert "for ($attempt = 1; $attempt -le 3; $attempt++)" in workflow
-    assert "fail-on-cache-miss: true" in workflow
-    assert "Install-Module -Name BcContainerHelper" not in workflow
+    assert "BCCONTAINERHELPER_VERSION: 6.1.18" in workflow_text
+    assert download_script.count("Save-Module") == 1
+    assert "RequiredVersion $env:BCCONTAINERHELPER_VERSION" in download_script
+    assert "fail-on-cache-miss: true" in workflow_text
+    assert "Install-Module -Name BcContainerHelper" not in workflow_text
 
 
 def test_summarize_workflow_preserves_partial_diagnostics_and_blocks_upload() -> None:
