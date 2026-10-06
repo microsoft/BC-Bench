@@ -40,8 +40,7 @@ _PREPARE_BCQUALITY_SCRIPT = Path(__file__).parent / "scripts" / "Prepare-BCQuali
 
 
 def _load_pr_review_settings() -> dict[str, Any]:
-    config_file = SHARED_CONFIG_FILE
-    return yaml.safe_load(config_file.read_text(encoding="utf-8"))["pr_review"]
+    return yaml.safe_load(SHARED_CONFIG_FILE.read_text(encoding="utf-8"))["pr_review"]
 
 
 def _resolve_pr_review_root(engine_path: Path | None) -> Path:
