@@ -1,3 +1,4 @@
+using module .\BCBenchUtils.psm1
 using module .\Dataset.psm1
 
 <#
@@ -6,9 +7,6 @@ using module .\Dataset.psm1
 .DESCRIPTION
     Shipped with bcbench-core (bcbench_core.bc.APP_UTILS_MODULE). Requires the BcContainerHelper module.
 #>
-
-Import-Module (Join-Path $PSScriptRoot "BCBenchUtils.psm1") -DisableNameChecking
-
 
 <#
     .Synopsis
