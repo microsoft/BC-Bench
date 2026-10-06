@@ -304,7 +304,7 @@ function Write-Log {
                 [string]$callerScript = (Get-PSCallStack)[1].ScriptName
                 $Title = if ($callerScript) { Split-Path -Path $callerScript -Leaf } else { "PowerShell" }
             }
-            $escapedTitle = $Title -replace '%', '%25' -replace '\r', '%0D' -replace '\n', '%0A'
+            $escapedTitle = $Title -replace '%', '%25' -replace '\r', '%0D' -replace '\n', '%0A' -replace ':', '%3A' -replace ',', '%2C'
 
             # Output GitHub Actions annotation to stdout
             # Format: ::warning title={title}::{message}
