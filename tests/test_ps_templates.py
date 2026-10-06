@@ -12,19 +12,19 @@ _config = get_config()
 
 class TestEscapePsString:
     def test_escape_single_quote(self):
-        assert bc_operations._escape_ps_string("O'Brien") == "O''Brien"
+        assert bc_operations.escape_ps_string("O'Brien") == "O''Brien"
 
     def test_escape_multiple_quotes(self):
-        assert bc_operations._escape_ps_string("It's a 'test'") == "It''s a ''test''"
+        assert bc_operations.escape_ps_string("It's a 'test'") == "It''s a ''test''"
 
     def test_no_escape_needed(self):
-        assert bc_operations._escape_ps_string("normal_string") == "normal_string"
+        assert bc_operations.escape_ps_string("normal_string") == "normal_string"
 
     def test_empty_string(self):
-        assert bc_operations._escape_ps_string("") == ""
+        assert bc_operations.escape_ps_string("") == ""
 
     def test_password_with_special_chars(self):
-        assert bc_operations._escape_ps_string("P@ss'word123") == "P@ss''word123"
+        assert bc_operations.escape_ps_string("P@ss'word123") == "P@ss''word123"
 
 
 class TestPowerShellScriptGeneration:

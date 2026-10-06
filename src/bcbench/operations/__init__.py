@@ -6,11 +6,10 @@ from bcbench.operations.bc_operations import (
     build_ps_dataset_tests_script,
     build_ps_test_script,
     copy_symbol_apps,
-    execute_al_query,
     resolve_artifact_version_root,
     run_tests,
-    wrap_query_as_api,
 )
+from bcbench.operations.dataquery_operations import execute_al_query, wrap_query_as_api
 from bcbench.operations.instruction_operations import copy_problem_statement_folder, setup_custom_agent, setup_instructions_from_config
 from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild
 from bcbench.operations.skills_operations import setup_agent_skills
