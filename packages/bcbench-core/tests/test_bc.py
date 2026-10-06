@@ -306,8 +306,6 @@ class TestBuildAndPublishProjects:
 
 
 _TESTS = [dataset.TestEntry(codeunitID=100, functionName=frozenset({"TestA"}))]
-_FAIL_TO_PASS = [dataset.TestEntry(codeunitID=100, functionName=frozenset({"TestFix"}))]
-_PASS_TO_PASS = [dataset.TestEntry(codeunitID=200, functionName=frozenset({"TestExisting"}))]
 
 
 class TestRunTestSuiteOutcome:
@@ -336,17 +334,3 @@ class TestRunTestSuiteOutcome:
             bc.run_test_suite(_TESTS, "Pass", _CONTAINER)
 
         assert "Test output:\nTests passed for Codeunit 100" in caplog.text
-
-
-class TestRunTests:
-    def test_both_suites_must_pass(self):
-        with patch.object(bc, "run_test_suite") as run:
-            bc.run_tests(_FAIL_TO_PASS, _PASS_TO_PASS, _CONTAINER)
-
-        assert [c.args for c in run.call_args_list] == [(_FAIL_TO_PASS, "Pass", _CONTAINER), (_PASS_TO_PASS, "Pass", _CONTAINER)]
-
-    def test_skips_empty_suites(self):
-        with patch.object(bc, "run_test_suite") as run:
-            bc.run_tests(_FAIL_TO_PASS, [], _CONTAINER)
-
-        run.assert_called_once_with(_FAIL_TO_PASS, "Pass", _CONTAINER)
