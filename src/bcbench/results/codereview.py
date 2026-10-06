@@ -353,7 +353,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
 
-    def combination_key(self) -> tuple[str | int | tuple[str, ...] | None, ...]:
+    def combination_key(self) -> tuple[object, ...]:
         return (
             *super().combination_key(),
             self.copilot_cli_version,
