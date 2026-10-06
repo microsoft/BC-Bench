@@ -2,10 +2,10 @@ import json
 import subprocess
 
 import pytest
+from bcbench_core.git import apply_patch, init_repo
 from unidiff import PatchSet
 
 from bcbench.dataset.codereview import CodeReviewEntry, Severity
-from bcbench.operations.git_operations import apply_patch, init_repo
 from bcbench.types import EvaluationCategory
 
 _SCAN = "synthetic__performance-014"

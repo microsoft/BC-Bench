@@ -1,10 +1,10 @@
 """Tests for NL2ALPipeline.evaluate() — empty-diff handling is nl2al-specific."""
 
 import pytest
+from bcbench_core.git import EmptyDiffError
 
 from bcbench.config import get_config
 from bcbench.evaluate.nl2al import NL2ALPipeline
-from bcbench.exceptions import EmptyDiffError
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_evaluation_context, create_nl2al_entry
@@ -23,7 +23,7 @@ def _nl2al_context(tmp_path):
 
 
 def _throw(exc: Exception):
-    def _raise(_repo_path):
+    def _raise(_repo_path, *, exclude):
         raise exc
 
     return _raise
@@ -59,7 +59,7 @@ class TestNL2ALEvaluateEmptyDiff:
 
     def test_non_empty_diff_persists_raw_output(self, tmp_path, monkeypatch):
         ctx = _nl2al_context(tmp_path)
-        monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", lambda _repo_path: "diff --git a/x.al b/x.al\n+pageextension")
+        monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", lambda _repo_path, *, exclude: "diff --git a/x.al b/x.al\n+pageextension")
 
         NL2ALPipeline().evaluate(ctx)
 

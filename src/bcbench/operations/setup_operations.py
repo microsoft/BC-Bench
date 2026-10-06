@@ -6,8 +6,9 @@ import re
 from pathlib import Path
 from uuid import uuid4
 
+from bcbench_core.git import checkout_commit, clean_repo, commit_changes
+
 from bcbench.dataset.dataset_entry import RepoGroundedEntry
-from bcbench.operations.git_operations import checkout_commit, clean_repo, commit_changes
 
 logger = logging.getLogger(__name__)
 

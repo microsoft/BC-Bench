@@ -14,13 +14,10 @@ __all__ = [
     "CollectionError",
     "ConfigurationError",
     "DatasetError",
-    "EmptyDiffError",
     "EmptyGoldResultError",
     "EntryNotFoundError",
-    "GitOperationError",
     "InvalidEntryFormatError",
     "NoEntriesFoundError",
-    "PatchApplicationError",
     "TestExecutionError",
 ]
 
@@ -61,30 +58,6 @@ class NoEntriesFoundError(DatasetError):
         message = "No entries matched the filter criteria"
         if criteria:
             message = f"No entries found for {criteria}"
-        super().__init__(message)
-
-
-class GitOperationError(BCBenchError):
-    """Base class for git operation failures."""
-
-
-class PatchApplicationError(GitOperationError):
-    """Failed to apply a patch."""
-
-    def __init__(self, patch_name: str, stderr: str = "") -> None:
-        self.patch_name = patch_name
-        self.stderr = stderr
-        message = f"Failed to apply {patch_name}"
-        if stderr:
-            message += f": {stderr}"
-        super().__init__(message)
-
-
-class EmptyDiffError(GitOperationError):
-    """Generated diff is empty."""
-
-    def __init__(self) -> None:
-        message = "Generated diff is empty. Agent did not make any changes."
         super().__init__(message)
 
 

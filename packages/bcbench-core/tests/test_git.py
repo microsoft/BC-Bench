@@ -5,10 +5,13 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.exceptions import EmptyDiffError
-from bcbench.operations.git_operations import (
+from bcbench_core.git import (
+    EmptyDiffError,
+    PatchApplicationError,
+    apply_patch,
     checkout_commit,
     clean_project_paths,
+    clean_repo,
     clone_repo_at_revision,
     commit_changes,
     fetch_commit_if_missing,
@@ -64,6 +67,71 @@ class TestCommitChanges:
         result = subprocess.run(["git", "log", "--format=%s", "-1"], cwd=repo_path, capture_output=True, text=True, check=True)
         assert result.stdout.strip() == "empty"
 
+    def test_no_verify_skips_failing_pre_commit_hook(self, temp_git_repo):
+        hook = temp_git_repo / ".git" / "hooks" / "pre-commit"
+        hook.write_text("#!/bin/sh\nexit 1\n", newline="\n")
+        hook.chmod(0o755)
+        (temp_git_repo / "file.al").write_text("changed")
+
+        with pytest.raises(subprocess.CalledProcessError):
+            commit_changes(temp_git_repo, "blocked by hook")
+        commit_changes(temp_git_repo, "skips hook", no_verify=True)
+
+        result = subprocess.run(["git", "log", "--format=%s", "-1"], cwd=temp_git_repo, capture_output=True, text=True, check=True)
+        assert result.stdout.strip() == "skips hook"
+
+
+class TestApplyPatch:
+    @pytest.fixture
+    def repo_with_patch(self, tmp_path: Path) -> tuple[Path, str]:
+        init_repo(tmp_path)
+        (tmp_path / "file.al").write_text("original\n", newline="\n")
+        commit_changes(tmp_path, "initial")
+        (tmp_path / "file.al").write_text("patched\n", newline="\n")
+        diff = subprocess.run(["git", "diff"], cwd=tmp_path, capture_output=True, text=True, check=True).stdout
+        clean_repo(tmp_path)
+        return tmp_path, diff
+
+    def test_applies_patch_to_working_tree(self, repo_with_patch):
+        repo_path, diff = repo_with_patch
+
+        apply_patch(repo_path, diff, "fix patch")
+
+        assert (repo_path / "file.al").read_text() == "patched\n"
+
+    def test_raises_patch_application_error_with_git_output(self, repo_with_patch):
+        repo_path, diff = repo_with_patch
+        (repo_path / "file.al").write_text("conflicting\n", newline="\n")
+
+        with pytest.raises(PatchApplicationError, match="Failed to apply test patch: ") as error:
+            apply_patch(repo_path, diff, "test patch")
+
+        assert error.value.patch_name == "test patch"
+        assert "file.al" in error.value.stderr
+
+
+class TestCleanRepo:
+    def test_discards_modified_staged_and_untracked_files(self, tmp_path):
+        init_repo(tmp_path)
+        (tmp_path / "file.al").write_text("original")
+        (tmp_path / "staged.al").write_text("original")
+        commit_changes(tmp_path, "initial")
+        (tmp_path / "file.al").write_text("modified")
+        (tmp_path / "staged.al").write_text("staged")
+        subprocess.run(["git", "add", "staged.al"], cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / "untracked").mkdir()
+        (tmp_path / "untracked" / "new.al").write_text("new")
+
+        clean_repo(tmp_path)
+
+        assert not has_changes(tmp_path)
+        assert (tmp_path / "file.al").read_text() == "original"
+        assert (tmp_path / "staged.al").read_text() == "original"
+
+
+def test_patch_application_error_without_stderr_has_short_message():
+    assert str(PatchApplicationError("gold patch")) == "Failed to apply gold patch"
+
 
 class TestStageAndGetDiff:
     @pytest.fixture
@@ -106,6 +174,49 @@ class TestStageAndGetDiff:
         # Don't make any changes
         with pytest.raises(EmptyDiffError):
             stage_and_get_diff(temp_git_repo)
+
+    @pytest.mark.parametrize("file_path", ["app.json", "app/app.json", "spec.docx", "app/spec.docx", "README.md", "app/README.md"])
+    def test_stage_and_get_diff_includes_previously_staged_files_by_default(self, temp_git_repo, file_path):
+        (temp_git_repo / "app" / "file.al").write_text("modified app content")
+        (temp_git_repo / file_path).write_text("staged content")
+        subprocess.run(["git", "add", file_path], cwd=temp_git_repo, check=True, capture_output=True)
+
+        diff = stage_and_get_diff(temp_git_repo)
+
+        assert "app/file.al" in diff
+        assert file_path in diff
+        assert "staged content" in diff
+
+    @pytest.mark.parametrize("file_path", ["app/app.json", "spec.docx", "app/spec.docx", "README.md", "app/README.md"])
+    def test_stage_and_get_diff_uses_recommended_exclusions(self, temp_git_repo, file_path):
+        (temp_git_repo / "app" / "file.al").write_text("modified app content")
+        (temp_git_repo / file_path).write_text("staged content")
+        subprocess.run(["git", "add", file_path], cwd=temp_git_repo, check=True, capture_output=True)
+
+        diff = stage_and_get_diff(temp_git_repo, exclude=("**/app.json", "*.docx", "*.md"))
+
+        assert "app/file.al" in diff
+        assert file_path not in diff
+        assert "staged content" not in diff
+
+    def test_stage_and_get_diff_only_excluded_changes_raises_empty_diff(self, temp_git_repo):
+        (temp_git_repo / "app" / "app.json").write_text("{}")
+        subprocess.run(["git", "add", "app/app.json"], cwd=temp_git_repo, check=True, capture_output=True)
+
+        with pytest.raises(EmptyDiffError):
+            stage_and_get_diff(temp_git_repo, exclude=("**/app.json", "*.docx", "*.md"))
+
+    def test_stage_and_get_diff_uses_custom_exclude(self, temp_git_repo):
+        (temp_git_repo / "app" / "file.al").write_text("modified app content")
+        (temp_git_repo / "test" / "file.al").write_text("modified test content")
+        (temp_git_repo / "app" / "app.json").write_text("{}")
+        subprocess.run(["git", "add", "app/app.json"], cwd=temp_git_repo, check=True, capture_output=True)
+
+        diff = stage_and_get_diff(temp_git_repo, exclude=("test/*",))
+
+        assert "app/file.al" in diff
+        assert "app/app.json" in diff
+        assert "test/file.al" not in diff
 
     def test_stage_and_get_diff_no_al_files_raises_empty_diff(self, tmp_path):
         # Repro for CI failure: agent didn't write any *.al files. `git add '*.al'`
@@ -240,7 +351,7 @@ class TestCleanProjectPaths:
             clean_project_paths(temp_git_repo, [])
 
 
-@patch("bcbench.operations.git_operations.subprocess.run")
+@patch("bcbench_core.git.subprocess.run")
 def test_clone_repo_at_revision_shallow_clones_via_gh(mock_run, tmp_path):
     destination = tmp_path / "clone"
 
@@ -250,7 +361,7 @@ def test_clone_repo_at_revision_shallow_clones_via_gh(mock_run, tmp_path):
     assert [c.args[0] for c in mock_run.call_args_list] == [["gh", "repo", "clone", "obra/superpowers", str(destination), "--", "--depth=1", f"--revision={'a' * 40}"]]
 
 
-@patch("bcbench.operations.git_operations.subprocess.run")
+@patch("bcbench_core.git.subprocess.run")
 def test_clone_repo_at_revision_replaces_existing_destination(mock_run, tmp_path):
     destination = tmp_path / "clone"
     stale_file = destination / "stale" / "pack.idx"
@@ -263,7 +374,7 @@ def test_clone_repo_at_revision_replaces_existing_destination(mock_run, tmp_path
     assert not (destination / "stale").exists()
 
 
-@patch("bcbench.operations.git_operations.subprocess.run")
+@patch("bcbench_core.git.subprocess.run")
 def test_clone_repo_at_revision_propagates_gh_failure(mock_run, tmp_path):
     mock_run.side_effect = subprocess.CalledProcessError(1, "gh", stderr="gh: Not Found (HTTP 404)")
 
@@ -271,7 +382,7 @@ def test_clone_repo_at_revision_propagates_gh_failure(mock_run, tmp_path):
         clone_repo_at_revision("o/missing", "c" * 40, tmp_path / "clone")
 
 
-@patch("bcbench.operations.git_operations.subprocess.run")
+@patch("bcbench_core.git.subprocess.run")
 def test_checkout_commit_runs_plain_checkout(mock_run, tmp_path):
     mock_run.return_value = subprocess.CompletedProcess([], 0)
 
@@ -281,7 +392,7 @@ def test_checkout_commit_runs_plain_checkout(mock_run, tmp_path):
     assert commands == [["git", "checkout", "a" * 40]]
 
 
-@patch("bcbench.operations.git_operations.subprocess.run")
+@patch("bcbench_core.git.subprocess.run")
 def test_fetch_commit_if_missing_skips_when_commit_present(mock_run, tmp_path):
     mock_run.return_value = subprocess.CompletedProcess([], 0)
 
@@ -291,7 +402,7 @@ def test_fetch_commit_if_missing_skips_when_commit_present(mock_run, tmp_path):
     assert commands == [["git", "cat-file", "-e", f"{'a' * 40}^{{commit}}"]]
 
 
-@patch("bcbench.operations.git_operations.subprocess.run")
+@patch("bcbench_core.git.subprocess.run")
 def test_fetch_commit_if_missing_fetches_absent_commit(mock_run, tmp_path):
     sha = "b" * 40
     mock_run.side_effect = [subprocess.CompletedProcess([], 1), subprocess.CompletedProcess([], 0)]

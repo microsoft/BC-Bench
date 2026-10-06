@@ -4,9 +4,10 @@ import shutil
 from collections.abc import Mapping
 from pathlib import Path
 
+from bcbench_core.git import clone_repo_at_revision
+
 from bcbench.config import get_config
 from bcbench.exceptions import AgentError
-from bcbench.operations.git_operations import clone_repo_at_revision
 from bcbench.types import PluginConfig
 
 logger = logging.getLogger(__name__)
