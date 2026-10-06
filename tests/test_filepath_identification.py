@@ -1,4 +1,5 @@
 import pytest
+from bcbench_core.agent.copilot import CopilotOptions
 from bcbench_core.agent.metrics import AgentMetrics
 
 import bcbench.contamination.runner as runner_mod
@@ -201,7 +202,8 @@ App/Foo/Bar.Table.al
 
         result = runner_mod.run_filepath_identification(entry=entry, model="m", result_dir=result_dir)
 
-        assert invocation_kwargs["allow_all_tools"] is False
+        assert invocation_kwargs["options"] == CopilotOptions(allow_all_tools=False)
+        assert "env" in invocation_kwargs
         assert result.predicted_files == ["App/Foo/Bar.Table.al"]
         assert result.matches_any_gold_path
         assert result.metrics == metrics

@@ -1,11 +1,14 @@
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
+from bcbench_core.agent.copilot import CopilotProcessError, CopilotTimeoutError
 
 from bcbench.agent.copilot.agent import run_copilot_agent
-from bcbench.types import EvaluationCategory, PluginConfig
+from bcbench.config import get_config
+from bcbench.exceptions import AgentTimeoutError
+from bcbench.types import EvaluationCategory, ExperimentConfiguration, PluginConfig
 from tests.conftest import create_dataset_entry
 
 
@@ -56,6 +59,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     assert "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS" not in mock_run.call_args.kwargs["env"]
     assert mock_run.call_args.kwargs["env"]["BC_SERVER_USERNAME"] == "admin"
     assert mock_run.call_args.kwargs["env"]["BC_SERVER_PASSWORD"] == "secret"
+    assert mock_run.call_args.kwargs["env"]["GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP"] == "true"
     mock_parse_output.assert_called_once_with(['{"type":"result"}'], log_transcript=True)
 
 
@@ -118,3 +122,74 @@ def test_copilot_session_options_preserve_plugin_order_and_explicit_directory_gr
     assert config.skills_enabled is True
     assert config.custom_agent == "al-dev"
     assert config.plugins == ["probe@local", "granted@local"]
+
+
+@pytest.fixture
+def configured_copilot_run(tmp_path):
+    repo_path = tmp_path / "repo"
+    output_dir = tmp_path / "output"
+    repo_path.mkdir()
+    output_dir.mkdir()
+    gateway = Mock(base_url="http://127.0.0.1:9999")
+    with (
+        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.copilot.agent.build_prompt", return_value="do the task"),
+        patch("bcbench.agent.copilot.agent.start_bc_mcp_gateway", return_value=gateway),
+        patch("bcbench.agent.copilot.agent.build_mcp_config", return_value=('{"mcpServers":{}}', ["probe"])),
+        patch("bcbench.agent.copilot.agent.build_al_lsp_plugin", return_value=tmp_path / "lsp"),
+        patch("bcbench.agent.copilot.agent.setup_instructions_from_config", return_value=True),
+        patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=True),
+        patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value="al-dev"),
+        patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
+        patch("bcbench_core.agent.copilot.cli.parse_output", return_value=(None, None)),
+        patch(
+            "bcbench_core.agent.copilot.cli.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        ) as run,
+    ):
+        yield repo_path, output_dir, gateway, run
+
+
+def test_copilot_timeout_adapts_core_metrics_and_preserves_experiment_metadata(configured_copilot_run):
+    repo_path, output_dir, gateway, run = configured_copilot_run
+    timeout = get_config().timeout.agent_execution
+    run.side_effect = subprocess.TimeoutExpired(["copilot"], timeout)
+
+    with pytest.raises(AgentTimeoutError, match="Copilot CLI timed out") as error:
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir)
+
+    assert error.value.metrics is not None
+    assert error.value.metrics.execution_time == timeout
+    assert error.value.config == ExperimentConfiguration(mcp_servers=["probe"], al_lsp_enabled=True, custom_instructions=True, skills_enabled=True, custom_agent="al-dev")
+    assert isinstance(error.value.__cause__, CopilotTimeoutError)
+    gateway.stop.assert_called_once_with()
+
+
+@pytest.mark.parametrize("failure", [subprocess.CalledProcessError(2, ["copilot"], output="partial output", stderr="unavailable"), OSError("cannot start")])
+def test_copilot_process_errors_propagate_and_stop_gateway(configured_copilot_run, failure):
+    repo_path, output_dir, gateway, run = configured_copilot_run
+    run.side_effect = failure
+
+    with pytest.raises(CopilotProcessError) as error:
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir)
+
+    assert error.value.__cause__ is failure
+    gateway.stop.assert_called_once_with()
+
+
+def test_missing_copilot_stops_gateway_without_invoking_a_process(configured_copilot_run):
+    repo_path, output_dir, gateway, run = configured_copilot_run
+
+    with patch("bcbench_core.agent.copilot.cli._find_copilot", return_value=None), pytest.raises(CopilotProcessError, match="not found"):
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir)
+
+    run.assert_not_called()
+    gateway.stop.assert_called_once_with()
+
+
+def test_successful_copilot_run_stops_gateway(configured_copilot_run):
+    repo_path, output_dir, gateway, _ = configured_copilot_run
+
+    run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir)
+
+    gateway.stop.assert_called_once_with()

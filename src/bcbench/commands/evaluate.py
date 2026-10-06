@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated, cast
 
 import typer
-from bcbench_core.agent.copilot.cli import get_copilot_version
+from bcbench_core.agent.copilot import get_copilot_version
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.filesystem import prepare_run_dir
 

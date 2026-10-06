@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench_core.agent.copilot.cli import get_copilot_version
+from bcbench_core.agent.copilot import get_copilot_version
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.exceptions import AgentError
 

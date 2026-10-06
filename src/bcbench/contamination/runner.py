@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
 from pathlib import Path
 
-from bcbench_core.agent.copilot.cli import invoke_copilot
+from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
@@ -36,7 +37,8 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
             model=model,
             work_dir=Path(tmp),
             timeout=_config.timeout.filepath_identification,
-            allow_all_tools=False,
+            env=os.environ,
+            options=CopilotOptions(allow_all_tools=False),
         )
 
     gold_files: list[str] = extract_file_paths_from_patch(entry.patch)

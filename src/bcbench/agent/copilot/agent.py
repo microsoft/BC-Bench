@@ -1,13 +1,11 @@
 """GitHub Copilot CLI Agent implementation."""
 
 import logging
-import subprocess
 from pathlib import Path
 
 import yaml
-from bcbench_core.agent.copilot.cli import copilot_session_args, invoke_copilot
+from bcbench_core.agent.copilot import CopilotOptions, CopilotTimeoutError, invoke_copilot
 from bcbench_core.agent.metrics import AgentMetrics
-from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared import (
     agent_subprocess_env,
@@ -75,21 +73,21 @@ def run_copilot_agent(
         plugins=[plugin.record for plugin, _ in plugins] or None,
     )
 
-    logger.info(f"Executing Copilot CLI in directory: {repo_path}")
-    logger.debug(f"Using prompt:\n{prompt}")
-
     try:
-        lsp_plugin_dirs = [lsp_plugin_dir] if lsp_plugin_dir is not None else []
+        lsp_plugin_dirs = (lsp_plugin_dir,) if lsp_plugin_dir is not None else ()
         # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
         # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
         # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
         # silently widen the agent's sandbox access.
-        extra_args = copilot_session_args(
-            output_dir,
-            mcp_config_json,
-            plugin_dirs=[*lsp_plugin_dirs, *(plugin_dir for _, plugin_dir in plugins)],
-            granted_dirs=[plugin_dir for plugin, plugin_dir in plugins if plugin.grant_dir_access],
+        options = CopilotOptions(
+            allow_all_tools=True,
+            custom_instructions=instructions_enabled,
+            log_dir=output_dir,
+            mcp_config_json=mcp_config_json,
+            plugin_dirs=(*lsp_plugin_dirs, *(plugin_dir for _, plugin_dir in plugins)),
+            granted_dirs=tuple(plugin_dir for plugin, plugin_dir in plugins if plugin.grant_dir_access),
             custom_agent=custom_agent,
+            workspace_mcp=True,
         )
 
         metrics, _ = invoke_copilot(
@@ -97,27 +95,12 @@ def run_copilot_agent(
             model=model,
             work_dir=repo_path,
             timeout=_config.timeout.agent_execution,
-            allow_all_tools=True,
-            custom_instructions=instructions_enabled,
-            extra_args=extra_args,
-            env=agent_subprocess_env(
-                {
-                    "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
-                },
-                pass_bc_credentials=category.pass_on_bc_container_credentials,
-            ),
+            env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
+            options=options,
         )
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
-    except subprocess.TimeoutExpired:
-        logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
-        raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
-        raise AgentError(f"Copilot CLI execution failed: {e}") from None
-    except Exception:
-        logger.exception("Unexpected error running Copilot CLI")
-        raise
+    except CopilotTimeoutError as exc:
+        raise AgentTimeoutError("Copilot CLI timed out", metrics=exc.metrics, config=config) from exc
     else:
         return metrics, config
     finally:
