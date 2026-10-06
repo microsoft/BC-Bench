@@ -1,4 +1,6 @@
+import hashlib
 import json
+import re
 import subprocess
 
 import pytest
@@ -11,12 +13,22 @@ from bcbench.types import EvaluationCategory
 _SCAN = "synthetic__performance-014"
 _API = "synthetic__performance-009"
 _GROUPS = "synthetic__error-handling-drilldown-position-01"
-_ENTRY_IDS = (_SCAN, _API, _GROUPS)
+_HTTP_CLEAN = "synthetic__http-optional-clean-01"
+_HTTP_FALSE = "synthetic__http-consumed-false-01"
+_HTTP_STATUS = "synthetic__http-status-body-01"
+_ENTRY_IDS = (_SCAN, _API, _GROUPS, _HTTP_CLEAN, _HTTP_FALSE, _HTTP_STATUS)
 
 
 def _unique_object(pairs):
     assert len(dict(pairs)) == len(pairs), "Duplicate JSON object keys"
     return dict(pairs)
+
+
+def test_http_experiment_preserves_the_original_corpus():
+    lines = EvaluationCategory.CODE_REVIEW.dataset_path.read_bytes().splitlines(keepends=True)
+    original = b"".join(line.replace(b"\r\n", b"\n") for line in lines if json.loads(line)["instance_id"] not in {_HTTP_CLEAN, _HTTP_FALSE, _HTTP_STATUS})
+    assert len(original.splitlines()) == 145
+    assert hashlib.sha256(original).hexdigest() == "43bcddc685e3f81cb655fc0efe33f7c47763fe64864ecf62ab69220a231e513c"
 
 
 @pytest.fixture(scope="module")
@@ -170,3 +182,70 @@ def test_regenerated_header_ids_lose_position_but_business_keys_restore_it(mater
             restored_id = next(key for key, code in rows.items() if code == selected_code)
             assert restored_id != old_id
             assert rows[restored_id] == selected_code
+
+
+@pytest.mark.parametrize("entry_id", [_HTTP_CLEAN, _HTTP_FALSE, _HTTP_STATUS])
+def test_http_controls_have_no_unavailable_article_or_steering_comments(materialized_entries, entry_id):
+    entry, files = materialized_entries[entry_id]
+    assert entry.declared_articles() == set()
+    assert entry.ignored_comments == []
+    for source in files.values():
+        assert "Access = Internal;" in source
+        assert "internal procedure " in source
+        assert re.search(r"(?<!:)//|/\*", source) is None
+        assert "Record " not in source
+        assert "Authorization" not in source
+        assert "SecretText" not in source
+        assert "[TryFunction]" not in source
+        urls = re.findall(r"Label '(https:[^']+)'", source)
+        assert urls
+        assert set(urls) <= {"https://public.example/rate", "https://public.example/heartbeat"}
+
+
+def test_http_bare_calls_check_status_without_consuming_optional_result(materialized_entries):
+    entry, files = materialized_entries[_HTTP_CLEAN]
+    source = files["src/BCBHttpOptionalReturn.Codeunit.al"]
+    assert entry.expected_comments == []
+    assert "        Client.Get(RateUrlTok, Response);\n        if not Response.IsSuccessStatusCode() then\n            Error(RequestErr);" in source
+    assert "        Client.Post(HeartbeatUrlTok, Content, Response);\n        if not Response.IsSuccessStatusCode() then\n            Error(RequestErr);" in source
+    assert "Evaluate(Rate, ResponseBody, 9);" in source
+    assert "Content.WriteFrom('{}');" in source
+    assert source.splitlines()[11] == "        Client.Get(RateUrlTok, Response);"
+    assert source.splitlines()[26] == "        Client.Post(HeartbeatUrlTok, Content, Response);"
+
+
+def test_http_consumed_false_reports_success_but_does_not_read_invalid_response(materialized_entries):
+    entry, files = materialized_entries[_HTTP_FALSE]
+    source = files["src/BCBHttpDelivery.Codeunit.al"]
+    assert len(entry.expected_comments) == 1
+    assert entry.expected_comments[0].severity == Severity.MEDIUM
+    gold = entry.expected_comments[0]
+    assert gold.line_start == gold.line_end == 12
+    assert source.splitlines()[gold.line_start - 1 : gold.line_end] == [
+        "        if not Client.Post(HeartbeatUrlTok, Content, Response) then exit(true);",
+    ]
+    assert source.splitlines()[12:15] == [
+        "        if not Response.IsSuccessStatusCode() then",
+        "            Error(RequestErr);",
+        "        exit(true);",
+    ]
+    assert "RequestSucceeded" not in source
+    assert "Response.Content" not in source
+    assert "returns true on the same line when Post returns false" in gold.body
+
+
+def test_http_completed_error_body_reaches_numeric_success_path(materialized_entries):
+    entry, files = materialized_entries[_HTTP_STATUS]
+    source = files["src/BCBHttpRateReader.Codeunit.al"]
+    assert len(entry.expected_comments) == 1
+    assert entry.expected_comments[0].severity == Severity.MEDIUM
+    assert source.splitlines()[11:16] == [
+        "        if not Client.Get(RateUrlTok, Response) then",
+        "            Error(TransportErr);",
+        "        Response.Content.ReadAs(ResponseBody);",
+        "        Evaluate(Rate, ResponseBody, 9);",
+        "        exit(Rate);",
+    ]
+    assert "IsSuccessStatusCode" not in source
+    assert "HttpStatusCode" not in source
+    assert "4xx or 5xx" in entry.expected_comments[0].body
