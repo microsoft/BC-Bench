@@ -18,7 +18,12 @@ The import and environment rules are enforced by ruff (`banned-api` in [`pyproje
 ## Prerequisites
 
 - `git` 2.49+ and an authenticated [GitHub CLI](https://cli.github.com/) (`gh`)
+- For Copilot invocation: an installed and authenticated [GitHub Copilot CLI](https://github.com/github/copilot-cli).
 - For BC container operations: PowerShell 7 with the latest [BcContainerHelper](https://github.com/microsoft/navcontainerhelper) module. The PowerShell modules ship in [`src/bcbench_core/powershell`](src/bcbench_core/powershell).
+
+## Copilot CLI
+
+`bcbench_core.agent.copilot.cli` provides version detection and prompt execution. Use `copilot_session_args` to format logging, MCP configuration, plugin, directory-grant, and custom-agent options, then pass them to `invoke_copilot(extra_args=...)`. Applications supply prompts and process environments and decide which tools and directory grants to enable.
 
 ## Logging
 

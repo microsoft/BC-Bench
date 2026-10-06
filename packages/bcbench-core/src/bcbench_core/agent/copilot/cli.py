@@ -14,7 +14,7 @@ from bcbench_core.exceptions import AgentError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["get_copilot_version", "invoke_copilot"]
+__all__ = ["copilot_session_args", "get_copilot_version", "invoke_copilot"]
 
 
 def _find_copilot() -> str | None:
@@ -25,6 +25,24 @@ def _find_copilot() -> str | None:
 
 def get_copilot_version() -> str:
     return get_cli_version(_find_copilot(), "GitHub Copilot CLI")
+
+
+def copilot_session_args(
+    log_dir: Path,
+    mcp_config_json: str | None = None,
+    plugin_dirs: Sequence[Path] = (),
+    granted_dirs: Sequence[Path] = (),
+    custom_agent: str | None = None,
+) -> list[str]:
+    """Build session options; filesystem access is granted only through `granted_dirs`."""
+    args = ["--log-level=debug", f"--log-dir={log_dir.resolve()}"]
+    if mcp_config_json:
+        args.append(f"--additional-mcp-config={mcp_config_json}")
+    args.extend(f"--plugin-dir={plugin_dir}" for plugin_dir in plugin_dirs)
+    args.extend(f"--add-dir={granted_dir}" for granted_dir in granted_dirs)
+    if custom_agent:
+        args.append(f"--agent={custom_agent}")
+    return args
 
 
 def invoke_copilot(

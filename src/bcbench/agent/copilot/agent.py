@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 import yaml
-from bcbench_core.agent.copilot.cli import invoke_copilot
+from bcbench_core.agent.copilot.cli import copilot_session_args, invoke_copilot
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 
@@ -79,22 +79,18 @@ def run_copilot_agent(
     logger.debug(f"Using prompt:\n{prompt}")
 
     try:
-        extra_args = [
-            "--log-level=debug",
-            f"--log-dir={output_dir.resolve()}",
-        ]
-        if mcp_config_json:
-            extra_args.append(f"--additional-mcp-config={mcp_config_json}")
-        if lsp_plugin_dir is not None:
-            extra_args.append(f"--plugin-dir={lsp_plugin_dir}")
-        extra_args.extend(f"--plugin-dir={plugin_dir}" for _, plugin_dir in plugins)
+        lsp_plugin_dirs = [lsp_plugin_dir] if lsp_plugin_dir is not None else []
         # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
         # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
         # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
         # silently widen the agent's sandbox access.
-        extra_args.extend(f"--add-dir={plugin_dir}" for plugin, plugin_dir in plugins if plugin.grant_dir_access)
-        if custom_agent:
-            extra_args.append(f"--agent={custom_agent}")
+        extra_args = copilot_session_args(
+            output_dir,
+            mcp_config_json,
+            plugin_dirs=[*lsp_plugin_dirs, *(plugin_dir for _, plugin_dir in plugins)],
+            granted_dirs=[plugin_dir for plugin, plugin_dir in plugins if plugin.grant_dir_access],
+            custom_agent=custom_agent,
+        )
 
         metrics, _ = invoke_copilot(
             prompt=prompt,

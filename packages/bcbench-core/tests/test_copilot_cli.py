@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench_core.agent.copilot.cli import _find_copilot, invoke_copilot
+from bcbench_core.agent.copilot.cli import _find_copilot, copilot_session_args, invoke_copilot
 from bcbench_core.exceptions import AgentError
 
 
@@ -87,3 +87,35 @@ def test_invoke_copilot_forwards_cli_stderr(tmp_path: Path, capsys):
         assert invoke_copilot(prompt="p", model="m", work_dir=tmp_path, timeout=60) == (None, "")
 
     assert "warning: slow model" in capsys.readouterr().err
+
+
+def test_copilot_session_args_minimal(tmp_path: Path):
+    assert copilot_session_args(tmp_path) == ["--log-level=debug", f"--log-dir={tmp_path.resolve()}"]
+
+
+def test_copilot_session_args_full_in_cli_order(tmp_path: Path):
+    args = copilot_session_args(
+        tmp_path / "logs",
+        '{"mcpServers":{}}',
+        plugin_dirs=(tmp_path / "lsp", tmp_path / "plugin with spaces"),
+        granted_dirs=(tmp_path / "plugin with spaces",),
+        custom_agent="al-dev",
+    )
+
+    assert args == [
+        "--log-level=debug",
+        f"--log-dir={(tmp_path / 'logs').resolve()}",
+        '--additional-mcp-config={"mcpServers":{}}',
+        f"--plugin-dir={tmp_path / 'lsp'}",
+        f"--plugin-dir={tmp_path / 'plugin with spaces'}",
+        f"--add-dir={tmp_path / 'plugin with spaces'}",
+        "--agent=al-dev",
+    ]
+
+
+def test_copilot_session_args_does_not_grant_plugin_directory_access(tmp_path: Path):
+    assert copilot_session_args(tmp_path, plugin_dirs=(tmp_path / "plugin",)) == [
+        "--log-level=debug",
+        f"--log-dir={tmp_path.resolve()}",
+        f"--plugin-dir={tmp_path / 'plugin'}",
+    ]
