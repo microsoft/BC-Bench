@@ -252,6 +252,10 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root) as prepare_bcquality,
+        patch(
+            "bcbench.agent.pr_review.metrics._load_bcquality_identity",
+            return_value=("microsoft/BCQuality", "b" * 40, "1.6"),
+        ),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[10.0, 12.5]),
@@ -358,6 +362,10 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root),
+        patch(
+            "bcbench.agent.pr_review.metrics._load_bcquality_identity",
+            return_value=("microsoft/BCQuality", "b" * 40, "1.6"),
+        ),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[1.0, 2.0]),

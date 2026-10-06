@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 from typing import NamedTuple, Self
 
@@ -12,8 +13,9 @@ from scipy.optimize import linear_sum_assignment
 from bcbench.dataset import ReviewComment
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
-from bcbench.types import EvaluationContext
+from bcbench.types import EvaluationContext, PRReviewMetrics
 
+logger = logging.getLogger(__name__)
 _METRIC_EXPLANATIONS = """\
 <details>
 <summary>📖 How to read these metrics</summary>
@@ -272,6 +274,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
 
     average_prompt_tokens: float | None = None
     average_completion_tokens: float | None = None
+    copilot_cli_version: str | None = None
+    bcquality_repository: str | None = None
+    bcquality_commit: str | None = None
+    bcquality_version: str | None = None
 
     generated_comment_count: int = Field(default=0, ge=0)
     expected_comment_count: int = Field(default=0, ge=0)
@@ -317,6 +323,15 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
+
+    def combination_key(self) -> tuple[str | None, ...]:
+        return (
+            *super().combination_key(),
+            self.copilot_cli_version,
+            self.bcquality_repository,
+            self.bcquality_commit,
+            self.bcquality_version,
+        )
 
     def _performance_markdown(self) -> str:
         def metric(value: float | None, digits: int = 1) -> str:
@@ -488,7 +503,16 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             return sum(available) / len(available) if available else None
 
         def metric_values(name: str) -> list[int | float | None]:
-            return [getattr(result.metrics, name) if result.metrics else None for result in code_review_results]
+            return [getattr(result.metrics, name, None) if result.metrics else None for result in code_review_results]
+
+        def consistent_provenance(name: str) -> str | None:
+            values = {value for result in code_review_results if isinstance(result.metrics, PRReviewMetrics) and (value := getattr(result.metrics, name)) is not None}
+            if len(values) > 1:
+                logger.warning(f"Omitting inconsistent {name} from code-review summary")
+                return None
+            return next(iter(values), None)
+
+        usage_completeness = [value for value in metric_values("usage_complete") if value is not None]
 
         return summary.model_copy(
             update={
@@ -531,6 +555,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "average_sub_skills_skipped": average_metric(metric_values("sub_skills_skipped")),
                 "token_coverage_rate": sum(value is not None for value in metric_values("total_tokens")) / total_results,
                 "credit_coverage_rate": sum(value is not None for value in metric_values("ai_credits")) / total_results,
-                "usage_complete_rate": sum(value is True for value in metric_values("usage_complete")) / total_results,
+                "usage_complete_rate": sum(value is True for value in usage_completeness) / len(usage_completeness) if usage_completeness else None,
+                "copilot_cli_version": consistent_provenance("copilot_cli_version"),
+                "bcquality_repository": consistent_provenance("bcquality_repository"),
+                "bcquality_commit": consistent_provenance("bcquality_commit"),
+                "bcquality_version": consistent_provenance("bcquality_version"),
             }
         )

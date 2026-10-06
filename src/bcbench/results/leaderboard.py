@@ -36,12 +36,6 @@ class LeaderboardAggregate(BaseModel, ABC):
     average_duration: float
 
     benchmark_version: str
-    copilot_cli_version: str | None = None
-    bc_alagents_repository: str | None = None
-    bc_alagents_commit: str | None = None
-    bcquality_repository: str | None = None
-    bcquality_commit: str | None = None
-    bcquality_version: str | None = None
 
     @staticmethod
     def _validate_consistent_runs(runs: Sequence[EvaluationResultSummary]) -> None:
@@ -68,12 +62,6 @@ class LeaderboardAggregate(BaseModel, ABC):
             "num_runs": len(runs),
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
             "benchmark_version": first_run.benchmark_version,
-            "copilot_cli_version": first_run.copilot_cli_version,
-            "bc_alagents_repository": first_run.bc_alagents_repository,
-            "bc_alagents_commit": first_run.bc_alagents_commit,
-            "bcquality_repository": first_run.bcquality_repository,
-            "bcquality_commit": first_run.bcquality_commit,
-            "bcquality_version": first_run.bcquality_version,
         }
 
     @classmethod
@@ -147,6 +135,10 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     """Aggregate for the code-review category: mean F1 across runs with bootstrap CI."""
 
     f1: float = 0.0
+    copilot_cli_version: str | None = None
+    bcquality_repository: str | None = None
+    bcquality_commit: str | None = None
+    bcquality_version: str | None = None
     f1_ci_low: float | None = None
     f1_ci_high: float | None = None
     f_beta_05: float = 0.0
@@ -184,6 +176,20 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     token_coverage_rate: float | None = None
     credit_coverage_rate: float | None = None
     usage_complete_rate: float | None = None
+
+    @classmethod
+    def _base_fields(cls, runs: Sequence[EvaluationResultSummary]) -> dict[str, Any]:
+        from bcbench.results.codereview import CodeReviewResultSummary
+
+        first_run = runs[0]
+        assert isinstance(first_run, CodeReviewResultSummary)
+        return {
+            **super()._base_fields(runs),
+            "copilot_cli_version": first_run.copilot_cli_version,
+            "bcquality_repository": first_run.bcquality_repository,
+            "bcquality_commit": first_run.bcquality_commit,
+            "bcquality_version": first_run.bcquality_version,
+        }
 
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":
