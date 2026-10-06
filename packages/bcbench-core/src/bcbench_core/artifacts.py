@@ -16,15 +16,8 @@ type ArtifactType = Literal["sandbox", "onprem"]
 
 
 def resolve_artifact_version_root(version: str, artifacts_cache: Path = DEFAULT_ARTIFACTS_CACHE, artifact_type: ArtifactType = "sandbox") -> Path | None:
-    """Return the newest BcContainerHelper artifact folder matching a major.minor version.
-
-    BcContainerHelper expands a major.minor version (e.g. "27.2") to a full ``<major>.<minor>.<build>.<revision>``
-    folder under ``<artifacts_cache>/<artifact_type>/``. We glob, lexically sort, and pick the newest -- BC's
-    full-version fields are constant-width in practice, so a lexical sort matches a numeric one.
-
-    Returns None when no matching artifact has been downloaded yet.
-    """
-    version_roots = sorted((artifacts_cache / artifact_type).glob(f"{version}.*"))
+    """Return the newest downloaded artifact folder matching a major.minor version, or None."""
+    version_roots = sorted((artifacts_cache / artifact_type).glob(f"{version}.*"), key=lambda root: tuple(map(int, root.name.split("."))))
     return version_roots[-1] if version_roots else None
 
 
