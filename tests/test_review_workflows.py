@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import shutil
@@ -330,6 +331,12 @@ def test_focused_http_experiment_has_exact_matrix_and_no_publish_route() -> None
     matrix = json.loads(dispatch_entries)
     assert matrix == entries
     assert len(matrix) == len(set(matrix)) == 7
+    dataset_sha = "8e8f8afe85bf9a9f3b7fd556a882e1d5eed4c87466ab473181a0c128bb435b93"
+    assert hashlib.sha256(EvaluationCategory.CODE_REVIEW.dataset_path.read_bytes().replace(b"\r\n", b"\n")).hexdigest() == dataset_sha
+    scope_doc = (WORKFLOWS.parents[1] / "docs" / "code-review.md").read_text(encoding="utf-8")
+    assert "HTTP clean scope v4" in scope_doc
+    assert dataset_sha in scope_doc
+    assert json.dumps(entries, separators=(",", ":")) in scope_doc
     assert "synthetic__privacy-010" not in matrix
     assert "synthetic__privacy-010" in dataset
     assert sum(bool(dataset[entry_id].expected_comments or dataset[entry_id].ignored_comments) for entry_id in matrix) == 5
