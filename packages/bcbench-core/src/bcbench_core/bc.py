@@ -161,10 +161,14 @@ def run_tests(fail_to_pass: list[TestEntry], pass_to_pass: list[TestEntry], cont
     if fail_to_pass:
         logger.info(f"Running {len(fail_to_pass)} fail-to-pass tests")
         run_test_suite(fail_to_pass, "Pass", container)
+    else:
+        logger.info("No fail-to-pass tests to run")
 
     if pass_to_pass:
         logger.info(f"Running {len(pass_to_pass)} pass-to-pass tests")
         run_test_suite(pass_to_pass, "Pass", container)
+    else:
+        logger.info("No pass-to-pass tests to run")
 
     logger.info("All tests completed")
 
