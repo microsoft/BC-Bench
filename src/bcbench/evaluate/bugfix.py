@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from bcbench_core.bc import build_and_publish_projects, run_tests
+from bcbench_core.bc import build_and_publish_projects
 from bcbench_core.exceptions import BuildError, TestExecutionError
 from bcbench_core.git import apply_patch, clean_project_paths, stage_and_get_diff
 from bcbench_core.projects import categorize_projects
@@ -9,7 +9,7 @@ from bcbench_core.projects import categorize_projects
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
-from bcbench.operations import copy_problem_statement_folder, set_runtime_version, setup_repo_prebuild
+from bcbench.operations import copy_problem_statement_folder, run_tests, set_runtime_version, setup_repo_prebuild
 from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationContext
 

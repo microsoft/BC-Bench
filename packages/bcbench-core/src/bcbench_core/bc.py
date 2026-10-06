@@ -156,23 +156,6 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
     logger.info("All projects built and published")
 
 
-def run_tests(fail_to_pass: list[TestEntry], pass_to_pass: list[TestEntry], container: ContainerConfig) -> None:
-    """Verify a fix: the fail-to-pass and pass-to-pass tests must all pass."""
-    if fail_to_pass:
-        logger.info(f"Running {len(fail_to_pass)} fail-to-pass tests")
-        run_test_suite(fail_to_pass, "Pass", container)
-    else:
-        logger.info("No fail-to-pass tests to run")
-
-    if pass_to_pass:
-        logger.info(f"Running {len(pass_to_pass)} pass-to-pass tests")
-        run_test_suite(pass_to_pass, "Pass", container)
-    else:
-        logger.info("No pass-to-pass tests to run")
-
-    logger.info("All tests completed")
-
-
 def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container: ContainerConfig, timeout: int = 3 * 60) -> None:
     """Run a suite of tests; "Pass" requires every test to pass, "Fail" at least one failure."""
     test_entries_json: str = TypeAdapter(list[TestEntry]).dump_json(test_entries).decode()
