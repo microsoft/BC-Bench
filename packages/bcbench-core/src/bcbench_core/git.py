@@ -155,13 +155,13 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         Path(patch_file).unlink(missing_ok=True)
 
 
-def stage_and_get_diff(repo_path: Path, exclude: tuple[str, ...] = ("**/app.json", "*.docx", "*.md")) -> str:
+def stage_and_get_diff(repo_path: Path, exclude: tuple[str, ...] = ()) -> str:
     """Stage all *.al file changes and return the staged diff against HEAD.
 
     Args:
         repo_path: Path to the git repository.
         exclude: Git pathspec patterns left out of the diff, including files staged earlier (e.g. by the agent).
-            Defaults to `app.json`, Word documents, and Markdown, which are not part of the AL source change.
+            Defaults to no exclusions. For AL-only evaluation, you'll likely want to pass `("**/app.json", "*.docx", "*.md")`
 
     Returns:
         The git diff patch.

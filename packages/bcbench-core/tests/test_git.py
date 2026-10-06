@@ -175,15 +175,36 @@ class TestStageAndGetDiff:
         with pytest.raises(EmptyDiffError):
             stage_and_get_diff(temp_git_repo)
 
-    def test_stage_and_get_diff_excludes_app_json_by_default(self, temp_git_repo):
+    @pytest.mark.parametrize("file_path", ["app.json", "app/app.json", "spec.docx", "app/spec.docx", "README.md", "app/README.md"])
+    def test_stage_and_get_diff_includes_previously_staged_files_by_default(self, temp_git_repo, file_path):
         (temp_git_repo / "app" / "file.al").write_text("modified app content")
-        (temp_git_repo / "app" / "app.json").write_text("{}")
-        subprocess.run(["git", "add", "app/app.json"], cwd=temp_git_repo, check=True, capture_output=True)
+        (temp_git_repo / file_path).write_text("staged content")
+        subprocess.run(["git", "add", file_path], cwd=temp_git_repo, check=True, capture_output=True)
 
         diff = stage_and_get_diff(temp_git_repo)
 
         assert "app/file.al" in diff
-        assert "app.json" not in diff
+        assert file_path in diff
+        assert "staged content" in diff
+
+    @pytest.mark.parametrize("file_path", ["app/app.json", "spec.docx", "app/spec.docx", "README.md", "app/README.md"])
+    def test_stage_and_get_diff_uses_recommended_exclusions(self, temp_git_repo, file_path):
+        (temp_git_repo / "app" / "file.al").write_text("modified app content")
+        (temp_git_repo / file_path).write_text("staged content")
+        subprocess.run(["git", "add", file_path], cwd=temp_git_repo, check=True, capture_output=True)
+
+        diff = stage_and_get_diff(temp_git_repo, exclude=("**/app.json", "*.docx", "*.md"))
+
+        assert "app/file.al" in diff
+        assert file_path not in diff
+        assert "staged content" not in diff
+
+    def test_stage_and_get_diff_only_excluded_changes_raises_empty_diff(self, temp_git_repo):
+        (temp_git_repo / "app" / "app.json").write_text("{}")
+        subprocess.run(["git", "add", "app/app.json"], cwd=temp_git_repo, check=True, capture_output=True)
+
+        with pytest.raises(EmptyDiffError):
+            stage_and_get_diff(temp_git_repo, exclude=("**/app.json", "*.docx", "*.md"))
 
     def test_stage_and_get_diff_uses_custom_exclude(self, temp_git_repo):
         (temp_git_repo / "app" / "file.al").write_text("modified app content")

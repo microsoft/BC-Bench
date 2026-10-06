@@ -71,7 +71,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
 
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
         try:
-            generated_patch = stage_and_get_diff(context.repo_path)
+            generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
         except EmptyDiffError:
             if _empty_is_acceptable(context.entry):
                 # Safety/refusal gold entry: declining is correct, so the empty diff is judged

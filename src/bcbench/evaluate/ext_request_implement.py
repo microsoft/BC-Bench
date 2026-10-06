@@ -37,7 +37,7 @@ class ExtRequestImplementPipeline(EvaluationPipeline[ExtRequestImplementEntry]):
 
     def evaluate(self, context: EvaluationContext[ExtRequestImplementEntry]) -> None:
         try:
-            generated_patch = stage_and_get_diff(context.repo_path)
+            generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
         except EmptyDiffError:
             result = JudgeBasedEvaluationResult.create_empty_output(context)
             logger.warning(f"Agent produced no changes for {context.entry.instance_id}")

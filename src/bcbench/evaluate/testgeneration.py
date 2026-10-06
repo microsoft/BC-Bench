@@ -82,7 +82,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         # Evaluation focuses on valid changes (test code), treating unintended modifications as out-of-scope noise
         clean_project_paths(context.repo_path, app_projects)
 
-        generated_patch: str = stage_and_get_diff(context.repo_path)
+        generated_patch: str = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
 
         # Read file contents from the local repo for test extraction
         file_contents: dict[str, str] = {}
