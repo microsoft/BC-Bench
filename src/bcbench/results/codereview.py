@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Sequence
+from collections.abc import Hashable, Sequence
 from typing import Literal, NamedTuple, Self
 
 import numpy as np
@@ -353,7 +353,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
 
-    def combination_key(self) -> tuple[object, ...]:
+    def combination_key(self) -> tuple[Hashable, ...]:
         return (
             *super().combination_key(),
             self.copilot_cli_version,

@@ -3,7 +3,7 @@ import logging
 import tomllib
 from abc import ABC, abstractmethod
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Hashable, Sequence
 from datetime import UTC, date, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -139,7 +139,7 @@ class EvaluationResultSummary(BaseModel, ABC):
 
         logger.info(f"Saved evaluation summary to {output_file}")
 
-    def combination_key(self) -> tuple[object, ...]:
+    def combination_key(self) -> tuple[Hashable, ...]:
         """Key for runs with the same harness version, model, experiment, and benchmark version.
 
         Judge-scored categories extend the key with their judge model, so runs judged by different models stay separate.
@@ -203,7 +203,7 @@ class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
         assert isinstance(first_result, JudgeScoredEvaluationResult)
         return {**super()._base_fields(results, run_id), "judge_model": first_result.judge_model}
 
-    def combination_key(self) -> tuple[object, ...]:
+    def combination_key(self) -> tuple[Hashable, ...]:
         """Runs judged by different models are aggregated separately."""
         return (*super().combination_key(), self.judge_model)
 
