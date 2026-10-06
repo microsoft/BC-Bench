@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import jsonschema
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -19,6 +19,62 @@ class ProcessMetrics(BaseModel):
     malformed_records: int = Field(ge=0)
 
 
+class FindingIdNormalization(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    kind: Literal["finding-id"]
+    finding_index: int = Field(ge=0)
+    original_id: str = Field(min_length=1)
+    canonical_id: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_changed_id(self) -> "FindingIdNormalization":
+        if self.original_id == self.canonical_id:
+            raise ValueError("finding-id normalization must change the ID")
+        return self
+
+
+class OriginalLocationRange(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, serialize_by_alias=True)
+
+    start_line: int = Field(alias="start-line", ge=1)
+    end_line: int = Field(alias="end-line", ge=1)
+
+
+class LocationRangeNormalization(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    kind: Literal["location-range"]
+    finding_index: int = Field(ge=0)
+    file: str = Field(min_length=1, pattern=r"^[^\\]+$")
+    line: int = Field(ge=1)
+    original_range: OriginalLocationRange
+
+    @model_validator(mode="after")
+    def validate_bounded_range(self) -> "LocationRangeNormalization":
+        if not self.original_range.start_line < self.line <= self.original_range.end_line:
+            raise ValueError("location-range normalization requires start-line < line <= end-line")
+        return self
+
+
+NormalizationChange = Annotated[FindingIdNormalization | LocationRangeNormalization, Field(discriminator="kind")]
+
+
+class ProcessNormalization(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    raw_report_path: str = Field(min_length=1, pattern=r"^[^\\]+$")
+    raw_report_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    changes: list[NormalizationChange] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_unique_changes(self) -> "ProcessNormalization":
+        keys = [(change.kind, change.finding_index) for change in self.changes]
+        if len(keys) != len(set(keys)):
+            raise ValueError("normalization changes contain duplicate kind/finding_index pairs")
+        return self
+
+
 class ProcessRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -35,6 +91,16 @@ class ProcessRecord(BaseModel):
     report_path: str | None
     failure_reason: str | None
     metrics: ProcessMetrics | None
+    normalization: ProcessNormalization | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def validate_normalization(self) -> "ProcessRecord":
+        if "normalization" in self.model_fields_set:
+            if self.normalization is None:
+                raise ValueError("normalization must be omitted rather than null")
+            if self.role != "leaf" or self.status != "completed":
+                raise ValueError("normalization requires a completed leaf process")
+        return self
 
 
 class RunConfiguration(BaseModel):
