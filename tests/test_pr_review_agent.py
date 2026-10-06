@@ -1,14 +1,23 @@
 import json
 import subprocess
+from copy import deepcopy
+from functools import partial
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_cli_version, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
+from bcbench.agent.pr_review.run_manifest import load_run_manifest
+from bcbench.dataset.codereview import ReviewComment
+from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.exceptions import AgentError
-from bcbench.types import EvaluationCategory, PRReviewMetrics
-from tests.conftest import create_codereview_entry
+from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.codereview import CodeReviewResult
+from bcbench.types import AgentHarness, EvaluationCategory, PRReviewMetrics
+from tests.conftest import create_codereview_entry, create_evaluation_context
+from tests.test_pr_review_run_manifest import privacy_normalization
 
 
 def _dirs(tmp_path: Path) -> tuple[Path, Path]:
@@ -23,7 +32,7 @@ def _write_output(output_dir: Path, text: str) -> None:
     (output_dir / "al-code-review-findings.json").write_text(text, encoding="utf-8")
 
 
-def _write_run_manifest(output_dir: Path, *, root_model: str, leaf_model: str) -> None:
+def _write_run_manifest(output_dir: Path, *, root_model: str, leaf_model: str, leaf_report: dict | None = None) -> None:
     def process(role: str, ordinal: int, skill_id: str, model: str) -> dict:
         metrics = {
             "cli_version": "1.0.83",
@@ -47,6 +56,9 @@ def _write_run_manifest(output_dir: Path, *, root_model: str, leaf_model: str) -
             "metrics": metrics,
         }
 
+    if leaf_report is None:
+        leaf_report = {"skill": {"id": "al-performance-review"}, "outcome": "completed", "findings": []}
+    leaf_id = leaf_report["skill"]["id"]
     payload = {
         "schema_version": 1,
         "status": "completed",
@@ -66,9 +78,9 @@ def _write_run_manifest(output_dir: Path, *, root_model: str, leaf_model: str) -
             "agent_minimum_severity": "Medium",
             "review_source": "local",
         },
-        "plan": {"skill_id": "al-code-review", "leaf_count": 1, "leaf_ids": ["al-performance-review"]},
+        "plan": {"skill_id": "al-code-review", "leaf_count": 1, "leaf_ids": [leaf_id]},
         "processes": [
-            process("leaf", 1, "al-performance-review", leaf_model),
+            process("leaf", 1, leaf_id, leaf_model),
             process("root", 2, "al-code-review", root_model),
         ],
     }
@@ -76,7 +88,6 @@ def _write_run_manifest(output_dir: Path, *, root_model: str, leaf_model: str) -
     schema_dir = output_dir / "bcquality" / "schemas"
     schema_dir.mkdir(parents=True, exist_ok=True)
     (schema_dir / "findings-report.schema.json").write_text('{"type": "object"}', encoding="utf-8")
-    leaf_report = {"skill": {"id": "al-performance-review"}, "outcome": "completed", "findings": []}
     root_report = {"skill": {"id": "al-code-review"}, "outcome": "completed", "findings": [], "sub-results": [leaf_report]}
     for process_record, report in zip(payload["processes"], (leaf_report, root_report), strict=True):
         path = output_dir / process_record["report_path"]
@@ -295,9 +306,30 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert "-GenerateOnly" not in run_process.call_args.args[0]
 
 
-def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("normalization_kind", [None, "finding-id", "location-range", "combined", "malformed"])
+def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, normalization_kind: str | None) -> None:
     _, repo = _dirs(tmp_path)
-    entry = create_codereview_entry()
+    audit = privacy_normalization()
+    expected = [ReviewComment(file=change["file"], line_start=change["line"], body="Privacy finding.") for change in audit["changes"] if change["kind"] == "location-range"]
+    leaf_report: dict = {
+        "skill": {"id": "al-privacy-review", "version": 1},
+        "outcome": "completed",
+        "findings": [
+            {
+                "id": audit["changes"][0]["canonical_id"],
+                "severity": "major",
+                "message": comment.body,
+                "location": {"file": comment.file, "line": comment.line_start},
+                "references": [{"path": audit["changes"][0]["canonical_id"]}],
+                "confidence": "high",
+                "domain": "Privacy",
+                "suggested-code-omission-reason": "Synthetic integration-specific change.",
+            }
+            for comment in expected
+        ],
+        "suppressed": [],
+    }
+    entry = create_codereview_entry(expected_comments=expected)
     settings = {"min_severity": "Medium"}
     completed = subprocess.CompletedProcess(args=["pwsh"], returncode=0, stdout="", stderr="")
     engine_root = tmp_path / "engine"
@@ -333,7 +365,38 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
         ),
         encoding="utf-8",
     )
-    _write_run_manifest(output_dir, root_model="gpt-5.6-sol", leaf_model="gpt-5.6-luna")
+    _write_run_manifest(output_dir, root_model="gpt-5.6-sol", leaf_model="gpt-5.6-luna", leaf_report=leaf_report)
+    manifest_path = output_dir / "_run-manifest.json"
+    if normalization_kind is not None:
+        if normalization_kind in {"finding-id", "location-range"}:
+            audit["changes"] = [change for change in audit["changes"] if change["kind"] == normalization_kind]
+        raw_path = output_dir / audit["raw_report_path"]
+        raw_path.parent.mkdir(parents=True)
+        raw_report = deepcopy(leaf_report)
+        for change in audit["changes"]:
+            finding = raw_report["findings"][change["finding_index"]]
+            if change["kind"] == "finding-id":
+                finding["id"] = change["original_id"]
+            else:
+                finding["location"]["range"] = change["original_range"]
+        raw_bytes = b"\xef\xbb\xbf" + (json.dumps(raw_report, indent=2).replace("\n", "\r\n") + "\r\n").encode("utf-8")
+        raw_path.write_bytes(raw_bytes)
+        audit["raw_report_sha256"] = sha256(raw_bytes).hexdigest()
+        if normalization_kind == "malformed":
+            audit["changes"][0]["unexpected"] = True
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["processes"][0]["normalization"] = audit
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest_bytes = manifest_path.read_bytes()
+    _write_output(
+        output_dir,
+        json.dumps(
+            {
+                "outcome": "completed",
+                "findings": [{"filePath": comment.file, "lineNumber": comment.line_start, "issue": comment.body} for comment in expected],
+            }
+        ),
+    )
     monkeypatch.setenv("COPILOT_REVIEW_LEAF_MODEL", "ambient-leaf")
     monkeypatch.setenv("COPILOT_REVIEW_LEAF_EXECUTION", "parallel")
     monkeypatch.setenv("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "99")
@@ -346,11 +409,12 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root),
-        patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
+        patch("bcbench.agent.pr_review.agent._write_review_json", wraps=_write_review_json) as write_review,
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[1.0, 2.0]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
     ):
-        run_pr_review_agent(
+        run_agent = partial(
+            run_pr_review_agent,
             entry=entry,
             model="gpt-5.6-sol",
             category=EvaluationCategory.CODE_REVIEW,
@@ -364,9 +428,35 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
             max_leaf_concurrency=4,
             cli_timeout_minutes=30,
         )
+        if normalization_kind == "malformed":
+            with pytest.raises(AgentError, match="unexpected"):
+                run_agent()
+            write_review.assert_not_called()
+            assert not (repo / "review.json").exists()
+            assert manifest_path.read_bytes() == manifest_bytes
+            return
+        metrics, config = run_agent()
 
     engine_env = run_process.call_args.kwargs["env"]
     assert engine_env["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.6-luna"
     assert engine_env["COPILOT_REVIEW_LEAF_EXECUTION"] == "serial"
     assert engine_env["COPILOT_REVIEW_MAX_LEAF_CONCURRENCY"] == "4"
     assert engine_env["COPILOT_REVIEW_CLI_TIMEOUT_MINUTES"] == "30"
+    context = create_evaluation_context(tmp_path, entry=entry, agent_name=AgentHarness.PR_REVIEW, category=EvaluationCategory.CODE_REVIEW)
+    context.metrics, context.experiment = metrics, config
+    with patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [True] * len(pairs)) as judge:
+        CodeReviewPipeline().evaluate(context)
+    judge.assert_called_once()
+    result = BaseEvaluationResult.from_json(json.loads(next(context.result_dir.glob("*.jsonl")).read_text(encoding="utf-8")))
+    assert isinstance(result, CodeReviewResult)
+    assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (4, 0, 0)
+    assert result.precision == result.recall == result.f1 == 1.0
+    assert [comment.line_start for comment in result.generated_comments] == [25, 24, 23, 23]
+    assert manifest_path.read_bytes() == manifest_bytes
+    retained = load_run_manifest(manifest_path).processes[0].normalization
+    if normalization_kind is None:
+        assert retained is None
+    else:
+        assert retained is not None
+        assert retained.model_dump() == audit
+        assert (output_dir / retained.raw_report_path).read_bytes() == raw_bytes

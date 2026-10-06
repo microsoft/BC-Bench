@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.agent.pr_review.run_manifest import load_run_manifest, validate_review_reports, validate_run_manifest
+from bcbench.agent.pr_review.run_manifest import FindingIdNormalization, LocationRangeNormalization, RunManifest, load_run_manifest, validate_review_reports, validate_run_manifest
 from bcbench.exceptions import AgentError
 
 ENGINE_COMMIT = "e" * 40
@@ -76,6 +76,42 @@ def valid_manifest() -> dict:
             _process("leaf", 1, "al-performance-review", "gpt-5.4"),
             _process("leaf", 2, "al-security-review", "gpt-5.4"),
             _process("root", 3, "al-code-review", "claude-sonnet-5"),
+        ],
+    }
+
+
+def privacy_normalization() -> dict:
+    # PR80 @ 4a0885e207cf96617b33d54d0146debbcf7d9841 replays run 37310924454/privacy-015.
+    # Handoff SHA256: c313a4ad40d270f4f77821ac36e375baaf107b8944fb8673e1d27d42c1e8b054.
+    findings = [
+        ("ai-context", "AIContextBuilder.Codeunit.al", 25, 23),
+        ("customer-export", "CustomerDataExporter.Codeunit.al", 24, 20),
+        ("crm-sync", "ExternalCRMSync.Codeunit.al", 23, 19),
+        ("email", "OutboxEmailDispatcher.Codeunit.al", 23, 18),
+    ]
+    return {
+        "raw_report_path": "leaf-results/03-al-privacy-review/_review-report.raw.json",
+        "raw_report_sha256": "26aead0958e6ffe60c947f740b95ecf016783116a88d1254e87cea5c54c10107",
+        "changes": [
+            *[
+                {
+                    "kind": "finding-id",
+                    "finding_index": index,
+                    "original_id": f"privacy-notice-consent-for-external-data-transfer-{suffix}",
+                    "canonical_id": "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+                }
+                for index, (suffix, _, _, _) in enumerate(findings)
+            ],
+            *[
+                {
+                    "kind": "location-range",
+                    "finding_index": index,
+                    "file": f"src/{file}",
+                    "line": line,
+                    "original_range": {"start-line": start, "end-line": line},
+                }
+                for index, (_, file, line, start) in enumerate(findings)
+            ],
         ],
     }
 
@@ -244,3 +280,186 @@ def test_original_reports_are_required_inside_output_directory(tmp_path, path):
     payload["processes"][0]["report_path"] = path
     with pytest.raises(AgentError):
         validate_review_reports(_load(tmp_path, payload), tmp_path)
+
+
+def test_legacy_manifest_roundtrip_preserves_omission_and_other_nulls(tmp_path):
+    payload = valid_manifest()
+    manifest = _load(tmp_path, payload)
+
+    assert all(process.normalization is None for process in manifest.processes)
+    assert manifest.model_dump() == payload
+    assert json.loads(manifest.model_dump_json()) == payload
+    assert RunManifest.model_validate_json(manifest.model_dump_json()) == manifest
+
+
+@pytest.mark.parametrize("kind", ["finding-id", "location-range", "combined"])
+def test_normalization_roundtrip_retains_exact_audit_fields(tmp_path, kind):
+    payload = valid_manifest()
+    normalization = privacy_normalization()
+    if kind != "combined":
+        normalization["changes"] = [change for change in normalization["changes"] if change["kind"] == kind]
+    payload["processes"][0]["normalization"] = normalization
+    manifest = _load(tmp_path, payload)
+    _validate(manifest)
+    _write_reports(tmp_path, payload)
+    validate_review_reports(manifest, tmp_path)
+
+    assert manifest.model_dump() == payload
+    assert json.loads(manifest.model_dump_json()) == payload
+    assert RunManifest.model_validate_json(manifest.model_dump_json()) == manifest
+    audit = manifest.processes[0].normalization
+    assert audit is not None
+    assert audit.raw_report_path == normalization["raw_report_path"]
+    assert audit.raw_report_sha256 == normalization["raw_report_sha256"]
+    ids = [change for change in audit.changes if isinstance(change, FindingIdNormalization)]
+    ranges = [change for change in audit.changes if isinstance(change, LocationRangeNormalization)]
+    assert len(ids) == (0 if kind == "location-range" else 4)
+    assert len(ranges) == (0 if kind == "finding-id" else 4)
+    assert [change.finding_index for change in ids or ranges] == [0, 1, 2, 3]
+    assert [(change.line, change.original_range.start_line, change.original_range.end_line) for change in ranges] == (
+        [] if kind == "finding-id" else [(25, 23, 25), (24, 20, 24), (23, 19, 23), (23, 18, 23)]
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        pytest.param(lambda n: n.update(extra=True), id="audit-extra"),
+        pytest.param(lambda n: n.pop("raw_report_path"), id="missing-raw-path"),
+        pytest.param(lambda n: n.pop("raw_report_sha256"), id="missing-raw-hash"),
+        pytest.param(lambda n: n.pop("changes"), id="missing-changes"),
+        pytest.param(lambda n: n.update(changes=[]), id="empty-changes"),
+        pytest.param(lambda n: n.update(changes={}), id="nonarray-changes"),
+        pytest.param(lambda n: n["changes"][0].update(extra=True), id="id-extra"),
+        pytest.param(lambda n: n["changes"][0].pop("original_id"), id="missing-original-id"),
+        pytest.param(lambda n: n["changes"][0].pop("canonical_id"), id="missing-canonical-id"),
+        pytest.param(lambda n: n["changes"][0].pop("finding_index"), id="missing-index"),
+        pytest.param(lambda n: n["changes"][0].pop("kind"), id="missing-kind"),
+        pytest.param(lambda n: n["changes"][0].update(kind="unknown"), id="unknown-kind"),
+        pytest.param(lambda n: n["changes"][0].update(kind="location-range"), id="wrong-union-shape"),
+        pytest.param(lambda n: n["changes"][0].update(original_id=n["changes"][0]["canonical_id"]), id="unchanged-id"),
+        pytest.param(lambda n: n["changes"][4].update(extra=True), id="range-extra"),
+        pytest.param(lambda n: n["changes"][4].update(finding_id="invented"), id="range-has-no-finding-id"),
+        pytest.param(lambda n: n["changes"][4].pop("file"), id="missing-file"),
+        pytest.param(lambda n: n["changes"][4].pop("line"), id="missing-line"),
+        pytest.param(lambda n: n["changes"][4].pop("original_range"), id="missing-range"),
+        pytest.param(lambda n: n["changes"][4]["original_range"].update(extra=True), id="endpoint-extra"),
+        pytest.param(lambda n: n["changes"][4]["original_range"].pop("start-line"), id="missing-start"),
+        pytest.param(lambda n: n["changes"][4]["original_range"].pop("end-line"), id="missing-end"),
+        pytest.param(lambda n: n["changes"][4]["original_range"].update(start_line=23), id="unaliased-start"),
+        pytest.param(lambda n: n["changes"][4]["original_range"].update({"start-line": 25}), id="unchanged-range"),
+        pytest.param(lambda n: n["changes"][4]["original_range"].update({"start-line": 26, "end-line": 27}), id="anchor-before-range"),
+        pytest.param(lambda n: n["changes"][4]["original_range"].update({"end-line": 24}), id="anchor-after-range"),
+        pytest.param(lambda n: n["changes"][4]["original_range"].update({"end-line": 22}), id="reversed-range"),
+        pytest.param(lambda n: n["changes"].append(deepcopy(n["changes"][0])), id="duplicate-id-index"),
+        pytest.param(lambda n: n["changes"].append(deepcopy(n["changes"][4])), id="duplicate-range-index"),
+    ],
+)
+def test_rejects_malformed_normalization(tmp_path, mutation):
+    payload = valid_manifest()
+    payload["processes"][0]["normalization"] = normalization = privacy_normalization()
+    mutation(normalization)
+
+    with pytest.raises(AgentError, match="normalization"):
+        _load(tmp_path, payload)
+
+
+@pytest.mark.parametrize("value", ["", "a" * 63, "a" * 65, "A" * 64, "g" * 64, "a" * 64 + "\n", None, 123, True])
+def test_rejects_malformed_raw_hash(tmp_path, value):
+    payload = valid_manifest()
+    payload["processes"][0]["normalization"] = normalization = privacy_normalization()
+    normalization["raw_report_sha256"] = value
+    with pytest.raises(AgentError, match="raw_report_sha256"):
+        _load(tmp_path, payload)
+
+
+@pytest.mark.parametrize("field", ["raw_report_path", "file", "original_id", "canonical_id"])
+@pytest.mark.parametrize("value", ["", None, 123, True])
+def test_rejects_invalid_normalization_strings(tmp_path, field, value):
+    payload = valid_manifest()
+    payload["processes"][0]["normalization"] = normalization = privacy_normalization()
+    target = normalization if field == "raw_report_path" else normalization["changes"][4 if field == "file" else 0]
+    target[field] = value
+    with pytest.raises(AgentError, match=field):
+        _load(tmp_path, payload)
+
+
+@pytest.mark.parametrize("field", ["raw_report_path", "file"])
+def test_rejects_backslash_normalization_paths(tmp_path, field):
+    payload = valid_manifest()
+    payload["processes"][0]["normalization"] = normalization = privacy_normalization()
+    target = normalization if field == "raw_report_path" else normalization["changes"][4]
+    target[field] = target[field].replace("/", "\\")
+    with pytest.raises(AgentError, match=field):
+        _load(tmp_path, payload)
+
+
+@pytest.mark.parametrize("change_index", [0, 4])
+@pytest.mark.parametrize("value", [-1, 0.5, "0", True, None])
+def test_rejects_invalid_finding_indices(tmp_path, change_index, value):
+    payload = valid_manifest()
+    payload["processes"][0]["normalization"] = normalization = privacy_normalization()
+    normalization["changes"][change_index]["finding_index"] = value
+    with pytest.raises(AgentError, match="finding_index"):
+        _load(tmp_path, payload)
+
+
+@pytest.mark.parametrize("field", ["line", "start-line", "end-line"])
+@pytest.mark.parametrize("value", [0, -1, 1.5, "23", True, None])
+def test_rejects_invalid_normalization_lines(tmp_path, field, value):
+    payload = valid_manifest()
+    payload["processes"][0]["normalization"] = normalization = privacy_normalization()
+    change = normalization["changes"][4]
+    target = change if field == "line" else change["original_range"]
+    target[field] = value
+    with pytest.raises(AgentError, match=field):
+        _load(tmp_path, payload)
+
+
+@pytest.mark.parametrize(("role", "status"), [("root", "completed"), ("leaf", "failed"), ("root", "failed")])
+def test_normalization_requires_completed_leaf(tmp_path, role, status):
+    payload = valid_manifest()
+    payload["processes"][0].update(role=role, status=status, normalization=privacy_normalization())
+    with pytest.raises(AgentError, match="normalization requires a completed leaf"):
+        _load(tmp_path, payload)
+
+
+def test_normalization_rejects_explicit_null(tmp_path):
+    payload = valid_manifest()
+    payload["processes"][0]["normalization"] = None
+    with pytest.raises(AgentError, match="normalization must be omitted rather than null"):
+        _load(tmp_path, payload)
+
+
+def test_process_unknown_fields_are_still_forbidden(tmp_path):
+    payload = valid_manifest()
+    payload["processes"][0].update(normalization=privacy_normalization(), unknown=True)
+    with pytest.raises(AgentError, match="unknown"):
+        _load(tmp_path, payload)
+
+
+@pytest.mark.parametrize("status", ["running", "partial", "failed"])
+def test_completed_leaf_audit_survives_noncompleted_run_but_does_not_enable_scoring(tmp_path, status):
+    payload = valid_manifest()
+    payload["processes"][0]["normalization"] = privacy_normalization()
+    payload["status"] = status
+    if status == "running":
+        payload["completed_at"] = None
+    elif status == "failed":
+        payload["failure_reason"] = "Later process failed"
+    manifest = _load(tmp_path, payload)
+    assert manifest.model_dump() == payload
+    with pytest.raises(AgentError, match=f"status='{status}'"):
+        _validate(manifest)
+
+
+def test_does_not_invent_contiguous_indices_change_order_or_article_id_patterns(tmp_path):
+    payload = valid_manifest()
+    normalization = privacy_normalization()
+    normalization["changes"] = [normalization["changes"][4], normalization["changes"][0]]
+    for change in normalization["changes"]:
+        change["finding_index"] = 7
+    normalization["changes"][1].update(original_id="Legacy ID", canonical_id="Case-Sensitive/Primary.md")
+    normalization["changes"][0].update(file="src/Folder with spaces/Example.al", line=24)
+    payload["processes"][0]["normalization"] = normalization
+    assert _load(tmp_path, payload).model_dump() == payload

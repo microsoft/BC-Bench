@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 import yaml
@@ -358,9 +358,53 @@ def test_pr_review_diagnostics_are_allowlisted_without_raw_otel_or_checkout_uplo
     upload = next(step for step in steps if step["name"] == "Upload allowlisted review diagnostics")
     assert upload["if"] == "always()"
     paths = upload["with"]["path"].splitlines()
-    assert len(paths) == 12
+    additions = [
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.raw.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-source-bounds.json",
+    ]
+    assert [path for path in paths if path not in additions] == [
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_run-manifest.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_run-metrics.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/al-code-review-findings.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/agent-output.txt",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/agent-transcript.log",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/leaf-results/*/stdout.txt",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/leaf-results/*/stderr.txt",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_filter-report.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/bcquality/schemas/findings-report.schema.json",
+        "${{ steps.setup-env.outputs.repo_path }}/review.json",
+        "${{ steps.setup-env.outputs.repo_path }}/judge_results.json",
+    ]
+    assert len(paths) == 14
+    assert all(path in paths for path in additions)
     assert all(not path.endswith(("**", "**/*", "**/*.json", "**/*.log")) for path in paths)
     for filename in ("_run-manifest.json", "_run-metrics.json", "_review-report.json", "al-code-review-findings.json", "judge_results.json", "review.json"):
         assert any(path.endswith("/" + filename) for path in paths)
     assert "_copilot-otel" not in upload["with"]["path"]
     assert upload["with"]["retention-days"] == 7
+
+
+@pytest.mark.parametrize(
+    ("path", "selected"),
+    [
+        ("run/_run-manifest.json", True),
+        ("run/leaf-results/03-al-privacy-review/_review-report.json", True),
+        ("run/leaf-results/03-al-privacy-review/_review-report.raw.json", True),
+        ("run/_review-source-bounds.json", True),
+        ("run/nested/diagnostics/_review-source-bounds.json", True),
+        ("run/_copilot-otel/events.jsonl", False),
+        ("run/_copilot-otel/metrics.json", False),
+        ("run/leaf-results/03-al-privacy-review/_copilot-otel/trace.json", False),
+        ("run/bcquality/knowledge-index.json", False),
+        ("run/bcquality/microsoft/knowledge/privacy/example.md", False),
+        ("run/leaf-results/03-al-privacy-review/other.raw.json", False),
+        ("run/_review-source-bounds.json.bak", False),
+        ("run/leaf-results/03-al-privacy-review/_review-report.raw.json.bak", False),
+    ],
+)
+def test_review_diagnostic_selection_is_filename_scoped(path: str, selected: bool) -> None:
+    workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
+    upload = next(step for step in workflow["jobs"]["evaluate-with-pr-review"]["steps"] if step["name"] == "Upload allowlisted review diagnostics")
+    selectors = [selector.replace("${{ env.EVALUATION_RESULTS_DIR }}/", "") for selector in upload["with"]["path"].splitlines() if selector.startswith("${{ env.EVALUATION_RESULTS_DIR }}/")]
+    assert any(PurePosixPath(path).full_match(selector) for selector in selectors) is selected
