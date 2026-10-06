@@ -25,6 +25,8 @@ The import and environment rules are enforced by ruff (`banned-api` in [`pyproje
 
 `bcbench_core.agent.copilot` provides `invoke_copilot`, `get_copilot_version`, and immutable `CopilotOptions`. Supply a prompt, model, workspace, timeout, and explicit environment; core handles launch arguments, Copilot environment settings, execution, and output parsing. Tools and custom instructions are disabled by default. Options cover logging, prepared MCP configuration, plugin directories, explicit directory grants, custom agents, and additional CLI arguments.
 
+The moved `copilot.cli` module retains low-level CLI invocation; new session orchestration lives in `copilot.agent`. Consumers use the package-level API.
+
 ```python
 from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
 

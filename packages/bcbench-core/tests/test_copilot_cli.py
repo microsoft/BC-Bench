@@ -6,7 +6,8 @@ from unittest.mock import patch
 import pytest
 
 from bcbench_core.agent.copilot import CopilotOptions, CopilotProcessError, CopilotTimeoutError, invoke_copilot
-from bcbench_core.agent.copilot.cli import _find_copilot, copilot_session_args
+from bcbench_core.agent.copilot.agent import copilot_session_args
+from bcbench_core.agent.copilot.cli import _find_copilot
 from bcbench_core.exceptions import AgentError
 
 
