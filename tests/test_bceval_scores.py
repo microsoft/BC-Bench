@@ -10,20 +10,27 @@ from evaluator import scores
 
 
 @pytest.mark.parametrize(
-    ("model", "expected_content"),
+    ("model", "expected_content", "expects_temperature"),
     [
         (
             "gpt-56-reasoning-nano-luna",
             [{"type": "output_text", "text": "answer"}],
+            False,
         ),
-        ("gpt-41-2025-04-14", "answer"),
+        ("gpt-41-2025-04-14", "answer", True),
     ],
 )
-def test_lm_checklist_uses_output_text_only_for_responses_models(monkeypatch, model, expected_content):
+def test_lm_checklist_adapts_only_luna_responses_payload(
+    monkeypatch,
+    model,
+    expected_content,
+    expects_temperature,
+):
     class _BuiltInLmChecklist:
         def _request_args(self, output, expected, **kwargs):
             return {
                 "model": model,
+                "temperature": 0,
                 "messages": [
                     {"role": "system", "content": "instructions"},
                     {"role": "user", "content": "question"},
@@ -47,3 +54,4 @@ def test_lm_checklist_uses_output_text_only_for_responses_models(monkeypatch, mo
             "content": expected_content,
         },
     ]
+    assert ("temperature" in request) is expects_temperature

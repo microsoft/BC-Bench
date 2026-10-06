@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
+_LUNA_JUDGE_MODEL = "gpt-56-reasoning-nano-luna"
+
 
 def _responses_compatible_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
@@ -25,9 +27,12 @@ class LmChecklist:
 
         def responses_compatible_request_args(output: object, expected: object = None, **kwargs: object) -> dict[str, Any]:
             request = request_args(output, expected, **kwargs)
+            model = str(request.get("model", ""))
             # Autoevals routes GPT-5 models through Responses, where assistant content is output.
-            if str(request.get("model", "")).startswith("gpt-5"):
+            if model.startswith("gpt-5"):
                 request["messages"] = _responses_compatible_messages(request["messages"])
+            if model == _LUNA_JUDGE_MODEL:
+                request.pop("temperature", None)
             return request
 
         scorer._request_args = responses_compatible_request_args
