@@ -2,7 +2,7 @@ import sys
 
 import typer
 
-from bcbench.categories import category_definition
+from bcbench.categories.registry import category_definition
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.config import get_config
 from bcbench.github_actions import write_step_outputs

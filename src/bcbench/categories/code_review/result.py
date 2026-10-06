@@ -3,15 +3,18 @@ from typing import NamedTuple, Self, override
 
 import numpy as np
 from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
+from bcbench_core.stats import bootstrap_ci
 from pydantic import Field
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
-from bcbench.dataset import BaseDatasetEntry, ReviewComment
+from bcbench.categories.code_review.entry import ReviewComment
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
-from bcbench.results.summary import JudgeBasedEvaluationResultSummary
+from bcbench.results.leaderboard import JudgeBasedLeaderboardAggregate
+from bcbench.results.summary import EvaluationResultSummary, JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext
 
 _METRIC_EXPLANATIONS = """\
@@ -500,5 +503,79 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "average_completion_tokens": average_metric([result.metrics.completion_tokens if result.metrics else None for result in code_review_results]),
                 "average_total_tokens": average_metric([result.metrics.total_tokens if result.metrics else None for result in code_review_results]),
                 "average_ai_credits": average_metric([result.metrics.ai_credits if result.metrics else None for result in code_review_results]),
+            }
+        )
+
+
+class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
+    """Aggregate for the code-review category: mean F1 across runs with bootstrap CI."""
+
+    f1: float = 0.0
+    f1_ci_low: float | None = None
+    f1_ci_high: float | None = None
+    f_beta_05: float = 0.0
+    f_beta_2: float = 0.0
+    precision: float = 0.0
+    recall: float = 0.0
+
+    macro_f1: float = 0.0
+    macro_f1_ci_low: float | None = None
+    macro_f1_ci_high: float | None = None
+    macro_f_beta_05: float = 0.0
+    macro_f_beta_2: float = 0.0
+    macro_precision: float = 0.0
+    macro_recall: float = 0.0
+
+    valid_review_output_rate: float = 0.0
+    average_prompt_tokens: float | None = None
+    average_completion_tokens: float | None = None
+    average_total_tokens: float | None = None
+    average_ai_credits: float | None = None
+
+    @classmethod
+    @override
+    def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":
+        base = super().from_runs(runs)
+        assert isinstance(base, CodeReviewLeaderboardAggregate)
+
+        cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
+        n = len(cr_runs)
+
+        def mean_metric(values: Sequence[float | None]) -> float | None:
+            available = [value for value in values if value is not None]
+            return sum(available) / len(available) if available else None
+
+        # The micro headline pools every comment across the dataset, so there is no per-task
+        # decomposition to resample; its CI is intentionally over run-level means and captures
+        # run-to-run reproducibility (None unless >=2 runs with variance).
+        f1_ci = bootstrap_ci([r.f1 for r in cr_runs])
+        # The macro headline weights tasks equally, so we bootstrap the equal-weight headline over the
+        # pooled per-task F1 scores across runs: the CI reflects task-level variance (resampling tasks),
+        # which is the dominant sampling uncertainty for our small task set and is meaningful even for a
+        # single run. This deliberately differs from the per-run micro CI above.
+        pooled_task_f1 = [score for r in cr_runs for score in r.instance_results.values()]
+        macro_f1_ci = bootstrap_ci(pooled_task_f1)
+
+        return base.model_copy(
+            update={
+                "f1": round(f1_ci["mean"], 3) if f1_ci["mean"] is not None else 0.0,
+                "f1_ci_low": round(f1_ci["ci_low"], 3) if f1_ci["ci_low"] is not None else None,
+                "f1_ci_high": round(f1_ci["ci_high"], 3) if f1_ci["ci_high"] is not None else None,
+                "f_beta_05": sum(r.f_beta_05 for r in cr_runs) / n,
+                "f_beta_2": sum(r.f_beta_2 for r in cr_runs) / n,
+                "precision": sum(r.precision for r in cr_runs) / n,
+                "recall": sum(r.recall for r in cr_runs) / n,
+                "macro_f1": round(macro_f1_ci["mean"], 3) if macro_f1_ci["mean"] is not None else 0.0,
+                "macro_f1_ci_low": round(macro_f1_ci["ci_low"], 3) if macro_f1_ci["ci_low"] is not None else None,
+                "macro_f1_ci_high": round(macro_f1_ci["ci_high"], 3) if macro_f1_ci["ci_high"] is not None else None,
+                "macro_f_beta_05": sum(r.macro_f_beta_05 for r in cr_runs) / n,
+                "macro_f_beta_2": sum(r.macro_f_beta_2 for r in cr_runs) / n,
+                "macro_precision": sum(r.macro_precision for r in cr_runs) / n,
+                "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
+                "valid_review_output_rate": sum(r.valid_review_output_rate for r in cr_runs) / n,
+                "average_prompt_tokens": mean_metric([run.average_prompt_tokens for run in cr_runs]),
+                "average_completion_tokens": mean_metric([run.average_completion_tokens for run in cr_runs]),
+                "average_total_tokens": mean_metric([run.average_total_tokens for run in cr_runs]),
+                "average_ai_credits": mean_metric([run.average_ai_credits for run in cr_runs]),
             }
         )

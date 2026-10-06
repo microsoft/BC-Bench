@@ -8,10 +8,10 @@ from pathlib import Path
 from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
 from bcbench_core.exceptions import AgentError
 
+from bcbench.categories.code_review.entry import ReviewComment
+from bcbench.categories.code_review.result import assign_comment_matches
 from bcbench.config import get_config
-from bcbench.dataset.codereview import ReviewComment
 from bcbench.exceptions import LLMJudgeError
-from bcbench.results.codereview import assign_comment_matches
 
 _config = get_config()
 

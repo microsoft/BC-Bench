@@ -1,6 +1,6 @@
 from bcbench.categories.definition import CategoryDefinition
+from bcbench.categories.nl2al.entry import NL2ALEntry
 from bcbench.categories.nl2al.pipeline import NL2ALPipeline
-from bcbench.dataset import NL2ALEntry
 from bcbench.results.leaderboard import JudgeBasedLeaderboardAggregate
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory

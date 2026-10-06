@@ -7,49 +7,6 @@ from pydantic import Field
 from bcbench.dataset.dataset_entry import RepoGroundedEntry
 from bcbench.types import Checklist, ChecklistAssertion
 
-__all__ = ["ExtRequestAdvisorEntry", "ExtRequestImplementEntry", "ExtRequestTriageEntry", "ManagedLabel"]
-
-
-class ExtRequestAdvisorEntry(RepoGroundedEntry):
-    """Single-shot proxy for preparing a Business Central extensibility request."""
-
-    patch: str | None = None
-
-    title: Annotated[str, Field(min_length=1)]
-    description: Annotated[str, Field(min_length=1)]
-    comments: str = ""
-    expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
-
-    @override
-    def get_task(self) -> str:
-        sections = [f"# {self.title}", "", self.description.rstrip()]
-        if self.comments.strip():
-            sections += ["", "## Additional requester context", "", self.comments.rstrip()]
-        return "\n".join(sections)
-
-    @override
-    def get_expected_output(self) -> Checklist:
-        return {"assertions": self.expected}
-
-
-class ExtRequestImplementEntry(RepoGroundedEntry):
-    """Dataset entry for the extensibility-request-implement category — implement an approved extensibility request in AL.
-
-    Judge-based (no build, no tests). The agent reads the extensibility request (provided as plain
-    text) and adds the requested extension point (typically an integration event) to the existing repo
-    checked out at `base_commit`. The agent's diff is graded by an LLM judge against `expected`, which
-    encodes both fidelity to the gold fix (`patch`) and correct propagation across the expected
-    W1 + country/region layer files.
-    """
-
-    # LLM-judge checklist: expected event/signature/placement and expected layer propagation.
-    expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
-
-    @override
-    def get_expected_output(self) -> Checklist:
-        return {"assertions": self.expected}
-
-
 type ManagedLabel = Literal[
     "Finance",
     "SCM",

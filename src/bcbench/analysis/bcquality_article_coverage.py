@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bcbench.dataset.codereview import ArticleId, CodeReviewEntry
+from bcbench.categories.code_review.entry import ArticleId, CodeReviewEntry
 
 _KNOWLEDGE_SUBDIR = Path("microsoft") / "knowledge"
 _BCQUALITY_ROOT_ENV = "BCQUALITY_ROOT"

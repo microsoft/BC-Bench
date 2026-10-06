@@ -1,6 +1,6 @@
 from bcbench.categories.definition import CategoryDefinition
+from bcbench.categories.ext_request_triage.entry import ExtRequestTriageEntry
 from bcbench.categories.ext_request_triage.pipeline import ExtRequestTriagePipeline
-from bcbench.dataset import ExtRequestTriageEntry
 from bcbench.results.leaderboard import JudgeBasedLeaderboardAggregate
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory

@@ -8,15 +8,16 @@ from unittest.mock import patch
 import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 
-from bcbench.categories import category_definition
+from bcbench.categories.bug_fix.result import BugFixResult
+from bcbench.categories.nl2al.entry import NL2ALEntry
+from bcbench.categories.registry import category_definition
 from bcbench.categories.results import load_result
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationCategory, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 

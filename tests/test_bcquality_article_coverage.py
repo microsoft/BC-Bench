@@ -12,10 +12,9 @@ from bcbench.analysis.bcquality_article_coverage import (
     enumerate_inventory,
     resolve_bcquality_root,
 )
-from bcbench.categories import category_definition
+from bcbench.categories.code_review.entry import ArticleId, CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment
+from bcbench.categories.registry import category_definition
 from bcbench.config import get_config
-from bcbench.dataset import CodeReviewEntry, ReviewComment
-from bcbench.dataset.codereview import ArticleId, CodeReviewEntryMetadata
 from bcbench.types import EvaluationCategory
 
 _BASE_COMMIT = "70fd0246a0a4dbc72cb183ca719106722c03be4d"

@@ -5,9 +5,9 @@ import pytest
 from bcbench_core.git import apply_patch, init_repo
 from unidiff import PatchSet
 
-from bcbench.categories import category_definition
+from bcbench.categories.code_review.entry import CodeReviewEntry, Severity
+from bcbench.categories.registry import category_definition
 from bcbench.config import get_config
-from bcbench.dataset.codereview import CodeReviewEntry, Severity
 from bcbench.types import EvaluationCategory
 
 _SCAN = "synthetic__performance-014"

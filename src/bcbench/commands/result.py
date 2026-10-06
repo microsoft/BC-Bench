@@ -7,7 +7,7 @@ from typing import Annotated
 
 import typer
 
-from bcbench.categories import category_definition
+from bcbench.categories.registry import category_definition
 from bcbench.categories.results import aggregate_runs, load_leaderboard, load_result, load_summary, summarize_results
 from bcbench.cli_options import EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config

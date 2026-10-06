@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 import typer
 from bcbench_core.container import ContainerConfig
 
-from bcbench.categories import category_definition
+from bcbench.categories.registry import category_definition
 from bcbench.types import AgentRuntimeConfig, CopilotModelName, EvaluationCategory
 
 # Type aliases for cleaner command signatures

@@ -4,21 +4,21 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Literal, Self, override
+from typing import Annotated, Self, override
 
 from bcbench_core.dataset import TestEntry
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
-from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
+from bcbench.types import CommitSha, ExpectedOutput, RepoSlug
 
 _config = get_config()
 
 INSTANCE_ID_PATTERN = r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$"
 PROBLEM_STATEMENT_README = "README.md"
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "RepoGroundedEntry", "TestGenEntry"]
 
 
 class EntryMetadata(BaseModel):
@@ -174,54 +174,3 @@ class TestGenEntry(_BugFixTestGenBase):
     @override
     def get_expected_output(self) -> str:
         return self.test_patch
-
-
-class NL2ALEntry(BaseDatasetEntry):
-    """Dataset entry for NL2AL category — generate AL code from natural language."""
-
-    nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
-    expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
-    page: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./]*$")]
-    audience: Literal["Business", "Technical", "Both"]
-
-    @property
-    @override
-    def customization_profile(self) -> str:
-        return "nl2al"
-
-    @override
-    def get_task(self) -> str:
-        return self.nl_prompt
-
-    @override
-    def get_expected_output(self) -> Checklist:
-        return {"assertions": self.expected}
-
-
-class DataQueryEntry(BaseDatasetEntry):
-    """Dataset entry for the data-query category — answer a BC data question using the data tools.
-
-    Execution-based: the agent retrieves the actual data (writing the rows to answer.json, plus the
-    query it used to query.al); evaluation compares those rows to the entry's expected rows, computed
-    on demand by running ``gold_query`` against the fixed Contoso container. The workspace is
-    scaffolded by the pipeline, so there is no repo or commit.
-    """
-
-    nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
-    gold_query: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
-    # Whether row order is significant when comparing result sets (e.g. the question asks for a
-    # specific ranking). Defaults to False: result sets are compared order-insensitively.
-    ordered: bool = False
-
-    @property
-    @override
-    def customization_profile(self) -> str:
-        return "dataquery"
-
-    @override
-    def get_task(self) -> str:
-        return self.nl_prompt
-
-    @override
-    def get_expected_output(self) -> str:
-        return self.gold_query

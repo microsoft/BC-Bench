@@ -18,16 +18,16 @@ from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import ValidationError
 from rich.console import Console
 
+from bcbench.categories.bug_fix.result import BugFixResult
 from bcbench.categories.results import load_result, load_summary, summarize_results
+from bcbench.categories.test_generation.result import TestGenerationResult
 from bcbench.config import get_config
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.results.bugfix import BugFixResult
 from bcbench.results.display import create_console_summary, create_github_job_summary
 from bcbench.results.summary import (
     ExecutionBasedEvaluationResultSummary,
     JudgeBasedEvaluationResultSummary,
 )
-from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
 

@@ -6,9 +6,9 @@ from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import BuildError
 
 from bcbench.categories.data_query import operations as dataquery_operations
+from bcbench.categories.data_query.entry import DataQueryEntry
 from bcbench.categories.data_query.operations import wrap_query_as_api
 from bcbench.categories.data_query.pipeline import DataQueryPipeline, _load_answer_rows, result_sets_match
-from bcbench.dataset import DataQueryEntry
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.types import AgentHarness, EvaluationCategory, EvaluationContext
 from tests.conftest import create_data_query_entry

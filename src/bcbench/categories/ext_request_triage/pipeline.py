@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import override
 
-from bcbench.dataset import ExtRequestTriageEntry
+from bcbench.categories.ext_request_triage.entry import ExtRequestTriageEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
 from bcbench.operations import setup_repo_prebuild

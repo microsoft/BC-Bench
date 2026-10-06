@@ -7,8 +7,8 @@ from typing import override
 
 from bcbench_core.filesystem import clear_directory
 
+from bcbench.categories.data_query.entry import DataQueryEntry
 from bcbench.categories.data_query.operations import execute_al_query
-from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.github_actions import github_log_group

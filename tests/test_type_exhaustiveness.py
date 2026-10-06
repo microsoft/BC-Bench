@@ -4,9 +4,14 @@ import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import TypeAdapter
 
-from bcbench.categories import category_definition
-from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
-from bcbench.dataset.codereview import ReviewComment, Severity
+from bcbench.categories.code_review.entry import CodeReviewEntry, ReviewComment, Severity
+from bcbench.categories.data_query.entry import DataQueryEntry
+from bcbench.categories.ext_request_advisor.entry import ExtRequestAdvisorEntry
+from bcbench.categories.ext_request_implement.entry import ExtRequestImplementEntry
+from bcbench.categories.ext_request_triage.entry import ExtRequestTriageEntry
+from bcbench.categories.nl2al.entry import NL2ALEntry
+from bcbench.categories.registry import category_definition
+from bcbench.dataset import BugFixEntry
 from bcbench.types import AgentHarness, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
 
 

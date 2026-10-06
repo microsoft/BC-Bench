@@ -8,6 +8,7 @@ from bcbench_core.exceptions import BuildError, TestExecutionError
 from bcbench_core.git import apply_patch, clean_project_paths, stage_and_get_diff
 from bcbench_core.projects import categorize_projects
 
+from bcbench.categories.test_generation.result import TestGenerationResult
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.dataset import TestGenEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
@@ -16,7 +17,6 @@ from bcbench.github_actions import github_log_group
 from bcbench.operations import copy_problem_statement_folder, extract_tests_from_patch, setup_repo_prebuild
 from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.paths import SHARED_CONFIG_FILE
-from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentConfig, EvaluationContext
 
 logger = logging.getLogger(__name__)

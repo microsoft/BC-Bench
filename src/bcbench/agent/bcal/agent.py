@@ -11,7 +11,7 @@ from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from bcbench.dataset import NL2ALEntry
+from bcbench.categories.nl2al.entry import NL2ALEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.types import ExperimentConfiguration
 

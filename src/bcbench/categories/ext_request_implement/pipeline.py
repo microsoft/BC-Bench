@@ -5,7 +5,7 @@ from typing import override
 from bcbench_core.exceptions import EmptyDiffError
 from bcbench_core.git import stage_and_get_diff
 
-from bcbench.dataset import ExtRequestImplementEntry
+from bcbench.categories.ext_request_implement.entry import ExtRequestImplementEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
 from bcbench.operations import copy_problem_statement_folder, set_runtime_version, setup_repo_prebuild

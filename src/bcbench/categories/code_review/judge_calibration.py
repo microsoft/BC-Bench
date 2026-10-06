@@ -17,9 +17,9 @@ from pathlib import Path
 from bcbench_core.scoring import precision_recall
 from pydantic import BaseModel, ConfigDict
 
+from bcbench.categories.code_review.entry import ReviewComment
 from bcbench.categories.code_review.judge import judge_verdicts
 from bcbench.config import get_config
-from bcbench.dataset.codereview import ReviewComment
 from bcbench.types import JudgeCalibrationReport
 
 _config = get_config()

@@ -9,8 +9,10 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
-from bcbench.categories import category_definition
 from bcbench.categories.code_review.judge_calibration import run_calibration
+from bcbench.categories.code_review.result import CodeReviewResult
+from bcbench.categories.nl2al.entry import NL2ALEntry
+from bcbench.categories.registry import category_definition
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -29,9 +31,9 @@ from bcbench.cli_options import (
     resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
-from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentHarness, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)

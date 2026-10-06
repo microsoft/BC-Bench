@@ -1,8 +1,7 @@
+from bcbench.categories.code_review.entry import CodeReviewEntry
 from bcbench.categories.code_review.pipeline import CodeReviewPipeline
+from bcbench.categories.code_review.result import CodeReviewLeaderboardAggregate, CodeReviewResultSummary
 from bcbench.categories.definition import CategoryDefinition
-from bcbench.dataset import CodeReviewEntry
-from bcbench.results.codereview import CodeReviewResultSummary
-from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
 from bcbench.types import EvaluationCategory
 
 DEFINITION: CategoryDefinition[CodeReviewEntry] = CategoryDefinition(
