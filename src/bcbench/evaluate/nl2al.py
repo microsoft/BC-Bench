@@ -3,13 +3,14 @@ import os
 import subprocess
 from pathlib import Path
 
+from bcbench_core.artifacts import copy_symbol_apps
+from bcbench_core.exceptions import EmptyDiffError
 from bcbench_core.filesystem import remove_tree
-from bcbench_core.git import EmptyDiffError, stage_and_get_diff
+from bcbench_core.git import stage_and_get_diff
 
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
-from bcbench.operations import copy_symbol_apps
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 

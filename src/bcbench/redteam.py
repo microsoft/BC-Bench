@@ -9,10 +9,10 @@ from typing import Any, cast
 
 from azure.ai.evaluation.red_team import AttackStrategy, RedTeam, RiskCategory, SupportedLanguages
 from azure.identity import DefaultAzureCredential
+from bcbench_core.artifacts import copy_symbol_apps
 
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
 from bcbench.dataset.dataset_entry import NL2ALEntry
-from bcbench.operations import copy_symbol_apps
 from bcbench.types import EvaluationCategory
 
 logger = logging.getLogger(__name__)

@@ -1,4 +1,5 @@
-from bcbench.exceptions import _extract_test_errors
+from bcbench_core import exceptions
+from bcbench_core.exceptions import _extract_test_errors
 
 SAMPLE_TEST_OUTPUT = """\
 BcContainerHelper version 6.1.11-preview1992978
@@ -85,9 +86,7 @@ class TestExtractTestErrors:
 
 class TestTestExecutionErrorMessage:
     def test_error_message_is_concise(self):
-        from bcbench.exceptions import TestExecutionError
-
-        error = TestExecutionError("Pass", stderr="", stdout=SAMPLE_TEST_OUTPUT)
+        error = exceptions.TestExecutionError("Pass", stderr="", stdout=SAMPLE_TEST_OUTPUT)
         message = str(error)
 
         # Should include the expectation
@@ -100,3 +99,9 @@ class TestTestExecutionErrorMessage:
         assert "BcContainerHelper version" not in message
         assert "Using Container" not in message
         assert "TaskScheduler" not in message
+
+
+def test_falls_back_to_last_lines_when_every_line_is_noise():
+    output = "::group::Run\nBcContainerHelper version 6\nTests failed for Codeunit 1"
+
+    assert _extract_test_errors(output, max_lines=2) == "BcContainerHelper version 6\nTests failed for Codeunit 1"

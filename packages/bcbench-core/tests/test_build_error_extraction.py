@@ -1,4 +1,4 @@
-from bcbench.exceptions import _extract_compiler_errors
+from bcbench_core.exceptions import _extract_compiler_errors
 
 SAMPLE_BUILD_OUTPUT = """\
   C:\\Source\\App\\Layers\\W1\\BaseApp\\Manufacturing\\Routing\\RoutingVersion.Table.al(111,31): warning AL0432: Codeunit 'NoSeriesManagement' is marked for removal. Reason: Please use the "No. Series" and "No. Series - Batch" codeunits instead. Tag: 24.0.

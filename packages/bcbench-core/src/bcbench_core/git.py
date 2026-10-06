@@ -5,33 +5,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from bcbench_core.exceptions import EmptyDiffError, PatchApplicationError
 from bcbench_core.filesystem import remove_tree
 
 logger = logging.getLogger(__name__)
-
-
-class GitOperationError(Exception):
-    """Base class for git operation failures."""
-
-
-class PatchApplicationError(GitOperationError):
-    """Failed to apply a patch."""
-
-    def __init__(self, patch_name: str, stderr: str = "") -> None:
-        self.patch_name = patch_name
-        self.stderr = stderr
-        message = f"Failed to apply {patch_name}"
-        if stderr:
-            message += f": {stderr}"
-        super().__init__(message)
-
-
-class EmptyDiffError(GitOperationError):
-    """Generated diff is empty."""
-
-    def __init__(self) -> None:
-        message = "Generated diff is empty. Agent did not make any changes."
-        super().__init__(message)
 
 
 def clean_repo(repo_path: Path) -> None:
@@ -110,7 +87,7 @@ def has_changes(repo_path: Path) -> bool:
     return bool(result.stdout.strip())
 
 
-def commit_changes(repo_path: Path, message: str, *, allow_empty: bool = False, no_verify: bool = False) -> None:
+def commit_changes(repo_path: Path, message: str, allow_empty: bool = False, no_verify: bool = False) -> None:
     logger.info(f"Committing changes: {message}")
     subprocess.run(["git", "add", "-A"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
     commit_args = ["git", "-c", "user.name=bcbench", "-c", "user.email=bcbench@noreply", "commit"]

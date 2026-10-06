@@ -45,7 +45,7 @@ jobs:
         run: |
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           Import-Module BcContainerHelper -Force -DisableNameChecking
-          Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
+          Import-Module ./scripts/BenchmarkUtils.psm1 -Force -DisableNameChecking
 
           $latestUrls = Get-BCBenchLatestArtifactUrls
           $urlsJson = ($latestUrls | ConvertTo-Json -Depth 2) + "`n"
