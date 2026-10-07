@@ -15,7 +15,7 @@ import pytest
 from rich.console import Console
 from typer.main import get_command
 
-# Red teaming ships as the optional `redteam` dependency group, so skip when it is not installed.
+# Red teaming ships as the optional `redteam` extra, so skip when it is not installed.
 pytest.importorskip("azure.ai.evaluation.red_team")
 
 from bcbench import redteam
