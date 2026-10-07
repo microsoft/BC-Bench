@@ -2,7 +2,6 @@ import logging
 from pathlib import Path
 from typing import override
 
-import yaml
 from bcbench_core.bc import build_and_publish_projects, run_test_suite
 from bcbench_core.dataset import TestEntry
 from bcbench_core.exceptions import BuildError, TestExecutionError
@@ -18,7 +17,7 @@ from bcbench.github_actions import github_log_group
 from bcbench.operations import copy_problem_statement_folder, extract_tests_from_patch, setup_repo_prebuild
 from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationContext
+from bcbench.types import AgentConfig, EvaluationContext, TestGenerationInput
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -26,16 +25,8 @@ _config = get_config()
 __all__ = ["TestGenerationPipeline", "_get_test_generation_input_mode"]
 
 
-def _get_test_generation_input_mode() -> str:
-    config_file: Path = _config.paths.agent_share_dir / "config.yaml"
-    shared_config = yaml.safe_load(config_file.read_text())
-    input_mode: str = shared_config.get("prompt", {}).get("test-generation-input", "problem-statement")
-
-    valid_modes: set[str] = {"gold-patch", "problem-statement", "both"}
-    if input_mode not in valid_modes:
-        raise ValueError(f"Invalid test-generation-input mode: '{input_mode}'. Must be one of {valid_modes}. Note: Use hyphens, not underscores (e.g., 'gold-patch' not 'gold_patch')")
-
-    return input_mode
+def _get_test_generation_input_mode() -> TestGenerationInput:
+    return AgentConfig.from_file(_config.paths.agent_share_dir / "config.yaml").prompt.test_generation_input
 
 
 class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):

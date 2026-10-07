@@ -2,8 +2,11 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from bcbench.evaluate.testgeneration import _get_test_generation_input_mode
+
+_INVALID_MODE = "Input should be 'problem-statement', 'gold-patch' or 'both'"
 
 
 def test_get_test_generation_input_mode_valid_gold_patch():
@@ -45,17 +48,16 @@ def test_get_test_generation_input_mode_defaults_to_problem_statement():
 def test_get_test_generation_input_mode_invalid_with_underscore():
     config_content = yaml.dump({"prompt": {"test-generation-input": "gold_patch"}})
 
-    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError, match="Invalid test-generation-input mode: 'gold_patch'") as exc_info:
+    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValidationError, match=_INVALID_MODE) as exc_info:
         _get_test_generation_input_mode()
 
     assert "gold-patch" in str(exc_info.value)
-    assert "Use hyphens, not underscores" in str(exc_info.value)
 
 
 def test_get_test_generation_input_mode_invalid_random_value():
     config_content = yaml.dump({"prompt": {"test-generation-input": "invalid-mode"}})
 
-    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError, match="Invalid test-generation-input mode: 'invalid-mode'") as exc_info:
+    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValidationError, match=_INVALID_MODE) as exc_info:
         _get_test_generation_input_mode()
 
     assert "gold-patch" in str(exc_info.value)
@@ -66,5 +68,5 @@ def test_get_test_generation_input_mode_invalid_random_value():
 def test_get_test_generation_input_mode_empty_string():
     config_content = yaml.dump({"prompt": {"test-generation-input": ""}})
 
-    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError, match="Invalid test-generation-input mode: ''"):
+    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValidationError, match=_INVALID_MODE):
         _get_test_generation_input_mode()

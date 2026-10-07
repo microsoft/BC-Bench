@@ -7,8 +7,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
+import yaml
 from bcbench_core.container import ContainerConfig
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AliasPath, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
+    "AgentConfig",
     "AgentHarness",
     "AgentMetrics",
     "AgentMetricsContract",
@@ -30,10 +32,14 @@ __all__ = [
     "EvaluationContext",
     "ExpectedOutput",
     "ExperimentConfiguration",
+    "HttpMcpServer",
     "JudgeCalibrationReport",
+    "McpServerConfig",
     "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
+    "StdioMcpServer",
+    "TestGenerationInput",
 ]
 
 
@@ -550,6 +556,69 @@ class EvaluationCategory(StrEnum):
                 return "windows-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")
+
+
+type TestGenerationInput = Literal["problem-statement", "gold-patch", "both"]
+
+
+class PromptConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    include_project_paths: bool = False
+    test_generation_input: TestGenerationInput = Field(default="problem-statement", alias="test-generation-input")
+    templates: dict[EvaluationCategory, str] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_templates(cls, data: object) -> object:
+        # config.yaml keys each prompt template as `<category>-template`
+        if not isinstance(data, dict):
+            return data
+        settings = {key: value for key, value in data.items() if not key.endswith("-template")}
+        templates = {key.removesuffix("-template"): value for key, value in data.items() if key.endswith("-template")}
+        return {**settings, "templates": templates}
+
+
+class HttpMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["http"]
+    name: str
+    url: str
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+class StdioMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["stdio"]
+    name: str
+    command: str
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+type McpServerConfig = Annotated[HttpMcpServer | StdioMcpServer, Field(discriminator="type")]
+
+
+class AgentConfig(BaseModel):
+    """The agent setup sections of `config.yaml`; other sections (e.g. `judges`) are read by their own consumers."""
+
+    model_config = ConfigDict(frozen=True)
+
+    prompt: PromptConfig = Field(default_factory=PromptConfig)
+    instructions_enabled: bool = Field(default=False, validation_alias=AliasPath("instructions", "enabled"))
+    skills_enabled: bool = Field(default=False, validation_alias=AliasPath("skills", "enabled"))
+    custom_agents_enabled: bool = Field(default=False, validation_alias=AliasPath("agents", "enabled"))
+    custom_agent_name: str | None = Field(default=None, validation_alias=AliasPath("agents", "name"))
+    # Kept raw: only enabled entries are validated into `PluginConfig`, since a disabled
+    # entry may point at a path that only exists on another machine.
+    plugins: tuple[dict[str, object], ...] = ()
+    mcp_servers: tuple[McpServerConfig, ...] = Field(default=(), validation_alias=AliasPath("mcp", "servers"))
+
+    @classmethod
+    def from_file(cls, path: Path) -> AgentConfig:
+        return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 @dataclass(frozen=True)

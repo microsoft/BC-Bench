@@ -17,7 +17,7 @@ import json
 import logging
 import threading
 import time
-from http.client import HTTPConnection
+from http.client import HTTPConnection, HTTPResponse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast, override
 from urllib.parse import urlsplit
@@ -358,7 +358,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             self.wfile.write(b"0\r\n\r\n")
             self.wfile.flush()
 
-        def _relay(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
+        def _relay(self, response: HTTPResponse) -> None:
             self._response_started = True
             self.send_response_only(response.status)
             content_length: str | None = None

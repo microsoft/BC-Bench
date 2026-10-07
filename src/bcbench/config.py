@@ -6,10 +6,10 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast, get_args
 
 import yaml
 from dotenv import load_dotenv
+from pydantic import AliasPath, BaseModel, ConfigDict, Field
 
 from bcbench.cli_options import CopilotModelName
 
@@ -123,31 +123,18 @@ class FilePatternConfig:
         )
 
 
-@dataclass(frozen=True)
-class JudgeConfig:
-    """Configuration for LLM judges."""
+class JudgeConfig(BaseModel):
+    """Configuration for LLM judges, read from the `judges` section of `config.yaml`."""
 
-    code_review_model: CopilotModelName
-    lm_checklist_model: str
-    result_file: str
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
+
+    code_review_model: CopilotModelName = Field(validation_alias=AliasPath("judges", "code-review", "model"))
+    lm_checklist_model: str = Field(min_length=1, validation_alias=AliasPath("judges", "lm-checklist", "model"))
+    result_file: str = "judge_results.json"
 
     @classmethod
     def from_file(cls, path: Path) -> JudgeConfig:
-        shared_config = yaml.safe_load(path.read_text(encoding="utf-8"))
-        code_review_model: str = shared_config["judges"]["code-review"]["model"]
-        lm_checklist_model: str = shared_config["judges"]["lm-checklist"]["model"]
-
-        if not all(model.strip() for model in (code_review_model, lm_checklist_model)):
-            raise ValueError("Judge models must be non-empty strings")
-
-        if code_review_model not in get_args(CopilotModelName):
-            raise ValueError(f"Unknown code-review judge model {code_review_model!r} in {path}")
-
-        return cls(
-            code_review_model=cast(CopilotModelName, code_review_model),
-            lm_checklist_model=lm_checklist_model,
-            result_file="judge_results.json",
-        )
+        return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 @dataclass(frozen=True)

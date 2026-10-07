@@ -1,5 +1,4 @@
 import json
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -9,12 +8,12 @@ from bcbench_core.container import ContainerConfig
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths as _build_assembly_probing_paths
 from bcbench.agent.shared.mcp import build_mcp_config
 from bcbench.exceptions import AgentError
-from bcbench.types import AgentRuntimeConfig
+from bcbench.types import AgentConfig, AgentRuntimeConfig
 from tests.conftest import create_dataset_entry
 
 
-def _make_config(*servers: dict[str, Any]) -> dict[str, Any]:
-    return {"mcp": {"servers": [deepcopy(s) for s in servers]}}
+def _make_config(*servers: dict[str, Any]) -> AgentConfig:
+    return AgentConfig.model_validate({"mcp": {"servers": servers}})
 
 
 ALTOOL_SERVER = {
