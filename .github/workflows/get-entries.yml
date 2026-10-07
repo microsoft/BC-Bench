@@ -24,6 +24,9 @@ on:
       entries:
         description: JSON array of dataset entries
         value: ${{ jobs.get-entries.outputs.entries }}
+      entry-count:
+        description: Number of dataset entries
+        value: ${{ jobs.get-entries.outputs.entry-count }}
       runner:
         description: GitHub Actions runner label to evaluate this category on
         value: ${{ jobs.get-entries.outputs.runner }}
@@ -39,6 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       entries: ${{ steps.get-entries.outputs.entries }}
+      entry-count: ${{ steps.get-entries.outputs.entry-count }}
       runner: ${{ steps.runtime-config.outputs.runner }}
       requires-container: ${{ steps.runtime-config.outputs.requires-container }}
       requires-repo: ${{ steps.runtime-config.outputs.requires-repo }}
@@ -58,7 +62,7 @@ jobs:
       - name: Get entries for matrix
         id: get-entries
         run: |
-          cmd="uv run bcbench dataset list --category ${{ inputs.category }} --github-output entries"
+          cmd="uv run bcbench dataset list --category ${{ inputs.category }} --github-output entries --count-output entry-count"
 
           if [[ "${{ inputs.modified-only }}" == "true" ]]; then
             cmd="$cmd --modified-only"
