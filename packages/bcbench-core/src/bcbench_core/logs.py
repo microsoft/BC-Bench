@@ -57,7 +57,7 @@ class SensitiveDataFilter(logging.Filter):
             record.msg = redacted_msg
 
         # Also redact from args if present
-        if record.args:
+        if bool(record.args):
             if isinstance(record.args, dict):
                 record.args = {key: self._redact_value(value) for key, value in record.args.items()}
             elif isinstance(record.args, tuple):
