@@ -4,13 +4,42 @@ from unittest.mock import PropertyMock, patch
 import pytest
 
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import BugFixEntry, NL2ALEntry, _BugFixTestGenBase
+from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bceval_export import write_bceval_results
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
-from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
+from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result, create_nl2al_entry
 
 
 class TestWriteBcevalResults:
+    def test_exports_timeout_metadata(self, tmp_path):
+        entry = create_nl2al_entry()
+        judge_model = EvaluationCategory.NL2AL.judge_model
+        assert judge_model is not None
+        result = JudgeBasedEvaluationResult(
+            instance_id=entry.instance_id,
+            project="BaseApp",
+            model="gpt-55-chat-2026-04-29",
+            agent_name=AgentHarness.BCAL,
+            category=EvaluationCategory.NL2AL,
+            timeout=True,
+            error_message="Agent timed out",
+            judge_model=judge_model,
+        )
+
+        with patch.object(NL2ALEntry, "load", return_value=[entry]):
+            write_bceval_results(
+                results=[result],
+                out_dir=tmp_path,
+                run_id="run",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.NL2AL,
+            )
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        assert metadata["timeout"] is True
+        assert metadata["error_message"] == "Agent timed out"
+
     @pytest.mark.parametrize(
         "metrics",
         [

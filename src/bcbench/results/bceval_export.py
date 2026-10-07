@@ -72,6 +72,7 @@ def write_bceval_results(
                 "run_id": run_id,
                 "project": result.project,
                 "error_message": result.error_message,
+                "timeout": result.timeout,
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
                 **_experiment_metadata(result.experiment, git_ref, benchmark_version),
                 **(completeness.to_metadata() if completeness else {}),

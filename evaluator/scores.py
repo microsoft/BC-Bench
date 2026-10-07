@@ -7,6 +7,7 @@ from typing import Any
 
 _LUNA_JUDGE_MODEL = "gpt-56-reasoning-nano-luna"
 _LUNA_RESPONSE_FORMAT = {"type": "json_object"}
+_TIMEOUT_REASON = "Agent timed out before producing output"
 
 
 def _responses_compatible_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -127,12 +128,43 @@ def _luna_responses_client(client: object) -> object:
     return adapted_client
 
 
+def _timeout_scores(scorer: object, expected: object, metadata: dict[str, Any]) -> list[object]:
+    if not isinstance(expected, dict):
+        raise TypeError("expected must be a dict containing an 'assertions' key")
+    assertions = expected.get("assertions")
+    if not isinstance(assertions, list):
+        raise TypeError("expected['assertions'] must be a list")
+
+    judged = []
+    for index, assertion in enumerate(assertions):
+        if not isinstance(assertion, dict):
+            raise TypeError(f"expected['assertions'][{index}] must be a dict")
+        if "text" not in assertion:
+            raise ValueError(f"expected['assertions'][{index}] must contain a 'text' key")
+        judged.append({**assertion, "pass": False, "reasoning": _TIMEOUT_REASON})
+
+    score_metadata = {"assertions": judged, "error": _TIMEOUT_REASON}
+    metadata["assertionResults"] = judged
+    score = importlib.import_module("autoevals").Score
+    rate = getattr(scorer, "_rate", None)
+    if not callable(rate):
+        raise TypeError("LM Checklist scorer does not provide a callable '_rate'")
+    return [
+        score(name="pass_rate", score=rate(judged), metadata=score_metadata),
+        score(name="critical_pass_rate", score=rate(judged, "critical"), metadata=score_metadata),
+        score(name="expected_pass_rate", score=rate(judged, "expected"), metadata=score_metadata),
+        score(name="aspirational_pass_rate", score=rate(judged, "aspirational"), metadata=score_metadata),
+        score(name="test_passed", score=0.0, metadata=score_metadata),
+    ]
+
+
 class LmChecklist:
     def __new__(cls) -> object:
         # bc-eval loads a custom class with this name before its built-in scorer.
         module = importlib.import_module("bc_eval.scorers.autoeval.lmchecklist")
         scorer = module.LmChecklist()
         request_args = scorer._request_args
+        run_eval_sync = scorer._run_eval_sync
 
         def responses_compatible_request_args(output: object, expected: object = None, **kwargs: object) -> dict[str, Any]:
             request = request_args(output, expected, **kwargs)
@@ -145,7 +177,14 @@ class LmChecklist:
                 request["client"] = _luna_responses_client(request.get("client"))
             return request
 
+        def timeout_aware_run_eval_sync(output: object, expected: object = None, **kwargs: object) -> object:
+            metadata = kwargs.get("metadata")
+            if isinstance(metadata, dict) and metadata.get("timeout") is True:
+                return _timeout_scores(scorer, expected, metadata)
+            return run_eval_sync(output, expected, **kwargs)
+
         scorer._request_args = responses_compatible_request_args
+        scorer._run_eval_sync = timeout_aware_run_eval_sync
         return scorer
 
 
