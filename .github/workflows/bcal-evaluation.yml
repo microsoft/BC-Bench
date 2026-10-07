@@ -46,6 +46,7 @@ concurrency:
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
+  BCCONTAINERHELPER_VERSION: 6.1.18
 
 jobs:
   get-entries:
@@ -54,9 +55,44 @@ jobs:
       test-run: ${{ inputs.test-run || false }}
       category: nl2al
 
-  evaluate-with-bcal:
+  prepare-bccontainerhelper:
     runs-on: windows-latest
     needs: get-entries
+    if: needs.get-entries.outputs.entries != '[]'
+    steps:
+      - name: Cache pinned BcContainerHelper
+        id: cache-bccontainerhelper
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~\Documents\PowerShell\Modules\BcContainerHelper
+          key: bcal-bccontainerhelper-${{ runner.os }}-${{ env.BCCONTAINERHELPER_VERSION }}
+
+      - name: Download pinned BcContainerHelper
+        if: steps.cache-bccontainerhelper.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $moduleRoot = Join-Path $HOME 'Documents\PowerShell\Modules'
+          New-Item -ItemType Directory -Path $moduleRoot -Force | Out-Null
+          Save-Module `
+            -Name BcContainerHelper `
+            -RequiredVersion $env:BCCONTAINERHELPER_VERSION `
+            -Repository PSGallery `
+            -Path $moduleRoot `
+            -Force `
+            -ErrorAction Stop
+
+      - name: Verify pinned BcContainerHelper
+        shell: pwsh
+        run: |
+          Import-Module BcContainerHelper -RequiredVersion $env:BCCONTAINERHELPER_VERSION -Force -DisableNameChecking
+          if ((Get-Module BcContainerHelper).Version -ne [Version]$env:BCCONTAINERHELPER_VERSION) {
+            throw "Expected BcContainerHelper $env:BCCONTAINERHELPER_VERSION."
+          }
+
+  evaluate-with-bcal:
+    runs-on: windows-latest
+    needs: [get-entries, prepare-bccontainerhelper]
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.get-entries.outputs.entries != '[]'
@@ -152,6 +188,13 @@ jobs:
         id: bcversion
         run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --github-output version
 
+      - name: Restore pinned BcContainerHelper
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~\Documents\PowerShell\Modules\BcContainerHelper
+          key: bcal-bccontainerhelper-${{ runner.os }}-${{ env.BCCONTAINERHELPER_VERSION }}
+          fail-on-cache-miss: true
+
       # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
         id: bccache
@@ -164,7 +207,6 @@ jobs:
         if: steps.bccache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
-          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
       - name: Azure Login (OIDC) for CAPI Key Vault
@@ -207,6 +249,7 @@ jobs:
           CAPI_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
           CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
           CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+          PYTHONPATH: ${{ github.workspace }}\src
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend || 'external-command' }}" -eq "external-command") {
@@ -223,21 +266,24 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
+          name: evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: evaluate-with-bcal
+    needs: [get-entries, evaluate-with-bcal]
+    if: ${{ always() && !cancelled() && needs.get-entries.result == 'success' && needs.get-entries.outputs.entry-count != '0' }}
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write
     with:
-      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
+      results-dir: evaluation_results
       model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-55-chat-2026-04-29') || (inputs.model || 'gpt-5.2') }}
       agent: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && 'BCal-external-command' || 'BCal' }}
       mock: ${{ inputs.test-run || false }}
       category: nl2al
       skip-leaderboard: true
+      expected-total: ${{ fromJSON(needs.get-entries.outputs.entry-count) }}
+      artifact-pattern: evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*
     secrets: inherit

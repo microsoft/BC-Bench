@@ -203,3 +203,40 @@ def test_agent_workflows_select_al_tool_dotnet_version_for_bc_version() -> None:
     for workflow_name in ("claude-evaluation.yml", "copilot-evaluation.yml"):
         workflow = _workflow(workflow_name)
         assert '--framework "net${{ steps.setup-env.outputs.al_tool_dotnet_version }}"' in workflow
+
+
+def test_bcal_summary_runs_after_matrix_failures_and_enforces_completeness() -> None:
+    workflow = yaml.safe_load(_workflow("bcal-evaluation.yml"))
+    summarize = workflow["jobs"]["summarize-results"]
+
+    assert summarize["needs"] == ["get-entries", "evaluate-with-bcal"]
+    assert "always()" in summarize["if"]
+    assert summarize["with"]["expected-total"] == "${{ fromJSON(needs.get-entries.outputs.entry-count) }}"
+    assert summarize["with"]["results-dir"] == "evaluation_results"
+    assert summarize["with"]["artifact-pattern"] == "evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*"
+
+
+def test_bcal_downloads_one_pinned_cached_bccontainerhelper() -> None:
+    workflow_text = _workflow("bcal-evaluation.yml")
+    workflow = yaml.safe_load(workflow_text)
+    prepare_steps = workflow["jobs"]["prepare-bccontainerhelper"]["steps"]
+    download_step = next(step for step in prepare_steps if step["name"] == "Download pinned BcContainerHelper")
+    download_script = download_step["run"]
+
+    assert "BCCONTAINERHELPER_VERSION: 6.1.18" in workflow_text
+    assert download_script.count("Save-Module") == 1
+    assert "RequiredVersion $env:BCCONTAINERHELPER_VERSION" in download_script
+    assert "fail-on-cache-miss: true" in workflow_text
+    assert "Install-Module -Name BcContainerHelper" not in workflow_text
+
+
+def test_summarize_workflow_preserves_partial_diagnostics_and_blocks_upload() -> None:
+    workflow = _workflow("summarize-results.yml")
+
+    assert "continue-on-error: ${{ inputs.expected-total >= 0 }}" in workflow
+    assert "evaluation_completeness.json" in workflow
+    assert "bceval_results.jsonl" in workflow
+    assert "steps.summarize.outputs.complete == 'true'" in workflow
+    assert "bcbench.bceval_runner" not in workflow
+    assert "if: always()" in workflow
+    assert "bcbench result require-complete" in workflow
