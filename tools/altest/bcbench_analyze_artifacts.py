@@ -86,9 +86,7 @@ _WINPATH_RE = re.compile(r"[A-Z]:\\[^\n]+")
 
 def _normalize_error_message(msg: str) -> str:
     """Normalize error messages so similar failures group together."""
-    if msg is None:
-        return ""
-    msg = str(msg).replace("\r\n", "\n")
+    msg = msg.replace("\r\n", "\n")
     msg = _ANSI_RE.sub("", msg)
     msg = _TIME_RE.sub("[HH:MM:SS]", msg)
     msg = _WINPATH_RE.sub("<path>", msg)
