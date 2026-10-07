@@ -1,5 +1,6 @@
-from collections.abc import Sequence
-from typing import NamedTuple, Self
+import logging
+from collections.abc import Hashable, Sequence
+from typing import Literal, NamedTuple, Self
 
 import numpy as np
 from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
@@ -12,8 +13,30 @@ from scipy.optimize import linear_sum_assignment
 from bcbench.dataset import ReviewComment
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
-from bcbench.types import EvaluationContext
+from bcbench.types import EvaluationContext, PRReviewMetrics
 
+logger = logging.getLogger(__name__)
+_PR_REVIEW_METRICS = (
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "ai_credits",
+    "cached_tokens",
+    "cache_creation_tokens",
+    "reasoning_tokens",
+    "api_calls",
+    "failed_api_calls",
+    "usage_api_calls",
+    "premium_requests",
+    "malformed_records",
+    "knowledge_files",
+    "knowledge_pruned",
+    "knowledge_used",
+    "knowledge_suppressed",
+    "sub_skills_executed",
+    "sub_skills_skipped",
+    "usage_complete",
+)
 _METRIC_EXPLANATIONS = """\
 <details>
 <summary>📖 How to read these metrics</summary>
@@ -272,6 +295,18 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
 
     average_prompt_tokens: float | None = None
     average_completion_tokens: float | None = None
+    copilot_cli_version: str | None = None
+    bcquality_repository: str | None = None
+    bcquality_commit: str | None = None
+    bcquality_version: str | None = None
+    models: list[str] | None = None
+    leaf_model: str | None = None
+    leaf_execution: Literal["serial", "parallel"] | None = None
+    max_leaf_concurrency: int | None = Field(default=None, ge=1)
+    bcquality_source_snapshot: str | None = None
+    review_process_count: int | None = Field(default=None, ge=1)
+    metric_counts: dict[str, int] = Field(default_factory=dict)
+    metric_sums: dict[str, float] = Field(default_factory=dict)
 
     generated_comment_count: int = Field(default=0, ge=0)
     expected_comment_count: int = Field(default=0, ge=0)
@@ -296,10 +331,42 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
     average_total_tokens: float | None = None
+    average_cached_tokens: float | None = None
+    average_cache_creation_tokens: float | None = None
+    average_reasoning_tokens: float | None = None
+    average_api_calls: float | None = None
+    average_failed_api_calls: float | None = None
+    average_usage_api_calls: float | None = None
+    average_premium_requests: float | None = None
+    average_malformed_records: float | None = None
+    average_knowledge_files: float | None = None
+    average_knowledge_pruned: float | None = None
+    average_knowledge_used: float | None = None
+    average_knowledge_suppressed: float | None = None
+    average_sub_skills_executed: float | None = None
+    average_sub_skills_skipped: float | None = None
+    token_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    credit_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    usage_complete_rate: float | None = Field(default=None, ge=0.0, le=1.0)
 
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
+
+    def combination_key(self) -> tuple[Hashable, ...]:
+        return (
+            *super().combination_key(),
+            self.copilot_cli_version,
+            self.bcquality_repository,
+            self.bcquality_commit,
+            self.bcquality_version,
+            tuple(self.models) if self.models is not None else None,
+            self.leaf_model,
+            self.leaf_execution,
+            self.max_leaf_concurrency,
+            self.bcquality_source_snapshot,
+            self.review_process_count,
+        )
 
     def _performance_markdown(self) -> str:
         def metric(value: float | None, digits: int = 1) -> str:
@@ -470,6 +537,21 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             available = [value for value in values if value is not None]
             return sum(available) / len(available) if available else None
 
+        def metric_values(name: str) -> list[int | float | None]:
+            return [getattr(result.metrics, name, None) if result.metrics else None for result in code_review_results]
+
+        def consistent_runtime_value(name: str) -> str | int | list[str] | None:
+            values = [value for result in code_review_results if isinstance(result.metrics, PRReviewMetrics) and (value := getattr(result.metrics, name)) is not None]
+            unique_values = {tuple(value) if isinstance(value, list) else value for value in values}
+            if len(unique_values) > 1:
+                logger.warning(f"Omitting inconsistent {name} from code-review summary")
+                return None
+            value = next(iter(unique_values), None)
+            return list(value) if isinstance(value, tuple) else value
+
+        metric_counts = {name: sum(value is not None for value in metric_values(name)) for name in _PR_REVIEW_METRICS}
+        metric_sums = {name: float(sum(value for value in metric_values(name) if value is not None)) for name in _PR_REVIEW_METRICS}
+
         return summary.model_copy(
             update={
                 "generated_comment_count": generated_total,
@@ -491,9 +573,38 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
                 "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
-                "average_prompt_tokens": average_metric([result.metrics.prompt_tokens if result.metrics else None for result in code_review_results]),
-                "average_completion_tokens": average_metric([result.metrics.completion_tokens if result.metrics else None for result in code_review_results]),
-                "average_total_tokens": average_metric([result.metrics.total_tokens if result.metrics else None for result in code_review_results]),
-                "average_ai_credits": average_metric([result.metrics.ai_credits if result.metrics else None for result in code_review_results]),
+                "average_prompt_tokens": average_metric(metric_values("prompt_tokens")),
+                "average_completion_tokens": average_metric(metric_values("completion_tokens")),
+                "average_total_tokens": average_metric(metric_values("total_tokens")),
+                "average_ai_credits": average_metric(metric_values("ai_credits")),
+                "average_cached_tokens": average_metric(metric_values("cached_tokens")),
+                "average_cache_creation_tokens": average_metric(metric_values("cache_creation_tokens")),
+                "average_reasoning_tokens": average_metric(metric_values("reasoning_tokens")),
+                "average_api_calls": average_metric(metric_values("api_calls")),
+                "average_failed_api_calls": average_metric(metric_values("failed_api_calls")),
+                "average_usage_api_calls": average_metric(metric_values("usage_api_calls")),
+                "average_premium_requests": average_metric(metric_values("premium_requests")),
+                "average_malformed_records": average_metric(metric_values("malformed_records")),
+                "average_knowledge_files": average_metric(metric_values("knowledge_files")),
+                "average_knowledge_pruned": average_metric(metric_values("knowledge_pruned")),
+                "average_knowledge_used": average_metric(metric_values("knowledge_used")),
+                "average_knowledge_suppressed": average_metric(metric_values("knowledge_suppressed")),
+                "average_sub_skills_executed": average_metric(metric_values("sub_skills_executed")),
+                "average_sub_skills_skipped": average_metric(metric_values("sub_skills_skipped")),
+                "token_coverage_rate": metric_counts["total_tokens"] / total_results,
+                "credit_coverage_rate": metric_counts["ai_credits"] / total_results,
+                "usage_complete_rate": metric_sums["usage_complete"] / metric_counts["usage_complete"] if metric_counts["usage_complete"] else None,
+                "copilot_cli_version": consistent_runtime_value("copilot_cli_version"),
+                "bcquality_repository": consistent_runtime_value("bcquality_repository"),
+                "bcquality_commit": consistent_runtime_value("bcquality_commit"),
+                "bcquality_version": consistent_runtime_value("bcquality_version"),
+                "models": consistent_runtime_value("models"),
+                "leaf_model": consistent_runtime_value("leaf_model"),
+                "leaf_execution": consistent_runtime_value("leaf_execution"),
+                "max_leaf_concurrency": consistent_runtime_value("max_leaf_concurrency"),
+                "bcquality_source_snapshot": consistent_runtime_value("bcquality_source_snapshot"),
+                "review_process_count": consistent_runtime_value("review_process_count"),
+                "metric_counts": metric_counts,
+                "metric_sums": metric_sums,
             }
         )
