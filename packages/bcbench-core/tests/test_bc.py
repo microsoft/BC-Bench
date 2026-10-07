@@ -61,13 +61,14 @@ class TestPowerShellScriptGeneration:
         assert "P@ss''word" in script
         assert "App''s" in script
 
-    def test_build_test_script_without_functions(self):
+    @pytest.mark.parametrize("function_names", [None, []])
+    def test_build_test_script_without_functions(self, function_names):
         script = bc.build_ps_test_script(
             container_name="bcserver",
             username="admin",
             password="Test123",
             codeunit_id=50100,
-            function_names=None,
+            function_names=function_names,
         )
 
         assert "Import-Module BcContainerHelper" in script

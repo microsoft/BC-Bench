@@ -61,6 +61,16 @@ class TestSensitiveDataFilter:
         assert "hunter2" not in record.getMessage()
         assert record.getMessage().endswith(" 7")
 
+    @pytest.mark.parametrize("args", [None, (), {}])
+    def test_filter_preserves_empty_args(self, filter_instance, args):
+        record = logging.LogRecord("test", logging.INFO, "test.py", 1, "Test message", (), None)
+        record.args = args
+
+        filter_instance.filter(record)
+
+        assert record.args is args
+        assert record.getMessage() == "Test message"
+
 
 class TestGitHubActionsHandler:
     @pytest.fixture
