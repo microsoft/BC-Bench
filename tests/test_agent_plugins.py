@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -22,15 +23,15 @@ def _make_plugin(root: Path, name: str = "probe-plugin") -> Path:
     return root
 
 
-def _local_entry(path: Path, **overrides) -> dict:
+def _local_entry(path: Path, **overrides) -> dict[str, Any]:
     return {"name": "probe", "source": "local", "enabled": True, "path": str(path), **overrides}
 
 
-def _github_entry(**overrides) -> dict:
+def _github_entry(**overrides) -> dict[str, Any]:
     return {"name": "superpowers", "source": "github", "enabled": True, "repo": "obra/superpowers", "revision": "a" * 40, "path": ".", **overrides}
 
 
-def _shipped_plugins() -> list[dict]:
+def _shipped_plugins() -> list[dict[str, Any]]:
     config = yaml.safe_load((get_config().paths.agent_share_dir / "config.yaml").read_text(encoding="utf-8"))
     return config["plugins"]
 

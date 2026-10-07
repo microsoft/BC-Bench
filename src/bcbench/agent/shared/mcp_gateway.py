@@ -19,7 +19,7 @@ import threading
 import time
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import cast, override
+from typing import Any, cast, override
 from urllib.parse import urlsplit
 
 from bcbench_core.container import ContainerConfig
@@ -76,7 +76,7 @@ def _jsonrpc_method_and_id(body: bytes | None) -> tuple[str | None, object]:
     return obj.get("method"), obj.get("id")
 
 
-def _read_jsonrpc(response, deadline: float) -> dict:  # noqa: ANN001 - http.client.HTTPResponse
+def _read_jsonrpc(response, deadline: float) -> dict[str, Any]:  # noqa: ANN001 - http.client.HTTPResponse
     """Parse a JSON-RPC result from an MCP response body (application/json or SSE).
 
     For SSE, read line by line and return as soon as a JSON-RPC result/error arrives: the BC MCP
@@ -166,7 +166,9 @@ class BcMcpGateway:
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
 
-    def _rpc(self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict]:
+    def _rpc(
+        self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict[str, Any] | None, request_id: int | None = None, session_id: str | None = None
+    ) -> tuple[str | None, dict[str, Any]]:
         connection = HTTPConnection(host, port, timeout=_PROBE_TIMEOUT_SECONDS)
         try:
             payload: dict[str, object] = {"jsonrpc": "2.0", "method": method}

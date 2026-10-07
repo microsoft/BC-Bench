@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -408,7 +408,7 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
-    def pipeline(self) -> EvaluationPipeline:
+    def pipeline(self) -> EvaluationPipeline[Any]:
         from bcbench.evaluate import (
             BugFixPipeline,
             CodeReviewPipeline,

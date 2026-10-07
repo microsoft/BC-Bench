@@ -9,7 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
-from bcbench.dataset import ReviewComment
+from bcbench.dataset import BaseDatasetEntry, ReviewComment
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext
@@ -180,9 +180,9 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
     severity_mae: float = 0.0
 
     @classmethod
-    def create(
+    def create[E: BaseDatasetEntry](
         cls,
-        context: "EvaluationContext",
+        context: EvaluationContext[E],
         output: str,
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
@@ -218,9 +218,9 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
         )
 
     @classmethod
-    def create_invalid(
+    def create_invalid[E: BaseDatasetEntry](
         cls,
-        context: "EvaluationContext",
+        context: EvaluationContext[E],
         output: str,
         expected_comments: list[ReviewComment],
     ) -> Self:

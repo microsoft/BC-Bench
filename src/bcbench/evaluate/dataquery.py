@@ -1,6 +1,6 @@
 import json
 import logging
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import override
@@ -8,7 +8,7 @@ from typing import override
 from bcbench_core.filesystem import clear_directory
 
 from bcbench.dataset import DataQueryEntry
-from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.github_actions import github_log_group
 from bcbench.results.base import ExecutionBasedEvaluationResult
@@ -105,7 +105,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def run_agent(self, context: EvaluationContext[DataQueryEntry], agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[DataQueryEntry], agent_runner: AgentRunner[DataQueryEntry]) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 

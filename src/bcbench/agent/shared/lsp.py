@@ -54,7 +54,7 @@ def _build_lsp_args(project_paths: list[str], package_cache_paths: list[str], as
     return args
 
 
-def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict:
+def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict[str, object]:
     """Build the agent-specific `.lsp.json` content.
 
     Both agents launch the same `al launchlspserver` process — only the surrounding LSP-routing schema differs:
