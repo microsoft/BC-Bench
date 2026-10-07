@@ -11,7 +11,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "7c7c12c2188dd7bee063f925b9d055d05075beff"
+DEFAULT_ENGINE_SHA = "0b01ed8c90f3b07cbc693aa8869f84a16ded338d"
 PWSH = shutil.which("pwsh")
 
 
@@ -336,6 +336,7 @@ def test_focused_http_experiment_has_exact_matrix_and_no_publish_route() -> None
     scope_doc = (WORKFLOWS.parents[1] / "docs" / "code-review.md").read_text(encoding="utf-8")
     assert "HTTP clean scope v4" in scope_doc
     assert dataset_sha in scope_doc
+    assert DEFAULT_ENGINE_SHA in scope_doc
     assert json.dumps(entries, separators=(",", ":")) in scope_doc
     assert "synthetic__privacy-010" not in matrix
     assert "synthetic__privacy-010" in dataset
@@ -365,14 +366,14 @@ def test_pr_review_diagnostics_are_allowlisted_without_raw_otel_or_checkout_uplo
     upload = next(step for step in steps if step["name"] == "Upload allowlisted review diagnostics")
     assert upload["if"] == "always()"
     paths = upload["with"]["path"].splitlines()
-    additions = [
-        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.raw.json",
-        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-source-bounds.json",
-    ]
-    assert [path for path in paths if path not in additions] == [
+    assert paths == [
         "${{ env.EVALUATION_RESULTS_DIR }}/**/_run-manifest.json",
         "${{ env.EVALUATION_RESULTS_DIR }}/**/_run-metrics.json",
         "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.raw.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-source-bounds.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-findings-report.leaf.schema.json",
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/_review-findings-report.root.schema.json",
         "${{ env.EVALUATION_RESULTS_DIR }}/**/al-code-review-findings.json",
         "${{ env.EVALUATION_RESULTS_DIR }}/**/agent-output.txt",
         "${{ env.EVALUATION_RESULTS_DIR }}/**/agent-transcript.log",
@@ -383,12 +384,12 @@ def test_pr_review_diagnostics_are_allowlisted_without_raw_otel_or_checkout_uplo
         "${{ steps.setup-env.outputs.repo_path }}/review.json",
         "${{ steps.setup-env.outputs.repo_path }}/judge_results.json",
     ]
-    assert len(paths) == 14
-    assert all(path in paths for path in additions)
+    assert len(paths) == len(set(paths)) == 16
     assert all(not path.endswith(("**", "**/*", "**/*.json", "**/*.log")) for path in paths)
     for filename in ("_run-manifest.json", "_run-metrics.json", "_review-report.json", "al-code-review-findings.json", "judge_results.json", "review.json"):
         assert any(path.endswith("/" + filename) for path in paths)
     assert "_copilot-otel" not in upload["with"]["path"]
+    assert upload["with"]["if-no-files-found"] == "warn"
     assert upload["with"]["retention-days"] == 7
 
 
@@ -400,6 +401,10 @@ def test_pr_review_diagnostics_are_allowlisted_without_raw_otel_or_checkout_uplo
         ("run/leaf-results/03-al-privacy-review/_review-report.raw.json", True),
         ("run/_review-source-bounds.json", True),
         ("run/nested/diagnostics/_review-source-bounds.json", True),
+        ("run/_review-findings-report.leaf.schema.json", True),
+        ("run/_review-findings-report.root.schema.json", True),
+        ("run/leaf-results/03-al-privacy-review/_review-findings-report.leaf.schema.json", True),
+        ("run/nested/diagnostics/_review-findings-report.root.schema.json", True),
         ("run/_copilot-otel/events.jsonl", False),
         ("run/_copilot-otel/metrics.json", False),
         ("run/leaf-results/03-al-privacy-review/_copilot-otel/trace.json", False),
@@ -408,6 +413,11 @@ def test_pr_review_diagnostics_are_allowlisted_without_raw_otel_or_checkout_uplo
         ("run/leaf-results/03-al-privacy-review/other.raw.json", False),
         ("run/_review-source-bounds.json.bak", False),
         ("run/leaf-results/03-al-privacy-review/_review-report.raw.json.bak", False),
+        ("run/_review-findings-report.leaf.schema.json.bak", False),
+        ("run/_review-findings-report.root.schema.json.bak", False),
+        ("run/_review-findings-report.other.schema.json", False),
+        ("run/_review-findings-report.schema.json", False),
+        ("run/leaf-results/03-al-privacy-review/arbitrary.schema.json", False),
     ],
 )
 def test_review_diagnostic_selection_is_filename_scoped(path: str, selected: bool) -> None:
