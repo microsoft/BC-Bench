@@ -31,6 +31,13 @@ def test_http_experiment_preserves_the_original_corpus():
     assert hashlib.sha256(original).hexdigest() == "43bcddc685e3f81cb655fc0efe33f7c47763fe64864ecf62ab69220a231e513c"
 
 
+def test_http_clean_scope_revision_preserves_all_other_entries():
+    lines = EvaluationCategory.CODE_REVIEW.dataset_path.read_bytes().splitlines(keepends=True)
+    unchanged = b"".join(line.replace(b"\r\n", b"\n") for line in lines if json.loads(line)["instance_id"] != _HTTP_CLEAN)
+    assert len(unchanged.splitlines()) == 147
+    assert hashlib.sha256(unchanged).hexdigest() == "9201adef5a997c8ba0b1bb43fdde5cb4654c4880da543fd1aec6b12a9a064436"
+
+
 @pytest.fixture(scope="module")
 def materialized_entries(tmp_path_factory):
     dataset = EvaluationCategory.CODE_REVIEW.dataset_path
@@ -206,12 +213,28 @@ def test_http_bare_calls_check_status_without_consuming_optional_result(material
     entry, files = materialized_entries[_HTTP_CLEAN]
     source = files["src/BCBHttpOptionalReturn.Codeunit.al"]
     assert entry.expected_comments == []
-    assert "        Client.Get(RateUrlTok, Response);\n        if not Response.IsSuccessStatusCode() then\n            Error(RequestErr);" in source
+    assert entry.ignored_comments == []
+    assert hashlib.sha256(source.encode("utf-8")).hexdigest() == "a0f1b6bc70f5c0dddc0ecc5ffca17b339c73887747b76d56e15438c74c93e2ad"
+    assert len(source.splitlines()) == 31
+    assert source.split("    internal procedure CheckRateEndpoint()\n", 1)[1].split("    internal procedure SendHeartbeat()", 1)[0] == (
+        "    var\n"
+        "        Client: HttpClient;\n"
+        "        Response: HttpResponseMessage;\n"
+        "    begin\n"
+        "        Client.Get(RateUrlTok, Response);\n"
+        "        if not Response.IsSuccessStatusCode() then\n"
+        "            Error(RequestErr);\n"
+        "    end;\n\n"
+    )
     assert "        Client.Post(HeartbeatUrlTok, Content, Response);\n        if not Response.IsSuccessStatusCode() then\n            Error(RequestErr);" in source
-    assert "Evaluate(Rate, ResponseBody, 9);" in source
     assert "Content.WriteFrom('{}');" in source
-    assert source.splitlines()[11] == "        Client.Get(RateUrlTok, Response);"
-    assert source.splitlines()[26] == "        Client.Post(HeartbeatUrlTok, Content, Response);"
+    assert "Response.Content" not in source
+    assert "ResponseBody" not in source
+    assert "ReadAs(" not in source
+    assert "Evaluate(" not in source
+    assert "exit(" not in source
+    assert source.splitlines()[9] == "        Client.Get(RateUrlTok, Response);"
+    assert source.splitlines()[21] == "        Client.Post(HeartbeatUrlTok, Content, Response);"
 
 
 def test_http_consumed_false_reports_success_but_does_not_read_invalid_response(materialized_entries):

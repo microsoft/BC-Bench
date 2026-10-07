@@ -188,6 +188,8 @@ jobs:
             ${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.json
             ${{ env.EVALUATION_RESULTS_DIR }}/**/_review-report.raw.json
             ${{ env.EVALUATION_RESULTS_DIR }}/**/_review-source-bounds.json
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/_review-findings-report.leaf.schema.json
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/_review-findings-report.root.schema.json
             ${{ env.EVALUATION_RESULTS_DIR }}/**/al-code-review-findings.json
             ${{ env.EVALUATION_RESULTS_DIR }}/**/agent-output.txt
             ${{ env.EVALUATION_RESULTS_DIR }}/**/agent-transcript.log
