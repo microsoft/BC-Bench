@@ -41,7 +41,7 @@ def test_bceval_config_emits_pinned_lm_checklist_model(tmp_path, monkeypatch):
     result = runner.invoke(app, ["category", "bceval-config", "--category", "nl2al"])
 
     assert result.exit_code == 0
-    assert "judge_model=gpt-41-2025-04-14" in output_file.read_text(encoding="utf-8")
+    assert "judge_model=gpt-56-reasoning-nano-luna" in output_file.read_text(encoding="utf-8")
 
 
 def test_bceval_config_omits_judge_model_for_unjudged_category(tmp_path, monkeypatch):
