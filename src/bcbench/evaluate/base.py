@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
@@ -14,7 +15,12 @@ from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfigurati
 logger = logging.getLogger(__name__)
 _config = get_config()
 
-__all__ = ["AgentRunner", "EvaluationPipeline"]
+__all__ = ["AgentRunner", "EvaluationOutcome", "EvaluationPipeline"]
+
+
+class EvaluationOutcome(StrEnum):
+    COMPLETED = "completed"
+    AGENT_TIMEOUT = "agent_timeout"
 
 
 class AgentRunner[E: BaseDatasetEntry](Protocol):
@@ -79,7 +85,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         self,
         context: EvaluationContext[E],
         agent_runner: AgentRunner[E],
-    ) -> None:
+    ) -> EvaluationOutcome:
         """Template method orchestrating the evaluation flow.
 
         Executes setup, runs agent, evaluates results, and saves outcomes.
@@ -99,12 +105,13 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             result = context.category.result_class.create_agent_timeout_failure(context)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
-            return
+            return EvaluationOutcome.AGENT_TIMEOUT
         finally:
             logger.info(f"Agent metrics: {context.metrics}")
             logger.info(f"Experiment configuration: {context.experiment}")
 
         self.evaluate(context)
+        return EvaluationOutcome.COMPLETED
 
     def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.

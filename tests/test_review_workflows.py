@@ -207,8 +207,11 @@ def test_agent_workflows_select_al_tool_dotnet_version_for_bc_version() -> None:
 
 def test_bcal_summary_runs_after_matrix_failures_and_enforces_completeness() -> None:
     workflow = yaml.safe_load(_workflow("bcal-evaluation.yml"))
+    evaluation_steps = workflow["jobs"]["evaluate-with-bcal"]["steps"]
     summarize = workflow["jobs"]["summarize-results"]
+    upload = next(step for step in evaluation_steps if step["name"] == "Upload evaluation results")
 
+    assert upload["if"] == "always()"
     assert summarize["needs"] == ["get-entries", "evaluate-with-bcal"]
     assert "always()" in summarize["if"]
     assert summarize["with"]["expected-total"] == "${{ fromJSON(needs.get-entries.outputs.entry-count) }}"

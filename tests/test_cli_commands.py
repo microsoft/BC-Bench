@@ -14,6 +14,7 @@ from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtim
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.evaluate.base import EvaluationOutcome
 from bcbench.types import AgentMetrics, BCalLLMBackend, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
@@ -122,6 +123,7 @@ def test_evaluate_bcal_records_backend_model_label(tmp_path):
     class Pipeline:
         def execute(self, context, _agent_runner):
             captured["context"] = context
+            return EvaluationOutcome.COMPLETED
 
     with (
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
@@ -139,6 +141,38 @@ def test_evaluate_bcal_records_backend_model_label(tmp_path):
         )
 
     assert captured["context"].model == "gpt-5.2-prod"
+
+
+def test_evaluate_bcal_exits_nonzero_after_persisted_timeout(tmp_path):
+    entry = create_nl2al_entry()
+
+    class EntryClass:
+        @staticmethod
+        def load(_dataset_path, entry_id: str):
+            assert entry_id == entry.instance_id
+            return [entry]
+
+    class Pipeline:
+        def execute(self, _context, _agent_runner):
+            return EvaluationOutcome.AGENT_TIMEOUT
+
+    with (
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
+        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
+        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        pytest.raises(typer.Exit) as exc_info,
+    ):
+        evaluate_commands.evaluate_bcal(
+            entry_id=entry.instance_id,
+            repo_path=tmp_path / "repo",
+            output_dir=tmp_path / "results",
+            run_id="bcal-run",
+            backend=BCalLLMBackend.AZURE_OPENAI,
+            endpoint="https://aoai.example/",
+            deployment="gpt-5.2-prod",
+        )
+
+    assert exc_info.value.exit_code == 1
 
 
 @pytest.fixture

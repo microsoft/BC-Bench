@@ -27,6 +27,7 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
+from bcbench.evaluate.base import EvaluationOutcome
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -270,7 +271,7 @@ def evaluate_bcal(
         category=category,
     )
 
-    category.pipeline.execute(
+    outcome = category.pipeline.execute(
         context,
         lambda ctx: run_bcal_agent(
             entry=cast(NL2ALEntry, ctx.entry),
@@ -278,6 +279,8 @@ def evaluate_bcal(
             backend_config=backend_config,
         ),
     )
+    if outcome is EvaluationOutcome.AGENT_TIMEOUT:
+        raise typer.Exit(code=1)
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")

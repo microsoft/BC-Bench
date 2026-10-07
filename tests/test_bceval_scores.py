@@ -38,6 +38,13 @@ class _ModelResponse:
         return self._data
 
 
+class _Score:
+    def __init__(self, *, name, score, metadata):
+        self.name = name
+        self.score = score
+        self.metadata = metadata
+
+
 def _install_lm_checklist_dependencies(monkeypatch, *, model, client):
     class _BuiltInLmChecklist:
         def __init__(self):
@@ -78,6 +85,13 @@ def _install_lm_checklist_dependencies(monkeypatch, *, model, client):
             response = request_client.complete(**request)
             return self._process_response(response, expected["assertions"])
 
+        @staticmethod
+        def _rate(assertions, level=None):
+            selected = [assertion for assertion in assertions if level is None or assertion.get("level") == level]
+            if not selected:
+                return 0.0
+            return sum(1 for assertion in selected if assertion["pass"]) / len(selected)
+
     def prepare_openai(*, client=None, is_async=False):
         assert not is_async
         return client or _RecordingClient()
@@ -85,6 +99,11 @@ def _install_lm_checklist_dependencies(monkeypatch, *, model, client):
     bc_eval_module = types.ModuleType("bc_eval.scorers.autoeval.lmchecklist")
     bc_eval_module.LmChecklist = _BuiltInLmChecklist  # ty: ignore[unresolved-attribute]
     monkeypatch.setitem(sys.modules, bc_eval_module.__name__, bc_eval_module)
+
+    autoevals_package = types.ModuleType("autoevals")
+    autoevals_package.__path__ = []
+    autoevals_package.Score = _Score  # ty: ignore[unresolved-attribute]
+    monkeypatch.setitem(sys.modules, autoevals_package.__name__, autoevals_package)
 
     autoevals_module = types.ModuleType("autoevals.oai")
     autoevals_module.prepare_openai = prepare_openai  # ty: ignore[unresolved-attribute]
@@ -269,3 +288,35 @@ def test_lm_checklist_rejects_luna_response_without_output_text(monkeypatch):
             "answer",
             {"assertions": [{"text": "The answer is correct."}]},
         )
+
+
+def test_lm_checklist_scores_timeout_without_calling_judge(monkeypatch):
+    client = _RecordingClient()
+    built_in = _install_lm_checklist_dependencies(
+        monkeypatch,
+        model="gpt-56-reasoning-nano-luna",
+        client=client,
+    )
+    metadata = {"timeout": True}
+    assertions = [
+        {"text": "Critical behavior.", "level": "critical"},
+        {"text": "Expected behavior.", "level": "expected"},
+    ]
+
+    scorer = cast(built_in, scores.LmChecklist())
+    result = scorer._run_eval_sync(
+        "",
+        {"assertions": assertions},
+        metadata=metadata,
+    )
+
+    assert {score.name: score.score for score in result} == {
+        "pass_rate": 0.0,
+        "critical_pass_rate": 0.0,
+        "expected_pass_rate": 0.0,
+        "aspirational_pass_rate": 0.0,
+        "test_passed": 0.0,
+    }
+    assert client.responses_calls == []
+    assert client.chat_calls == []
+    assert metadata["assertionResults"] == [{**assertion, "pass": False, "reasoning": "Agent timed out before producing output"} for assertion in assertions]
