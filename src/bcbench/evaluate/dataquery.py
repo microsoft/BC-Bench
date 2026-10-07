@@ -3,6 +3,7 @@ import logging
 from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import override
 
 from bcbench_core.filesystem import clear_directory
 
@@ -94,17 +95,21 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
     genuinely querying the environment.
     """
 
+    @override
     def setup_workspace(self, entry: DataQueryEntry, repo_path: Path) -> None:
         # The workspace is shared into the running container, so its contents are cleared in place.
         clear_directory(repo_path)
 
+    @override
     def setup(self, context: EvaluationContext[DataQueryEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
 
+    @override
     def run_agent(self, context: EvaluationContext[DataQueryEntry], agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
+    @override
     def evaluate(self, context: EvaluationContext[DataQueryEntry]) -> None:
         query_file = context.repo_path / GENERATED_QUERY_FILE
         # query.al is only an inspection artifact now; scoring is on the data the agent retrieved.

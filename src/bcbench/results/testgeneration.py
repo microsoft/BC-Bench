@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Self, override
 
 from bcbench.results.base import ExecutionBasedEvaluationResult
 from bcbench.types import EvaluationContext
@@ -11,10 +11,12 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
     post_patch_passed: bool = False
 
     @property
+    @override
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {**super().category_metrics, "pre_patch_failed": self.pre_patch_failed, "post_patch_passed": self.post_patch_passed}
 
     @property
+    @override
     def display_row(self) -> dict[str, str]:
         return {
             "Pre-Patch Failed": "Yes" if self.pre_patch_failed else "No",
@@ -22,6 +24,7 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
         }
 
     @classmethod
+    @override
     def create_success(cls, context: "EvaluationContext", output: str) -> Self:
         return cls(**cls._base_fields(context), output=output, resolved=True, build=True, pre_patch_failed=True, post_patch_passed=True)
 

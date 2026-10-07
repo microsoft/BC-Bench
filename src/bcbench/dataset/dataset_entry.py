@@ -4,7 +4,7 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Self, override
 
 from bcbench_core.dataset import TestEntry
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -118,6 +118,7 @@ class RepoGroundedEntry(BaseDatasetEntry):
     patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
 
     @property
+    @override
     def customization_profile(self) -> str:
         return self.repo.replace("/", "-")
 
@@ -125,6 +126,7 @@ class RepoGroundedEntry(BaseDatasetEntry):
     def problem_statement_dir(self) -> Path:
         return _config.paths.problem_statement_dir / self.instance_id
 
+    @override
     def get_task(self) -> str:
         readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
         return readme_path.read_text(encoding="utf-8")
@@ -158,6 +160,7 @@ class _BugFixTestGenBase(RepoGroundedEntry):
 class BugFixEntry(_BugFixTestGenBase):
     """Dataset entry for the bug-fix category."""
 
+    @override
     def get_expected_output(self) -> str:
         return self.patch
 
@@ -165,6 +168,7 @@ class BugFixEntry(_BugFixTestGenBase):
 class TestGenEntry(_BugFixTestGenBase):
     """Dataset entry for the test-generation category."""
 
+    @override
     def get_expected_output(self) -> str:
         return self.test_patch
 
@@ -178,12 +182,15 @@ class NL2ALEntry(BaseDatasetEntry):
     audience: Literal["Business", "Technical", "Both"]
 
     @property
+    @override
     def customization_profile(self) -> str:
         return "nl2al"
 
+    @override
     def get_task(self) -> str:
         return self.nl_prompt
 
+    @override
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}
 
@@ -204,11 +211,14 @@ class DataQueryEntry(BaseDatasetEntry):
     ordered: bool = False
 
     @property
+    @override
     def customization_profile(self) -> str:
         return "dataquery"
 
+    @override
     def get_task(self) -> str:
         return self.nl_prompt
 
+    @override
     def get_expected_output(self) -> str:
         return self.gold_query

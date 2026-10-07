@@ -1,7 +1,7 @@
 import logging
 import random
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, cast, override
 
 import typer
 from bcbench_core.filesystem import prepare_run_dir
@@ -346,12 +346,15 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
     It randomly generates different scenarios to test result handling and serialization.
     """
 
+    @override
     def setup_workspace(self, entry: BaseDatasetEntry, repo_path: Path) -> None:
         logger.info("Mock pipeline: Skipping workspace setup")
 
+    @override
     def setup(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         logger.info("Mock pipeline: Skipping setup")
 
+    @override
     def run_agent(self, context: EvaluationContext[BaseDatasetEntry], agent_runner: AgentRunner[BaseDatasetEntry]) -> None:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
@@ -382,6 +385,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         logger.info(f"Using agent metrics: {context.metrics}")
         logger.info(f"Using experiment configuration: {context.experiment}")
 
+    @override
     def evaluate(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")

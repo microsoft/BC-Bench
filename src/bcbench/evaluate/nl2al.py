@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
+from typing import override
 
 from bcbench_core.artifacts import copy_symbol_apps
 from bcbench_core.exceptions import EmptyDiffError
@@ -56,20 +57,24 @@ def _git_init_and_commit(repo_path: Path) -> None:
 class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
     """Pipeline for NL2AL evaluation category — generate AL code from natural language."""
 
+    @override
     def setup_workspace(self, entry: NL2ALEntry, repo_path: Path) -> None:
         _reset_repo_path(repo_path)
         copy_symbol_apps(repo_path / entry.project_paths[0], entry.environment_setup_version)
         _git_init_and_commit(repo_path)
 
+    @override
     def setup(self, context: EvaluationContext[NL2ALEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
 
+    @override
     def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: AgentRunner[NL2ALEntry]) -> None:
         # Single attempt — retries are disabled. An empty diff (the agent asked for clarification
         # instead of editing) is scored as a failure in evaluate(), not re-run.
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
+    @override
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
         try:
             generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))

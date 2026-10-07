@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from pydantic import BaseModel, Field
 
@@ -164,10 +164,12 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
     # Per-instance pass/fail for aggregate metrics (pass^k, CI)
     instance_results: dict[str, bool] = Field(default_factory=dict)
 
+    @override
     def render_github_metrics_markdown(self) -> str:
         return f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
 
     @classmethod
+    @override
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "ExecutionBasedEvaluationResultSummary":
         from bcbench.results.base import ExecutionBasedEvaluationResult
 
@@ -196,6 +198,7 @@ class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
     judge_model: str
 
     @classmethod
+    @override
     def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
         from bcbench.results.base import JudgeScoredEvaluationResult
 
@@ -203,10 +206,12 @@ class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
         assert isinstance(first_result, JudgeScoredEvaluationResult)
         return {**super()._base_fields(results, run_id), "judge_model": first_result.judge_model}
 
+    @override
     def combination_key(self) -> tuple[str | None, ...]:
         """Runs judged by different models are aggregated separately."""
         return (*super().combination_key(), self.judge_model)
 
+    @override
     def render_github_metrics_markdown(self) -> str:
         """Judge scoring happens externally, so there are no in-run metrics to surface."""
         return ""
