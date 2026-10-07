@@ -9,12 +9,15 @@ import typer
 
 from bcbench.cli_options import EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
+from bcbench.github_actions import write_step_outputs
 from bcbench.results import (
     BaseEvaluationResult,
+    EvaluationCompleteness,
     EvaluationResultSummary,
     Leaderboard,
     LeaderboardAggregate,
     create_console_summary,
+    create_github_completeness_summary,
     create_github_job_summary,
     write_bceval_results,
 )
@@ -36,6 +39,9 @@ def result_summarize(
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
     git_ref: Annotated[str | None, typer.Option("--git-ref", help="Git ref (branch/tag) the run was dispatched from; recorded in bceval metadata as git_branch")] = None,
+    expected_total: Annotated[int, typer.Option(help="Expected number of unique matrix entries; negative disables completeness tracking")] = -1,
+    completeness_output: Annotated[str, typer.Option(help="Output filename for matrix completeness metadata")] = "evaluation_completeness.json",
+    github_output: Annotated[bool, typer.Option(help="Write produced/expected/complete step outputs to GITHUB_OUTPUT")] = False,
 ) -> None:
     """
     Summarize evaluation results from a completed run.
@@ -43,13 +49,16 @@ def result_summarize(
     Aggregates individual instance results, displays job summaries and generates bceval output format.
     """
     run_dir: Path = result_dir / run_id
+    track_completeness = expected_total >= 0
 
     if not run_dir.exists():
-        logger.error(f"Results directory not found: {run_dir}")
-        raise typer.Exit(code=1)
+        if not track_completeness:
+            logger.error(f"Results directory not found: {run_dir}")
+            raise typer.Exit(code=1)
+        run_dir.mkdir(parents=True)
 
     result_files = list(run_dir.rglob(result_pattern))
-    if not result_files:
+    if not result_files and not track_completeness:
         logger.error(f"No result files matching '{result_pattern}' found in {run_dir}")
         raise typer.Exit(code=1)
 
@@ -57,7 +66,7 @@ def result_summarize(
     instance_pattern_regex = re.compile(_config.file_patterns.instance_pattern)
     result_files = [f for f in result_files if instance_pattern_regex.match(f.stem)]
 
-    if not result_files:
+    if not result_files and not track_completeness:
         logger.error(f"No instance-specific result files found in {run_dir}")
         raise typer.Exit(code=1)
 
@@ -67,13 +76,44 @@ def result_summarize(
         with results_path.open() as f:
             results.extend(BaseEvaluationResult.from_json(json.loads(line)) for line in f if line.strip())
 
-    if not results:
+    if not results and not track_completeness:
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
+    completeness = EvaluationCompleteness.from_instance_ids(expected_total, (result.instance_id for result in results)) if track_completeness else None
+    if completeness:
+        completeness.save(run_dir / completeness_output)
+        logger.info(
+            "Evaluation completeness: expected=%d produced=%d missing=%d duplicates=%d",
+            completeness.expected_entry_count,
+            completeness.produced_entry_count,
+            completeness.missing_entry_count,
+            completeness.duplicate_result_count,
+        )
+        if _config.env.github_actions and not results:
+            create_github_completeness_summary(completeness)
+
+    if github_output:
+        output_completeness = completeness or EvaluationCompleteness.from_instance_ids(len({result.instance_id for result in results}), (result.instance_id for result in results))
+        write_step_outputs(
+            {
+                "expected": str(output_completeness.expected_entry_count),
+                "produced": str(output_completeness.produced_entry_count),
+                "missing": str(output_completeness.missing_entry_count),
+                "complete": str(output_completeness.complete).lower(),
+                "has-results": str(bool(results)).lower(),
+            }
+        )
+
+    if not results:
+        logger.error("No matrix shard produced an evaluation result.")
+        return
+
+    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref, completeness=completeness)
 
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
+    if completeness:
+        summary = summary.model_copy(update={"completeness": completeness})
 
     if _config.env.github_actions:
         create_github_job_summary(results, summary)
@@ -81,6 +121,30 @@ def result_summarize(
         create_console_summary(results, summary)
 
     summary.save(run_dir, summary_output)
+
+
+@result_app.command("require-complete")
+def result_require_complete(
+    completeness_file: Annotated[Path, typer.Argument(exists=True, file_okay=True, dir_okay=False)],
+) -> None:
+    completeness = EvaluationCompleteness.load(completeness_file)
+    if completeness.complete:
+        logger.info(
+            "Evaluation is complete: %d/%d entries produced.",
+            completeness.produced_entry_count,
+            completeness.expected_entry_count,
+        )
+        return
+
+    logger.error(
+        "Evaluation is incomplete: expected=%d produced=%d missing=%d unexpected=%d duplicates=%d",
+        completeness.expected_entry_count,
+        completeness.produced_entry_count,
+        completeness.missing_entry_count,
+        completeness.unexpected_entry_count,
+        completeness.duplicate_result_count,
+    )
+    raise typer.Exit(code=1)
 
 
 def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[LeaderboardAggregate]:

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, override
 from pydantic import BaseModel, Field
 
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.completeness import EvaluationCompleteness
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 if TYPE_CHECKING:
@@ -58,6 +59,7 @@ class EvaluationResultSummary(BaseModel, ABC):
 
     github_run_id: str | None = None
     experiment: ExperimentConfiguration | None = None
+    completeness: EvaluationCompleteness | None = None
 
     benchmark_version: str
 
@@ -131,6 +133,8 @@ class EvaluationResultSummary(BaseModel, ABC):
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
         if data["average_tool_usage"] is None:
             del data["average_tool_usage"]
+        if data["completeness"] is None:
+            del data["completeness"]
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:

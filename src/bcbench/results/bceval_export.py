@@ -9,6 +9,7 @@ from typing import Any
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.completeness import EvaluationCompleteness
 from bcbench.results.summary import get_benchmark_version
 from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
 
@@ -37,6 +38,7 @@ def write_bceval_results(
     output_filename: str,
     category: EvaluationCategory,
     git_ref: str | None = None,
+    completeness: EvaluationCompleteness | None = None,
 ) -> None:
     """Write results into a JSONL file for bceval consumption."""
     entry_cls = category.entry_class
@@ -72,6 +74,7 @@ def write_bceval_results(
                 "error_message": result.error_message,
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
                 **_experiment_metadata(result.experiment, git_ref, benchmark_version),
+                **(completeness.to_metadata() if completeness else {}),
             }
 
             bceval_result = {
