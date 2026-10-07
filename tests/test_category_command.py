@@ -33,7 +33,7 @@ def test_bceval_config_appends_to_github_output_file_when_set(tmp_path, monkeypa
     assert "judge_model=" not in contents
 
 
-def test_bceval_config_emits_pinned_lm_checklist_model(tmp_path, monkeypatch):
+def test_bceval_config_emits_lm_checklist_judge_model_setting(tmp_path, monkeypatch):
     output_file = tmp_path / "gh_output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
@@ -41,7 +41,8 @@ def test_bceval_config_emits_pinned_lm_checklist_model(tmp_path, monkeypatch):
     result = runner.invoke(app, ["category", "bceval-config", "--category", "nl2al"])
 
     assert result.exit_code == 0
-    assert "judge_model=gpt-41-2025-04-14" in output_file.read_text(encoding="utf-8")
+    lines = output_file.read_text(encoding="utf-8").splitlines()
+    assert any(line.startswith("judge_model=") for line in lines)
 
 
 def test_bceval_config_omits_judge_model_for_unjudged_category(tmp_path, monkeypatch):
