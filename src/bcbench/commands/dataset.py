@@ -183,7 +183,7 @@ def version(
 
 
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
-    instance_ids = []
+    instance_ids: list[str] = []
 
     for line in diff_output.splitlines():
         # Look for added or modified lines (lines starting with +)

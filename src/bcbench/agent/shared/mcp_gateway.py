@@ -73,7 +73,8 @@ def _jsonrpc_method_and_id(body: bytes | None) -> tuple[str | None, object]:
         return None, None
     if not isinstance(obj, dict):
         return None, None
-    return obj.get("method"), obj.get("id")
+    method = obj.get("method")
+    return (method if isinstance(method, str) else None), obj.get("id")
 
 
 def _read_jsonrpc(response, deadline: float) -> dict[str, Any]:  # noqa: ANN001 - http.client.HTTPResponse
@@ -200,7 +201,7 @@ class BcMcpGateway:
             self._rpc(self._origin_host, self._origin_port, self._injected_headers, "notifications/initialized", None, session_id=session_id)
         _, listed = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "tools/list", {}, request_id=2, session_id=session_id)
         result = listed.get("result")
-        tools = [name for t in (result or {}).get("tools", []) if isinstance(t, dict) and isinstance(name := t.get("name"), str)]
+        tools: list[str] = [name for t in (result or {}).get("tools", []) if isinstance(t, dict) and isinstance(name := t.get("name"), str)]
         if tools and isinstance(result, dict):
             with self._lock:
                 self._cached_tools_result = result

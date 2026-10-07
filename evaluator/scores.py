@@ -5,22 +5,22 @@ from typing import Any
 
 class ResolutionRate:
     def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
-        return metadata.get("resolved", False)
+        return bool(metadata.get("resolved", False))
 
 
 class BuildRate:
     def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
-        return metadata.get("build", False)
+        return bool(metadata.get("build", False))
 
 
 class PrePatchFailedRate:
     def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
-        return metadata.get("pre_patch_failed", False)
+        return bool(metadata.get("pre_patch_failed", False))
 
 
 class PostPatchPassedRate:
     def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
-        return metadata.get("post_patch_passed", False)
+        return bool(metadata.get("post_patch_passed", False))
 
 
 class PrecisionScore:

@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 from pydantic import ValidationError
 
@@ -23,11 +23,11 @@ def _extract_json_candidate(raw_output: str) -> str:
 
     block_match = re.search(r"```json\s*([\s\S]*?)\s*```", raw_output, re.IGNORECASE)
     if block_match:
-        return block_match.group(1).strip()
+        return cast(str, block_match.group(1)).strip()
 
     generic_block_match = re.search(r"```\s*([\s\S]*?)\s*```", raw_output)
     if generic_block_match:
-        return generic_block_match.group(1).strip()
+        return cast(str, generic_block_match.group(1)).strip()
 
     return stripped
 
