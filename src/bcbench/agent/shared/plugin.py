@@ -13,6 +13,9 @@ from bcbench.types import AgentConfig, PluginConfig
 logger = logging.getLogger(__name__)
 _config = get_config()
 
+# Where both Copilot CLI and Claude Code look for a plugin's manifest
+PLUGIN_MANIFEST = Path(".claude-plugin") / "plugin.json"
+
 
 def write_agent_plugin(folder: str, manifest: Mapping[str, object], files: Mapping[str, object]) -> Path:
     """Write a plugin folder and return its path.
@@ -27,8 +30,8 @@ def write_agent_plugin(folder: str, manifest: Mapping[str, object], files: Mappi
     """
     plugin_dir: Path = _config.paths.plugin_root / folder
 
-    (plugin_dir / _config.file_patterns.plugin_manifest.parent).mkdir(parents=True, exist_ok=True)
-    (plugin_dir / _config.file_patterns.plugin_manifest).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    (plugin_dir / PLUGIN_MANIFEST.parent).mkdir(parents=True, exist_ok=True)
+    (plugin_dir / PLUGIN_MANIFEST).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     for rel_path, content in files.items():
         target: Path = plugin_dir / rel_path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -86,9 +89,9 @@ def _has_plugin_manifest(plugin_dir: Path, allow_copilot_manifest: bool) -> bool
     when ``allow_copilot_manifest`` is set (Copilot runs) - never for a Claude run, which would otherwise
     forward the plugin via ``--plugin-dir`` only for Claude to ignore it.
     """
-    if (plugin_dir / _config.file_patterns.plugin_manifest).is_file():
+    if (plugin_dir / PLUGIN_MANIFEST).is_file():
         return True
-    return allow_copilot_manifest and (plugin_dir / _config.file_patterns.plugin_manifest.name).is_file()
+    return allow_copilot_manifest and (plugin_dir / PLUGIN_MANIFEST.name).is_file()
 
 
 def _resolve_plugin(plugin: PluginConfig, allow_copilot_manifest: bool) -> Path:
@@ -101,8 +104,8 @@ def _resolve_plugin(plugin: PluginConfig, allow_copilot_manifest: bool) -> Path:
             plugin_dir = _plugin_dir_in_clone(clone_dir, plugin)
 
     if not _has_plugin_manifest(plugin_dir, allow_copilot_manifest):
-        nested: Path = plugin_dir / _config.file_patterns.plugin_manifest
-        locations: str = f"{nested} or {plugin_dir / _config.file_patterns.plugin_manifest.name}" if allow_copilot_manifest else str(nested)
+        nested: Path = plugin_dir / PLUGIN_MANIFEST
+        locations: str = f"{nested} or {plugin_dir / PLUGIN_MANIFEST.name}" if allow_copilot_manifest else str(nested)
         raise AgentError(f"Plugin '{plugin.name}' has no manifest at {locations}")
 
     logger.info(f"Loading plugin {plugin.record} from {plugin_dir}")

@@ -16,14 +16,12 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 
 def get_claude_version() -> str:
@@ -37,6 +35,7 @@ def run_claude_code(
     repo_path: Path,
     output_dir: Path,
     runtime: AgentRuntimeConfig | None = None,
+    timeout: int = 60 * 60,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run Claude Code on a single dataset entry.
 
@@ -135,7 +134,7 @@ def run_claude_code(
                 },
                 pass_bc_credentials=category.pass_on_bc_container_credentials,
             ),
-            timeout=_config.timeout.agent_execution,
+            timeout=timeout,
             check=True,
             capture_output=True,
         )
@@ -145,8 +144,8 @@ def run_claude_code(
 
         metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
     except subprocess.TimeoutExpired:
-        logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
+        logger.exception(f"Claude Code timed out after {timeout} seconds")
+        metrics = AgentMetrics(execution_time=timeout)
         raise AgentTimeoutError("Claude Code timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"Claude Code execution failed with error {e.stderr}")

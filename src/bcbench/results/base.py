@@ -12,6 +12,9 @@ from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
+# Per-instance result files are JSON Lines
+RESULT_FILE_SUFFIX = ".jsonl"
+
 
 class BaseEvaluationResult(BaseModel):
     """Base class for all evaluation results with shared metrics across categories."""

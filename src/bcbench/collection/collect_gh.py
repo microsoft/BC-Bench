@@ -11,6 +11,7 @@ from bcbench.collection.gh_client import GHClient
 from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_project_paths_from_diff, separate_patches
 from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
+from bcbench.dataset.dataset_entry import PROBLEM_STATEMENT_README
 from bcbench.exceptions import CollectionError, NoTestsExtractedError
 from bcbench.operations import extract_tests_from_patch
 
@@ -32,7 +33,7 @@ def _save_problem_statement(
     instance_id: str,
     problem_statement: str,
     problem_statement_dir: Path = _config.paths.problem_statement_dir,
-    filename: str = _config.file_patterns.problem_statement_readme,
+    filename: str = PROBLEM_STATEMENT_README,
 ) -> None:
     output_dir = problem_statement_dir / instance_id
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -60,7 +61,7 @@ def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> Scree
         raise CollectionError(f"Failed to fetch PR #{pr_number} from {repo}: {exc}") from exc
 
     try:
-        patch, patch_fix, patch_test = separate_patches(diff, _config.file_patterns.test_project_identifiers)
+        patch, patch_fix, patch_test = separate_patches(diff)
         project_paths = find_project_paths_from_diff(patch)
     except CollectionError as exc:
         raise CollectionError(f"Failed to parse PR diff: {exc}") from exc
@@ -103,7 +104,7 @@ def _build_bugfix_entry(
 
     diff = gh_client.get_pr_diff(pr_number)
 
-    patch, patch_fix, patch_test = separate_patches(diff, _config.file_patterns.test_project_identifiers)
+    patch, patch_fix, patch_test = separate_patches(diff)
 
     # Extract problem statement from PR
     title = pr_data.get("title", "")
