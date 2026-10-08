@@ -2,11 +2,12 @@ import json
 from unittest.mock import PropertyMock, patch
 
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import AgentHarness, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
 
 

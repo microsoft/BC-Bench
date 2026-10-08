@@ -1,10 +1,11 @@
 """GitHub Copilot CLI Agent implementation."""
 
 import logging
-import subprocess
 from pathlib import Path
 
-from bcbench.agent.copilot.cli import invoke_copilot
+from bcbench_core.agent.copilot import CopilotOptions, CopilotTimeoutError, invoke_copilot
+from bcbench_core.agent.metrics import AgentMetrics
+
 from bcbench.agent.shared import (
     agent_subprocess_env,
     build_al_lsp_plugin,
@@ -15,9 +16,9 @@ from bcbench.agent.shared import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentError, AgentTimeoutError
+from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentConfig, AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -71,53 +72,34 @@ def run_copilot_agent(
         plugins=[plugin.record for plugin, _ in plugins] or None,
     )
 
-    logger.info(f"Executing Copilot CLI in directory: {repo_path}")
-    logger.debug(f"Using prompt:\n{prompt}")
-
     try:
-        extra_args = [
-            "--log-level=debug",
-            f"--log-dir={output_dir.resolve()}",
-        ]
-        if mcp_config_json:
-            extra_args.append(f"--additional-mcp-config={mcp_config_json}")
-        if lsp_plugin_dir is not None:
-            extra_args.append(f"--plugin-dir={lsp_plugin_dir}")
-        extra_args.extend(f"--plugin-dir={plugin_dir}" for _, plugin_dir in plugins)
+        lsp_plugin_dirs = (lsp_plugin_dir,) if lsp_plugin_dir is not None else ()
         # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
         # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
         # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
         # silently widen the agent's sandbox access.
-        extra_args.extend(f"--add-dir={plugin_dir}" for plugin, plugin_dir in plugins if plugin.grant_dir_access)
-        if custom_agent:
-            extra_args.append(f"--agent={custom_agent}")
+        options = CopilotOptions(
+            allow_all_tools=True,
+            custom_instructions=instructions_enabled,
+            log_dir=output_dir,
+            mcp_config_json=mcp_config_json,
+            plugin_dirs=(*lsp_plugin_dirs, *(plugin_dir for _, plugin_dir in plugins)),
+            granted_dirs=tuple(plugin_dir for plugin, plugin_dir in plugins if plugin.grant_dir_access),
+            custom_agent=custom_agent,
+            workspace_mcp=True,
+        )
 
         metrics, _ = invoke_copilot(
             prompt=prompt,
             model=model,
             work_dir=repo_path,
             timeout=_config.timeout.agent_execution,
-            allow_all_tools=True,
-            custom_instructions=instructions_enabled,
-            extra_args=extra_args,
-            env=agent_subprocess_env(
-                {
-                    "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
-                },
-                pass_bc_credentials=category.pass_on_bc_container_credentials,
-            ),
+            env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
+            options=options,
         )
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
-    except subprocess.TimeoutExpired:
-        logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
-        raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
-        raise AgentError(f"Copilot CLI execution failed: {e}") from None
-    except Exception:
-        logger.exception("Unexpected error running Copilot CLI")
-        raise
+    except CopilotTimeoutError as exc:
+        raise AgentTimeoutError("Copilot CLI timed out", metrics=exc.metrics, config=config) from exc
     else:
         return metrics, config
     finally:

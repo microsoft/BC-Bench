@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bcbench.types import AgentMetrics, ExperimentConfiguration
+    from bcbench_core.agent.metrics import AgentMetrics
+
+    from bcbench.types import ExperimentConfiguration
 
 __all__ = [
-    "AgentError",
     "BCBenchError",
     "CollectionError",
     "ConfigurationError",
@@ -84,10 +85,6 @@ class NoTestsExtractedError(BCBenchError):
     def __init__(self) -> None:
         message = "No tests extracted from the generated patch."
         super().__init__(message)
-
-
-class AgentError(BCBenchError):
-    """Agent execution errors."""
 
 
 class AgentTimeoutError(BCBenchError):

@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from io import StringIO
 
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import ValidationError
 from rich.console import Console
 
@@ -26,7 +27,7 @@ from bcbench.results.summary import (
     JudgeBasedEvaluationResultSummary,
 )
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
 
 
