@@ -285,6 +285,7 @@ analysis = [
     { name = "plotly" },
 ]
 dev = [
+    { name = "click" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -322,6 +323,7 @@ analysis = [
     { name = "plotly", specifier = ">=6.5.0" },
 ]
 dev = [
+    { name = "click", specifier = ">=8.3.0" },
     { name = "pre-commit", specifier = ">=4.3.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.0" },
