@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import override
 
 from bcbench_core.bc import build_and_publish_projects
 from bcbench_core.exceptions import BuildError, TestExecutionError
@@ -21,11 +22,13 @@ __all__ = ["BugFixPipeline"]
 class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
     """Pipeline for bug-fix evaluation category."""
 
+    @override
     def setup_workspace(self, entry: BugFixEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)
         copy_problem_statement_folder(entry, repo_path)
         set_runtime_version(repo_path, entry.project_paths)
 
+    @override
     def setup(self, context: EvaluationContext[BugFixEntry]) -> None:
         setup_repo_prebuild(context.entry, context.repo_path)
 
@@ -39,10 +42,12 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
         copy_problem_statement_folder(context.entry, context.repo_path)
         set_runtime_version(context.repo_path, context.entry.project_paths)
 
+    @override
     def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: AgentRunner[BugFixEntry]) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
+    @override
     def evaluate(self, context: EvaluationContext[BugFixEntry]) -> None:
         container = context.get_container()
         test_projects, _app_projects = categorize_projects(context.entry.project_paths)

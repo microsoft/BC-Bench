@@ -19,7 +19,7 @@ import threading
 import time
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import cast
+from typing import cast, override
 from urllib.parse import urlsplit
 
 from bcbench_core.container import ContainerConfig
@@ -236,6 +236,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
     class _ProxyHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
+        @override
         def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
             pass
 

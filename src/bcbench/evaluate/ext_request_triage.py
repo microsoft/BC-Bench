@@ -10,6 +10,7 @@ persists that raw decision; scoring is performed downstream by the LMChecklist j
 
 import logging
 from pathlib import Path
+from typing import override
 
 from bcbench.dataset import ExtRequestTriageEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
@@ -28,17 +29,21 @@ TRIAGE_RESULT_FILE = "triage_result.json"
 class ExtRequestTriagePipeline(EvaluationPipeline[ExtRequestTriageEntry]):
     """Pipeline for the extensibility-request-triage category — no BC container, no build, no tests."""
 
+    @override
     def setup_workspace(self, entry: ExtRequestTriageEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)
         (repo_path / TRIAGE_RESULT_FILE).unlink(missing_ok=True)
 
+    @override
     def setup(self, context: EvaluationContext[ExtRequestTriageEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
 
+    @override
     def run_agent(self, context: EvaluationContext[ExtRequestTriageEntry], agent_runner: AgentRunner[ExtRequestTriageEntry]) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
+    @override
     def evaluate(self, context: EvaluationContext[ExtRequestTriageEntry]) -> None:
         result_path = context.repo_path / TRIAGE_RESULT_FILE
         raw = result_path.read_text(encoding="utf-8").strip() if result_path.exists() else ""

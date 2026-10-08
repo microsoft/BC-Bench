@@ -3,7 +3,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Self, cast
+from typing import Any, Self, cast, override
 
 from pydantic import BaseModel, model_validator
 
@@ -126,12 +126,14 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
         return cls(**cls._base_fields(context), output=output, build=build, resolved=resolved, error_message=error_message)
 
     @property
+    @override
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"
         return "Success" if self.resolved else "Failed"
 
     @property
+    @override
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {"resolved": self.resolved, "build": self.build}
 
@@ -158,10 +160,12 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
         return {**payload, "judge_model": judge_model}
 
     @classmethod
+    @override
     def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
         return {**super()._base_fields(context), "judge_model": context.category.judge_model}
 
     @property
+    @override
     def export_metadata(self) -> dict[str, str | int | float | bool | None]:
         return {"judge_model": self.judge_model}
 
@@ -186,6 +190,7 @@ class JudgeBasedEvaluationResult(JudgeScoredEvaluationResult):
         return cls(**cls._base_fields(context), output="")
 
     @property
+    @override
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"

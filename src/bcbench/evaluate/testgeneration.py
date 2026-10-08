@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import override
 
 import yaml
 from bcbench_core.bc import build_and_publish_projects, run_test_suite
@@ -54,11 +55,13 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             case _:
                 raise ValueError(f"Unhandled test generation input mode: {input_mode}")
 
+    @override
     def setup_workspace(self, entry: TestGenEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)
         self._apply_input_postbuild(entry, repo_path)
         set_runtime_version(repo_path, entry.project_paths)
 
+    @override
     def setup(self, context: EvaluationContext[TestGenEntry]) -> None:
         setup_repo_prebuild(context.entry, context.repo_path)
 
@@ -72,10 +75,12 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         self._apply_input_postbuild(context.entry, context.repo_path)
         set_runtime_version(context.repo_path, context.entry.project_paths)
 
+    @override
     def run_agent(self, context: EvaluationContext[TestGenEntry], agent_runner: AgentRunner[TestGenEntry]) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
+    @override
     def evaluate(self, context: EvaluationContext[TestGenEntry]) -> None:
         container = context.get_container()
         test_projects, app_projects = categorize_projects(context.entry.project_paths)

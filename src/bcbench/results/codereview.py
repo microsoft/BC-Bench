@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import NamedTuple, Self
+from typing import NamedTuple, Self, override
 
 import numpy as np
 from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
@@ -233,6 +233,7 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
         )
 
     @property
+    @override
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {
             "generated_comment_count": len(self.generated_comments),
@@ -251,6 +252,7 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
         }
 
     @property
+    @override
     def display_row(self) -> dict[str, str]:
         return {
             "Generated": str(len(self.generated_comments)),
@@ -315,6 +317,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             "\n"
         )
 
+    @override
     def render_github_metrics_markdown(self) -> str:
         micro_p = self.precision * 100
         micro_r = self.recall * 100
@@ -356,6 +359,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             f"{_METRIC_EXPLANATIONS}"
         )
 
+    @override
     def render_console_metrics(self) -> RenderableType:
         metric_columns = ["Precision", "Recall", "F1", "Fβ (β=0.5)", "Fβ (β=2)"]
 
@@ -420,6 +424,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
         )
 
     @classmethod
+    @override
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "CodeReviewResultSummary":
         summary = super().from_results(results, run_id)
         assert isinstance(summary, CodeReviewResultSummary)
