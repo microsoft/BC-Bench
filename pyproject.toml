@@ -95,7 +95,7 @@ exclude = ["notebooks/"]
 all = "error"
 
 [tool.ty.analysis]
-# bc-eval[capi] is internal and installed only into a separate venv by bcal-evaluation.yml
+# bc-eval is internal and installed only into a separate venv by bcal-evaluation.yml
 allowed-unresolved-imports = ["bc_eval.**"]
 
 [dependency-groups]
