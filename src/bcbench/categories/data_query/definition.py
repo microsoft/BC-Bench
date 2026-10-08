@@ -1,6 +1,6 @@
+from bcbench.categories.data_query.entry import DataQueryEntry
 from bcbench.categories.data_query.pipeline import DataQueryPipeline
 from bcbench.categories.definition import CategoryDefinition
-from bcbench.dataset import DataQueryEntry
 from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory

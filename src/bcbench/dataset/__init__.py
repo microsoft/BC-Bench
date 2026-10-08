@@ -1,23 +1,5 @@
-"""Dataset module for querying, validating and analyzing dataset entries."""
+"""Shared dataset entry bases and the bug-fix/test-generation entries of the shared bcbench.jsonl dataset."""
 
-from bcbench.dataset.codereview import ArticleId, CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
-from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, DataQueryEntry, NL2ALEntry, RepoGroundedEntry, TestGenEntry
-from bcbench.dataset.extensibility_request import ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel
+from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, RepoGroundedEntry, TestGenEntry
 
-__all__ = [
-    "ArticleId",
-    "BaseDatasetEntry",
-    "BugFixEntry",
-    "CodeReviewEntry",
-    "CodeReviewEntryMetadata",
-    "DataQueryEntry",
-    "ExtRequestAdvisorEntry",
-    "ExtRequestImplementEntry",
-    "ExtRequestTriageEntry",
-    "ManagedLabel",
-    "NL2ALEntry",
-    "RepoGroundedEntry",
-    "ReviewComment",
-    "Severity",
-    "TestGenEntry",
-]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "RepoGroundedEntry", "TestGenEntry"]

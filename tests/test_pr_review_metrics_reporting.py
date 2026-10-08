@@ -2,8 +2,7 @@ import json
 
 from bcbench_core.agent.metrics import AgentMetrics
 
-from bcbench.results.codereview import CodeReviewResultSummary
-from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
+from bcbench.categories.code_review.result import CodeReviewLeaderboardAggregate, CodeReviewResultSummary
 from tests.conftest import create_codereview_result
 
 

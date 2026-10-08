@@ -9,7 +9,7 @@ from bcbench_core.exceptions import EmptyDiffError
 from bcbench_core.filesystem import remove_tree
 from bcbench_core.git import stage_and_get_diff
 
-from bcbench.dataset import NL2ALEntry
+from bcbench.categories.nl2al.entry import NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
 from bcbench.results.base import JudgeBasedEvaluationResult

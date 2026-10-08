@@ -1,6 +1,6 @@
 from typer.testing import CliRunner
 
-from bcbench.categories import category_definition
+from bcbench.categories.registry import category_definition
 from bcbench.cli import app
 from bcbench.types import EvaluationCategory
 

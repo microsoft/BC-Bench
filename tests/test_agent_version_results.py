@@ -4,12 +4,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from bcbench.categories import category_definition
+from bcbench.categories.bug_fix.result import BugFixResult
+from bcbench.categories.registry import category_definition
 from bcbench.categories.results import aggregate_runs, load_aggregate, load_leaderboard, load_result, load_summary, summarize_results
 from bcbench.commands.result import _rebuild_aggregates, result_update
 from bcbench.config import get_config
 from bcbench.exceptions import AgentTimeoutError
-from bcbench.results.bugfix import BugFixResult
 from bcbench.types import AgentHarness, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context
 

@@ -10,7 +10,7 @@ This doc is a map; the source files and their comments are the source of truth. 
 
 ## Architecture
 
-`EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py) names the categories. Each category has a package under [src/bcbench/categories/](src/bcbench/categories/) that owns its behaviour; code shared by several categories (base classes, shared result families, shared datasets) stays in the common modules. The CLI looks up a category with `category_definition()` in [src/bcbench/categories/__init__.py](src/bcbench/categories/__init__.py).
+`EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py) names the categories. Each category has a package under [src/bcbench/categories/](src/bcbench/categories/) that owns its models and behaviour (`definition.py`, `pipeline.py`, and where category-specific, `entry.py` and `result.py`); code shared by several categories (base classes, shared result families, the shared `bcbench.jsonl` entries) stays in [src/bcbench/dataset/](src/bcbench/dataset/) and [src/bcbench/results/](src/bcbench/results/). The CLI looks up a category with `category_definition()` in [src/bcbench/categories/registry.py](src/bcbench/categories/registry.py).
 
 A category's `definition.py` declares ([src/bcbench/categories/definition.py](src/bcbench/categories/definition.py)):
 
@@ -31,8 +31,8 @@ Keep dataset entry classes and result classes focused on typed data. Put categor
 Use the existing implementations as examples: `bug-fix` and `test-generation` for execution-based categories, `code-review` and `nl2al` for judge-based ones.
 
 1. Add the enum value in [src/bcbench/types.py](src/bcbench/types.py), and a category package with `definition.py` under [src/bcbench/categories/](src/bcbench/categories/), wired into `category_definition()`.
-2. Add the category dataset JSONL and entry class in [src/bcbench/dataset/dataset_entry.py](src/bcbench/dataset/dataset_entry.py).
-3. Reuse a shared result family from [src/bcbench/results/](src/bcbench/results/), or add a category-specific result class.
+2. Add the category dataset JSONL and an `entry.py` in the category package, subclassing `BaseDatasetEntry` or `RepoGroundedEntry` from [src/bcbench/dataset/dataset_entry.py](src/bcbench/dataset/dataset_entry.py).
+3. Reuse a shared result family from [src/bcbench/results/](src/bcbench/results/), or add a `result.py` to the category package.
 4. Add a `pipeline.py` to the category package, subclassing `EvaluationPipeline` from [src/bcbench/evaluate/base.py](src/bcbench/evaluate/base.py) and setting its `result_type`.
 5. Add the prompt template to [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml).
 6. Add the category to workflow choice lists in [.github/workflows/](.github/workflows/), especially evaluation workflows and CI category selection.

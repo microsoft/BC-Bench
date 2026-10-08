@@ -6,7 +6,8 @@ from typing import Annotated, cast
 import typer
 
 from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
-from bcbench.categories import category_definition
+from bcbench.categories.nl2al.entry import NL2ALEntry
+from bcbench.categories.registry import category_definition
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -24,7 +25,6 @@ from bcbench.cli_options import (
     resolve_agent_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import NL2ALEntry
 from bcbench.types import EvaluationCategory
 
 logger = logging.getLogger(__name__)

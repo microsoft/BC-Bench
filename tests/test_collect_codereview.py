@@ -2,12 +2,12 @@
 
 from unittest.mock import MagicMock, patch
 
+from bcbench.categories.code_review.entry import CodeReviewEntry
 from bcbench.collection.collect_codereview import (
     collect_codereview_entries,
     group_expected_by_commit,
     parse_domain_severity,
 )
-from bcbench.dataset.codereview import CodeReviewEntry
 
 
 class TestParseDomainSeverity:

@@ -33,8 +33,8 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
+from bcbench.categories.code_review.entry import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.collection.gh_client import GHClient
-from bcbench.dataset import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.exceptions import CollectionError
 
 logger = logging.getLogger(__name__)

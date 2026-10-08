@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.categories import category_definition
+from bcbench.categories.registry import category_definition
 from bcbench.dataset import RepoGroundedEntry
 from bcbench.types import EvaluationCategory
 

@@ -8,15 +8,14 @@ from unittest.mock import patch
 import pytest
 from bcbench_core.exceptions import AgentError
 
-from bcbench.categories import category_definition
+from bcbench.categories.code_review.entry import CodeReviewEntry, ReviewComment, Severity
 from bcbench.categories.code_review.judge import LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
 from bcbench.categories.code_review.pipeline import CodeReviewPipeline
+from bcbench.categories.code_review.result import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
 from bcbench.categories.code_review.review_parsing import parse_review_output
+from bcbench.categories.registry import category_definition
 from bcbench.categories.results import aggregate_runs, load_leaderboard, load_result
 from bcbench.config import get_config
-from bcbench.dataset import CodeReviewEntry
-from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
@@ -831,7 +830,7 @@ class TestCodeReviewLeaderboardAggregate:
         return CodeReviewResultSummary.from_results([result], run_id=run_id)
 
     def test_aggregate_uses_f1_as_average_and_has_no_pass_hat_5(self):
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
+        from bcbench.categories.code_review.result import CodeReviewLeaderboardAggregate
 
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
@@ -849,7 +848,7 @@ class TestCodeReviewLeaderboardAggregate:
         assert not hasattr(agg, "pass_hat_5")
 
     def test_macro_f1_ci_is_bootstrapped_over_tasks_for_single_run(self):
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
+        from bcbench.categories.code_review.result import CodeReviewLeaderboardAggregate
 
         expected = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
         hit = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
@@ -896,8 +895,9 @@ class TestCodeReviewLeaderboardAggregate:
         assert data["aggregate"][0]["f1"] == run.f1
 
     def test_round_trip_preserves_codereview_subclasses(self, tmp_path):
-        from bcbench.results.codereview import CodeReviewResultSummary as CRSummary
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, Leaderboard
+        from bcbench.categories.code_review.result import CodeReviewLeaderboardAggregate
+        from bcbench.categories.code_review.result import CodeReviewResultSummary as CRSummary
+        from bcbench.results.leaderboard import Leaderboard
 
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),

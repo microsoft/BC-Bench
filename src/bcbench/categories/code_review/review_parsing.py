@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
-from bcbench.dataset.codereview import ReviewComment, Severity
+from bcbench.categories.code_review.entry import ReviewComment, Severity
 
 logger = logging.getLogger(__name__)
 

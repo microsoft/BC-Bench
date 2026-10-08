@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from bcbench.categories import category_definition
+from bcbench.categories.registry import category_definition
 from bcbench.config import JudgeConfig
 from bcbench.results import BaseEvaluationResult, EvaluationResultSummary, Leaderboard, LeaderboardAggregate
 from bcbench.types import EvaluationCategory

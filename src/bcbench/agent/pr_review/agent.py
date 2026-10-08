@@ -26,8 +26,8 @@ from bcbench_core.git import commit_changes, has_changes, init_repo
 
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
+from bcbench.categories.code_review.entry import CodeReviewEntry
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics

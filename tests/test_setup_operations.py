@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.categories import category_definition
+from bcbench.categories.registry import category_definition
 from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
 from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild

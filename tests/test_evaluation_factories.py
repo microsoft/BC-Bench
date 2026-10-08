@@ -1,13 +1,12 @@
 import pytest
 from pydantic import ValidationError
 
+from bcbench.categories.bug_fix.result import BugFixResult
+from bcbench.categories.code_review.result import CodeReviewLeaderboardAggregate, CodeReviewResultSummary
 from bcbench.categories.results import aggregate_runs, summarize_results
+from bcbench.categories.test_generation.result import TestGenerationResult
 from bcbench.config import get_config
 from bcbench.results.base import JudgeBasedEvaluationResult
-from bcbench.results.bugfix import BugFixResult
-from bcbench.results.codereview import CodeReviewResultSummary
-from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
-from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentHarness, EvaluationCategory
 from tests.conftest import create_codereview_result, create_dataset_entry, create_evaluation_context
 

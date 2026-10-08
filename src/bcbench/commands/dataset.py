@@ -6,11 +6,13 @@ from typing import Annotated
 
 import typer
 
-from bcbench.categories import category_definition
+from bcbench.categories.code_review.entry import CodeReviewEntry
+from bcbench.categories.nl2al.entry import NL2ALEntry
+from bcbench.categories.registry import category_definition
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.config import get_config
-from bcbench.dataset import CodeReviewEntry, RepoGroundedEntry
-from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
+from bcbench.dataset import RepoGroundedEntry
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
 from bcbench.types import EvaluationCategory
 

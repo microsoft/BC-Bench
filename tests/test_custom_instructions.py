@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bcbench.categories import category_definition
+from bcbench.categories.registry import category_definition
 from bcbench.dataset import BugFixEntry, RepoGroundedEntry
 from bcbench.operations.instruction_operations import (
     INSTRUCTION_SOURCE_FILE,

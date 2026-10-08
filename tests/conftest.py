@@ -16,15 +16,20 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from bcbench_core.dataset import TestEntry
 
-from bcbench.categories import category_definition
+from bcbench.categories.bug_fix.result import BugFixResult
+from bcbench.categories.code_review.entry import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
+from bcbench.categories.code_review.result import CodeReviewResult
 from bcbench.categories.code_review.review_parsing import parse_review_output
+from bcbench.categories.data_query.entry import DataQueryEntry
+from bcbench.categories.ext_request_advisor.entry import ExtRequestAdvisorEntry
+from bcbench.categories.ext_request_implement.entry import ExtRequestImplementEntry
+from bcbench.categories.ext_request_triage.entry import ExtRequestTriageEntry, ManagedLabel
+from bcbench.categories.nl2al.entry import NL2ALEntry
+from bcbench.categories.registry import category_definition
+from bcbench.categories.test_generation.result import TestGenerationResult
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry
-from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
-from bcbench.results.bugfix import BugFixResult
-from bcbench.results.codereview import CodeReviewResult
-from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentHarness, ChecklistAssertion, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 # Valid test data that passes all BugFixEntry validation rules

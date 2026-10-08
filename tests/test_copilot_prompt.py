@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bcbench.agent.shared import build_prompt
-from bcbench.dataset.codereview import CodeReviewEntry
+from bcbench.categories.code_review.entry import CodeReviewEntry
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import create_dataset_entry, create_ext_advisor_entry, create_problem_statement_dir
