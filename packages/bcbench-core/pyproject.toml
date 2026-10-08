@@ -88,7 +88,3 @@ ban-relative-imports = "all"
 "os.environ".msg = "bcbench-core must not read the environment; accept values as parameters."
 "os.getenv".msg = "bcbench-core must not read the environment; accept values as parameters."
 "dotenv".msg = "bcbench-core must not load configuration; accept values as parameters."
-
-[tool.ty.rules]
-# Strictest baseline for the public library; relax a specific rule only with a rationale.
-all = "error"

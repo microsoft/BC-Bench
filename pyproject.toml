@@ -88,7 +88,11 @@ extend = "packages/bcbench-core/pyproject.toml"
 "tools/**" = ["T20"]                  # standalone CLI scripts
 
 [tool.ty.src]
-exclude = ["notebooks/", "packages/"]
+exclude = ["notebooks/"]
+
+[tool.ty.rules]
+# Strictest baseline for the whole workspace; relax a specific rule only with a rationale.
+all = "error"
 
 [tool.ty.analysis]
 # bc-eval[capi] is internal and installed only into a separate venv by bcal-evaluation.yml

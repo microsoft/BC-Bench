@@ -30,13 +30,10 @@ repos:
   - repo: local
     hooks:
       - id: ty
-        name: ty check (bcbench)
-        entry: uv run ty check
-        language: system
-        pass_filenames: false
-      - id: ty-bcbench-core
-        name: ty check (bcbench-core)
-        # `uv check` enables ty's uv integration, which missing-direct-dependency requires
-        entry: uv check --package bcbench-core --locked --no-sync --preview-features check-command
+        name: ty check
+        # `uv check` enables ty's uv integration, which missing-direct-dependency requires.
+        # --all-packages selects the root project, so uv runs the ty locked by its dev group and the root
+        # [tool.ty] config applies to every workspace member.
+        entry: uv check --all-packages --locked --no-sync --preview-features check-command
         language: system
         pass_filenames: false
