@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from bcbench.collection.gh_client import GHClient
 from bcbench.dataset import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
@@ -56,23 +56,18 @@ def parse_domain_severity(body: str) -> tuple[str | None, Severity | None]:
     """
     import re
 
-    domain: str | None = None
-    # Preferred: the explicit metadata marker the review bot appends. It survives
-    # LaTeX-escaped headers (e.g. "Severity\ \u2014\ Performance") that the header
-    # regex below cannot read.
-    marker = re.search(r"<!--\s*agent_domain:\s*([A-Za-z][\w /-]*?)\s*-->", body)
-    if marker:
-        domain = marker.group(1).strip()
-    else:
+    domain_match = (
+        # Preferred: the explicit metadata marker the review bot appends. It survives
+        # LaTeX-escaped headers (e.g. "Severity\ \u2014\ Performance") that the header
+        # regexes below cannot read.
+        re.search(r"<!--\s*agent_domain:\s*([A-Za-z][\w /-]*?)\s*-->", body)
         # Bot header: "<severity> Severity - <Domain>"
-        match = re.search(r"Severity\s*[\u2014-]\s*([A-Za-z][A-Za-z /]+)", body)
-        if match:
-            domain = match.group(1).strip()
-        else:
-            # Human header: leading "**<Domain> - ...**"
-            match = re.match(r"\s*\*\*\s*([A-Za-z][A-Za-z ]+?)\s*[\u2014-]", body)
-            if match:
-                domain = match.group(1).strip()
+        or re.search(r"Severity\s*[\u2014-]\s*([A-Za-z][A-Za-z /]+)", body)
+        # Human header: leading "**<Domain> - ...**"
+        or re.match(r"\s*\*\*\s*([A-Za-z][A-Za-z ]+?)\s*[\u2014-]", body)
+    )
+    # typeshed types group(1) as `str | Any`; every pattern above always captures group 1
+    domain: str | None = cast(str, domain_match.group(1)).strip() if domain_match else None
 
     severity: Severity | None = None
     words = "|".join(_SEVERITY_WORDS)

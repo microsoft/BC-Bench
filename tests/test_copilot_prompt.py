@@ -1,12 +1,10 @@
 from pathlib import Path
 from unittest.mock import patch
 
-import yaml
-
 from bcbench.agent.shared import build_prompt
 from bcbench.config import get_config
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import create_dataset_entry, create_ext_advisor_entry, create_problem_statement_dir
 
 
@@ -19,12 +17,14 @@ def test_build_prompt_without_project_paths(tmp_path: Path):
     repo_path.mkdir()
     problem_dir = create_problem_statement_dir(tmp_path, "Fix the bug in the payment module\n\nCheck the validation logic")
 
-    config = {
-        "prompt": {
-            "bug-fix-template": "Working at {{repo_path}}. Task: {{task}}",
-            "include_project_paths": False,
+    config = AgentConfig.model_validate(
+        {
+            "prompt": {
+                "bug-fix-template": "Working at {{repo_path}}. Task: {{task}}",
+                "include_project_paths": False,
+            }
         }
-    }
+    )
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
         result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
@@ -45,12 +45,14 @@ def test_build_prompt_with_project_paths(tmp_path: Path):
     repo_path.mkdir()
     problem_dir = create_problem_statement_dir(tmp_path, "Update the sales calculation")
 
-    config = {
-        "prompt": {
-            "bug-fix-template": "Repo: {{repo_path}}. {% if include_project_paths %}Projects: {{project_paths}}{% endif %}. Task: {{task}}",
-            "include_project_paths": True,
+    config = AgentConfig.model_validate(
+        {
+            "prompt": {
+                "bug-fix-template": "Repo: {{repo_path}}. {% if include_project_paths %}Projects: {{project_paths}}{% endif %}. Task: {{task}}",
+                "include_project_paths": True,
+            }
         }
-    }
+    )
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
         result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
@@ -69,13 +71,15 @@ def test_build_prompt_test_generation_gold_patch_mode(tmp_path: Path):
     repo_path.mkdir()
     problem_dir = create_problem_statement_dir(tmp_path, "Fix payment validation bug")
 
-    config = {
-        "prompt": {
-            "test-generation-template": "Repo: {{repo_path}}. {% if is_gold_patch %}Generate test for fix{% else %}Generate test for issue: {{task}}{% endif %}",
-            "test-generation-input": "gold-patch",
-            "include_project_paths": False,
+    config = AgentConfig.model_validate(
+        {
+            "prompt": {
+                "test-generation-template": "Repo: {{repo_path}}. {% if is_gold_patch %}Generate test for fix{% else %}Generate test for issue: {{task}}{% endif %}",
+                "test-generation-input": "gold-patch",
+                "include_project_paths": False,
+            }
         }
-    }
+    )
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
         result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
@@ -94,13 +98,15 @@ def test_build_prompt_test_generation_problem_statement_mode(tmp_path: Path):
     repo_path.mkdir()
     problem_dir = create_problem_statement_dir(tmp_path, "Fix payment validation bug")
 
-    config = {
-        "prompt": {
-            "test-generation-template": "Repo: {{repo_path}}. {% if is_gold_patch %}Generate test for fix{% else %}Generate test for issue: {{task}}{% endif %}",
-            "test-generation-input": "problem-statement",
-            "include_project_paths": False,
+    config = AgentConfig.model_validate(
+        {
+            "prompt": {
+                "test-generation-template": "Repo: {{repo_path}}. {% if is_gold_patch %}Generate test for fix{% else %}Generate test for issue: {{task}}{% endif %}",
+                "test-generation-input": "problem-statement",
+                "include_project_paths": False,
+            }
         }
-    }
+    )
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
         result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
@@ -119,13 +125,15 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
     repo_path.mkdir()
     problem_dir = create_problem_statement_dir(tmp_path, "Fix payment validation bug")
 
-    config = {
-        "prompt": {
-            "test-generation-template": "Repo: {{repo_path}}. {% if is_gold_patch %}[HAS_PATCH]{% endif %}{% if is_problem_statement %}[HAS_ISSUE] {{task}}{% endif %}",
-            "test-generation-input": "both",
-            "include_project_paths": False,
+    config = AgentConfig.model_validate(
+        {
+            "prompt": {
+                "test-generation-template": "Repo: {{repo_path}}. {% if is_gold_patch %}[HAS_PATCH]{% endif %}{% if is_problem_statement %}[HAS_ISSUE] {{task}}{% endif %}",
+                "test-generation-input": "both",
+                "include_project_paths": False,
+            }
         }
-    }
+    )
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
         result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
@@ -138,7 +146,7 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
 
 def test_build_prompt_code_review_enforces_review_json_contract(tmp_path: Path):
     config_path = get_config().paths.agent_share_dir / "config.yaml"
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config = AgentConfig.from_file(config_path)
     entry = CodeReviewEntry.model_construct(project_paths=[], patch="diff --git a/src/Foo.al b/src/Foo.al")
 
     prompt = build_prompt(entry, tmp_path, config, EvaluationCategory.CODE_REVIEW)
@@ -155,7 +163,7 @@ def test_build_prompt_code_review_enforces_review_json_contract(tmp_path: Path):
 
 def test_build_prompt_ext_advisor_delegates_to_custom_agent(tmp_path: Path):
     config_path = get_config().paths.agent_share_dir / "config.yaml"
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config = AgentConfig.from_file(config_path)
 
     prompt = build_prompt(
         create_ext_advisor_entry(),

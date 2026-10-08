@@ -3,8 +3,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import yaml
-
 from bcbench.agent.claude.metrics import parse_stream_output
 from bcbench.agent.shared import (
     agent_subprocess_env,
@@ -19,7 +17,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentConfig, AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -43,7 +41,7 @@ def run_claude_code(
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used
     """
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
-    claude_config = yaml.safe_load(config_file.read_text())
+    claude_config = AgentConfig.from_file(config_file)
 
     claude_cmd = shutil.which("claude")
     if not claude_cmd:

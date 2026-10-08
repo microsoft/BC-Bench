@@ -7,8 +7,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
+import yaml
 from bcbench_core.container import ContainerConfig
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -18,6 +19,9 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
+    "AL_MCP_SERVER_NAME",
+    "BC_MCP_SERVER_NAME",
+    "AgentConfig",
     "AgentHarness",
     "AgentMetrics",
     "AgentMetricsContract",
@@ -30,10 +34,14 @@ __all__ = [
     "EvaluationContext",
     "ExpectedOutput",
     "ExperimentConfiguration",
+    "HttpMcpServer",
     "JudgeCalibrationReport",
+    "McpServerConfig",
     "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
+    "StdioMcpServer",
+    "TestGenerationInput",
 ]
 
 
@@ -550,6 +558,100 @@ class EvaluationCategory(StrEnum):
                 return "windows-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")
+
+
+type TestGenerationInput = Literal["problem-statement", "gold-patch", "both"]
+
+
+class PromptConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    include_project_paths: StrictBool = False
+    test_generation_input: TestGenerationInput = Field(default="problem-statement", alias="test-generation-input")
+    templates: dict[EvaluationCategory, str] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_templates(cls, data: object) -> object:
+        # config.yaml keys each prompt template as `<category>-template`
+        if not isinstance(data, dict):
+            return data
+        if "templates" in data:
+            raise ValueError("Prompt templates must be configured as `<category>-template` keys, not `templates`")
+        settings = {key: value for key, value in data.items() if not key.endswith("-template")}
+        templates = {key.removesuffix("-template"): value for key, value in data.items() if key.endswith("-template")}
+        return {**settings, "templates": templates}
+
+
+class HttpMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["http"]
+    name: str
+    url: str
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+class StdioMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["stdio"]
+    name: str
+    command: str
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+type McpServerConfig = Annotated[HttpMcpServer | StdioMcpServer, Field(discriminator="type")]
+
+AL_MCP_SERVER_NAME = "altool"
+BC_MCP_SERVER_NAME = "bcmcp"
+
+
+class McpConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    servers: tuple[McpServerConfig, ...] = ()
+
+    @model_validator(mode="after")
+    def check_reserved_server_types(self) -> McpConfig:
+        # build_mcp_config customizes these servers by name and relies on their transport type
+        for server in self.servers:
+            if server.name == AL_MCP_SERVER_NAME and not isinstance(server, StdioMcpServer):
+                raise ValueError(f"MCP server '{AL_MCP_SERVER_NAME}' must be of type 'stdio'")
+            if server.name == BC_MCP_SERVER_NAME and not isinstance(server, HttpMcpServer):
+                raise ValueError(f"MCP server '{BC_MCP_SERVER_NAME}' must be of type 'http'")
+        return self
+
+
+class ToggleConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: StrictBool = False
+
+
+class CustomAgentsConfig(ToggleConfig):
+    name: str | None = None
+
+
+class AgentConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    prompt: PromptConfig = Field(default_factory=PromptConfig)
+    instructions: ToggleConfig = Field(default_factory=ToggleConfig)
+    skills: ToggleConfig = Field(default_factory=ToggleConfig)
+    agents: CustomAgentsConfig = Field(default_factory=CustomAgentsConfig)
+    # Kept raw: only enabled entries are validated into `PluginConfig`, since a disabled
+    # entry may point at a path that only exists on another machine.
+    plugins: tuple[dict[str, object], ...] = ()
+    mcp: McpConfig = Field(default_factory=McpConfig)
+    # Declared so typos in agent sections are rejected; their contents are validated by `JudgeConfig` and the pr-review agent
+    judges: dict[str, object] = Field(default_factory=dict)
+    pr_review: dict[str, object] = Field(default_factory=dict)
+
+    @classmethod
+    def from_file(cls, path: Path) -> AgentConfig:
+        return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 @dataclass(frozen=True)

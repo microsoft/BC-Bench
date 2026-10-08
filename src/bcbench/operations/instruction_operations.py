@@ -1,23 +1,22 @@
 import logging
 from pathlib import Path
 from shutil import copytree, rmtree
-from typing import Any
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.dataset_entry import RepoGroundedEntry
-from bcbench.types import AgentHarness
+from bcbench.types import AgentConfig, AgentHarness
 
 logger = logging.getLogger(__name__)
 _config = get_config()
 
 
-def setup_instructions_from_config(agent_config: dict[str, Any], entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
+def setup_instructions_from_config(agent_config: AgentConfig, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
     """
     Setup custom instructions from config if enabled.
 
     Args:
-        agent_config: Agent configuration dictionary
+        agent_config: Parsed agent configuration
         entry: Dataset entry naming the customization profile to apply
         repo_path: Path to repository where instructions will be copied
         harness: Agent harness (Copilot or Claude)
@@ -25,8 +24,7 @@ def setup_instructions_from_config(agent_config: dict[str, Any], entry: BaseData
     Returns:
         True if instructions are enabled, False otherwise
     """
-    instructions_config: dict[str, Any] = agent_config["instructions"]
-    instructions_enabled: bool = instructions_config["enabled"]
+    instructions_enabled: bool = agent_config.instructions.enabled
 
     if instructions_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
@@ -49,20 +47,17 @@ def setup_instructions_from_config(agent_config: dict[str, Any], entry: BaseData
     return instructions_enabled
 
 
-def setup_custom_agent(agent_config: dict[str, Any], entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> str | None:
+def setup_custom_agent(agent_config: AgentConfig, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> str | None:
     """
     Setup custom agents in the repository if available.
     """
-    custom_agent_config: dict[str, Any] = agent_config["agents"]
-    custom_agent_enabled: bool = custom_agent_config["enabled"]
-
-    if custom_agent_enabled:
+    if agent_config.agents.enabled:
         source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
         target_dir: Path = harness.get_target_dir(repo_path)
         copytree(source_instructions / "agents", target_dir / "agents", dirs_exist_ok=True)
 
         logger.info(f"Custom agents are set up from {source_instructions / 'agents'}")
-        return custom_agent_config.get("name")
+        return agent_config.agents.name
 
     return None
 

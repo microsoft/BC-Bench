@@ -159,7 +159,10 @@ def set_runtime_version(repo_path: Path, project_paths: list[str]) -> None:
         if app_json.get("runtime"):
             continue
 
-        platform: str = app_json.get("platform", "")
+        platform: object = app_json.get("platform")
+        if not isinstance(platform, str):
+            continue
+
         platform_major = _major_version(platform)
         if platform_major is None:
             continue

@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from pydantic import ValidationError
@@ -100,16 +101,16 @@ def parse_review_output(raw_output: str) -> list[ReviewComment] | None:
         return None
 
     try:
-        raw = json.loads(candidate)
+        raw: object = json.loads(candidate)
     except json.JSONDecodeError:
         logger.warning("Failed to parse review output as JSON")
         return None
 
-    raw_items: list[object]
+    raw_items: Sequence[object]
     if isinstance(raw, list):
         raw_items = raw
-    elif isinstance(raw, dict) and isinstance(raw.get("findings"), list):
-        raw_items = raw["findings"]
+    elif isinstance(raw, dict) and isinstance(findings := raw.get("findings"), list):
+        raw_items = findings
     elif isinstance(raw, dict) and any(key in raw for key in ("file", "filePath")):
         raw_items = [raw]
     else:

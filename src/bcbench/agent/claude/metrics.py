@@ -74,7 +74,7 @@ def parse_stream_output(output_lines: Sequence[str], *, log_transcript: bool = F
                             continue
                         match block.get("type"):
                             case "text":
-                                text = block.get("text")
+                                text: object = block.get("text")
                                 if log_transcript and isinstance(text, str) and text.strip():
                                     last_assistant_message = text.strip()
                                     logger.info("Claude Code: %s", last_assistant_message)
