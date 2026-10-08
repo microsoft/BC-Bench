@@ -1,4 +1,4 @@
-from bcbench.evaluate.ext_request_advisor import ADVISOR_RESULT_FILE, ExtRequestAdvisorPipeline
+from bcbench.categories.ext_request_advisor.pipeline import ADVISOR_RESULT_FILE, ExtRequestAdvisorPipeline
 from bcbench.results.base import RESULT_FILE_SUFFIX, JudgeBasedEvaluationResult
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_evaluation_context, create_ext_advisor_entry
@@ -41,7 +41,7 @@ def test_setup_removes_stale_advisor_output(tmp_path, monkeypatch):
     result_path = context.repo_path / ADVISOR_RESULT_FILE
     context.repo_path.mkdir()
     result_path.write_text("stale", encoding="utf-8")
-    monkeypatch.setattr("bcbench.evaluate.ext_request_advisor.setup_repo_prebuild", lambda *_args: None)
+    monkeypatch.setattr("bcbench.categories.ext_request_advisor.pipeline.setup_repo_prebuild", lambda *_args: None)
 
     ExtRequestAdvisorPipeline().setup(context)
 

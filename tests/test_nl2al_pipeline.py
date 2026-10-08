@@ -3,7 +3,7 @@
 import pytest
 from bcbench_core.exceptions import EmptyDiffError
 
-from bcbench.evaluate.nl2al import NL2ALPipeline
+from bcbench.categories.nl2al.pipeline import NL2ALPipeline
 from bcbench.results.base import RESULT_FILE_SUFFIX, JudgeBasedEvaluationResult
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_evaluation_context, create_nl2al_entry
@@ -32,7 +32,7 @@ class TestNL2ALEvaluateEmptyDiff:
     def test_empty_diff_on_genuine_task_is_marked_as_failure(self, tmp_path, monkeypatch):
         # Default entry has no metadata.area, so an empty diff means the agent failed to edit.
         ctx = _nl2al_context(tmp_path)
-        monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", _throw(EmptyDiffError()))
+        monkeypatch.setattr("bcbench.categories.nl2al.pipeline.stage_and_get_diff", _throw(EmptyDiffError()))
 
         NL2ALPipeline().evaluate(ctx)
 
@@ -47,7 +47,7 @@ class TestNL2ALEvaluateEmptyDiff:
         # it is left Unscored and judged downstream.
         entry = create_nl2al_entry(instance_id="nl2al__safety-refusal-1", area="safety")
         ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
-        monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", _throw(EmptyDiffError()))
+        monkeypatch.setattr("bcbench.categories.nl2al.pipeline.stage_and_get_diff", _throw(EmptyDiffError()))
 
         NL2ALPipeline().evaluate(ctx)
 
@@ -58,7 +58,7 @@ class TestNL2ALEvaluateEmptyDiff:
 
     def test_non_empty_diff_persists_raw_output(self, tmp_path, monkeypatch):
         ctx = _nl2al_context(tmp_path)
-        monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", lambda _repo_path, *, exclude: "diff --git a/x.al b/x.al\n+pageextension")
+        monkeypatch.setattr("bcbench.categories.nl2al.pipeline.stage_and_get_diff", lambda _repo_path, *, exclude: "diff --git a/x.al b/x.al\n+pageextension")
 
         NL2ALPipeline().evaluate(ctx)
 
@@ -68,7 +68,7 @@ class TestNL2ALEvaluateEmptyDiff:
 
     def test_unexpected_exceptions_still_propagate(self, tmp_path, monkeypatch):
         ctx = _nl2al_context(tmp_path)
-        monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", _throw(RuntimeError("infra blew up")))
+        monkeypatch.setattr("bcbench.categories.nl2al.pipeline.stage_and_get_diff", _throw(RuntimeError("infra blew up")))
 
         with pytest.raises(RuntimeError, match="infra blew up"):
             NL2ALPipeline().evaluate(ctx)
@@ -89,7 +89,7 @@ class TestNL2ALRunAgentSingleAttempt:
 
         reset_calls = {"n": 0}
         monkeypatch.setattr(pipeline, "setup_workspace", lambda *_args, **_kw: reset_calls.__setitem__("n", reset_calls["n"] + 1))
-        monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", _throw(AssertionError("run_agent must not stage diffs or retry when retries are disabled")))
+        monkeypatch.setattr("bcbench.categories.nl2al.pipeline.stage_and_get_diff", _throw(AssertionError("run_agent must not stage diffs or retry when retries are disabled")))
 
         pipeline.run_agent(ctx, agent_runner)
 

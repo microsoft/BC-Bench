@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
 import yaml
 from bcbench_core.agent.metrics import AgentMetrics
@@ -14,7 +14,6 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
-    from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
     from bcbench.results.leaderboard import LeaderboardAggregate
     from bcbench.results.summary import EvaluationResultSummary
@@ -334,39 +333,6 @@ class EvaluationCategory(StrEnum):
                 return JudgeBasedLeaderboardAggregate
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return JudgeBasedLeaderboardAggregate
-
-        raise ValueError(f"Unknown evaluation category: {self}")
-
-    @property
-    def pipeline(self) -> EvaluationPipeline[Any]:
-        from bcbench.evaluate import (
-            BugFixPipeline,
-            CodeReviewPipeline,
-            DataQueryPipeline,
-            ExtRequestAdvisorPipeline,
-            ExtRequestImplementPipeline,
-            ExtRequestTriagePipeline,
-            NL2ALPipeline,
-            TestGenerationPipeline,
-        )
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return BugFixPipeline()
-            case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationPipeline()
-            case EvaluationCategory.CODE_REVIEW:
-                return CodeReviewPipeline()
-            case EvaluationCategory.NL2AL:
-                return NL2ALPipeline()
-            case EvaluationCategory.DATA_QUERY:
-                return DataQueryPipeline()
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return ExtRequestAdvisorPipeline()
-            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
-                return ExtRequestImplementPipeline()
-            case EvaluationCategory.EXT_REQUEST_TRIAGE:
-                return ExtRequestTriagePipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

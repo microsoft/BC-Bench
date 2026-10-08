@@ -10,6 +10,7 @@ from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.categories import category_definition
+from bcbench.categories.code_review.judge_calibration import run_calibration
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -30,7 +31,6 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
-from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentHarness, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
@@ -77,7 +77,8 @@ def evaluate_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
+    definition = category_definition(category)
+    entry = definition.load_entries(_config.paths.dataset_dir, entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -93,7 +94,7 @@ def evaluate_copilot(
         category=category,
     )
 
-    pipeline = category.pipeline
+    pipeline = definition.make_pipeline()
     pipeline.execute(
         context,
         lambda ctx: run_copilot_agent(
@@ -102,7 +103,7 @@ def evaluate_copilot(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            pass_bc_credentials=category_definition(category).pass_bc_credentials,
+            pass_bc_credentials=definition.pass_bc_credentials,
             runtime=runtime,
         ),
     )
@@ -148,7 +149,8 @@ def evaluate_claude_code(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
+    definition = category_definition(category)
+    entry = definition.load_entries(_config.paths.dataset_dir, entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
@@ -164,7 +166,7 @@ def evaluate_claude_code(
         category=category,
     )
 
-    pipeline = category.pipeline
+    pipeline = definition.make_pipeline()
     pipeline.execute(
         context,
         lambda ctx: run_claude_code(
@@ -173,7 +175,7 @@ def evaluate_claude_code(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            pass_bc_credentials=category_definition(category).pass_bc_credentials,
+            pass_bc_credentials=definition.pass_bc_credentials,
             runtime=runtime,
         ),
     )
@@ -203,7 +205,8 @@ def evaluate_pr_review(
     To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
+    definition = category_definition(category)
+    entry = definition.load_entries(_config.paths.dataset_dir, entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
@@ -219,7 +222,7 @@ def evaluate_pr_review(
         category=category,
     )
 
-    category.pipeline.execute(
+    definition.make_pipeline().execute(
         context,
         lambda ctx: run_pr_review_agent(
             entry=ctx.entry,
@@ -250,7 +253,8 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0])
+    definition = category_definition(category)
+    entry: NL2ALEntry = cast(NL2ALEntry, definition.load_entries(_config.paths.dataset_dir, entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         command=llm_command,
@@ -269,7 +273,7 @@ def evaluate_bcal(
         category=category,
     )
 
-    category.pipeline.execute(
+    definition.make_pipeline().execute(
         context,
         lambda ctx: run_bcal_agent(
             entry=cast(NL2ALEntry, ctx.entry),

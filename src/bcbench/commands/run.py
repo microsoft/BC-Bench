@@ -71,8 +71,9 @@ def run_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
+    definition = category_definition(category)
+    entry = definition.load_entries(_config.paths.dataset_dir, entry_id)[0]
+    definition.make_pipeline().setup_workspace(entry, repo_path)
 
     run_copilot_agent(
         entry=entry,
@@ -80,7 +81,7 @@ def run_copilot(
         model=model,
         category=category,
         output_dir=output_dir,
-        pass_bc_credentials=category_definition(category).pass_bc_credentials,
+        pass_bc_credentials=definition.pass_bc_credentials,
         runtime=runtime,
     )
 
@@ -123,8 +124,9 @@ def run_claude(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
+    definition = category_definition(category)
+    entry = definition.load_entries(_config.paths.dataset_dir, entry_id)[0]
+    definition.make_pipeline().setup_workspace(entry, repo_path)
 
     run_claude_code(
         entry=entry,
@@ -132,7 +134,7 @@ def run_claude(
         model=model,
         category=category,
         output_dir=output_dir,
-        pass_bc_credentials=category_definition(category).pass_bc_credentials,
+        pass_bc_credentials=definition.pass_bc_credentials,
         runtime=runtime,
     )
 
@@ -160,8 +162,9 @@ def run_pr_review(
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
+    definition = category_definition(category)
+    entry = definition.load_entries(_config.paths.dataset_dir, entry_id)[0]
+    definition.make_pipeline().setup_workspace(entry, repo_path)
 
     run_pr_review_agent(
         entry=entry,
@@ -190,8 +193,9 @@ def run_bcal(
         uv run bcbench run bcal nl2al__job-budget-report-1
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0])
-    category.pipeline.setup_workspace(entry, repo_path)
+    definition = category_definition(category)
+    entry: NL2ALEntry = cast(NL2ALEntry, definition.load_entries(_config.paths.dataset_dir, entry_id)[0])
+    definition.make_pipeline().setup_workspace(entry, repo_path)
 
     run_bcal_agent(
         entry=entry,
