@@ -29,6 +29,7 @@ def test_absent_sections_are_disabled():
         pytest.param({"prompt": {"include_project_paths": "true"}}, id="prompt-string-not-bool"),
         pytest.param({"instrucions": {"enabled": True}}, id="misspelled-section"),
         pytest.param({"mcp": {"server": []}}, id="misspelled-mcp-key"),
+        pytest.param({"prompt": {"templates": {"bug-fix": "x"}}}, id="prompt-templates-key"),
     ],
 )
 def test_malformed_config_is_rejected(data):

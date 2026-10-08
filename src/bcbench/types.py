@@ -576,6 +576,8 @@ class PromptConfig(BaseModel):
         # config.yaml keys each prompt template as `<category>-template`
         if not isinstance(data, dict):
             return data
+        if "templates" in data:
+            raise ValueError("Prompt templates must be configured as `<category>-template` keys, not `templates`")
         settings = {key: value for key, value in data.items() if not key.endswith("-template")}
         templates = {key.removesuffix("-template"): value for key, value in data.items() if key.endswith("-template")}
         return {**settings, "templates": templates}
