@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import Any
 
 from jinja2.sandbox import SandboxedEnvironment
 
@@ -17,7 +18,7 @@ def _transform_image_paths(content: str) -> str:
     return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
 
-def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
+def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict[str, Any], category: EvaluationCategory, al_mcp: bool = False) -> str:
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
     include_project_paths = prompt_config.get("include_project_paths")

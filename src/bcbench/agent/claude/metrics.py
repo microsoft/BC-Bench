@@ -25,7 +25,7 @@ def _milliseconds_to_seconds(value: object) -> float | None:
     return None if milliseconds is None else milliseconds / 1000.0
 
 
-def _tool_label(block: dict) -> str | None:
+def _tool_label(block: dict[str, object]) -> str | None:
     tool_name = block.get("name")
     if not isinstance(tool_name, str) or not tool_name:
         return None

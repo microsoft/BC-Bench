@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
 
 class BcBenchMetrics:
-    def __call__(self, *, metadata: dict, **kwargs: object) -> dict[str, int]:
+    def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> dict[str, int]:
         tool_usage: dict[str, int] = metadata.get("tool_usage", {})
         return {
             "tool_calls": sum(tool_usage.values()) if tool_usage else 0,

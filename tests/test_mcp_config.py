@@ -1,6 +1,7 @@
 import json
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 from bcbench_core.container import ContainerConfig
@@ -12,7 +13,7 @@ from bcbench.types import AgentRuntimeConfig
 from tests.conftest import create_dataset_entry
 
 
-def _make_config(*servers: dict) -> dict:
+def _make_config(*servers: dict[str, Any]) -> dict[str, Any]:
     return {"mcp": {"servers": [deepcopy(s) for s in servers]}}
 
 

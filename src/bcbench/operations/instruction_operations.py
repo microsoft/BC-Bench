@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from shutil import copytree, rmtree
+from typing import Any
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 _config = get_config()
 
 
-def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
+def setup_instructions_from_config(agent_config: dict[str, Any], entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
     """
     Setup custom instructions from config if enabled.
 
@@ -24,7 +25,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
     Returns:
         True if instructions are enabled, False otherwise
     """
-    instructions_config: dict = agent_config["instructions"]
+    instructions_config: dict[str, Any] = agent_config["instructions"]
     instructions_enabled: bool = instructions_config["enabled"]
 
     if instructions_enabled:
@@ -48,11 +49,11 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
     return instructions_enabled
 
 
-def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> str | None:
+def setup_custom_agent(agent_config: dict[str, Any], entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> str | None:
     """
     Setup custom agents in the repository if available.
     """
-    custom_agent_config: dict = agent_config["agents"]
+    custom_agent_config: dict[str, Any] = agent_config["agents"]
     custom_agent_enabled: bool = custom_agent_config["enabled"]
 
     if custom_agent_enabled:

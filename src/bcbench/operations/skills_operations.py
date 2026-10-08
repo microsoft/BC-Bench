@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from shutil import copytree, rmtree
+from typing import Any
 
 from bcbench.dataset.dataset_entry import BaseDatasetEntry
 from bcbench.operations.instruction_operations import _get_source_instructions_path
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def setup_agent_skills(
-    agent_config: dict,
+    agent_config: dict[str, Any],
     entry: BaseDatasetEntry,
     repo_path: Path,
     harness: AgentHarness,

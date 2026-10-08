@@ -84,7 +84,7 @@ def test_invalid_output_raises_instead_of_clean_review(tmp_path: Path, text: str
         {"outcome": "no-knowledge", "findings": "nope"},
     ],
 )
-def test_malformed_report_raises_instead_of_clean_review(tmp_path: Path, report: dict) -> None:
+def test_malformed_report_raises_instead_of_clean_review(tmp_path: Path, report: dict[str, object]) -> None:
     out, repo = _dirs(tmp_path)
     _write_output(out, json.dumps(report))
     with pytest.raises(AgentError, match="no findings list"):

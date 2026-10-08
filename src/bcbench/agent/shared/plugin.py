@@ -3,6 +3,7 @@ import logging
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from bcbench_core.git import clone_repo_at_revision
 
@@ -45,7 +46,7 @@ def remove_agent_plugin(folder: str) -> None:
         logger.info(f"Removed stale agent plugin '{folder}': {plugin_dir}")
 
 
-def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool = False) -> list[tuple[PluginConfig, Path]]:
+def resolve_config_plugins(agent_config: dict[str, Any], *, allow_copilot_manifest: bool = False) -> list[tuple[PluginConfig, Path]]:
     """Resolve the config's enabled plugin entries to loadable plugin folders.
 
     A plugin is either `local` (an absolute path on this machine) or `github` (cloned from its repo
