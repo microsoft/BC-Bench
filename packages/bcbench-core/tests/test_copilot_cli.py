@@ -6,7 +6,6 @@ from unittest.mock import patch
 import pytest
 
 from bcbench_core.agent.copilot import CopilotOptions, CopilotProcessError, CopilotTimeoutError, invoke_copilot
-from bcbench_core.agent.copilot.agent import copilot_session_args
 from bcbench_core.agent.copilot.cli import _find_copilot
 from bcbench_core.exceptions import AgentError
 
@@ -94,41 +93,28 @@ def test_invoke_copilot_forwards_cli_stderr(tmp_path: Path, capsys):
     assert "warning: slow model" in capsys.readouterr().err
 
 
-def test_copilot_session_args_minimal(tmp_path: Path):
-    assert copilot_session_args(tmp_path) == ["--log-level=debug", f"--log-dir={tmp_path.resolve()}"]
+def _command_for(options: CopilotOptions, tmp_path: Path) -> list[str]:
+    with (
+        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.cli.subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")) as run,
+    ):
+        invoke_copilot("p", "m", tmp_path, 60, {}, options)
+    command = run.call_args.args[0]
+    assert isinstance(command, list)
+    return [str(arg) for arg in command]
 
 
-def test_copilot_session_args_can_omit_logging():
-    assert copilot_session_args() == []
-    assert copilot_session_args(mcp_config_json='{"mcpServers":{}}') == ['--additional-mcp-config={"mcpServers":{}}']
+def test_invoke_copilot_adds_logging_only_with_a_log_dir(tmp_path: Path):
+    assert _command_for(CopilotOptions(), tmp_path)[6:-1] == []
+    assert _command_for(CopilotOptions(log_dir=tmp_path), tmp_path)[6:-1] == ["--log-level=debug", f"--log-dir={tmp_path.resolve()}"]
+    assert _command_for(CopilotOptions(mcp_config_json='{"mcpServers":{}}'), tmp_path)[6:-1] == ['--additional-mcp-config={"mcpServers":{}}']
 
 
-def test_copilot_session_args_full_in_cli_order(tmp_path: Path):
-    args = copilot_session_args(
-        tmp_path / "logs",
-        '{"mcpServers":{}}',
-        plugin_dirs=(tmp_path / "lsp", tmp_path / "plugin with spaces"),
-        granted_dirs=(tmp_path / "plugin with spaces",),
-        custom_agent="al-dev",
-    )
+def test_invoke_copilot_does_not_grant_plugin_directory_access(tmp_path: Path):
+    command = _command_for(CopilotOptions(plugin_dirs=(tmp_path / "plugin",)), tmp_path)
 
-    assert args == [
-        "--log-level=debug",
-        f"--log-dir={(tmp_path / 'logs').resolve()}",
-        '--additional-mcp-config={"mcpServers":{}}',
-        f"--plugin-dir={tmp_path / 'lsp'}",
-        f"--plugin-dir={tmp_path / 'plugin with spaces'}",
-        f"--add-dir={tmp_path / 'plugin with spaces'}",
-        "--agent=al-dev",
-    ]
-
-
-def test_copilot_session_args_does_not_grant_plugin_directory_access(tmp_path: Path):
-    assert copilot_session_args(tmp_path, plugin_dirs=(tmp_path / "plugin",)) == [
-        "--log-level=debug",
-        f"--log-dir={tmp_path.resolve()}",
-        f"--plugin-dir={tmp_path / 'plugin'}",
-    ]
+    assert f"--plugin-dir={tmp_path / 'plugin'}" in command
+    assert not any(arg.startswith("--add-dir=") for arg in command)
 
 
 def test_invoke_copilot_runs_a_configured_session_without_caller_built_arguments(tmp_path: Path):
