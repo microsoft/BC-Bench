@@ -10,9 +10,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import click
 import pytest
 from rich.console import Console
-from typer.testing import CliRunner
+from typer.main import get_command
 
 # Red teaming ships as the optional `redteam` dependency group, so skip when it is not installed.
 pytest.importorskip("azure.ai.evaluation.red_team")
@@ -34,15 +35,17 @@ def bcal_target(tmp_path: Path) -> redteam.RedTeamCallback:
         )
 
 
-def test_scan_only_exposes_external_command_options():
-    result = CliRunner().invoke(redteam_app, ["scan", "--help"])
+def _option_names(command: click.Command) -> set[str]:
+    return {option for parameter in command.params if isinstance(parameter, click.Option) for option in (*parameter.opts, *parameter.secondary_opts)}
 
-    assert result.exit_code == 0
-    assert "--llm-command" in result.stdout
-    assert "--llm-model" in result.stdout
-    assert "--backend" not in result.stdout
-    assert "--endpoint" not in result.stdout
-    assert "--deployment" not in result.stdout
+
+def test_scan_only_exposes_external_command_options():
+    root = get_command(redteam_app)
+    assert isinstance(root, click.Group)
+    options = _option_names(root.commands["scan"])
+
+    assert {"--llm-command", "--llm-model"} <= options
+    assert options.isdisjoint({"--backend", "--endpoint", "--deployment"})
 
 
 def test_bcal_target_uses_advanced_async_callback_signature(bcal_target: redteam.RedTeamCallback):

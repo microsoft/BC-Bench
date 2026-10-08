@@ -5,8 +5,10 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import PropertyMock, patch
 
+import click
 import pytest
 import typer
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from bcbench.cli import _redteam_group_installed, app
@@ -140,16 +142,20 @@ def test_evaluate_bcal_records_model_label(tmp_path):
     assert captured["context"].model == "gpt-5.2-prod"
 
 
-@pytest.mark.parametrize("command", [["run", "bcal", "--help"], ["evaluate", "bcal", "--help"]])
-def test_bcal_commands_only_expose_external_command_options(command):
-    result = runner.invoke(app, command)
+def _option_names(command: click.Command) -> set[str]:
+    return {option for parameter in command.params if isinstance(parameter, click.Option) for option in (*parameter.opts, *parameter.secondary_opts)}
 
-    assert result.exit_code == 0
-    assert "--llm-command" in result.stdout
-    assert "--llm-model" in result.stdout
-    assert "--backend" not in result.stdout
-    assert "--endpoint" not in result.stdout
-    assert "--deployment" not in result.stdout
+
+@pytest.mark.parametrize("command_group", ["run", "evaluate"])
+def test_bcal_commands_only_expose_external_command_options(command_group):
+    root = get_command(app)
+    assert isinstance(root, click.Group)
+    group = root.commands[command_group]
+    assert isinstance(group, click.Group)
+    options = _option_names(group.commands["bcal"])
+
+    assert {"--llm-command", "--llm-model"} <= options
+    assert options.isdisjoint({"--backend", "--endpoint", "--deployment"})
 
 
 @pytest.fixture
