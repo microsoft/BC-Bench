@@ -10,6 +10,24 @@ import pytest
 from bcbench.agent.bcal import bc_eval_capi_bridge
 
 
+class _CapiClient:
+    def __init__(self, result: object = None, error: Exception | None = None) -> None:
+        self.result = result
+        self.error = error
+        self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+
+    def create(self, **_kwargs: object) -> object:
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+class _HttpError(Exception):
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+        super().__init__(f"HTTP {status_code}")
+
+
 def test_load_request_accepts_utf8_bom_from_bcal_windows_stdin():
     request = {
         "model": "gpt-5",
@@ -19,6 +37,42 @@ def test_load_request_accepts_utf8_bom_from_bcal_windows_stdin():
     input_stream = BytesIO(b"\xef\xbb\xbf" + json.dumps(request).encode())
 
     assert bc_eval_capi_bridge._load_request(input_stream) == request
+
+
+@pytest.mark.parametrize("status_code", [500, 503, 599])
+def test_create_completion_records_capi_5xx_as_infrastructure_error(monkeypatch, tmp_path, status_code):
+    error_file = tmp_path / "capi-error.json"
+    monkeypatch.setenv(bc_eval_capi_bridge._INFRASTRUCTURE_ERROR_FILE_ENV, str(error_file))
+
+    with pytest.raises(_HttpError, match=f"HTTP {status_code}"):
+        bc_eval_capi_bridge._create_completion(_CapiClient(error=_HttpError(status_code)), {})
+
+    assert json.loads(error_file.read_text(encoding="utf-8")) == {
+        "provider": "capi",
+        "status_code": status_code,
+        "message": f"HTTP {status_code}",
+    }
+
+
+@pytest.mark.parametrize("status_code", [400, 401, 429])
+def test_create_completion_does_not_classify_non_5xx_failures(monkeypatch, tmp_path, status_code):
+    error_file = tmp_path / "capi-error.json"
+    monkeypatch.setenv(bc_eval_capi_bridge._INFRASTRUCTURE_ERROR_FILE_ENV, str(error_file))
+
+    with pytest.raises(_HttpError, match=f"HTTP {status_code}"):
+        bc_eval_capi_bridge._create_completion(_CapiClient(error=_HttpError(status_code)), {})
+
+    assert not error_file.exists()
+
+
+def test_create_completion_clears_stale_infrastructure_error_after_success(monkeypatch, tmp_path):
+    error_file = tmp_path / "capi-error.json"
+    error_file.write_text("stale", encoding="utf-8")
+    monkeypatch.setenv(bc_eval_capi_bridge._INFRASTRUCTURE_ERROR_FILE_ENV, str(error_file))
+    expected = {"choices": []}
+
+    assert bc_eval_capi_bridge._create_completion(_CapiClient(result=expected), {}) == expected
+    assert not error_file.exists()
 
 
 @pytest.fixture

@@ -11,7 +11,7 @@ from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationOutcome, EvaluationPipeline
-from bcbench.exceptions import AgentTimeoutError
+from bcbench.exceptions import AgentInfrastructureError, AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
@@ -103,6 +103,34 @@ class TestExecuteAgentTimeout:
         result = _read_only_result(ctx)
         assert isinstance(result, JudgeBasedEvaluationResult)
         assert result.judge_model == EvaluationCategory.NL2AL.judge_model
+
+
+class TestExecuteAgentInfrastructureError:
+    def test_persists_infrastructure_result_and_skips_evaluate(self, tmp_path):
+        entry = create_nl2al_entry()
+        ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
+        metrics = AgentMetrics(execution_time=42.0)
+        error = AgentInfrastructureError(
+            "CAPI infrastructure error (HTTP 500): DependencyFailure",
+            provider="capi",
+            status_code=500,
+            metrics=metrics,
+            config=ExperimentConfiguration(),
+        )
+        pipeline = _StubPipeline[NL2ALEntry](raise_in_run_agent=error)
+
+        outcome = pipeline.execute(ctx, lambda _: (None, None))
+
+        assert outcome is EvaluationOutcome.AGENT_INFRASTRUCTURE_ERROR
+        assert pipeline.evaluate_called is False
+        result = _read_only_result(ctx)
+        assert isinstance(result, JudgeBasedEvaluationResult)
+        assert result.infrastructure_error is True
+        assert result.error_provider == "capi"
+        assert result.error_status_code == 500
+        assert result.error_message == str(error)
+        assert result.metrics == metrics
+        assert result.status_label == "Infrastructure Error"
 
 
 class TestExecuteEvaluateError:

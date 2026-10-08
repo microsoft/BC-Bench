@@ -263,4 +263,5 @@ jobs:
       skip-leaderboard: true
       expected-total: ${{ fromJSON(needs.get-entries.outputs.entry-count) }}
       artifact-pattern: evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*
+      allow-unscored-results: true
     secrets: inherit

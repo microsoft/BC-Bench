@@ -1,6 +1,8 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+import json
 import logging
+import os
 import shutil
 import subprocess
 import time
@@ -11,13 +13,15 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.exceptions import AgentError, AgentTimeoutError
+from bcbench.exceptions import AgentError, AgentInfrastructureError, AgentTimeoutError
 from bcbench.types import AgentMetrics, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 _config = get_config()
 
 _BCAL_TOOL = "bcal"
+_CAPI_ERROR_FILE_ENV = "BCBENCH_CAPI_ERROR_FILE"
+_CAPI_ERROR_FILENAME = ".bcbench-capi-error.json"
 
 
 class BCalBackendConfig(BaseModel):
@@ -56,6 +60,40 @@ def _process_output(output: str | bytes | None) -> str:
     if isinstance(output, bytes):
         return output.decode("utf-8", errors="replace").strip()
     return (output or "").strip()
+
+
+def _take_capi_infrastructure_error(error_file: Path, metrics: AgentMetrics) -> AgentInfrastructureError | None:
+    if not error_file.is_file():
+        return None
+
+    try:
+        payload = json.loads(error_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        raise AgentError(f"Could not read BCal CAPI infrastructure error marker {error_file}: {error}") from error
+    finally:
+        error_file.unlink(missing_ok=True)
+
+    if not isinstance(payload, dict):
+        raise AgentError(f"Invalid BCal CAPI infrastructure error marker: {payload!r}")
+
+    provider = payload.get("provider")
+    status_code = payload.get("status_code")
+    message = payload.get("message")
+    if provider != "capi" or not isinstance(status_code, int) or not 500 <= status_code <= 599 or not isinstance(message, str):
+        raise AgentError(f"Invalid BCal CAPI infrastructure error marker: {payload!r}")
+
+    return AgentInfrastructureError(
+        f"CAPI infrastructure error (HTTP {status_code}): {message}",
+        provider=provider,
+        status_code=status_code,
+        metrics=metrics,
+        config=ExperimentConfiguration(),
+    )
+
+
+def _raise_capi_infrastructure_error(error_file: Path, metrics: AgentMetrics) -> None:
+    if infrastructure_error := _take_capi_infrastructure_error(error_file, metrics):
+        raise infrastructure_error from None
 
 
 def _trim_prompt_echo(stdout: str, query: str) -> str:
@@ -130,6 +168,9 @@ def run_bcal_agent(
 
     export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
     cmd_args = _bcal_cmd_args(entry, entry.get_task(), package_cache_path, export_folder, backend_config)
+    error_file = package_cache_path.parent / _CAPI_ERROR_FILENAME
+    error_file.unlink(missing_ok=True)
+    process_env = {**os.environ, _CAPI_ERROR_FILE_ENV: str(error_file)}
 
     logger.info(f"Export folder: {export_folder}")
     logger.debug(f"Package cache path: {package_cache_path}")
@@ -142,18 +183,26 @@ def run_bcal_agent(
             cmd_args,
             timeout=_config.timeout.bcal_execution,
             check=True,
+            env=process_env,
         )
         execution_time = time.monotonic() - start
+        metrics = AgentMetrics(execution_time=execution_time)
+        _raise_capi_infrastructure_error(error_file, metrics)
 
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
-        return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
+        return metrics, ExperimentConfiguration()
     except subprocess.TimeoutExpired:
         logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
+        _raise_capi_infrastructure_error(error_file, metrics)
         raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
     except subprocess.CalledProcessError as e:
+        metrics = AgentMetrics(execution_time=time.monotonic() - start)
+        _raise_capi_infrastructure_error(error_file, metrics)
         logger.exception(f"bcal CLI execution failed: {e.stderr}")
         raise AgentError(f"bcal CLI execution failed: {e}") from None
+    except AgentInfrastructureError:
+        raise
     except Exception:
         logger.exception("Unexpected error running bcal CLI")
         raise

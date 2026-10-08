@@ -250,9 +250,11 @@ def test_lm_checklist_delegates_non_luna_requests(monkeypatch):
     )
 
     scorer = cast(built_in, scores.LmChecklist())
-    result = scorer._run_eval_sync("answer", {"assertions": [assertion]})
+    metadata = {}
+    result = scorer._run_eval_sync("answer", {"assertions": [assertion]}, metadata=metadata)
 
     assert {score.name: score.score for score in result}["test_passed"] == 1.0
+    assert metadata["core_score_name"] == "test_passed"
     assert len(client.chat_calls) == 1
     assert client.responses_calls == []
 
@@ -319,4 +321,38 @@ def test_lm_checklist_scores_timeout_without_calling_judge(monkeypatch):
     }
     assert client.responses_calls == []
     assert client.chat_calls == []
+    assert metadata["core_score_name"] == "test_passed"
     assert metadata["assertionResults"] == [{**assertion, "pass": False, "reasoning": "Agent timed out before producing output"} for assertion in assertions]
+
+
+def test_lm_checklist_skips_infrastructure_error_without_calling_judge(monkeypatch):
+    client = _RecordingClient()
+    built_in = _install_lm_checklist_dependencies(
+        monkeypatch,
+        model="gpt-56-reasoning-nano-luna",
+        client=client,
+    )
+    error_message = "CAPI infrastructure error (HTTP 500): DependencyFailure"
+    metadata = {
+        "infrastructure_error": True,
+        "Error": error_message,
+    }
+
+    scorer = cast(built_in, scores.LmChecklist())
+    result = scorer._run_eval_sync(
+        "",
+        {"assertions": [{"text": "Critical behavior.", "level": "critical"}]},
+        metadata=metadata,
+    )
+
+    assert {score.name: score.score for score in result} == {
+        "pass_rate": None,
+        "critical_pass_rate": None,
+        "expected_pass_rate": None,
+        "aspirational_pass_rate": None,
+        "test_passed": None,
+    }
+    assert all(score.metadata == {"error": error_message} for score in result)
+    assert metadata["core_score_name"] == "test_passed"
+    assert client.responses_calls == []
+    assert client.chat_calls == []

@@ -158,6 +158,19 @@ def _timeout_scores(scorer: object, expected: object, metadata: dict[str, Any]) 
     ]
 
 
+def _infrastructure_error_scores(metadata: dict[str, Any]) -> list[object]:
+    error = str(metadata.get("Error") or metadata.get("error_message") or "Infrastructure error")
+    score_metadata = {"error": error}
+    score = importlib.import_module("autoevals").Score
+    return [
+        score(name="pass_rate", score=None, metadata=score_metadata),
+        score(name="critical_pass_rate", score=None, metadata=score_metadata),
+        score(name="expected_pass_rate", score=None, metadata=score_metadata),
+        score(name="aspirational_pass_rate", score=None, metadata=score_metadata),
+        score(name="test_passed", score=None, metadata=score_metadata),
+    ]
+
+
 class LmChecklist:
     def __new__(cls) -> object:
         # bc-eval loads a custom class with this name before its built-in scorer.
@@ -179,8 +192,12 @@ class LmChecklist:
 
         def timeout_aware_run_eval_sync(output: object, expected: object = None, **kwargs: object) -> object:
             metadata = kwargs.get("metadata")
-            if isinstance(metadata, dict) and metadata.get("timeout") is True:
-                return _timeout_scores(scorer, expected, metadata)
+            if isinstance(metadata, dict):
+                metadata["core_score_name"] = "test_passed"
+                if metadata.get("infrastructure_error") is True:
+                    return _infrastructure_error_scores(metadata)
+                if metadata.get("timeout") is True:
+                    return _timeout_scores(scorer, expected, metadata)
             return run_eval_sync(output, expected, **kwargs)
 
         scorer._request_args = responses_compatible_request_args

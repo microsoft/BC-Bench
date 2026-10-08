@@ -8,7 +8,7 @@ from typing import Protocol
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentTimeoutError
+from bcbench.exceptions import AgentInfrastructureError, AgentTimeoutError
 from bcbench.results import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
 
@@ -20,6 +20,7 @@ __all__ = ["AgentRunner", "EvaluationOutcome", "EvaluationPipeline"]
 
 class EvaluationOutcome(StrEnum):
     COMPLETED = "completed"
+    AGENT_INFRASTRUCTURE_ERROR = "agent_infrastructure_error"
     AGENT_TIMEOUT = "agent_timeout"
 
 
@@ -106,6 +107,18 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
             return EvaluationOutcome.AGENT_TIMEOUT
+        except AgentInfrastructureError as e:
+            context.metrics = e.metrics
+            context.experiment = e.config
+            result = context.category.result_class.create_agent_infrastructure_failure(
+                context,
+                error_message=str(e),
+                provider=e.provider,
+                status_code=e.status_code,
+            )
+            self.save_result(context, result)
+            logger.warning("Agent execution stopped because an infrastructure dependency failed.")
+            return EvaluationOutcome.AGENT_INFRASTRUCTURE_ERROR
         finally:
             logger.info(f"Agent metrics: {context.metrics}")
             logger.info(f"Experiment configuration: {context.experiment}")

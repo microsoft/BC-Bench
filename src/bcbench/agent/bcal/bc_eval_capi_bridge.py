@@ -11,6 +11,7 @@ from typing import BinaryIO, cast
 _CERT_FILE_ENV = "CAPI_CERT_FILE"
 _CERT_TENANT_ENV = "CAPI_TENANT_ID"
 _CERT_CLIENT_ENV = "CAPI_CLIENT_ID"
+_INFRASTRUCTURE_ERROR_FILE_ENV = "BCBENCH_CAPI_ERROR_FILE"
 
 # Reasoning effort (not all models support this parameter), different models might have different available values:
 # Set to None to omit the parameter entirely (lets the model/service use its own default).
@@ -105,6 +106,52 @@ def _maybe_install_local_cert_credential() -> None:
     _patch_credential_from_local_file(cert_file)
 
 
+def _infrastructure_error_file() -> Path | None:
+    path = os.environ.get(_INFRASTRUCTURE_ERROR_FILE_ENV)
+    return Path(path) if path else None
+
+
+def _clear_infrastructure_error() -> None:
+    error_file = _infrastructure_error_file()
+    if error_file is not None:
+        error_file.unlink(missing_ok=True)
+
+
+def _http_status_code(error: Exception) -> int | None:
+    status_code = getattr(error, "status_code", None)
+    if not isinstance(status_code, int):
+        status_code = getattr(getattr(error, "response", None), "status_code", None)
+    return status_code if isinstance(status_code, int) else None
+
+
+def _record_infrastructure_error(error: Exception) -> None:
+    status_code = _http_status_code(error)
+    error_file = _infrastructure_error_file()
+    if error_file is None or status_code is None or not 500 <= status_code <= 599:
+        return
+
+    error_file.parent.mkdir(parents=True, exist_ok=True)
+    error_file.write_text(
+        json.dumps(
+            {
+                "provider": "capi",
+                "status_code": status_code,
+                "message": str(error),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _create_completion(client: object, kwargs: dict[str, object]) -> object:
+    _clear_infrastructure_error()
+    try:
+        return client.chat.completions.create(**kwargs)  # ty: ignore[unresolved-attribute]
+    except Exception as error:
+        _record_infrastructure_error(error)
+        raise
+
+
 def main() -> int:
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
@@ -134,7 +181,7 @@ def main() -> int:
     if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
 
-    response = client.chat.completions.create(**kwargs)
+    response = _create_completion(client, kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
     return 0
 

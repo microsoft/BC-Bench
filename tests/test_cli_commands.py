@@ -192,6 +192,37 @@ def test_evaluate_bcal_exits_nonzero_after_persisted_timeout(tmp_path):
     assert exc_info.value.exit_code == 1
 
 
+def test_evaluate_bcal_exits_nonzero_after_persisted_infrastructure_error(tmp_path):
+    entry = create_nl2al_entry()
+
+    class EntryClass:
+        @staticmethod
+        def load(_dataset_path, entry_id: str):
+            assert entry_id == entry.instance_id
+            return [entry]
+
+    class Pipeline:
+        def execute(self, _context, _agent_runner):
+            return EvaluationOutcome.AGENT_INFRASTRUCTURE_ERROR
+
+    with (
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
+        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
+        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        pytest.raises(typer.Exit) as exc_info,
+    ):
+        evaluate_commands.evaluate_bcal(
+            entry_id=entry.instance_id,
+            repo_path=tmp_path / "repo",
+            output_dir=tmp_path / "results",
+            run_id="bcal-run",
+            llm_command="python bridge.py",
+            llm_model="gpt-5.2-prod",
+        )
+
+    assert exc_info.value.exit_code == 1
+
+
 @pytest.fixture
 def agent_command_category(tmp_path):
     entry = create_dataset_entry()

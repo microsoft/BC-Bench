@@ -273,7 +273,7 @@ def evaluate_bcal(
             backend_config=backend_config,
         ),
     )
-    if outcome is EvaluationOutcome.AGENT_TIMEOUT:
+    if outcome in {EvaluationOutcome.AGENT_INFRASTRUCTURE_ERROR, EvaluationOutcome.AGENT_TIMEOUT}:
         raise typer.Exit(code=1)
 
     logger.info("Evaluation complete!")

@@ -40,6 +40,40 @@ class TestWriteBcevalResults:
         assert metadata["timeout"] is True
         assert metadata["error_message"] == "Agent timed out"
 
+    def test_exports_infrastructure_error_without_model_score(self, tmp_path):
+        entry = create_nl2al_entry()
+        judge_model = EvaluationCategory.NL2AL.judge_model
+        assert judge_model is not None
+        error_message = "CAPI infrastructure error (HTTP 500): DependencyFailure"
+        result = JudgeBasedEvaluationResult(
+            instance_id=entry.instance_id,
+            project="BaseApp",
+            model="gpt-55-chat-2026-04-29",
+            agent_name=AgentHarness.BCAL,
+            category=EvaluationCategory.NL2AL,
+            infrastructure_error=True,
+            error_provider="capi",
+            error_status_code=500,
+            error_message=error_message,
+            judge_model=judge_model,
+        )
+
+        with patch.object(NL2ALEntry, "load", return_value=[entry]):
+            write_bceval_results(
+                results=[result],
+                out_dir=tmp_path,
+                run_id="run",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.NL2AL,
+            )
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        assert metadata["infrastructure_error"] is True
+        assert metadata["error_provider"] == "capi"
+        assert metadata["error_status_code"] == 500
+        assert metadata["Error"] == error_message
+        assert "test_passed" not in metadata
+
     @pytest.mark.parametrize(
         "metrics",
         [
@@ -99,6 +133,8 @@ class TestWriteBcevalResults:
         assert data["metadata"]["agent_version"] == "1.2.3"
         # bug-fix is not judge-scored, so no judge model is exported
         assert "judge_model" not in data["metadata"]
+        assert "infrastructure_error" not in data["metadata"]
+        assert "Error" not in data["metadata"]
         assert data["metadata"]["prompt_tokens"] == 5000
         assert data["metadata"]["completion_tokens"] == 1200
         assert data["metadata"]["latency"] == 120.5

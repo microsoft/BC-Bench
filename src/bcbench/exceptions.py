@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AgentError",
+    "AgentInfrastructureError",
     "BCBenchError",
     "CollectionError",
     "ConfigurationError",
@@ -88,6 +89,25 @@ class NoTestsExtractedError(BCBenchError):
 
 class AgentError(BCBenchError):
     """Agent execution errors."""
+
+
+class AgentInfrastructureError(AgentError):
+    """A dependency failure that prevented the agent from producing an evaluable result."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str,
+        status_code: int | None = None,
+        metrics: AgentMetrics | None = None,
+        config: ExperimentConfiguration | None = None,
+    ) -> None:
+        self.provider = provider
+        self.status_code = status_code
+        self.metrics = metrics
+        self.config = config
+        super().__init__(message)
 
 
 class AgentTimeoutError(BCBenchError):
