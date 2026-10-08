@@ -17,23 +17,19 @@ from bcbench.github_actions import github_log_group
 from bcbench.operations import copy_problem_statement_folder, extract_tests_from_patch, setup_repo_prebuild
 from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentConfig, EvaluationContext, TestGenerationInput
+from bcbench.types import AgentConfig, EvaluationContext
 
 logger = logging.getLogger(__name__)
 _config = get_config()
 
-__all__ = ["TestGenerationPipeline", "_get_test_generation_input_mode"]
-
-
-def _get_test_generation_input_mode() -> TestGenerationInput:
-    return AgentConfig.from_file(_config.paths.agent_share_dir / "config.yaml").prompt.test_generation_input
+__all__ = ["TestGenerationPipeline"]
 
 
 class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
     """Pipeline for test-generation evaluation category."""
 
     def _apply_input_postbuild(self, entry: TestGenEntry, repo_path: Path) -> None:
-        input_mode = _get_test_generation_input_mode()
+        input_mode = AgentConfig.from_file(_config.paths.agent_share_dir / "config.yaml").prompt.test_generation_input
         logger.info(f"Test generation input mode: {input_mode}")
         match input_mode:
             case "gold-patch":

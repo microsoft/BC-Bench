@@ -20,7 +20,6 @@ def _transform_image_paths(content: str) -> str:
 def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: AgentConfig, category: EvaluationCategory, al_mcp: bool = False) -> str:
     prompt_config = config.prompt
     template_str = prompt_config.templates[category]
-    include_project_paths = prompt_config.include_project_paths
 
     test_gen_input: TestGenerationInput = prompt_config.test_generation_input
     is_gold_patch: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("gold-patch", "both")
@@ -32,7 +31,7 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: AgentConfig, 
         repo_path=repo_path,
         task=task,
         project_paths=", ".join(entry.project_paths),
-        include_project_paths=include_project_paths,
+        include_project_paths=prompt_config.include_project_paths,
         is_gold_patch=is_gold_patch,  # only relevant for test-generation
         is_problem_statement=is_problem_statement,  # only relevant for test-generation
         al_mcp=al_mcp,  # whether AL MCP server is enabled
