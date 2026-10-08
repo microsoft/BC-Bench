@@ -15,17 +15,14 @@ This doc is a map; the source files and their comments are the source of truth. 
 A category's `definition.py` declares ([src/bcbench/categories/definition.py](src/bcbench/categories/definition.py)):
 
 - `dataset_file` / `entry_type` — the dataset file for raw tasks and the typed Python model for one dataset row (aka one task). `requires_repo` follows from the entry type.
-- `make_pipeline` — builds the category's pipeline (`pipeline.py` in the category package): setup, agent run, and evaluation behavior.
+- `pipeline_type` — the category's pipeline (`pipeline.py` in the category package): setup, agent run, and evaluation behavior. The pipeline declares the `result_type` recorded for one evaluated task.
+- `summary_type` / `aggregate_type` — the aggregate views used by result summaries and leaderboards. [src/bcbench/categories/results.py](src/bcbench/categories/results.py) uses these types to load and aggregate results.
 - `evaluators` / `core_score` — the bc-eval evaluator list and headline score, emitted to workflows by [src/bcbench/commands/category.py](src/bcbench/commands/category.py).
+- `judge` — the LLM judge for judge-scored categories; its pinned model comes from `judges` in [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml).
 - `requires_container` / `runner` — whether the category needs a BC container, and which runner evaluates it.
 - `pass_bc_credentials` — whether the agent may see the BC container credentials.
 
-Still mapped from `EvaluationCategory` while the redesign continues:
-
-- `result_class` — the recorded outcome for one evaluated task.
-- `summary_class` / `aggregate_class` — the aggregate views used by result summaries and leaderboards.
-- `judge_model` — the pinned LLM judge for judge-scored categories.
-- Prompt template — the category-specific prompt in [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml), loaded by [src/bcbench/agent/shared/prompt.py](src/bcbench/agent/shared/prompt.py).
+Still keyed by category name while the redesign continues: the prompt template in [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml), loaded by [src/bcbench/agent/shared/prompt.py](src/bcbench/agent/shared/prompt.py).
 
 Keep dataset entry classes and result classes focused on typed data. Put category-specific behavior in the pipeline.
 
@@ -33,10 +30,10 @@ Keep dataset entry classes and result classes focused on typed data. Put categor
 
 Use the existing implementations as examples: `bug-fix` and `test-generation` for execution-based categories, `code-review` and `nl2al` for judge-based ones.
 
-1. Add the enum value and remaining mappings in [src/bcbench/types.py](src/bcbench/types.py), and a category package with `definition.py` under [src/bcbench/categories/](src/bcbench/categories/), wired into `category_definition()`.
+1. Add the enum value in [src/bcbench/types.py](src/bcbench/types.py), and a category package with `definition.py` under [src/bcbench/categories/](src/bcbench/categories/), wired into `category_definition()`.
 2. Add the category dataset JSONL and entry class in [src/bcbench/dataset/dataset_entry.py](src/bcbench/dataset/dataset_entry.py).
-3. Add a result class under [src/bcbench/results/](src/bcbench/results/) and map it from `EvaluationCategory.result_class`.
-4. Add a `pipeline.py` to the category package, subclassing `EvaluationPipeline` from [src/bcbench/evaluate/base.py](src/bcbench/evaluate/base.py).
+3. Reuse a shared result family from [src/bcbench/results/](src/bcbench/results/), or add a category-specific result class.
+4. Add a `pipeline.py` to the category package, subclassing `EvaluationPipeline` from [src/bcbench/evaluate/base.py](src/bcbench/evaluate/base.py) and setting its `result_type`.
 5. Add the prompt template to [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml).
 6. Add the category to workflow choice lists in [.github/workflows/](.github/workflows/), especially evaluation workflows and CI category selection.
 7. Add docs, leaderboard data, notebooks, and tests for the category where relevant.

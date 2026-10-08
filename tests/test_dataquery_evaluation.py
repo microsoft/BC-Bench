@@ -91,6 +91,7 @@ class TestGoldRowsEmptyGuard:
             model="test-model",
             agent_name=AgentHarness.COPILOT,
             category=EvaluationCategory.DATA_QUERY,
+            judge_model=None,
         )
 
     def test_empty_gold_raises(self, tmp_path, monkeypatch):

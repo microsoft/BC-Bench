@@ -16,7 +16,9 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from bcbench_core.dataset import TestEntry
 
+from bcbench.categories import category_definition
 from bcbench.categories.code_review.review_parsing import parse_review_output
+from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
@@ -99,6 +101,7 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
         agent_name=agent_name,
         model=model,
         category=category,
+        judge_model=category_definition(category).judge_model(get_config().judge),
     )
 
 
@@ -220,6 +223,7 @@ def create_codereview_result(
         agent_name=agent_name,
         model=model,
         category=EvaluationCategory.CODE_REVIEW,
+        judge_model=get_config().judge.code_review_model,
     )
     context.metrics = metrics
 

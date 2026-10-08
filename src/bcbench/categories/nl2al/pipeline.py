@@ -57,6 +57,8 @@ def _git_init_and_commit(repo_path: Path) -> None:
 class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
     """Pipeline for NL2AL evaluation category — generate AL code from natural language."""
 
+    result_type = JudgeBasedEvaluationResult
+
     @override
     def setup_workspace(self, entry: NL2ALEntry, repo_path: Path) -> None:
         _reset_repo_path(repo_path)

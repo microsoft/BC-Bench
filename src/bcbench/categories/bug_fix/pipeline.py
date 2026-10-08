@@ -22,6 +22,8 @@ __all__ = ["BugFixPipeline"]
 class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
     """Pipeline for bug-fix evaluation category."""
 
+    result_type = BugFixResult
+
     @override
     def setup_workspace(self, entry: BugFixEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)

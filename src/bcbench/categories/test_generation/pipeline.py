@@ -27,6 +27,8 @@ __all__ = ["TestGenerationPipeline"]
 class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
     """Pipeline for test-generation evaluation category."""
 
+    result_type = TestGenerationResult
+
     def _apply_input_postbuild(self, entry: TestGenEntry, repo_path: Path) -> None:
         input_mode = AgentConfig.from_file(SHARED_CONFIG_FILE).prompt.test_generation_input
         logger.info(f"Test generation input mode: {input_mode}")

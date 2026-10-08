@@ -109,19 +109,9 @@ class EvaluationResultSummary(BaseModel, ABC):
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
         """Create a summary from a list of per-instance results.
 
-        When called on the base class, dispatches to the correct subclass.
         Subclasses override, call super().from_results(), and extend via model_copy().
         """
-        if cls is EvaluationResultSummary:
-            summary_cls = results[0].category.summary_class
-            return summary_cls.from_results(results, run_id)
-
         return cls(**cls._base_fields(results, run_id))
-
-    @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> "EvaluationResultSummary":
-        category = EvaluationCategory(payload["category"])
-        return category.summary_class.model_validate(payload)
 
     def to_dict(self) -> dict[str, Any]:
         data = self.model_dump(mode="json")

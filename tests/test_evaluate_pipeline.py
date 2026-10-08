@@ -9,16 +9,21 @@ import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.categories import category_definition
+from bcbench.categories.results import load_result
 from bcbench.commands.evaluate import MockEvaluationPipeline
+from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationCategory, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
 
 class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
+    result_type = BugFixResult
+
     def __init__(self, *, raise_in_evaluate: Exception | None = None, raise_in_run_agent: Exception | None = None) -> None:
         self.raise_in_evaluate = raise_in_evaluate
         self.raise_in_run_agent = raise_in_run_agent
@@ -48,6 +53,10 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
             raise self.raise_in_evaluate
 
 
+class _JudgeStubPipeline(_StubPipeline[NL2ALEntry]):
+    result_type = JudgeBasedEvaluationResult
+
+
 def _noop_runner(_ctx: EvaluationContext[BugFixEntry]) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]:
     return AgentMetrics(execution_time=1.0), ExperimentConfiguration()
 
@@ -57,7 +66,7 @@ def _read_only_result[E: BaseDatasetEntry](ctx: EvaluationContext[E]) -> BaseEva
     payload = result_file.read_text(encoding="utf-8").strip().splitlines()
     assert len(payload) == 1, f"Expected one persisted result, got {len(payload)}: {payload}"
 
-    return BaseEvaluationResult.from_json(json.loads(payload[0]))
+    return load_result(json.loads(payload[0]), get_config().judge)
 
 
 class TestExecuteHappyPath:
@@ -91,17 +100,17 @@ class TestExecuteAgentTimeout:
     def test_persists_category_specific_timeout_result(self, tmp_path):
         entry = create_nl2al_entry()
         ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
-        pipeline = _StubPipeline[NL2ALEntry](raise_in_run_agent=AgentTimeoutError("test timeout"))
+        pipeline = _JudgeStubPipeline(raise_in_run_agent=AgentTimeoutError("test timeout"))
 
         pipeline.execute(ctx, lambda _: (None, None))
 
         result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
         payload = json.loads(result_file.read_text(encoding="utf-8"))
-        assert payload["judge_model"] == EvaluationCategory.NL2AL.judge_model
+        assert payload["judge_model"] == get_config().judge.lm_checklist_model
 
         result = _read_only_result(ctx)
         assert isinstance(result, JudgeBasedEvaluationResult)
-        assert result.judge_model == EvaluationCategory.NL2AL.judge_model
+        assert result.judge_model == get_config().judge.lm_checklist_model
 
 
 class TestExecuteEvaluateError:
@@ -159,6 +168,6 @@ class TestMockPipelineCoversAllCategories:
                 pipeline.evaluate(ctx)
 
         result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
-        results = [BaseEvaluationResult.from_json(json.loads(line)) for line in result_file.read_text(encoding="utf-8").splitlines()]
+        results = [load_result(json.loads(line), get_config().judge) for line in result_file.read_text(encoding="utf-8").splitlines()]
         assert {r.category for r in results} == {category}
         assert all(r.instance_id == entry.instance_id for r in results)

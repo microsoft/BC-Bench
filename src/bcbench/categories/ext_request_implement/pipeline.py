@@ -25,6 +25,8 @@ class ExtRequestImplementPipeline(EvaluationPipeline[ExtRequestImplementEntry]):
     by an LLM judge against the entry checklist.
     """
 
+    result_type = JudgeBasedEvaluationResult
+
     @override
     def setup_workspace(self, entry: ExtRequestImplementEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)

@@ -96,6 +96,8 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
     genuinely querying the environment.
     """
 
+    result_type = ExecutionBasedEvaluationResult
+
     @override
     def setup_workspace(self, entry: DataQueryEntry, repo_path: Path) -> None:
         # The workspace is shared into the running container, so its contents are cleared in place.

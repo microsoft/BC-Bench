@@ -133,7 +133,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
         patch.object(
             evaluate_commands,
             "category_definition",
-            return_value=SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id), make_pipeline=Pipeline),
+            return_value=SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id), make_pipeline=Pipeline, judge_model=lambda _judges: None),
         ),
     ):
         evaluate_commands.evaluate_bcal(
@@ -181,7 +181,9 @@ def agent_command_category(tmp_path):
         def execute(self, context, agent_runner):
             agent_runner(context)
 
-    definition = SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id), make_pipeline=Pipeline, requires_container=False, pass_bc_credentials=True)
+    definition = SimpleNamespace(
+        load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id), make_pipeline=Pipeline, judge_model=lambda _judges: None, requires_container=False, pass_bc_credentials=True
+    )
     with (
         patch.object(run_commands, "category_definition", return_value=definition),
         patch.object(evaluate_commands, "category_definition", return_value=definition),

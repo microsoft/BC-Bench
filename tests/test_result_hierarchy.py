@@ -18,11 +18,12 @@ from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import ValidationError
 from rich.console import Console
 
+from bcbench.categories.results import load_result, load_summary, summarize_results
+from bcbench.config import get_config
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.display import create_console_summary, create_github_job_summary
 from bcbench.results.summary import (
-    EvaluationResultSummary,
     ExecutionBasedEvaluationResultSummary,
     JudgeBasedEvaluationResultSummary,
 )
@@ -149,12 +150,12 @@ class TestDisplayRow:
 class TestFromJsonDispatch:
     def test_from_json_returns_bugfix_result(self):
         payload = create_bugfix_result().model_dump(mode="json")
-        loaded = BaseEvaluationResult.from_json(payload)
+        loaded = load_result(payload, get_config().judge)
         assert isinstance(loaded, BugFixResult)
 
     def test_from_json_returns_testgen_result(self):
         payload = create_testgen_result(pre_patch_failed=True).model_dump(mode="json")
-        loaded = BaseEvaluationResult.from_json(payload)
+        loaded = load_result(payload, get_config().judge)
         assert isinstance(loaded, TestGenerationResult)
         assert loaded.pre_patch_failed is True
 
@@ -166,7 +167,7 @@ class TestFromJsonDispatch:
             output="patch content",
             error_message=None,
         )
-        loaded = BaseEvaluationResult.from_json(original.model_dump(mode="json"))
+        loaded = load_result(original.model_dump(mode="json"), get_config().judge)
         assert loaded.instance_id == original.instance_id
         assert loaded.output == original.output
 
@@ -174,7 +175,7 @@ class TestFromJsonDispatch:
         payload = create_bugfix_result().model_dump(mode="json")
         payload["category"] = "nonexistent"
         with pytest.raises(ValueError, match="nonexistent"):
-            BaseEvaluationResult.from_json(payload)
+            load_result(payload, get_config().judge)
 
 
 class TestJudgeScoredValidation:
@@ -182,10 +183,10 @@ class TestJudgeScoredValidation:
         ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
         payload = BaseEvaluationResult.create_agent_timeout_failure(ctx).model_dump(mode="json")
 
-        loaded = JudgeBasedEvaluationResult.model_validate(payload)
+        loaded = load_result(payload, get_config().judge)
 
         assert isinstance(loaded, JudgeBasedEvaluationResult)
-        assert loaded.judge_model == EvaluationCategory.NL2AL.judge_model
+        assert loaded.judge_model == get_config().judge.lm_checklist_model
 
     def test_rejects_missing_judge_model_for_non_timeout(self, tmp_path):
         ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
@@ -218,12 +219,12 @@ class TestCreateAgentTimeout:
 class TestSummaryFromResults:
     def test_base_dispatches_to_execution_based_for_bugfix(self):
         results = [create_bugfix_result(instance_id="test__1", resolved=True)]
-        summary = EvaluationResultSummary.from_results(results, run_id="run1")
+        summary = summarize_results(results, run_id="run1")
         assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
 
     def test_base_dispatches_to_execution_based_for_testgen(self):
         results = [create_testgen_result(instance_id="test__1")]
-        summary = EvaluationResultSummary.from_results(results, run_id="run1")
+        summary = summarize_results(results, run_id="run1")
         assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
 
     def test_subclass_direct_call_also_works(self):
@@ -245,7 +246,7 @@ class TestSummaryFromResults:
                 metrics=AgentMetrics(execution_time=200.0, prompt_tokens=3000, completion_tokens=1500),
             ),
         ]
-        summary = EvaluationResultSummary.from_results(results, run_id="run1")
+        summary = summarize_results(results, run_id="run1")
 
         assert summary.total == 2
         assert summary.model == "gpt-4o"
@@ -261,7 +262,7 @@ class TestSummaryFromResults:
             create_bugfix_result(instance_id="test__2", resolved=False, build=True),
             create_bugfix_result(instance_id="test__3", resolved=False, build=False),
         ]
-        summary = EvaluationResultSummary.from_results(results, run_id="run1")
+        summary = summarize_results(results, run_id="run1")
 
         assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
         assert summary.resolved == 1
@@ -274,7 +275,7 @@ class TestSummaryFromResults:
             create_bugfix_result(instance_id="test__a", resolved=True),
             create_bugfix_result(instance_id="test__b", resolved=False),
         ]
-        summary = EvaluationResultSummary.from_results(results, run_id="run1")
+        summary = summarize_results(results, run_id="run1")
 
         assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
         assert summary.instance_results == {"test__a": True, "test__b": False}
@@ -351,7 +352,7 @@ class TestSummaryFromJson:
             "average_completion_tokens": 500.0,
             "benchmark_version": "0.1.0",
         }
-        summary = EvaluationResultSummary.from_json(payload)
+        summary = load_summary(payload)
         assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
         assert summary.resolved == 3
 
@@ -368,7 +369,7 @@ class TestSummaryFromJson:
             "benchmark_version": "0.1.0",
         }
         with pytest.raises(ValueError, match="nonexistent"):
-            EvaluationResultSummary.from_json(payload)
+            load_summary(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +391,7 @@ class TestAgentVersionDisplay:
         result = result_factory()
         result.agent_name = agent_name
         result.agent_version = agent_version
-        summary = EvaluationResultSummary.from_results([result], run_id="")
+        summary = summarize_results([result], run_id="")
         output = Console(file=StringIO(), record=True, width=160)
         monkeypatch.setattr("bcbench.results.display.console", output)
 
@@ -405,7 +406,7 @@ class TestAgentVersionDisplay:
         result = result_factory()
         result.agent_name = agent_name
         result.agent_version = agent_version
-        summary = EvaluationResultSummary.from_results([result], run_id="")
+        summary = summarize_results([result], run_id="")
         sections = []
         monkeypatch.setattr("bcbench.results.display._write_github_step_summary", sections.append)
 
@@ -424,7 +425,7 @@ class TestConsoleSummary:
             create_bugfix_result(instance_id="test__1", resolved=True),
             create_bugfix_result(instance_id="test__2", resolved=False, error_message="Build failed"),
         ]
-        create_console_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        create_console_summary(results, summarize_results(results, run_id=""))
         captured = capsys.readouterr()
         assert "test__1" in captured.out
         assert "test__2" in captured.out
@@ -434,7 +435,7 @@ class TestConsoleSummary:
         results = [
             create_testgen_result(instance_id="test__1", resolved=True, pre_patch_failed=True, post_patch_passed=True),
         ]
-        create_console_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        create_console_summary(results, summarize_results(results, run_id=""))
         captured = capsys.readouterr()
         # Rich truncates column headers, but data values "Yes" should appear
         assert "Yes" in captured.out
@@ -449,7 +450,7 @@ class TestGitHubJobSummary:
             create_bugfix_result(instance_id="test__1", resolved=True),
             create_bugfix_result(instance_id="test__2", resolved=False, error_message="Build failed"),
         ]
-        create_github_job_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        create_github_job_summary(results, summarize_results(results, run_id=""))
         content = summary_file.read_text()
         assert "test__1" in content
         assert "test__2" in content
@@ -469,7 +470,7 @@ class TestGitHubJobSummary:
                 experiment=ExperimentConfiguration(plugins=plugins),
             ),
         ]
-        create_github_job_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        create_github_job_summary(results, summarize_results(results, run_id=""))
         content = summary_file.read_text()
         assert "- Plugins: superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99, bcbench-example@local" in content
 
@@ -479,7 +480,7 @@ class TestGitHubJobSummary:
         results = [
             create_testgen_result(instance_id="test__1", resolved=True, pre_patch_failed=True, post_patch_passed=True),
         ]
-        create_github_job_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        create_github_job_summary(results, summarize_results(results, run_id=""))
         content = summary_file.read_text()
         assert "Pre-Patch Failed" in content
         assert "Post-Patch Passed" in content
@@ -494,7 +495,7 @@ class TestGitHubJobSummary:
                 metrics=AgentMetrics(execution_time=100.0, tool_usage={"bash": 5, "view": 3}),
             ),
         ]
-        create_github_job_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        create_github_job_summary(results, summarize_results(results, run_id=""))
         content = summary_file.read_text()
         assert "Tool Usage" in content
         assert "bash" in content

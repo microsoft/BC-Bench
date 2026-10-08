@@ -12,10 +12,10 @@ from bcbench.categories import category_definition
 from bcbench.categories.code_review.judge import LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
 from bcbench.categories.code_review.pipeline import CodeReviewPipeline
 from bcbench.categories.code_review.review_parsing import parse_review_output
+from bcbench.categories.results import aggregate_runs, load_leaderboard, load_result
 from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
@@ -289,7 +289,7 @@ class TestCodeReviewResult:
         with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
-        loaded = BaseEvaluationResult.from_json(data)
+        loaded = load_result(data, get_config().judge)
         assert isinstance(loaded, CodeReviewResult)
         assert loaded.category == EvaluationCategory.CODE_REVIEW
         assert len(loaded.generated_comments) == 1
@@ -305,7 +305,7 @@ class TestCodeReviewResult:
             "output": "",
         }
 
-        result = BaseEvaluationResult.from_json(payload)
+        result = load_result(payload, get_config().judge)
         assert result.category == EvaluationCategory.CODE_REVIEW
         assert isinstance(result, CodeReviewResult)
 
@@ -831,7 +831,7 @@ class TestCodeReviewLeaderboardAggregate:
         return CodeReviewResultSummary.from_results([result], run_id=run_id)
 
     def test_aggregate_uses_f1_as_average_and_has_no_pass_hat_5(self):
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, LeaderboardAggregate
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
 
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
@@ -840,7 +840,7 @@ class TestCodeReviewLeaderboardAggregate:
 
         run = self._make_summary(expected_comments, output, run_id="run-1")
 
-        agg = LeaderboardAggregate.from_runs([run])
+        agg = aggregate_runs([run])
 
         assert isinstance(agg, CodeReviewLeaderboardAggregate)
         assert agg.category == EvaluationCategory.CODE_REVIEW
@@ -849,7 +849,7 @@ class TestCodeReviewLeaderboardAggregate:
         assert not hasattr(agg, "pass_hat_5")
 
     def test_macro_f1_ci_is_bootstrapped_over_tasks_for_single_run(self):
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, LeaderboardAggregate
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
 
         expected = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
         hit = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
@@ -870,7 +870,7 @@ class TestCodeReviewLeaderboardAggregate:
             "test__t-4": 0.0,
         }
 
-        agg = LeaderboardAggregate.from_runs([run])
+        agg = aggregate_runs([run])
 
         # A single run with varying per-task F1 still yields a real (task-level) CI.
         assert isinstance(agg, CodeReviewLeaderboardAggregate)
@@ -879,7 +879,7 @@ class TestCodeReviewLeaderboardAggregate:
         assert agg.macro_f1_ci_low <= agg.macro_f1 <= agg.macro_f1_ci_high
 
     def test_aggregate_serialization_excludes_pass_hat_5(self):
-        from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
+        from bcbench.results.leaderboard import Leaderboard
 
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
@@ -887,7 +887,7 @@ class TestCodeReviewLeaderboardAggregate:
         output = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
 
         run = self._make_summary(expected_comments, output, run_id="run-1")
-        agg = LeaderboardAggregate.from_runs([run])
+        agg = aggregate_runs([run])
 
         leaderboard = Leaderboard(runs=[run], aggregate=[agg])
         data = leaderboard.to_dict()
@@ -895,9 +895,9 @@ class TestCodeReviewLeaderboardAggregate:
         assert "pass_hat_5" not in data["aggregate"][0]
         assert data["aggregate"][0]["f1"] == run.f1
 
-    def test_round_trip_preserves_codereview_subclasses(self):
+    def test_round_trip_preserves_codereview_subclasses(self, tmp_path):
         from bcbench.results.codereview import CodeReviewResultSummary as CRSummary
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, Leaderboard, LeaderboardAggregate
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, Leaderboard
 
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
@@ -905,10 +905,12 @@ class TestCodeReviewLeaderboardAggregate:
         output = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
 
         run = self._make_summary(expected_comments, output, run_id="run-1")
-        agg = LeaderboardAggregate.from_runs([run])
+        agg = aggregate_runs([run])
         leaderboard = Leaderboard(runs=[run], aggregate=[agg])
 
-        restored = Leaderboard.model_validate(leaderboard.to_dict())
+        leaderboard_path = tmp_path / "leaderboard.json"
+        leaderboard_path.write_text(json.dumps(leaderboard.to_dict()), encoding="utf-8")
+        restored = load_leaderboard(leaderboard_path)
 
         assert isinstance(restored.runs[0], CRSummary)
         assert isinstance(restored.aggregate[0], CodeReviewLeaderboardAggregate)
@@ -1017,7 +1019,7 @@ class TestCodeReviewPipeline:
         with patch("bcbench.categories.code_review.judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge:
             pipeline.evaluate(context)
 
-        result = BaseEvaluationResult.from_json(json.loads(next(context.result_dir.glob("*.jsonl")).read_text(encoding="utf-8")))
+        result = load_result(json.loads(next(context.result_dir.glob("*.jsonl")).read_text(encoding="utf-8")), get_config().judge)
         assert isinstance(result, CodeReviewResult)
         assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (1, 0, 1)
         assert result.recall == 1.0
