@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       external-model:
-        description: "Model alias to use through the bc-eval CAPI service"
+        description: "Unprefixed model alias to use through the direct M365 LLM API"
         required: false
         default: "gpt-55-chat-2026-04-29"
         type: choice
@@ -64,7 +64,7 @@ jobs:
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
 
-      - name: Azure Login (OIDC) for ADO feed
+      - name: Azure Login (OIDC) for ADO feed and LLM API
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -112,7 +112,7 @@ jobs:
             Start-Sleep -Seconds 20
           }
 
-      - name: Build bc-eval CAPI bridge venv
+      - name: Build bc-eval LLM API bridge venv
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
@@ -121,13 +121,13 @@ jobs:
           Write-Output "::add-mask::$adoToken"
 
           # Match the bridge runtime to BC-Bench so BCal can safely inherit its Python environment.
-          uv venv .bcal-capi-venv --python .\.venv\Scripts\python.exe
+          uv venv .bcal-llm-api-venv --python .\.venv\Scripts\python.exe
 
           # Same transient ADO feed flakiness as the bcal install above; retry the package pull.
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.14" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+            uv pip install --python .\.bcal-llm-api-venv\Scripts\python.exe "bc-eval==0.6.0" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
             if ($LASTEXITCODE -eq 0) { break }
-            if ($attempt -eq 3) { throw "bc-eval[capi] install failed after 3 attempts (exit code $LASTEXITCODE)." }
+            if ($attempt -eq 3) { throw "bc-eval install failed after 3 attempts (exit code $LASTEXITCODE)." }
             Write-Output "::warning::bc-eval install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
             Start-Sleep -Seconds 20
           }
@@ -151,48 +151,13 @@ jobs:
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
-      - name: Azure Login (OIDC) for CAPI Key Vault
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
-      - name: Fetch CAPI client certificate from Key Vault
-        shell: pwsh
-        env:
-          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
-          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
-        run: |
-          if (-not $env:CAPI_CERTIFICATE_KEY_VAULT_NAME -or -not $env:CAPI_CERTIFICATE_NAME) {
-            throw "CAPI_CERTIFICATE_KEY_VAULT_NAME / CAPI_CERTIFICATE_NAME secrets must be set."
-          }
-          $b64 = az keyvault secret show --vault-name $env:CAPI_CERTIFICATE_KEY_VAULT_NAME --name $env:CAPI_CERTIFICATE_NAME --query value -o tsv
-          if (-not $b64) {
-            throw "Failed to fetch CAPI cert from Key Vault."
-          }
-          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\capi-cert.pfx", [Convert]::FromBase64String($b64))
-
       - name: Run BCal for entry ${{ matrix.entry }}
         timeout-minutes: 28
         env:
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat-2026-04-29' }}
-          CAPI_ENDPOINT: ${{ secrets.CAPI_ENDPOINT }}
-          CAPI_SCOPE: ${{ secrets.CAPI_SCOPE }}
-          CAPI_ORG_GUID: ${{ secrets.CAPI_ORG_GUID }}
-          CAPI_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
-          CAPI_USER_OBJECT_ID: ${{ secrets.CAPI_USER_OBJECT_ID }}
-          CAPI_PARTNER_SOURCE: ${{ secrets.CAPI_PARTNER_SOURCE }}
-          CAPI_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
-          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
-          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
         shell: pwsh
         run: |
-          $env:CAPI_CERT_FILE = "$env:RUNNER_TEMP\capi-cert.pfx"
-          if (-not (Test-Path $env:CAPI_CERT_FILE)) {
-            throw "Expected CAPI client cert at $env:CAPI_CERT_FILE but it was not fetched from Key Vault."
-          }
-          $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py"
+          $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-llm-api-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py"
 
           uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
@@ -200,12 +165,13 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
+          name: evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: evaluate-with-bcal
+    needs: [get-entries, evaluate-with-bcal]
+    if: ${{ always() && !cancelled() && needs.get-entries.result == 'success' && needs.get-entries.outputs.entry-count != '0' }}
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
@@ -217,4 +183,7 @@ jobs:
       mock: ${{ inputs.test-run || false }}
       category: nl2al
       skip-leaderboard: true
+      expected-total: ${{ fromJSON(needs.get-entries.outputs.entry-count) }}
+      artifact-pattern: evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*
+      allow-unscored-results: true
     secrets: inherit

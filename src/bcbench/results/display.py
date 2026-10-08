@@ -7,6 +7,7 @@ from rich.table import Table
 
 from bcbench.config import get_config
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.completeness import EvaluationCompleteness
 from bcbench.results.summary import EvaluationResultSummary, calculate_average_tool_usage
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ console = Console()
 
 def _status_style(status_label: str) -> tuple[str, str]:
     """Return (rich_color, github_emoji) for a status label."""
-    if status_label in ("Timeout", "Error", "Failed"):
+    if status_label in ("Timeout", "Infrastructure Error", "Error", "Failed"):
         return "red", ":x:"
     if status_label == "Unscored":
         return "yellow", ":grey_question:"
@@ -24,6 +25,8 @@ def _status_style(status_label: str) -> tuple[str, str]:
 
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
+    if summary.completeness:
+        console.print(f"Completeness: [bold]{summary.completeness.produced_entry_count}/{summary.completeness.expected_entry_count}[/bold] ({summary.completeness.missing_entry_count} missing/failed)")
     console.print(f"Total Processed: [bold]{len(results)}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
     console.print(f"Agent Version: [bold]{results[0].agent_version or 'Unrecorded'}[/bold]")
     console.print(f"Category: [bold]{results[0].category.value}[/bold]")
@@ -80,6 +83,7 @@ def _get_short_error_message(error_message: str | None) -> str:
 
 def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     metrics_section: str = summary.render_github_metrics_markdown().strip()
+    completeness_section = summary.completeness.render_markdown() if summary.completeness else ""
 
     # Calculate average tool usage
     tool_usage_section: str = ""
@@ -104,7 +108,10 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             f"- Plugins: {', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}",
         ]
     )
-    sections: list[str] = [header_section, *(section for section in [metrics_section, tool_usage_section] if section), "## Detailed Results\n\n"]
+    sections: list[str] = [
+        *(section for section in [completeness_section, header_section, metrics_section, tool_usage_section] if section),
+        "## Detailed Results\n\n",
+    ]
     markdown_summary: str = "\n\n".join(sections)
 
     # Dynamic columns from display_row()
@@ -130,6 +137,10 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {error_msg} |\n"
 
     _write_github_step_summary(markdown_summary)
+
+
+def create_github_completeness_summary(completeness: EvaluationCompleteness) -> None:
+    _write_github_step_summary(completeness.render_markdown())
 
 
 def _write_github_step_summary(content: str) -> None:

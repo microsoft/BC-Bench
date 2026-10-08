@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -10,7 +11,7 @@ import pytest
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
-from bcbench.exceptions import AgentError, AgentTimeoutError
+from bcbench.exceptions import AgentError, AgentInfrastructureError, AgentTimeoutError
 from tests.conftest import create_nl2al_entry
 
 
@@ -112,6 +113,90 @@ class TestRunBcalAgent:
         assert "--llm-backend=external-command" in captured["args"]
         assert "--llm-command=python bridge.py" in captured["args"]
         assert not any(a.startswith("--deployment=") for a in captured["args"])
+
+    def test_llm_api_5xx_marker_raises_typed_infrastructure_error(self, workspace: Path):
+        entry = create_nl2al_entry()
+
+        def fake_run(_args: list[str], **kwargs: object) -> None:
+            process_env = kwargs["env"]
+            assert isinstance(process_env, dict)
+            marker = Path(process_env[bcal_agent._LLM_API_ERROR_FILE_ENV])
+            marker.write_text(
+                json.dumps(
+                    {
+                        "provider": "llm_api",
+                        "status_code": 500,
+                        "message": "DependencyFailure: InternalServerError",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            raise subprocess.CalledProcessError(returncode=1, cmd=["bcal"])
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+            pytest.raises(AgentInfrastructureError, match="HTTP 500") as exc_info,
+        ):
+            bcal_agent.run_bcal_agent(
+                entry=entry,
+                repo_path=workspace,
+                backend_config=BCalBackendConfig(
+                    command="python bridge.py",
+                    model="gpt-55-chat-2026-04-29",
+                ),
+            )
+
+        assert exc_info.value.provider == "llm_api"
+        assert exc_info.value.status_code == 500
+        assert exc_info.value.metrics is not None
+        assert not (workspace / "JobBudgetVsActualReport" / bcal_agent._LLM_API_ERROR_FILENAME).exists()
+
+    def test_llm_api_5xx_marker_takes_precedence_over_process_timeout(self, workspace: Path):
+        entry = create_nl2al_entry()
+
+        def fake_run(_args: list[str], **kwargs: object) -> None:
+            process_env = kwargs["env"]
+            assert isinstance(process_env, dict)
+            Path(process_env[bcal_agent._LLM_API_ERROR_FILE_ENV]).write_text(
+                json.dumps(
+                    {
+                        "provider": "llm_api",
+                        "status_code": 503,
+                        "message": "Service unavailable",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            raise subprocess.TimeoutExpired(cmd=["bcal"], timeout=1)
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+            pytest.raises(AgentInfrastructureError, match="HTTP 503"),
+        ):
+            bcal_agent.run_bcal_agent(
+                entry=entry,
+                repo_path=workspace,
+                backend_config=BCalBackendConfig(command="python bridge.py"),
+            )
+
+    def test_generic_nonzero_exit_remains_agent_error(self, workspace: Path):
+        entry = create_nl2al_entry()
+        failure = subprocess.CalledProcessError(returncode=2, cmd=["bcal"])
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=failure),
+            pytest.raises(AgentError, match="status 2") as exc_info,
+        ):
+            bcal_agent.run_bcal_agent(
+                entry=entry,
+                repo_path=workspace,
+                backend_config=BCalBackendConfig(command="python bridge.py"),
+            )
+
+        assert not isinstance(exc_info.value, AgentInfrastructureError)
 
 
 class TestRunBcalPrompt:

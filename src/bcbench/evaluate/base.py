@@ -2,19 +2,26 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentTimeoutError
+from bcbench.exceptions import AgentInfrastructureError, AgentTimeoutError
 from bcbench.results import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 _config = get_config()
 
-__all__ = ["AgentRunner", "EvaluationPipeline"]
+__all__ = ["AgentRunner", "EvaluationOutcome", "EvaluationPipeline"]
+
+
+class EvaluationOutcome(StrEnum):
+    COMPLETED = "completed"
+    AGENT_INFRASTRUCTURE_ERROR = "agent_infrastructure_error"
+    AGENT_TIMEOUT = "agent_timeout"
 
 
 class AgentRunner[E: BaseDatasetEntry](Protocol):
@@ -79,7 +86,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         self,
         context: EvaluationContext[E],
         agent_runner: AgentRunner[E],
-    ) -> None:
+    ) -> EvaluationOutcome:
         """Template method orchestrating the evaluation flow.
 
         Executes setup, runs agent, evaluates results, and saves outcomes.
@@ -99,12 +106,25 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             result = context.category.result_class.create_agent_timeout_failure(context)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
-            return
+            return EvaluationOutcome.AGENT_TIMEOUT
+        except AgentInfrastructureError as e:
+            context.metrics = e.metrics
+            context.experiment = e.config
+            result = context.category.result_class.create_agent_infrastructure_failure(
+                context,
+                error_message=str(e),
+                provider=e.provider,
+                status_code=e.status_code,
+            )
+            self.save_result(context, result)
+            logger.warning("Agent execution stopped because an infrastructure dependency failed.")
+            return EvaluationOutcome.AGENT_INFRASTRUCTURE_ERROR
         finally:
             logger.info(f"Agent metrics: {context.metrics}")
             logger.info(f"Experiment configuration: {context.experiment}")
 
         self.evaluate(context)
+        return EvaluationOutcome.COMPLETED
 
     def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.

@@ -4,13 +4,76 @@ from unittest.mock import PropertyMock, patch
 import pytest
 
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import BugFixEntry, NL2ALEntry, _BugFixTestGenBase
+from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bceval_export import write_bceval_results
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
-from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
+from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result, create_nl2al_entry
 
 
 class TestWriteBcevalResults:
+    def test_exports_timeout_metadata(self, tmp_path):
+        entry = create_nl2al_entry()
+        judge_model = EvaluationCategory.NL2AL.judge_model
+        assert judge_model is not None
+        result = JudgeBasedEvaluationResult(
+            instance_id=entry.instance_id,
+            project="BaseApp",
+            model="gpt-55-chat-2026-04-29",
+            agent_name=AgentHarness.BCAL,
+            category=EvaluationCategory.NL2AL,
+            timeout=True,
+            error_message="Agent timed out",
+            judge_model=judge_model,
+        )
+
+        with patch.object(NL2ALEntry, "load", return_value=[entry]):
+            write_bceval_results(
+                results=[result],
+                out_dir=tmp_path,
+                run_id="run",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.NL2AL,
+            )
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        assert metadata["timeout"] is True
+        assert metadata["error_message"] == "Agent timed out"
+
+    def test_exports_infrastructure_error_without_model_score(self, tmp_path):
+        entry = create_nl2al_entry()
+        judge_model = EvaluationCategory.NL2AL.judge_model
+        assert judge_model is not None
+        error_message = "LLM API infrastructure error (HTTP 500): DependencyFailure"
+        result = JudgeBasedEvaluationResult(
+            instance_id=entry.instance_id,
+            project="BaseApp",
+            model="gpt-55-chat-2026-04-29",
+            agent_name=AgentHarness.BCAL,
+            category=EvaluationCategory.NL2AL,
+            infrastructure_error=True,
+            error_provider="llm_api",
+            error_status_code=500,
+            error_message=error_message,
+            judge_model=judge_model,
+        )
+
+        with patch.object(NL2ALEntry, "load", return_value=[entry]):
+            write_bceval_results(
+                results=[result],
+                out_dir=tmp_path,
+                run_id="run",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.NL2AL,
+            )
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        assert metadata["infrastructure_error"] is True
+        assert metadata["error_provider"] == "llm_api"
+        assert metadata["error_status_code"] == 500
+        assert metadata["Error"] == error_message
+        assert "test_passed" not in metadata
+
     @pytest.mark.parametrize(
         "metrics",
         [
@@ -37,7 +100,7 @@ class TestWriteBcevalResults:
 
         metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
         assert metadata["ai_credits"] == (metrics.ai_credits if metrics is not None else None)
-        # bc-eval 0.3.14 adds these fields before invoking our custom metric callback.
+        # bc-eval adds these fields before invoking our custom metric callback.
         assert isinstance(metadata["prompt_tokens"], int)
         assert isinstance(metadata["completion_tokens"], int)
 
@@ -70,6 +133,8 @@ class TestWriteBcevalResults:
         assert data["metadata"]["agent_version"] == "1.2.3"
         # bug-fix is not judge-scored, so no judge model is exported
         assert "judge_model" not in data["metadata"]
+        assert "infrastructure_error" not in data["metadata"]
+        assert "Error" not in data["metadata"]
         assert data["metadata"]["prompt_tokens"] == 5000
         assert data["metadata"]["completion_tokens"] == 1200
         assert data["metadata"]["latency"] == 120.5

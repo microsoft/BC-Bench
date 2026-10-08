@@ -203,3 +203,65 @@ def test_agent_workflows_select_al_tool_dotnet_version_for_bc_version() -> None:
     for workflow_name in ("claude-evaluation.yml", "copilot-evaluation.yml"):
         workflow = _workflow(workflow_name)
         assert '--framework "net${{ steps.setup-env.outputs.al_tool_dotnet_version }}"' in workflow
+
+
+def test_bcal_summary_runs_after_matrix_failures_and_enforces_completeness() -> None:
+    workflow = yaml.safe_load(_workflow("bcal-evaluation.yml"))
+    evaluation_steps = workflow["jobs"]["evaluate-with-bcal"]["steps"]
+    summarize = workflow["jobs"]["summarize-results"]
+    upload = next(step for step in evaluation_steps if step["name"] == "Upload evaluation results")
+
+    assert upload["if"] == "always()"
+    assert summarize["needs"] == ["get-entries", "evaluate-with-bcal"]
+    assert "always()" in summarize["if"]
+    assert summarize["with"]["expected-total"] == "${{ fromJSON(needs.get-entries.outputs.entry-count) }}"
+    assert summarize["with"]["results-dir"] == "${{ needs.evaluate-with-bcal.outputs.results-dir }}"
+    assert summarize["with"]["artifact-pattern"] == "evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*"
+    assert summarize["with"]["allow-unscored-results"] is True
+
+
+def test_bcal_uses_direct_llm_api_without_capi_certificate_setup() -> None:
+    workflow = _workflow("bcal-evaluation.yml")
+
+    assert "bc_eval_llm_api_bridge.py" in workflow
+    assert ".bcal-llm-api-venv" in workflow
+    assert "BCBENCH_LLM_API_ERROR_FILE" not in workflow
+    assert "CAPI_" not in workflow
+    assert "keyvault secret show" not in workflow
+    assert "capi-cert.pfx" not in workflow
+    assert "Azure Login (OIDC) for ADO feed and LLM API" in workflow
+
+
+def test_summarize_workflow_preserves_partial_diagnostics_and_blocks_incomplete_upload() -> None:
+    workflow_text = _workflow("summarize-results.yml")
+    workflow = yaml.safe_load(workflow_text)
+
+    assert "continue-on-error: ${{ inputs.expected-total >= 0 }}" in workflow_text
+    assert "evaluation_completeness.json" in workflow_text
+    assert "bceval_results.jsonl" in workflow_text
+    assert "steps.summarize.outputs.complete == 'true'" in workflow_text
+    assert "if: always()" in workflow_text
+    assert "bcbench result require-complete" in workflow_text
+    assert workflow[True]["workflow_call"]["inputs"]["allow-unscored-results"]["default"] is False
+    assert 'CORE_SCORE_ARGS=(--core-score "${{ steps.bceval.outputs.core_score }}")' in workflow_text
+    assert 'if [[ "${{ inputs.allow-unscored-results }}" == "true" ]]' in workflow_text
+    assert '"${CORE_SCORE_ARGS[@]}"' in workflow_text
+
+
+def test_only_bcal_summary_allows_unscored_infrastructure_results() -> None:
+    for workflow_name in ("copilot-evaluation.yml", "claude-evaluation.yml", "pr-review-evaluation.yml", "CI.yml"):
+        workflow = yaml.safe_load(_workflow(workflow_name))
+        summarize = workflow["jobs"]["summarize-results"]["with"]
+        assert "allow-unscored-results" not in summarize
+
+
+def test_bcal_and_scoring_pin_plain_bceval_0_6_0() -> None:
+    bcal_workflow = _workflow("bcal-evaluation.yml")
+    summarize_workflow = _workflow("summarize-results.yml")
+
+    assert bcal_workflow.count('"bc-eval==0.6.0"') == 1
+    assert summarize_workflow.count("bc-eval==0.6.0") == 1
+    assert "bc-eval[" not in bcal_workflow
+    assert "bc-eval[" not in summarize_workflow
+    assert "--llm-provider llm_api" in summarize_workflow
+    assert "--use-capi" not in summarize_workflow

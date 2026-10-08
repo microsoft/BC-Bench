@@ -21,6 +21,7 @@ dataset_app = typer.Typer(help="Query and analyze dataset")
 def list_entries(
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
+    count_output: Annotated[str | None, typer.Option(help="Write the entry count to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
 ) -> None:
@@ -58,8 +59,12 @@ def list_entries(
     for entry_id in entry_ids:
         print(f"  - {entry_id}")
 
-    if github_output:
-        write_step_outputs({github_output: json.dumps(entry_ids)})
+    step_outputs = {
+        **({github_output: json.dumps(entry_ids)} if github_output else {}),
+        **({count_output: str(len(entry_ids))} if count_output else {}),
+    }
+    if step_outputs:
+        write_step_outputs(step_outputs)
 
 
 @dataset_app.command("view")

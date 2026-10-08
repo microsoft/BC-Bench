@@ -19,7 +19,7 @@ from rich.console import Console
 
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
-from bcbench.results.display import create_console_summary, create_github_job_summary
+from bcbench.results.display import _status_style, create_console_summary, create_github_job_summary
 from bcbench.results.summary import (
     EvaluationResultSummary,
     ExecutionBasedEvaluationResultSummary,
@@ -86,6 +86,18 @@ class TestStatusLabel:
     def test_execution_based_failed(self):
         result = create_bugfix_result(resolved=False, build=True, error_message="Tests failed")
         assert result.status_label == "Failed"
+
+    def test_infrastructure_error_is_distinct_and_displayed_as_an_error(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
+        result = JudgeBasedEvaluationResult.create_agent_infrastructure_failure(
+            ctx,
+            error_message="LLM API HTTP 500",
+            provider="llm_api",
+            status_code=500,
+        )
+
+        assert result.status_label == "Infrastructure Error"
+        assert _status_style(result.status_label) == ("red", ":x:")
 
 
 # ---------------------------------------------------------------------------
