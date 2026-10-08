@@ -5,8 +5,10 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import PropertyMock, patch
 
+import click
 import pytest
 import typer
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from bcbench.cli import _redteam_group_installed, app
@@ -14,7 +16,7 @@ from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtim
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import AgentMetrics, BCalLLMBackend, EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
@@ -109,7 +111,8 @@ def sample_results_directory(tmp_path, sample_dataset_file_for_cli):
     return tmp_path, run_id, sample_dataset_file_for_cli
 
 
-def test_evaluate_bcal_records_backend_model_label(tmp_path):
+@pytest.mark.parametrize(("llm_model", "expected_model"), [("gpt-5.2-prod", "gpt-5.2-prod"), (None, "external-command")])
+def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     entry = create_nl2al_entry()
     captured = {}
 
@@ -133,12 +136,27 @@ def test_evaluate_bcal_records_backend_model_label(tmp_path):
             repo_path=tmp_path / "repo",
             output_dir=tmp_path / "results",
             run_id="bcal-run",
-            backend=BCalLLMBackend.AZURE_OPENAI,
-            endpoint=" https://aoai.example/ ",
-            deployment=" gpt-5.2-prod ",
+            llm_command=" python bridge.py ",
+            llm_model=llm_model,
         )
 
-    assert captured["context"].model == "gpt-5.2-prod"
+    assert captured["context"].model == expected_model
+
+
+def _option_names(command: click.Command) -> set[str]:
+    return {option for parameter in command.params if isinstance(parameter, click.Option) for option in (*parameter.opts, *parameter.secondary_opts)}
+
+
+@pytest.mark.parametrize("command_group", ["run", "evaluate"])
+def test_bcal_commands_only_expose_external_command_options(command_group):
+    root = get_command(app)
+    assert isinstance(root, click.Group)
+    group = root.commands[command_group]
+    assert isinstance(group, click.Group)
+    options = _option_names(group.commands["bcal"])
+
+    assert {"--llm-command", "--llm-model"} <= options
+    assert options.isdisjoint({"--backend", "--endpoint", "--deployment"})
 
 
 @pytest.fixture

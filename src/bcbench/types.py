@@ -22,7 +22,6 @@ __all__ = [
     "AgentMetrics",
     "AgentMetricsContract",
     "AnyAgentMetrics",
-    "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
@@ -613,8 +612,3 @@ class EvaluationContext[E: BaseDatasetEntry]:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
-
-
-class BCalLLMBackend(StrEnum):
-    AZURE_OPENAI = "azure-openai"
-    EXTERNAL_COMMAND = "external-command"
