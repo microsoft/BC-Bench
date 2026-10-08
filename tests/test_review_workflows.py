@@ -215,7 +215,7 @@ def test_bcal_summary_runs_after_matrix_failures_and_enforces_completeness() -> 
     assert summarize["needs"] == ["get-entries", "evaluate-with-bcal"]
     assert "always()" in summarize["if"]
     assert summarize["with"]["expected-total"] == "${{ fromJSON(needs.get-entries.outputs.entry-count) }}"
-    assert summarize["with"]["results-dir"] == "evaluation_results"
+    assert summarize["with"]["results-dir"] == "${{ needs.evaluate-with-bcal.outputs.results-dir }}"
     assert summarize["with"]["artifact-pattern"] == "evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*"
     assert summarize["with"]["allow-unscored-results"] is True
 

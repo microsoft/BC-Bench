@@ -177,8 +177,8 @@ def run_bcal_agent(
     logger.debug(f"Using prompt:\n{entry.get_task()}")
     logger.debug(f"bcal CLI command: {cmd_args}")
 
+    start = time.monotonic()
     try:
-        start = time.monotonic()
         subprocess.run(
             cmd_args,
             timeout=_config.timeout.bcal_execution,
