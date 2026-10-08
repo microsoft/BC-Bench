@@ -10,8 +10,6 @@ from bcbench.types import AgentConfig, AgentHarness
 logger = logging.getLogger(__name__)
 
 INSTRUCTION_SOURCE_FILE = "AGENTS.md"
-# Problem statements are copied into this folder of the agent's repository
-PROBLEM_STATEMENT_DEST_DIR = "problem"
 
 
 def setup_instructions_from_config(agent_config: AgentConfig, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
@@ -93,7 +91,7 @@ def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> 
         repo_path: Path to testbed repository where folder will be copied
     """
     source_dir: Path = entry.problem_statement_dir
-    dest_dir: Path = repo_path / PROBLEM_STATEMENT_DEST_DIR
+    dest_dir: Path = repo_path / entry.WORKSPACE_PROBLEM_DIR
 
     if dest_dir.exists():
         rmtree(dest_dir)

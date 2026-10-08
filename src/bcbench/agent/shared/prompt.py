@@ -3,15 +3,14 @@ from pathlib import Path
 
 from jinja2.sandbox import SandboxedEnvironment
 
-from bcbench.dataset import BaseDatasetEntry
-from bcbench.operations.instruction_operations import PROBLEM_STATEMENT_DEST_DIR
+from bcbench.dataset import BaseDatasetEntry, RepoGroundedEntry
 from bcbench.types import AgentConfig, EvaluationCategory, TestGenerationInput
 
 _jinja = SandboxedEnvironment(autoescape=False)
 
 
 def _transform_image_paths(content: str) -> str:
-    dest_dir = PROBLEM_STATEMENT_DEST_DIR
+    dest_dir = RepoGroundedEntry.WORKSPACE_PROBLEM_DIR
     return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
 

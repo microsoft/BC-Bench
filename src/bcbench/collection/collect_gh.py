@@ -10,8 +10,7 @@ import typer
 from bcbench.collection.gh_client import GHClient
 from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_project_paths_from_diff, separate_patches
 from bcbench.config import get_config
-from bcbench.dataset import BugFixEntry
-from bcbench.dataset.dataset_entry import PROBLEM_STATEMENT_README
+from bcbench.dataset import BugFixEntry, RepoGroundedEntry
 from bcbench.exceptions import CollectionError, NoTestsExtractedError
 from bcbench.operations import extract_tests_from_patch
 
@@ -33,7 +32,7 @@ def _save_problem_statement(
     instance_id: str,
     problem_statement: str,
     problem_statement_dir: Path = _config.paths.problem_statement_dir,
-    filename: str = PROBLEM_STATEMENT_README,
+    filename: str = RepoGroundedEntry.PROBLEM_STATEMENT_FILE,
 ) -> None:
     output_dir = problem_statement_dir / instance_id
     output_dir.mkdir(parents=True, exist_ok=True)
