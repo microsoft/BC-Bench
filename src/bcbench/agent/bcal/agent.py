@@ -44,9 +44,6 @@ class BCalBackendConfig(BaseModel):
             args.append(f"--deployment={self.model}")
         return args
 
-    def model_label(self) -> str:
-        return self.model or "external-command"
-
 
 def _resolve_bcal_executable() -> str:
     resolved = shutil.which(_BCAL_TOOL)

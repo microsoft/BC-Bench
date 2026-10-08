@@ -48,16 +48,6 @@ class TestCliArgs:
         assert not any(a.startswith("--deployment=") for a in args)
 
 
-class TestModelLabel:
-    def test_uses_model_when_present(self):
-        config = BCalBackendConfig(command="python bridge.py", model=" gpt-5 ")
-        assert config.model_label() == "gpt-5"
-
-    def test_without_model_uses_external_command_label(self):
-        config = BCalBackendConfig(command="python bridge.py")
-        assert config.model_label() == "external-command"
-
-
 class TestRunBcalAgent:
     def test_passes_external_command_to_bcal(self, workspace: Path):
         entry = create_nl2al_entry()

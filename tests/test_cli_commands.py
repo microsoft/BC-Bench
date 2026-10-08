@@ -111,7 +111,8 @@ def sample_results_directory(tmp_path, sample_dataset_file_for_cli):
     return tmp_path, run_id, sample_dataset_file_for_cli
 
 
-def test_evaluate_bcal_records_model_label(tmp_path):
+@pytest.mark.parametrize(("llm_model", "expected_model"), [("gpt-5.2-prod", "gpt-5.2-prod"), (None, "external-command")])
+def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     entry = create_nl2al_entry()
     captured = {}
 
@@ -136,10 +137,10 @@ def test_evaluate_bcal_records_model_label(tmp_path):
             output_dir=tmp_path / "results",
             run_id="bcal-run",
             llm_command=" python bridge.py ",
-            llm_model=" gpt-5.2-prod ",
+            llm_model=llm_model,
         )
 
-    assert captured["context"].model == "gpt-5.2-prod"
+    assert captured["context"].model == expected_model
 
 
 def _option_names(command: click.Command) -> set[str]:

@@ -259,7 +259,7 @@ def evaluate_bcal(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        model=backend_config.model_label(),
+        model=llm_model or "external-command",
         agent_name=AgentHarness.BCAL,
         category=category,
     )
