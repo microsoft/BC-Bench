@@ -1287,9 +1287,9 @@ class TestJudge:
         monkeypatch.setenv("BCBENCH_JUDGE_ENV_SENTINEL", "inherited")
         output = json.dumps({"type": "assistant.message", "data": {"content": '[{"pair":1,"match":true}]'}})
         with (
-            patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+            patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
             patch(
-                "bcbench_core.agent.copilot.cli.subprocess.run",
+                "bcbench_core.agent.copilot.agent.subprocess.run",
                 return_value=subprocess.CompletedProcess([], 0, stdout=output, stderr=""),
             ) as run,
         ):
@@ -1307,11 +1307,11 @@ class TestJudge:
     def test_raises_when_subprocess_fails(self, tmp_path):
         with (
             patch(
-                "bcbench_core.agent.copilot.cli._find_copilot",
+                "bcbench_core.agent.copilot.agent._find_copilot",
                 return_value="copilot",
             ),
             patch(
-                "bcbench_core.agent.copilot.cli.subprocess.run",
+                "bcbench_core.agent.copilot.agent.subprocess.run",
                 side_effect=subprocess.CalledProcessError(1, "copilot"),
             ),
             pytest.raises(LLMJudgeError, match="Judge subprocess failed"),
@@ -1321,8 +1321,8 @@ class TestJudge:
     def test_subprocess_failure_surfaces_copilot_output(self, tmp_path):
         error = subprocess.CalledProcessError(1, "copilot", output="partial stdout", stderr="model gpt-5.3-codex is not available")
         with (
-            patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
-            patch("bcbench_core.agent.copilot.cli.subprocess.run", side_effect=error),
+            patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
+            patch("bcbench_core.agent.copilot.agent.subprocess.run", side_effect=error),
             pytest.raises(LLMJudgeError, match="model gpt-5\\.3-codex is not available"),
         ):
             judge_verdicts([self._pair(10)], work_dir=tmp_path)

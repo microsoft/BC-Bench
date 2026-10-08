@@ -49,8 +49,8 @@ def test_cli_version_command_failure_is_an_error(error: Exception) -> None:
 
 def test_copilot_version_uses_the_evaluation_executable_resolver() -> None:
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="chosen-copilot.exe"),
-        patch("bcbench_core.agent.copilot.cli.get_cli_version", return_value="1.2.3") as version,
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="chosen-copilot.exe"),
+        patch("bcbench_core.agent.copilot.agent.get_cli_version", return_value="1.2.3") as version,
     ):
         assert get_copilot_version() == "1.2.3"
     version.assert_called_once_with("chosen-copilot.exe", "GitHub Copilot CLI")

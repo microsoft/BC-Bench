@@ -21,7 +21,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
         patch("bcbench.agent.copilot.agent.build_prompt", return_value="line one\nline two"),
         patch("bcbench.agent.copilot.agent.build_mcp_config", return_value=(None, None)),
         patch("bcbench.agent.copilot.agent.build_al_lsp_plugin", return_value=None),
@@ -29,9 +29,9 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
         patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=False),
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
-        patch("bcbench_core.agent.copilot.cli.parse_output", return_value=(None, None)) as mock_parse_output,
+        patch("bcbench_core.agent.copilot.agent.parse_output", return_value=(None, None)) as mock_parse_output,
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
         ) as mock_run,
     ):
@@ -78,7 +78,7 @@ def test_copilot_session_options_preserve_plugin_order_and_explicit_directory_gr
     ]
     mcp_config_json = '{"mcpServers":{"probe":{"command":"probe-mcp"}}}'
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
         patch("bcbench.agent.copilot.agent.build_prompt", return_value="do the task"),
         patch("bcbench.agent.copilot.agent.build_mcp_config", return_value=(mcp_config_json, ["probe"])),
         patch("bcbench.agent.copilot.agent.build_al_lsp_plugin", return_value=lsp_dir),
@@ -86,9 +86,9 @@ def test_copilot_session_options_preserve_plugin_order_and_explicit_directory_gr
         patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=True),
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value="al-dev"),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=plugins),
-        patch("bcbench_core.agent.copilot.cli.parse_output", return_value=(None, None)),
+        patch("bcbench_core.agent.copilot.agent.parse_output", return_value=(None, None)),
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
         ) as mock_run,
     ):
@@ -132,7 +132,7 @@ def configured_copilot_run(tmp_path):
     output_dir.mkdir()
     gateway = Mock(base_url="http://127.0.0.1:9999")
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
         patch("bcbench.agent.copilot.agent.build_prompt", return_value="do the task"),
         patch("bcbench.agent.copilot.agent.start_bc_mcp_gateway", return_value=gateway),
         patch("bcbench.agent.copilot.agent.build_mcp_config", return_value=('{"mcpServers":{}}', ["probe"])),
@@ -141,9 +141,9 @@ def configured_copilot_run(tmp_path):
         patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=True),
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value="al-dev"),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
-        patch("bcbench_core.agent.copilot.cli.parse_output", return_value=(None, None)),
+        patch("bcbench_core.agent.copilot.agent.parse_output", return_value=(None, None)),
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         ) as run,
     ):
@@ -180,7 +180,7 @@ def test_copilot_process_errors_propagate_and_stop_gateway(configured_copilot_ru
 def test_missing_copilot_stops_gateway_without_invoking_a_process(configured_copilot_run):
     repo_path, output_dir, gateway, run = configured_copilot_run
 
-    with patch("bcbench_core.agent.copilot.cli._find_copilot", return_value=None), pytest.raises(CopilotProcessError, match="not found"):
+    with patch("bcbench_core.agent.copilot.agent._find_copilot", return_value=None), pytest.raises(CopilotProcessError, match="not found"):
         run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir)
 
     run.assert_not_called()

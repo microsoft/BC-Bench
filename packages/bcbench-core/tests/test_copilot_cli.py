@@ -6,16 +6,16 @@ from unittest.mock import patch
 import pytest
 
 from bcbench_core.agent.copilot import CopilotOptions, CopilotProcessError, CopilotTimeoutError, invoke_copilot
-from bcbench_core.agent.copilot.cli import _find_copilot
+from bcbench_core.agent.copilot.agent import _find_copilot
 from bcbench_core.exceptions import AgentError
 
 
 def test_invoke_copilot_defaults_to_none_tool_argument_and_no_custom_instructions(tmp_path: Path):
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
-        patch("bcbench_core.agent.copilot.cli.parse_output", return_value=(None, None)),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent.parse_output", return_value=(None, None)),
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
         ) as mock_run,
     ):
@@ -35,10 +35,10 @@ def test_invoke_copilot_defaults_to_none_tool_argument_and_no_custom_instruction
 
 def test_invoke_copilot_can_enable_custom_instructions(tmp_path: Path):
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
-        patch("bcbench_core.agent.copilot.cli.parse_output", return_value=(None, None)),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent.parse_output", return_value=(None, None)),
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
         ) as mock_run,
     ):
@@ -58,9 +58,9 @@ def test_invoke_copilot_logs_readable_transcript(tmp_path: Path, caplog):
     output = '{"type":"model.call_start","data":{"turnId":"0"}}\n{"type":"assistant.message","data":{"content":"working"}}\n{"type":"result"}\n'
     caplog.set_level("INFO")
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output, stderr=""),
         ),
     ):
@@ -71,20 +71,20 @@ def test_invoke_copilot_logs_readable_transcript(tmp_path: Path, caplog):
 
 
 def test_find_copilot_prefers_the_exe_over_script_shims():
-    with patch("bcbench_core.agent.copilot.cli.shutil.which", side_effect=lambda name: name if name in ("copilot.exe", "copilot") else None):
+    with patch("bcbench_core.agent.copilot.agent.shutil.which", side_effect=lambda name: name if name in ("copilot.exe", "copilot") else None):
         assert _find_copilot() == "copilot.exe"
 
 
 def test_invoke_copilot_requires_the_cli(tmp_path: Path):
-    with patch("bcbench_core.agent.copilot.cli._find_copilot", return_value=None), pytest.raises(AgentError, match="Copilot CLI not found"):
+    with patch("bcbench_core.agent.copilot.agent._find_copilot", return_value=None), pytest.raises(AgentError, match="Copilot CLI not found"):
         invoke_copilot(prompt="p", model="m", work_dir=tmp_path, timeout=60, env={})
 
 
 def test_invoke_copilot_forwards_cli_stderr(tmp_path: Path, capsys):
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="warning: slow model\n"),
         ),
     ):
@@ -95,8 +95,8 @@ def test_invoke_copilot_forwards_cli_stderr(tmp_path: Path, capsys):
 
 def _command_for(options: CopilotOptions, tmp_path: Path) -> list[str]:
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
-        patch("bcbench_core.agent.copilot.cli.subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")) as run,
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent.subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")) as run,
     ):
         invoke_copilot("p", "m", tmp_path, 60, {}, options)
     command = run.call_args.args[0]
@@ -132,9 +132,9 @@ def test_invoke_copilot_runs_a_configured_session_without_caller_built_arguments
     output = '{"type":"model.call_start"}\n{"type":"assistant.message","data":{"content":"done","phase":"final_answer"}}\n'
     parent_env = MappingProxyType({"PATH": "explicit"})
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout=output, stderr=""),
         ) as run,
     ):
@@ -176,9 +176,9 @@ def test_invoke_copilot_runs_a_configured_session_without_caller_built_arguments
 def test_workspace_mcp_option_preserves_or_overrides_supplied_environment(tmp_path: Path, workspace_mcp: bool | None, expected: str):
     parent_env = {"GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "inherited"}
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
         patch(
-            "bcbench_core.agent.copilot.cli.subprocess.run",
+            "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
         ) as run,
     ):
@@ -192,8 +192,8 @@ def test_workspace_mcp_option_preserves_or_overrides_supplied_environment(tmp_pa
 def test_invoke_copilot_preserves_process_failure_diagnostics(tmp_path: Path, stdout: str | bytes, stderr: str | bytes, caplog):
     failure = subprocess.CalledProcessError(2, ["copilot"], output=stdout, stderr=stderr)
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
-        patch("bcbench_core.agent.copilot.cli.subprocess.run", side_effect=failure),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent.subprocess.run", side_effect=failure),
         pytest.raises(CopilotProcessError, match="exit status 2") as error,
     ):
         invoke_copilot("p", "m", tmp_path, 60, {})
@@ -208,8 +208,8 @@ def test_invoke_copilot_preserves_process_failure_diagnostics(tmp_path: Path, st
 def test_invoke_copilot_reports_timeout_with_metrics_and_partial_output(tmp_path: Path, caplog):
     failure = subprocess.TimeoutExpired(["copilot"], 60, output=b"partial output", stderr=b"waiting")
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
-        patch("bcbench_core.agent.copilot.cli.subprocess.run", side_effect=failure),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent.subprocess.run", side_effect=failure),
         pytest.raises(CopilotTimeoutError, match="after 60 seconds") as error,
     ):
         invoke_copilot("p", "m", tmp_path, 60, {})
@@ -225,8 +225,8 @@ def test_invoke_copilot_reports_timeout_with_metrics_and_partial_output(tmp_path
 def test_invoke_copilot_reports_launch_failure(tmp_path: Path, caplog):
     failure = OSError("unavailable")
     with (
-        patch("bcbench_core.agent.copilot.cli._find_copilot", return_value="copilot"),
-        patch("bcbench_core.agent.copilot.cli.subprocess.run", side_effect=failure),
+        patch("bcbench_core.agent.copilot.agent._find_copilot", return_value="copilot"),
+        patch("bcbench_core.agent.copilot.agent.subprocess.run", side_effect=failure),
         pytest.raises(CopilotProcessError, match="Could not start Copilot CLI: unavailable") as error,
     ):
         invoke_copilot("p", "m", tmp_path, 60, {})
