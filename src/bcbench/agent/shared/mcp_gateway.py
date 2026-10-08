@@ -260,6 +260,9 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             if rpc_method == "tools/list" and self._serve_cached_tools(rpc_id):
                 return
 
+            self._forward_upstream(body, rpc_method)
+
+        def _forward_upstream(self, body: bytes | None, rpc_method: str | None) -> None:
             request_headers: dict[str, str] = {k: v for k, v in self.headers.items() if k.lower() not in _STRIPPED_REQUEST_HEADERS}
             request_headers["Host"] = f"{gateway._origin_host}:{gateway._origin_port}"
             request_headers.update(gateway._injected_headers)
