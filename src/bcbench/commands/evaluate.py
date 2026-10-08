@@ -9,7 +9,7 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
-from bcbench.categories.code_review.judge_calibration import run_calibration
+from bcbench.categories.code_review.judge_calibration import CALIBRATION_DATASET_FILE, run_calibration
 from bcbench.categories.code_review.result import CodeReviewResult
 from bcbench.categories.nl2al.entry import NL2ALEntry
 from bcbench.categories.registry import category_definition
@@ -304,7 +304,7 @@ def evaluate_judge_calibration(
     the threshold.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
-    report = run_calibration(work_dir, model=model)
+    report = run_calibration(work_dir, model=model, dataset=_config.paths.dataset_dir / CALIBRATION_DATASET_FILE)
 
     logger.info(f"Judge calibration ({model}) over {report.total} labeled pairs:")
     logger.info(f"  precision={report.precision:.3f}  recall={report.recall:.3f}  accuracy={report.accuracy:.3f}")

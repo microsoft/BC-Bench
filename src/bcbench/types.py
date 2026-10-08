@@ -413,6 +413,11 @@ class EvaluationContext[E: BaseDatasetEntry]:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
 
+    def get_judge_model(self) -> str:
+        if self.judge_model is None:
+            raise ValueError(f"A judge model is required for {self.category.value} evaluation")
+        return self.judge_model
+
 
 CopilotModelName = Literal[
     "claude-sonnet-5",

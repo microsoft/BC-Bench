@@ -19,12 +19,10 @@ from pydantic import BaseModel, ConfigDict
 
 from bcbench.categories.code_review.entry import ReviewComment
 from bcbench.categories.code_review.judge import judge_verdicts
-from bcbench.config import get_config
 from bcbench.types import JudgeCalibrationReport
 
-_config = get_config()
-
-CALIBRATION_DATASET = _config.paths.dataset_dir / "judge_calibration.jsonl"
+# Hand-labeled calibration pairs, in the dataset dir
+CALIBRATION_DATASET_FILE = "judge_calibration.jsonl"
 
 
 class JudgeCalibrationCase(BaseModel):
@@ -36,7 +34,7 @@ class JudgeCalibrationCase(BaseModel):
     note: str
 
 
-def _load_calibration_cases(path: Path = CALIBRATION_DATASET) -> list[JudgeCalibrationCase]:
+def _load_calibration_cases(path: Path) -> list[JudgeCalibrationCase]:
     return [JudgeCalibrationCase.model_validate_json(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
@@ -74,7 +72,7 @@ def score_calibration(predicted: list[bool], cases: list[JudgeCalibrationCase]) 
     )
 
 
-def run_calibration(work_dir: Path, model: str = _config.judge.code_review_model, dataset: Path = CALIBRATION_DATASET) -> JudgeCalibrationReport:
+def run_calibration(work_dir: Path, model: str, dataset: Path) -> JudgeCalibrationReport:
     """Run the live judge over the calibration set and score it against the human labels.
 
     Requires the Copilot CLI (raises LLMJudgeError otherwise).

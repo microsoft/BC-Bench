@@ -145,9 +145,7 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
     @classmethod
     @override
     def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
-        if context.judge_model is None:
-            raise ValueError(f"{context.category.value} results need a judge model")
-        return {**super()._base_fields(context), "judge_model": context.judge_model}
+        return {**super()._base_fields(context), "judge_model": context.get_judge_model()}
 
     @property
     @override

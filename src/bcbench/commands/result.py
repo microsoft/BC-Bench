@@ -80,7 +80,8 @@ def result_summarize(
     summary = summarize_results(results, run_id=run_id)
 
     if _config.env.github_actions:
-        create_github_job_summary(results, summary)
+        step_summary = _config.env.github_step_summary
+        create_github_job_summary(results, summary, Path(step_summary) if step_summary else None)
     else:
         create_console_summary(results, summary)
 
