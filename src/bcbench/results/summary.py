@@ -28,7 +28,8 @@ def get_benchmark_version() -> str:
         except PackageNotFoundError:
             return "unknown"
     with pyproject_path.open("rb") as f:
-        return tomllib.load(f).get("project", {}).get("version", "unknown")
+        project_version = tomllib.load(f).get("project", {}).get("version")
+    return project_version if isinstance(project_version, str) else "unknown"
 
 
 class EvaluationResultSummary(BaseModel, ABC):

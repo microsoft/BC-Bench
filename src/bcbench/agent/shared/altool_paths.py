@@ -117,7 +117,7 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     # platform/ alone — the AL compiler recursively scans `--assemblyprobingpaths`
     # (SearchOption.AllDirectories), so a single root covers ServiceTier, Test Assemblies, etc.
     platform_dir = version_root / "platform"
-    assembly_probing_paths = [str(platform_dir)] if platform_dir.is_dir() else []
+    assembly_probing_paths: list[str] = [str(platform_dir)] if platform_dir.is_dir() else []
 
     # System .NET runtime — same fallback as the container-derived path so DotNet interop types resolve even without BC-shipped reference assemblies.
     assembly_probing_paths.extend(_dotnet_runtime_probing_paths())

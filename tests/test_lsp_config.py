@@ -26,7 +26,7 @@ def entry():
 
 
 @pytest.fixture
-def repo_path(tmp_path) -> Path:
+def repo_path(tmp_path: Path) -> Path:
     return tmp_path / "repo"
 
 
@@ -62,9 +62,9 @@ def _build(entry, repo_path, harness: AgentHarness, runtime: AgentRuntimeConfig 
 
 
 @pytest.fixture(params=[AgentHarness.COPILOT, AgentHarness.CLAUDE], ids=lambda a: a.value)
-def harness(request) -> AgentHarness:
+def harness(request: pytest.FixtureRequest) -> AgentHarness:
     """Parametrize across both agents — every shared behavior gets tested twice."""
-    return request.param
+    return AgentHarness(request.param)
 
 
 class TestSharedBehavior:
