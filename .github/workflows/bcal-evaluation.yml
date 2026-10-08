@@ -176,7 +176,6 @@ jobs:
       - name: Run BCal for entry ${{ matrix.entry }}
         timeout-minutes: 28
         env:
-          BCAL_LLM_BACKEND: external-command
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat-2026-04-29' }}
           CAPI_ENDPOINT: ${{ secrets.CAPI_ENDPOINT }}
           CAPI_SCOPE: ${{ secrets.CAPI_SCOPE }}

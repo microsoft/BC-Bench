@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 from rich.console import Console
+from typer.testing import CliRunner
 
 # Red teaming ships as the optional `redteam` dependency group, so skip when it is not installed.
 pytest.importorskip("azure.ai.evaluation.red_team")
@@ -19,9 +20,8 @@ pytest.importorskip("azure.ai.evaluation.red_team")
 from bcbench import redteam
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
-from bcbench.commands.redteam import _asr_table, _attack_result, _rows_table
+from bcbench.commands.redteam import _asr_table, _attack_result, _rows_table, redteam_app
 from bcbench.exceptions import AgentError
-from bcbench.types import BCalLLMBackend
 
 
 @pytest.fixture
@@ -30,8 +30,19 @@ def bcal_target(tmp_path: Path) -> redteam.RedTeamCallback:
         return redteam.build_bcal_target(
             package_cache_path=tmp_path / ".alpackages",
             export_base=tmp_path / "exports",
-            backend_config=BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            backend_config=BCalBackendConfig(command="python bridge.py"),
         )
+
+
+def test_scan_only_exposes_external_command_options():
+    result = CliRunner().invoke(redteam_app, ["scan", "--help"])
+
+    assert result.exit_code == 0
+    assert "--llm-command" in result.stdout
+    assert "--llm-model" in result.stdout
+    assert "--backend" not in result.stdout
+    assert "--endpoint" not in result.stdout
+    assert "--deployment" not in result.stdout
 
 
 def test_bcal_target_uses_advanced_async_callback_signature(bcal_target: redteam.RedTeamCallback):

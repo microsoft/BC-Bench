@@ -14,7 +14,7 @@ from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtim
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import AgentMetrics, BCalLLMBackend, EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
@@ -109,7 +109,7 @@ def sample_results_directory(tmp_path, sample_dataset_file_for_cli):
     return tmp_path, run_id, sample_dataset_file_for_cli
 
 
-def test_evaluate_bcal_records_backend_model_label(tmp_path):
+def test_evaluate_bcal_records_model_label(tmp_path):
     entry = create_nl2al_entry()
     captured = {}
 
@@ -133,12 +133,23 @@ def test_evaluate_bcal_records_backend_model_label(tmp_path):
             repo_path=tmp_path / "repo",
             output_dir=tmp_path / "results",
             run_id="bcal-run",
-            backend=BCalLLMBackend.AZURE_OPENAI,
-            endpoint=" https://aoai.example/ ",
-            deployment=" gpt-5.2-prod ",
+            llm_command=" python bridge.py ",
+            llm_model=" gpt-5.2-prod ",
         )
 
     assert captured["context"].model == "gpt-5.2-prod"
+
+
+@pytest.mark.parametrize("command", [["run", "bcal", "--help"], ["evaluate", "bcal", "--help"]])
+def test_bcal_commands_only_expose_external_command_options(command):
+    result = runner.invoke(app, command)
+
+    assert result.exit_code == 0
+    assert "--llm-command" in result.stdout
+    assert "--llm-model" in result.stdout
+    assert "--backend" not in result.stdout
+    assert "--endpoint" not in result.stdout
+    assert "--deployment" not in result.stdout
 
 
 @pytest.fixture

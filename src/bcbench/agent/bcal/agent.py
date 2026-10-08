@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.types import AgentMetrics, BCalLLMBackend, ExperimentConfiguration
+from bcbench.types import AgentMetrics, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -21,21 +21,14 @@ _BCAL_TOOL = "bcal"
 
 
 class BCalBackendConfig(BaseModel):
-    """A resolved bcal backend plus the inputs it needs to run.
-
-    Bundles the backend selector with its (command-entry supplied) values so call sites pass a
-    single object, and the conditional "which inputs are required" rules stay in one place.
-    """
+    """Configuration for bcal's external-command LLM bridge."""
 
     model_config = ConfigDict(frozen=True)
 
-    backend: BCalLLMBackend
-    endpoint: str | None = None
-    deployment: str | None = None
     command: str | None = None
     model: str | None = None
 
-    @field_validator("endpoint", "deployment", "command", "model", mode="before")
+    @field_validator("command", "model", mode="before")
     @classmethod
     def _strip_optional_string(cls, value: object) -> object:
         if isinstance(value, str):
@@ -44,31 +37,15 @@ class BCalBackendConfig(BaseModel):
         return value
 
     def cli_args(self) -> list[str]:
-        match self.backend:
-            case BCalLLMBackend.EXTERNAL_COMMAND:
-                if not self.command:
-                    raise AgentError("BCAL_LLM_COMMAND is required for the external-command backend.")
-                args = ["--llm-backend=external-command", f"--llm-command={self.command}"]
-                if self.model:
-                    args.append(f"--deployment={self.model}")
-                return args
-            case BCalLLMBackend.AZURE_OPENAI:
-                if not self.endpoint:
-                    raise AgentError("AZURE_OPENAI_ENDPOINT is required for the azure-openai backend.")
-                if not self.deployment:
-                    raise AgentError("AZURE_OPENAI_DEPLOYMENT is required for the azure-openai backend.")
-                return [f"--endpoint={self.endpoint}", f"--deployment={self.deployment}"]
-
-        raise ValueError(f"Unknown BCalLLMBackend: {self.backend}")
+        if not self.command:
+            raise AgentError("BCAL_LLM_COMMAND is required.")
+        args = ["--llm-backend=external-command", f"--llm-command={self.command}"]
+        if self.model:
+            args.append(f"--deployment={self.model}")
+        return args
 
     def model_label(self) -> str:
-        match self.backend:
-            case BCalLLMBackend.EXTERNAL_COMMAND:
-                return self.model or self.backend.value
-            case BCalLLMBackend.AZURE_OPENAI:
-                return self.deployment or self.backend.value
-
-        raise ValueError(f"Unknown BCalLLMBackend: {self.backend}")
+        return self.model or "external-command"
 
 
 def _resolve_bcal_executable() -> str:
@@ -146,7 +123,7 @@ def run_bcal_agent(
     repo_path: Path,
     backend_config: BCalBackendConfig,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend_config.backend.value})")
+    logger.info(f"Running bcal CLI on: {entry.instance_id}")
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
     project_name: str = entry.project_paths[0]
