@@ -40,6 +40,7 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
             category=EvaluationCategory.BUG_FIX,
             repo_path=repo_path,
             output_dir=output_dir,
+            pass_bc_credentials=True,
         )
 
     assert mock_run.call_args.args[0] == [

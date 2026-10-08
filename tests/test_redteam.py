@@ -16,6 +16,8 @@ from bcbench_core.exceptions import AgentError
 from rich.console import Console
 from typer.main import get_command
 
+from tests.conftest import create_nl2al_entry
+
 # Red teaming ships as the optional `redteam` extra, so skip when it is not installed.
 pytest.importorskip("azure.ai.evaluation.red_team")
 
@@ -29,6 +31,7 @@ from bcbench.commands.redteam import _asr_table, _attack_result, _rows_table, re
 def bcal_target(tmp_path: Path) -> redteam.RedTeamCallback:
     with patch.object(redteam, "_ensure_package_cache"):
         return redteam.build_bcal_target(
+            entry=create_nl2al_entry(),
             package_cache_path=tmp_path / ".alpackages",
             export_base=tmp_path / "exports",
             backend_config=BCalBackendConfig(command="python bridge.py"),

@@ -1,14 +1,12 @@
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_review_metrics
-from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, EvaluationCategory, PRReviewMetrics
+from bcbench.types import AgentHarness, PRReviewMetrics
 from tests.conftest import create_codereview_entry, create_codereview_result
 
 
@@ -112,8 +110,7 @@ def test_valid_engine_metrics_without_billing_preserve_unknown_credits_through_e
     result.save(tmp_path, "raw-result.jsonl")
     assert json.loads((tmp_path / "raw-result.jsonl").read_text(encoding="utf-8"))["metrics"]["ai_credits"] is None
 
-    with patch.object(CodeReviewEntry, "load", return_value=[create_codereview_entry()]):
-        write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.CODE_REVIEW)
+    write_bceval_results([result], tmp_path, "run", "export.jsonl", [create_codereview_entry()])
 
     metadata = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))["metadata"]
     assert metadata["ai_credits"] is None

@@ -4,6 +4,7 @@ import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import TypeAdapter
 
+from bcbench.categories import category_definition
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentHarness, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
@@ -70,7 +71,7 @@ def test_all_categories_have_pipelines():
 
 def test_all_categories_have_entry_classes():
     for category in EvaluationCategory:
-        entry_cls = category.entry_class
+        entry_cls = category_definition(category).entry_type
         assert entry_cls is not None
 
 
@@ -100,7 +101,7 @@ def test_all_categories_handled_in_get_expected_output(
     sample_ext_triage_entry: ExtRequestTriageEntry,
 ):
     for category in EvaluationCategory:
-        entry_cls = category.entry_class
+        entry_cls = category_definition(category).entry_type
         if entry_cls == CodeReviewEntry:
             # CodeReviewEntry has a different schema — test separately
             entry = CodeReviewEntry(
@@ -141,19 +142,19 @@ def test_all_categories_handled_in_get_expected_output(
 
 def test_all_categories_have_evaluators():
     for category in EvaluationCategory:
-        evaluators = category.evaluators
-        assert isinstance(evaluators, list)
+        evaluators = category_definition(category).evaluators
+        assert isinstance(evaluators, tuple)
         assert evaluators, f"{category} must declare at least one evaluator"
         assert all(isinstance(e, str) and e for e in evaluators)
 
 
 def test_all_categories_have_core_score():
     for category in EvaluationCategory:
-        assert isinstance(category.core_score, str)
-        assert category.core_score, f"{category} must declare a non-empty core_score"
+        assert isinstance(category_definition(category).core_score, str)
+        assert category_definition(category).core_score, f"{category} must declare a non-empty core_score"
 
 
 def test_pass_on_bc_container_credentials_exhaustiveness():
     categories_with_credentials_withheld = {EvaluationCategory.DATA_QUERY}
     for category in EvaluationCategory:
-        assert category.pass_on_bc_container_credentials is (category not in categories_with_credentials_withheld)
+        assert category_definition(category).pass_bc_credentials is (category not in categories_with_credentials_withheld)

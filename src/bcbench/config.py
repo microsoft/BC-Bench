@@ -11,8 +11,8 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import AliasPath, BaseModel, ConfigDict, Field
 
-from bcbench.cli_options import CopilotModelName
 from bcbench.paths import SHARED_CONFIG_FILE
+from bcbench.types import CopilotModelName
 
 __all__ = ["Config", "get_config"]
 

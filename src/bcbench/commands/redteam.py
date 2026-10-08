@@ -65,6 +65,7 @@ def scan(
         uv run bcbench redteam scan --language en --risk-category code_vulnerability
         uv run bcbench redteam scan --language es --seeds dataset/redteam/attack_objectives.json --attack-strategy base64
     """
+    from bcbench.categories.nl2al.definition import DEFINITION as NL2AL
     from bcbench.redteam import build_bcal_target, run_scan
 
     # Upstream treats seeds and risk categories as alternative objective sources, so exactly one is required.
@@ -75,7 +76,9 @@ def scan(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # Only support NL2AL for now, we will think about extensibility later.
+    # bcal always requires --page/--audience, but red teaming has no dataset entry of its own at the moment.
     scan_target = build_bcal_target(
+        entry=NL2AL.load_entries(_config.paths.dataset_dir)[0],
         package_cache_path=_config.paths.evaluation_results_path / "redteam" / ALPACKAGES_DIRNAME,
         export_base=output.parent / "bcal-exports",
         backend_config=BCalBackendConfig(

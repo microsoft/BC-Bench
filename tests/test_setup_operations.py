@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from bcbench.categories import category_definition
+from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
 from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild
 from bcbench.types import EvaluationCategory
@@ -71,7 +73,7 @@ def test_setup_repo_prebuild_commits_scope_compatibility_baseline(tmp_path: Path
 
 
 def test_benchmark_patches_do_not_depend_on_removed_scope_lines() -> None:
-    for entry in BugFixEntry.load(EvaluationCategory.BUG_FIX.dataset_path):
+    for entry in BugFixEntry.load(category_definition(EvaluationCategory.BUG_FIX).dataset_path(get_config().paths.dataset_dir)):
         for patch in (entry.patch, entry.test_patch):
             assert re.search(r"(?im)^[-+ ]\s*Scope\s*=\s*OnPrem;", patch) is None, entry.instance_id
 

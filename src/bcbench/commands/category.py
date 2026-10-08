@@ -2,6 +2,7 @@ import sys
 
 import typer
 
+from bcbench.categories import category_definition
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.github_actions import write_step_outputs
 from bcbench.types import EvaluationCategory
@@ -23,11 +24,12 @@ def bceval_config(category: EvaluationCategoryOption) -> None:
 
     The lines are appended to $GITHUB_OUTPUT so they become GitHub Actions step outputs. Outside of Actions nothing is written.
     """
+    definition = category_definition(category)
     outputs: dict[str, str] = {
-        "evaluators": ",".join(category.evaluators),
-        "core_score": category.core_score,
+        "evaluators": ",".join(definition.evaluators),
+        "core_score": definition.core_score,
     }
-    if ("lm_checklist" in category.evaluators) and (category.judge_model is not None):
+    if ("lm_checklist" in definition.evaluators) and (category.judge_model is not None):
         outputs["judge_model"] = category.judge_model
     write_step_outputs(outputs)
 
@@ -35,10 +37,11 @@ def bceval_config(category: EvaluationCategoryOption) -> None:
 @category_app.command("runtime-config")
 def runtime_config(category: EvaluationCategoryOption) -> None:
     """Emit the GitHub Actions runner label and environment requirements for a category."""
+    definition = category_definition(category)
     write_step_outputs(
         {
-            "runner": category.runner,
-            "requires-container": str(category.requires_container).lower(),
-            "requires-repo": str(category.requires_repo).lower(),
+            "runner": definition.runner,
+            "requires-container": str(definition.requires_container).lower(),
+            "requires-repo": str(definition.requires_repo).lower(),
         }
     )

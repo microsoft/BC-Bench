@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from bcbench.categories import category_definition
 from bcbench.dataset import BugFixEntry, RepoGroundedEntry
 from bcbench.operations.instruction_operations import (
     INSTRUCTION_SOURCE_FILE,
@@ -74,7 +75,7 @@ def test_repo_grounded_profile_is_derived_from_repo():
 
 def test_every_category_entry_class_names_a_customization_profile():
     for category in EvaluationCategory:
-        entry = category.entry_class.model_construct(repo="microsoft/BCApps")
+        entry = category_definition(category).entry_type.model_construct(repo="microsoft/BCApps")
         assert entry.customization_profile, f"{category} has no customization profile"
 
 

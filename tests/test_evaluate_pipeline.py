@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 
+from bcbench.categories import category_definition
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
@@ -128,7 +129,7 @@ def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
 
 @pytest.mark.parametrize("category", [EvaluationCategory.BUG_FIX, EvaluationCategory.TEST_GENERATION, EvaluationCategory.NL2AL, EvaluationCategory.EXT_REQUEST_IMPLEMENT])
 def test_al_evaluation_pipelines_pass_recommended_diff_exclusions(tmp_path, category):
-    entry = category.entry_class.model_validate(_entry_for_category(category).model_dump())
+    entry = category_definition(category).entry_type.model_validate(_entry_for_category(category).model_dump())
     ctx = create_evaluation_context(tmp_path, entry=entry, category=category)
     pipeline = category.pipeline
     module = type(pipeline).__module__

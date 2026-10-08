@@ -6,6 +6,7 @@ from typing import Annotated, cast
 import typer
 
 from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.categories import category_definition
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -70,7 +71,7 @@ def run_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_copilot_agent(
@@ -79,6 +80,7 @@ def run_copilot(
         model=model,
         category=category,
         output_dir=output_dir,
+        pass_bc_credentials=category_definition(category).pass_bc_credentials,
         runtime=runtime,
     )
 
@@ -121,7 +123,7 @@ def run_claude(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_claude_code(
@@ -130,6 +132,7 @@ def run_claude(
         model=model,
         category=category,
         output_dir=output_dir,
+        pass_bc_credentials=category_definition(category).pass_bc_credentials,
         runtime=runtime,
     )
 
@@ -157,7 +160,7 @@ def run_pr_review(
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_pr_review_agent(
@@ -187,7 +190,7 @@ def run_bcal(
         uv run bcbench run bcal nl2al__job-budget-report-1
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    entry: NL2ALEntry = cast(NL2ALEntry, category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0])
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_bcal_agent(

@@ -4,13 +4,14 @@ Convert the result into a format that bceval can consume and upload to Braintrus
 
 import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
+from bcbench.types import ExpectedOutput, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +36,10 @@ def write_bceval_results(
     out_dir: Path,
     run_id: str,
     output_filename: str,
-    category: EvaluationCategory,
+    dataset_entries: Sequence[BaseDatasetEntry],
     git_ref: str | None = None,
 ) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    entry_cls = category.entry_class
-    dataset_entries: list[BaseDatasetEntry] = entry_cls.load(category.dataset_path)
     benchmark_version = get_benchmark_version()
 
     output_file = out_dir / output_filename
