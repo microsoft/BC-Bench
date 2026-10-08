@@ -258,15 +258,23 @@ dependencies = [
     { name = "jinja2" },
     { name = "jsonschema" },
     { name = "numpy" },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "rich" },
     { name = "scipy" },
     { name = "textual" },
     { name = "typer" },
     { name = "typing-extensions" },
     { name = "unidiff" },
+]
+
+[package.optional-dependencies]
+redteam = [
+    { name = "azure-ai-evaluation", extra = ["redteam"] },
+    { name = "azure-identity" },
 ]
 
 [package.dev-dependencies]
@@ -277,33 +285,35 @@ analysis = [
     { name = "plotly" },
 ]
 dev = [
+    { name = "click" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "ty" },
 ]
-redteam = [
-    { name = "azure-ai-evaluation", extra = ["redteam"] },
-    { name = "azure-identity" },
-]
 
 [package.metadata]
 requires-dist = [
+    { name = "azure-ai-evaluation", extras = ["redteam"], marker = "extra == 'redteam'", specifier = ">=1.18.2" },
+    { name = "azure-identity", marker = "extra == 'redteam'", specifier = ">=1.25.3" },
     { name = "bcbench-core", editable = "packages/bcbench-core" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "numpy", specifier = ">=2.3.5" },
+    { name = "packaging", specifier = ">=25.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.0" },
+    { name = "rich", specifier = ">=14.2.0" },
     { name = "scipy", specifier = ">=1.16.3" },
     { name = "textual", specifier = ">=7.0" },
     { name = "typer", specifier = ">=0.9.0" },
     { name = "typing-extensions", specifier = ">=4.0" },
     { name = "unidiff", specifier = ">=0.7" },
 ]
+provides-extras = ["redteam"]
 
 [package.metadata.requires-dev]
 analysis = [
@@ -313,15 +323,12 @@ analysis = [
     { name = "plotly", specifier = ">=6.5.0" },
 ]
 dev = [
+    { name = "click", specifier = ">=8.3.0" },
     { name = "pre-commit", specifier = ">=4.3.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.0" },
     { name = "ruff", specifier = ">=0.16.0" },
     { name = "ty", specifier = ">=0.0.84" },
-]
-redteam = [
-    { name = "azure-ai-evaluation", extras = ["redteam"], specifier = ">=1.18.2" },
-    { name = "azure-identity", specifier = ">=1.25.3" },
 ]
 
 [[package]]

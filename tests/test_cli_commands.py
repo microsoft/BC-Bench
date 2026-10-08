@@ -11,7 +11,7 @@ import typer
 from typer.main import get_command
 from typer.testing import CliRunner
 
-from bcbench.cli import _redteam_group_installed, app
+from bcbench.cli import _redteam_extra_installed, app
 from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtime
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
@@ -29,14 +29,14 @@ runner = CliRunner()
 
 
 @patch("bcbench.cli.import_module")
-def test_redteam_group_installed_when_sdk_module_imports(import_module):
-    assert _redteam_group_installed()
+def test_redteam_extra_installed_when_sdk_module_imports(import_module):
+    assert _redteam_extra_installed()
     import_module.assert_called_once_with("azure.ai.evaluation.red_team")
 
 
 @patch("bcbench.cli.import_module", side_effect=ImportError)
-def test_redteam_group_not_installed_when_sdk_module_import_fails(import_module):
-    assert not _redteam_group_installed()
+def test_redteam_extra_not_installed_when_sdk_module_import_fails(import_module):
+    assert not _redteam_extra_installed()
     import_module.assert_called_once_with("azure.ai.evaluation.red_team")
 
 

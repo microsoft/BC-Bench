@@ -25,7 +25,7 @@ jobs:
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
         with:
-          all-groups: true
+          full-install: true
 
       - name: Install pre-commit hooks
         run: uv run pre-commit install
