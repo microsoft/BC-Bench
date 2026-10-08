@@ -9,7 +9,6 @@ from pathlib import Path
 
 from bcbench_core.agent.copilot.metrics import parse_output
 from bcbench_core.agent.copilot.types import CopilotOptions, CopilotProcessError, CopilotTimeoutError
-from bcbench_core.agent.env import agent_subprocess_env
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 
@@ -28,17 +27,10 @@ def get_copilot_version() -> str:
     return get_cli_version(_find_copilot(), "GitHub Copilot CLI")
 
 
-def invoke_copilot(
-    prompt: str,
-    model: str,
-    work_dir: Path,
-    timeout: int,
-    env: Mapping[str, str],
-    options: CopilotOptions = CopilotOptions(),  # noqa: B008 - frozen dataclass, so a shared default is safe
-) -> tuple[AgentMetrics | None, str]:
+def invoke_copilot(prompt: str, model: str, work_dir: Path, timeout: int, env: Mapping[str, str], options: CopilotOptions) -> tuple[AgentMetrics | None, str]:
     """Run one non-interactive Copilot CLI prompt.
 
-    Tools and custom instructions are disabled by default; filesystem access is granted only through ``options.granted_dirs``.
+    ``CopilotOptions()`` disables tools and custom instructions; filesystem access is granted only through ``options.granted_dirs``.
 
     Returns:
         A tuple containing parsed agent metrics, when available, and the final assistant response. The response is empty when none is emitted.
@@ -63,7 +55,7 @@ def invoke_copilot(
         *options.extra_args,
         f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
     ]
-    overrides = None if options.workspace_mcp is None else {"GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": str(options.workspace_mcp).lower()}
+    workspace_mcp = {} if options.workspace_mcp is None else {"GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": str(options.workspace_mcp).lower()}
     logger.info("Executing Copilot CLI in directory: %s", work_dir)
     logger.debug("Copilot command args: %s", cmd_args)
 
@@ -71,7 +63,7 @@ def invoke_copilot(
         result = subprocess.run(
             cmd_args,
             cwd=str(work_dir),
-            env=agent_subprocess_env(env, overrides),
+            env={**env, **workspace_mcp},
             capture_output=True,
             text=True,
             encoding="utf-8",

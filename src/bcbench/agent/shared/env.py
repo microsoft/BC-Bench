@@ -1,7 +1,5 @@
 import os
 
-from bcbench_core.agent.env import agent_subprocess_env as build_agent_subprocess_env
-
 # BC container connection details/credentials the harness uses to build the MCP config and to reach the
 # container. They must NOT leak into a launched agent's own process environment: otherwise the agent can
 # read the credentials and query BC's API directly from a shell, bypassing the MCP server the benchmark
@@ -15,9 +13,9 @@ _WITHHELD_ENV_VARS = frozenset({"BC_COMPANY", "BC_CONTAINER_NAME"})
 
 
 def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:
-    return build_agent_subprocess_env(
-        os.environ,
-        overrides,
-        exclude_vars=() if pass_bc_credentials else _WITHHELD_ENV_VARS,
-        exclude_prefixes=() if pass_bc_credentials else _WITHHELD_ENV_PREFIXES,
-    )
+    env = dict(os.environ)
+    if not pass_bc_credentials:
+        env = {k: v for k, v in env.items() if not k.startswith(_WITHHELD_ENV_PREFIXES) and k not in _WITHHELD_ENV_VARS}
+    if overrides:
+        env.update(overrides)
+    return env

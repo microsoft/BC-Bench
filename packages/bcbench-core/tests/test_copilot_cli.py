@@ -19,7 +19,7 @@ def test_invoke_copilot_defaults_to_none_tool_argument_and_no_custom_instruction
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
         ) as mock_run,
     ):
-        invoke_copilot(prompt="do the task", model="test-model", work_dir=tmp_path, timeout=60, env={})
+        invoke_copilot(prompt="do the task", model="test-model", work_dir=tmp_path, timeout=60, env={}, options=CopilotOptions())
 
     assert mock_run.call_args.args[0] == [
         "copilot",
@@ -64,7 +64,7 @@ def test_invoke_copilot_logs_readable_transcript(tmp_path: Path, caplog):
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output, stderr=""),
         ),
     ):
-        invoke_copilot(prompt="do the task", model="test-model", work_dir=tmp_path, timeout=60, env={})
+        invoke_copilot(prompt="do the task", model="test-model", work_dir=tmp_path, timeout=60, env={}, options=CopilotOptions())
 
     assert "Copilot: working" in caplog.messages
     assert output not in caplog.text
@@ -77,7 +77,7 @@ def test_find_copilot_prefers_the_exe_over_script_shims():
 
 def test_invoke_copilot_requires_the_cli(tmp_path: Path):
     with patch("bcbench_core.agent.copilot.agent._find_copilot", return_value=None), pytest.raises(AgentError, match="Copilot CLI not found"):
-        invoke_copilot(prompt="p", model="m", work_dir=tmp_path, timeout=60, env={})
+        invoke_copilot(prompt="p", model="m", work_dir=tmp_path, timeout=60, env={}, options=CopilotOptions())
 
 
 def test_invoke_copilot_forwards_cli_stderr(tmp_path: Path, capsys):
@@ -88,7 +88,7 @@ def test_invoke_copilot_forwards_cli_stderr(tmp_path: Path, capsys):
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="warning: slow model\n"),
         ),
     ):
-        assert invoke_copilot(prompt="p", model="m", work_dir=tmp_path, timeout=60, env={}) == (None, "")
+        assert invoke_copilot(prompt="p", model="m", work_dir=tmp_path, timeout=60, env={}, options=CopilotOptions()) == (None, "")
 
     assert "warning: slow model" in capsys.readouterr().err
 
@@ -196,7 +196,7 @@ def test_invoke_copilot_preserves_process_failure_diagnostics(tmp_path: Path, st
         patch("bcbench_core.agent.copilot.agent.subprocess.run", side_effect=failure),
         pytest.raises(CopilotProcessError, match="exit status 2") as error,
     ):
-        invoke_copilot("p", "m", tmp_path, 60, {})
+        invoke_copilot("p", "m", tmp_path, 60, {}, CopilotOptions())
 
     assert error.value.returncode == 2
     assert error.value.stdout == stdout
@@ -212,7 +212,7 @@ def test_invoke_copilot_reports_timeout_with_metrics_and_partial_output(tmp_path
         patch("bcbench_core.agent.copilot.agent.subprocess.run", side_effect=failure),
         pytest.raises(CopilotTimeoutError, match="after 60 seconds") as error,
     ):
-        invoke_copilot("p", "m", tmp_path, 60, {})
+        invoke_copilot("p", "m", tmp_path, 60, {}, CopilotOptions())
 
     assert error.value.timeout == 60
     assert error.value.metrics.execution_time == 60
@@ -229,7 +229,7 @@ def test_invoke_copilot_reports_launch_failure(tmp_path: Path, caplog):
         patch("bcbench_core.agent.copilot.agent.subprocess.run", side_effect=failure),
         pytest.raises(CopilotProcessError, match="Could not start Copilot CLI: unavailable") as error,
     ):
-        invoke_copilot("p", "m", tmp_path, 60, {})
+        invoke_copilot("p", "m", tmp_path, 60, {}, CopilotOptions())
 
     assert error.value.returncode is None
     assert error.value.__cause__ is failure

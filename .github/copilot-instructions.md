@@ -29,7 +29,6 @@ BC-Bench is category-based and designed to grow over time. It currently has two 
 - Prefer designs where invalid states are unrepresentable
 - Prefer high-order functions like map, filter, reduce over loops
 - Prefer immutable data structures where possible
-- Preserve rename detection when moving code; separate substantial new logic when the design supports it.
 
 ### Architecture design conventions
 
