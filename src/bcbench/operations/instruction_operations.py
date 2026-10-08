@@ -24,7 +24,7 @@ def setup_instructions_from_config(agent_config: AgentConfig, entry: BaseDataset
     Returns:
         True if instructions are enabled, False otherwise
     """
-    instructions_enabled: bool = agent_config.instructions_enabled
+    instructions_enabled: bool = agent_config.instructions.enabled
 
     if instructions_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
@@ -51,13 +51,13 @@ def setup_custom_agent(agent_config: AgentConfig, entry: BaseDatasetEntry, repo_
     """
     Setup custom agents in the repository if available.
     """
-    if agent_config.custom_agents_enabled:
+    if agent_config.agents.enabled:
         source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
         target_dir: Path = harness.get_target_dir(repo_path)
         copytree(source_instructions / "agents", target_dir / "agents", dirs_exist_ok=True)
 
         logger.info(f"Custom agents are set up from {source_instructions / 'agents'}")
-        return agent_config.custom_agent_name
+        return agent_config.agents.name
 
     return None
 

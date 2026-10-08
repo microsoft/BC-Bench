@@ -20,7 +20,7 @@ def setup_agent_skills(
     Returns:
         True if skills were copied, False if skills are disabled.
     """
-    skills_enabled: bool = agent_config.skills_enabled
+    skills_enabled: bool = agent_config.skills.enabled
 
     if skills_enabled:
         source_skills: Path = _get_source_instructions_path(entry.customization_profile)

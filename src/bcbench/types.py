@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 import yaml
 from bcbench_core.container import ContainerConfig
-from pydantic import AliasPath, BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
+    "AL_MCP_SERVER_NAME",
+    "BC_MCP_SERVER_NAME",
     "AgentConfig",
     "AgentHarness",
     "AgentMetrics",
@@ -564,7 +566,7 @@ type TestGenerationInput = Literal["problem-statement", "gold-patch", "both"]
 class PromptConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    include_project_paths: bool = False
+    include_project_paths: StrictBool = False
     test_generation_input: TestGenerationInput = Field(default="problem-statement", alias="test-generation-input")
     templates: dict[EvaluationCategory, str] = Field(default_factory=dict)
 
@@ -600,21 +602,50 @@ class StdioMcpServer(BaseModel):
 
 type McpServerConfig = Annotated[HttpMcpServer | StdioMcpServer, Field(discriminator="type")]
 
+AL_MCP_SERVER_NAME = "altool"
+BC_MCP_SERVER_NAME = "bcmcp"
+
+
+class McpConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    servers: tuple[McpServerConfig, ...] = ()
+
+    @model_validator(mode="after")
+    def check_reserved_server_types(self) -> McpConfig:
+        # build_mcp_config customizes these servers by name and relies on their transport type
+        for server in self.servers:
+            if server.name == AL_MCP_SERVER_NAME and not isinstance(server, StdioMcpServer):
+                raise ValueError(f"MCP server '{AL_MCP_SERVER_NAME}' must be of type 'stdio'")
+            if server.name == BC_MCP_SERVER_NAME and not isinstance(server, HttpMcpServer):
+                raise ValueError(f"MCP server '{BC_MCP_SERVER_NAME}' must be of type 'http'")
+        return self
+
+
+class ToggleConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: StrictBool = False
+
+
+class CustomAgentsConfig(ToggleConfig):
+    name: str | None = None
+
 
 class AgentConfig(BaseModel):
-    """The agent setup sections of `config.yaml`; other sections (e.g. `judges`) are read by their own consumers."""
-
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     prompt: PromptConfig = Field(default_factory=PromptConfig)
-    instructions_enabled: bool = Field(default=False, validation_alias=AliasPath("instructions", "enabled"))
-    skills_enabled: bool = Field(default=False, validation_alias=AliasPath("skills", "enabled"))
-    custom_agents_enabled: bool = Field(default=False, validation_alias=AliasPath("agents", "enabled"))
-    custom_agent_name: str | None = Field(default=None, validation_alias=AliasPath("agents", "name"))
+    instructions: ToggleConfig = Field(default_factory=ToggleConfig)
+    skills: ToggleConfig = Field(default_factory=ToggleConfig)
+    agents: CustomAgentsConfig = Field(default_factory=CustomAgentsConfig)
     # Kept raw: only enabled entries are validated into `PluginConfig`, since a disabled
     # entry may point at a path that only exists on another machine.
     plugins: tuple[dict[str, object], ...] = ()
-    mcp_servers: tuple[McpServerConfig, ...] = Field(default=(), validation_alias=AliasPath("mcp", "servers"))
+    mcp: McpConfig = Field(default_factory=McpConfig)
+    # Declared so typos in agent sections are rejected; their contents are validated by `JudgeConfig` and the pr-review agent
+    judges: dict[str, object] = Field(default_factory=dict)
+    pr_review: dict[str, object] = Field(default_factory=dict)
 
     @classmethod
     def from_file(cls, path: Path) -> AgentConfig:
