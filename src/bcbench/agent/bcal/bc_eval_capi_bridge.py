@@ -87,7 +87,7 @@ def _patch_credential_from_local_file(cert_file: Path) -> None:
     original = capi_auth.get_certificate_credential
     capi_auth.get_certificate_credential = _credential_from_file
     for mod_name, mod in list(sys.modules.items()):
-        if mod is None or not mod_name.startswith("bc_eval"):
+        if not mod_name.startswith("bc_eval"):
             continue
         if getattr(mod, "get_certificate_credential", None) is original:
             mod.get_certificate_credential = _credential_from_file  # ty: ignore[unresolved-attribute]

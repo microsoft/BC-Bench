@@ -17,9 +17,9 @@ import json
 import logging
 import threading
 import time
-from http.client import HTTPConnection
+from http.client import HTTPConnection, HTTPResponse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import cast
+from typing import Any, cast, override
 from urllib.parse import urlsplit
 
 from bcbench_core.container import ContainerConfig
@@ -73,10 +73,11 @@ def _jsonrpc_method_and_id(body: bytes | None) -> tuple[str | None, object]:
         return None, None
     if not isinstance(obj, dict):
         return None, None
-    return obj.get("method"), obj.get("id")
+    method = obj.get("method")
+    return (method if isinstance(method, str) else None), obj.get("id")
 
 
-def _read_jsonrpc(response, deadline: float) -> dict:  # noqa: ANN001 - http.client.HTTPResponse
+def _read_jsonrpc(response, deadline: float) -> dict[str, Any]:  # noqa: ANN001 - http.client.HTTPResponse
     """Parse a JSON-RPC result from an MCP response body (application/json or SSE).
 
     For SSE, read line by line and return as soon as a JSON-RPC result/error arrives: the BC MCP
@@ -166,7 +167,9 @@ class BcMcpGateway:
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
 
-    def _rpc(self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict]:
+    def _rpc(
+        self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict[str, Any] | None, request_id: int | None = None, session_id: str | None = None
+    ) -> tuple[str | None, dict[str, Any]]:
         connection = HTTPConnection(host, port, timeout=_PROBE_TIMEOUT_SECONDS)
         try:
             payload: dict[str, object] = {"jsonrpc": "2.0", "method": method}
@@ -198,7 +201,7 @@ class BcMcpGateway:
             self._rpc(self._origin_host, self._origin_port, self._injected_headers, "notifications/initialized", None, session_id=session_id)
         _, listed = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "tools/list", {}, request_id=2, session_id=session_id)
         result = listed.get("result")
-        tools = [name for t in (result or {}).get("tools", []) if isinstance(t, dict) and isinstance(name := t.get("name"), str)]
+        tools: list[str] = [name for t in (result or {}).get("tools", []) if isinstance(t, dict) and isinstance(name := t.get("name"), str)]
         if tools and isinstance(result, dict):
             with self._lock:
                 self._cached_tools_result = result
@@ -236,6 +239,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
     class _ProxyHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
+        @override
         def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
             pass
 
@@ -256,6 +260,9 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             if rpc_method == "tools/list" and self._serve_cached_tools(rpc_id):
                 return
 
+            self._forward_upstream(body, rpc_method)
+
+        def _forward_upstream(self, body: bytes | None, rpc_method: str | None) -> None:
             request_headers: dict[str, str] = {k: v for k, v in self.headers.items() if k.lower() not in _STRIPPED_REQUEST_HEADERS}
             request_headers["Host"] = f"{gateway._origin_host}:{gateway._origin_port}"
             request_headers.update(gateway._injected_headers)
@@ -355,7 +362,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             self.wfile.write(b"0\r\n\r\n")
             self.wfile.flush()
 
-        def _relay(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
+        def _relay(self, response: HTTPResponse) -> None:
             self._response_started = True
             self.send_response_only(response.status)
             content_length: str | None = None

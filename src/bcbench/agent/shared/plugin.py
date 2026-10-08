@@ -8,7 +8,7 @@ from bcbench_core.exceptions import AgentError
 from bcbench_core.git import clone_repo_at_revision
 
 from bcbench.config import get_config
-from bcbench.types import PluginConfig
+from bcbench.types import AgentConfig, PluginConfig
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -45,7 +45,7 @@ def remove_agent_plugin(folder: str) -> None:
         logger.info(f"Removed stale agent plugin '{folder}': {plugin_dir}")
 
 
-def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool = False) -> list[tuple[PluginConfig, Path]]:
+def resolve_config_plugins(agent_config: AgentConfig, *, allow_copilot_manifest: bool = False) -> list[tuple[PluginConfig, Path]]:
     """Resolve the config's enabled plugin entries to loadable plugin folders.
 
     A plugin is either `local` (an absolute path on this machine) or `github` (cloned from its repo
@@ -64,7 +64,7 @@ def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool =
         AgentError: If two enabled plugins share a name, or a plugin does not resolve to a folder
             holding a plugin manifest.
     """
-    plugins = [PluginConfig(**entry) for entry in agent_config["plugins"] if entry.get("enabled", False)]
+    plugins = [PluginConfig.model_validate(entry) for entry in agent_config.plugins if entry.get("enabled", False)]
 
     # A GitHub plugin clones into ``<plugin_root>/<name>`` and every plugin is recorded as
     # ``<name>@<revision|source>``, so two enabled plugins sharing a name would clobber each other's

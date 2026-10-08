@@ -4,13 +4,13 @@ from shutil import copytree, rmtree
 
 from bcbench.dataset.dataset_entry import BaseDatasetEntry
 from bcbench.operations.instruction_operations import _get_source_instructions_path
-from bcbench.types import AgentHarness
+from bcbench.types import AgentConfig, AgentHarness
 
 logger = logging.getLogger(__name__)
 
 
 def setup_agent_skills(
-    agent_config: dict,
+    agent_config: AgentConfig,
     entry: BaseDatasetEntry,
     repo_path: Path,
     harness: AgentHarness,
@@ -20,7 +20,7 @@ def setup_agent_skills(
     Returns:
         True if skills were copied, False if skills are disabled.
     """
-    skills_enabled: bool = agent_config["skills"]["enabled"]
+    skills_enabled: bool = agent_config.skills.enabled
 
     if skills_enabled:
         source_skills: Path = _get_source_instructions_path(entry.customization_profile)

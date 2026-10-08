@@ -4,7 +4,7 @@ import logging
 import subprocess
 from pathlib import Path
 from string import Template
-from typing import Literal
+from typing import Literal, cast
 
 from bcbench_core.bc import APP_UTILS_MODULE, escape_ps_string
 from bcbench_core.container import ContainerConfig
@@ -160,7 +160,7 @@ finally {
 )
 
 
-def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: Literal["generated", "gold"], company: str) -> list[dict]:
+def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: Literal["generated", "gold"], company: str) -> list[dict[str, object]]:
     """Compile + publish an AL query (wrapped as an API query) to the container and return its rows.
 
     Builds a throwaway app under ``work_root/.bcbench-query-<suffix>``, compiles + publishes it,
@@ -219,4 +219,4 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
         raise BuildTimeoutExpired(f"query-{suffix}", _config.timeout.execute_query) from None
 
     rows = json.loads(result_file.read_text(encoding="utf-8-sig") or "[]")
-    return rows if isinstance(rows, list) else [rows]
+    return cast(list[dict[str, object]], rows if isinstance(rows, list) else [rows])

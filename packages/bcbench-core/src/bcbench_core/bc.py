@@ -89,7 +89,7 @@ def build_ps_app_build_and_publish(container_name: str, username: str, password:
 
 def build_ps_test_script(container_name: str, username: str, password: str, codeunit_id: int, function_names: list[str] | None = None) -> str:
     # Build function parameter if needed
-    if function_names:
+    if bool(function_names):
         escaped_names = [f"'{escape_ps_string(fn)}'" for fn in function_names]
         function_param = f" -functionNames @({', '.join(escaped_names)})"
     else:

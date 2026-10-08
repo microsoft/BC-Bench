@@ -51,7 +51,7 @@ class Entry:
     instance_id: str
     domain: str
     patch: str
-    expected_comments: list[dict]
+    expected_comments: list[dict[str, Any]]
     match_line_tolerance: int
 
 
@@ -142,7 +142,7 @@ def setup_workspace(entry: Entry) -> Path:
     return repo_path
 
 
-def run_copilot(repo_path: Path, model: str, log_dir: Path) -> subprocess.CompletedProcess:
+def run_copilot(repo_path: Path, model: str, log_dir: Path) -> subprocess.CompletedProcess[bytes]:
     copilot = shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
     if not copilot:
         raise RuntimeError("copilot CLI not in PATH")
@@ -158,7 +158,7 @@ def run_copilot(repo_path: Path, model: str, log_dir: Path) -> subprocess.Comple
     return subprocess.run(cmd, cwd=repo_path, stderr=subprocess.PIPE, timeout=900, check=False)
 
 
-def parse_findings(review_json_path: Path) -> list[dict] | None:
+def parse_findings(review_json_path: Path) -> list[dict[str, Any]] | None:
     if not review_json_path.exists():
         return None
     try:
@@ -172,9 +172,9 @@ def parse_findings(review_json_path: Path) -> list[dict] | None:
     return None
 
 
-def evaluate(entry: Entry, findings: list[dict]) -> dict:
-    ood: list[dict] = []
-    in_domain: list[dict] = []
+def evaluate(entry: Entry, findings: list[dict[str, Any]]) -> dict[str, Any]:
+    ood: list[dict[str, Any]] = []
+    in_domain: list[dict[str, Any]] = []
     for f in findings:
         d = (f.get("domain") or "").strip().lower()
         if d and d != entry.domain.lower():
@@ -182,8 +182,8 @@ def evaluate(entry: Entry, findings: list[dict]) -> dict:
         else:
             in_domain.append(f)
 
-    matched: list[dict] = []
-    missed: list[dict] = []
+    matched: list[dict[str, Any]] = []
+    missed: list[dict[str, Any]] = []
     for exp in entry.expected_comments:
         exp_file = exp["file"].lower()
         exp_lo = exp["line_start"] - entry.match_line_tolerance
@@ -214,7 +214,7 @@ def evaluate(entry: Entry, findings: list[dict]) -> dict:
     }
 
 
-def probe_one(entry: Entry, model: str, keep: bool = False) -> dict:
+def probe_one(entry: Entry, model: str, keep: bool = False) -> dict[str, Any]:
     print(f"  [setup] {entry.instance_id}", flush=True)
     repo_path = setup_workspace(entry)
     log_dir = repo_path / ".copilot-logs"
@@ -254,7 +254,7 @@ def main() -> None:
 
     PROBE_ROOT.mkdir(parents=True, exist_ok=True)
     REPORT_ROOT.mkdir(parents=True, exist_ok=True)
-    summary: list[dict] = []
+    summary: list[dict[str, Any]] = []
     for e in entries:
         print(f"\n== {e.instance_id} ({e.domain}) ==", flush=True)
         report = probe_one(e, args.model, keep=args.keep)

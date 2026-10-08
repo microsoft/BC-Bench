@@ -3,7 +3,6 @@
 import logging
 from pathlib import Path
 
-import yaml
 from bcbench_core.agent.copilot import CopilotOptions, CopilotTimeoutError, invoke_copilot
 from bcbench_core.agent.metrics import AgentMetrics
 
@@ -19,7 +18,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -39,7 +38,7 @@ def run_copilot_agent(
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
     """
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
-    copilot_config = yaml.safe_load(config_file.read_text())
+    copilot_config = AgentConfig.from_file(config_file)
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 

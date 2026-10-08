@@ -24,7 +24,7 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.types import BCalLLMBackend, EvaluationCategory
+from bcbench.types import EvaluationCategory
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -175,11 +175,8 @@ def run_pr_review(
 def run_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     repo_path: RepoPath = _config.paths.evaluation_results_path,
-    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.AZURE_OPENAI,
-    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
-    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
-    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (required for external-command backend)")] = None,
-    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
 ) -> None:
     """
     Run BCal dotnet tool on a single nl2al entry to generate AL code.
@@ -197,9 +194,6 @@ def run_bcal(
         entry=entry,
         repo_path=repo_path,
         backend_config=BCalBackendConfig(
-            backend=backend,
-            endpoint=endpoint,
-            deployment=deployment,
             command=llm_command,
             model=llm_model,
         ),

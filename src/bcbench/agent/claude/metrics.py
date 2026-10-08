@@ -25,7 +25,7 @@ def _milliseconds_to_seconds(value: object) -> float | None:
     return None if milliseconds is None else milliseconds / 1000.0
 
 
-def _tool_label(block: dict) -> str | None:
+def _tool_label(block: dict[str, object]) -> str | None:
     tool_name = block.get("name")
     if not isinstance(tool_name, str) or not tool_name:
         return None
@@ -74,7 +74,7 @@ def parse_stream_output(output_lines: Sequence[str], *, log_transcript: bool = F
                             continue
                         match block.get("type"):
                             case "text":
-                                text = block.get("text")
+                                text: object = block.get("text")
                                 if log_transcript and isinstance(text, str) and text.strip():
                                     last_assistant_message = text.strip()
                                     logger.info("Claude Code: %s", last_assistant_message)

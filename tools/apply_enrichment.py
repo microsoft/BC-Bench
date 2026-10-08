@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATASET = REPO_ROOT / "dataset" / "codereview.jsonl"
@@ -43,7 +44,7 @@ def build_new_file_diff(file_path: str, content: str) -> str:
     return "\n".join(diff) + "\n"
 
 
-def load_designs(domain: str) -> list[dict]:
+def load_designs(domain: str) -> list[dict[str, Any]]:
     path = DESIGN_DIR / f"enrichment-design-{domain}.json"
     if not path.exists():
         raise FileNotFoundError(f"missing design file: {path}")
@@ -51,7 +52,7 @@ def load_designs(domain: str) -> list[dict]:
 
 
 def apply(domains: list[str], dry_run: bool = False) -> None:
-    designs_by_iid: dict[str, dict] = {}
+    designs_by_iid: dict[str, dict[str, Any]] = {}
     for d in domains:
         for design in load_designs(d):
             iid = design["instance_id"]

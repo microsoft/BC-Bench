@@ -16,7 +16,7 @@ from bcbench.operations.instruction_operations import (
     setup_custom_agent,
     setup_instructions_from_config,
 )
-from bcbench.types import AgentHarness, EvaluationCategory
+from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory
 
 _config = get_config()
 
@@ -34,7 +34,7 @@ def test_setup_custom_instructions():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"instructions": {"enabled": True}}
+        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
 
         # Setup instructions
         result = setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.COPILOT)
@@ -90,12 +90,14 @@ def test_setup_custom_agent():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {
-            "agents": {
-                "enabled": True,
-                "name": "extensibility-request-advisor",
+        config = AgentConfig.model_validate(
+            {
+                "agents": {
+                    "enabled": True,
+                    "name": "extensibility-request-advisor",
+                }
             }
-        }
+        )
 
         result = setup_custom_agent(
             config,
@@ -114,12 +116,14 @@ def test_custom_agent_disabled():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {
-            "agents": {
-                "enabled": False,
-                "name": "extensibility-request-advisor",
+        config = AgentConfig.model_validate(
+            {
+                "agents": {
+                    "enabled": False,
+                    "name": "extensibility-request-advisor",
+                }
             }
-        }
+        )
 
         result = setup_custom_agent(
             config,
@@ -139,7 +143,7 @@ def test_overwrite_existing_instructions():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"instructions": {"enabled": True}}
+        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
 
         # Create initial instruction file with different content
         github_dir = repo_path / ".github"
@@ -164,7 +168,7 @@ def test_path_specific_instructions_removed_before_copy():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"instructions": {"enabled": True}}
+        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
 
         # Create existing .github directory with old files
         github_dir = repo_path / ".github"
@@ -187,7 +191,7 @@ def test_no_path_specific_instructions_warning():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"instructions": {"enabled": True}}
+        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
 
         # Setup instructions
         setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.COPILOT)
@@ -203,7 +207,7 @@ def test_empty_instructions_folder_warning():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"instructions": {"enabled": True}}
+        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
 
         # Setup instructions
         setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.COPILOT)
@@ -221,7 +225,7 @@ def test_claude_instructions_renamed():
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
         entry.customization_profile = "microsoftInternal-NAV"
-        config = {"instructions": {"enabled": True}}
+        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
 
         result = setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.CLAUDE)
         assert result is True

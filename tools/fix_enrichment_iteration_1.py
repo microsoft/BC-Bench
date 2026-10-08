@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATASET = REPO_ROOT / "dataset" / "codereview.jsonl"
@@ -86,10 +87,10 @@ PRIVACY_008_CONTENT = """codeunit 50327 "Customer Sync Dispatcher"
 """
 
 
-FIXES: dict[str, Callable[[dict], None]] = {}
+FIXES: dict[str, Callable[[dict[str, Any]], None]] = {}
 
 
-def fix_security_002(entry: dict) -> None:
+def fix_security_002(entry: dict[str, Any]) -> None:
     # Drop expected[0] which expected line 3 (skill consolidates into line 10 finding)
     ec = entry["expected_comments"]
     if len(ec) >= 2:
@@ -97,7 +98,7 @@ def fix_security_002(entry: dict) -> None:
         entry["expected_comments"] = [c for c in ec if c.get("line_start") == 10]
 
 
-def fix_privacy_003(entry: dict) -> None:
+def fix_privacy_003(entry: dict[str, Any]) -> None:
     entry["patch"] = replace_file_block(
         entry["patch"],
         "src/CustomerEmailValidator.Codeunit.al",
@@ -114,7 +115,7 @@ def fix_privacy_003(entry: dict) -> None:
             )
 
 
-def fix_privacy_008(entry: dict) -> None:
+def fix_privacy_008(entry: dict[str, Any]) -> None:
     entry["patch"] = replace_file_block(
         entry["patch"],
         "src/CustomerSyncDispatcher.Codeunit.al",
@@ -123,7 +124,7 @@ def fix_privacy_008(entry: dict) -> None:
     # Keep expected at line 10 (HttpClient.Post)
 
 
-def fix_style_002(entry: dict) -> None:
+def fix_style_002(entry: dict[str, Any]) -> None:
     # Replace the SelfReferenceStyle expected with a PostingHelper 4-space indent expected
     entry["expected_comments"] = [
         {
@@ -137,7 +138,7 @@ def fix_style_002(entry: dict) -> None:
     ]
 
 
-def fix_upgrade_001(entry: dict) -> None:
+def fix_upgrade_001(entry: dict[str, Any]) -> None:
     for c in entry["expected_comments"]:
         if c["file"] == "src/InlineUpgradeSteps.Codeunit.al":
             c["line_start"] = 5

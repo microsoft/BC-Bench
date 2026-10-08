@@ -1,7 +1,8 @@
 import json
 import logging
 import re
-from typing import Any
+from collections.abc import Sequence
+from typing import Any, cast
 
 from pydantic import ValidationError
 
@@ -22,11 +23,11 @@ def _extract_json_candidate(raw_output: str) -> str:
 
     block_match = re.search(r"```json\s*([\s\S]*?)\s*```", raw_output, re.IGNORECASE)
     if block_match:
-        return block_match.group(1).strip()
+        return cast(str, block_match.group(1)).strip()
 
     generic_block_match = re.search(r"```\s*([\s\S]*?)\s*```", raw_output)
     if generic_block_match:
-        return generic_block_match.group(1).strip()
+        return cast(str, generic_block_match.group(1)).strip()
 
     return stripped
 
@@ -100,16 +101,16 @@ def parse_review_output(raw_output: str) -> list[ReviewComment] | None:
         return None
 
     try:
-        raw = json.loads(candidate)
+        raw: object = json.loads(candidate)
     except json.JSONDecodeError:
         logger.warning("Failed to parse review output as JSON")
         return None
 
-    raw_items: list[object]
+    raw_items: Sequence[object]
     if isinstance(raw, list):
         raw_items = raw
-    elif isinstance(raw, dict) and isinstance(raw.get("findings"), list):
-        raw_items = raw["findings"]
+    elif isinstance(raw, dict) and isinstance(findings := raw.get("findings"), list):
+        raw_items = findings
     elif isinstance(raw, dict) and any(key in raw for key in ("file", "filePath")):
         raw_items = [raw]
     else:

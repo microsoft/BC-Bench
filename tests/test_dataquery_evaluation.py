@@ -5,6 +5,7 @@ import pytest
 from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import BuildError
 
+from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.dataquery import DataQueryPipeline, _load_answer_rows, result_sets_match
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.operations import dataquery_operations, wrap_query_as_api
@@ -76,7 +77,7 @@ class TestResultSetsMatch:
 
 
 class TestGoldRowsEmptyGuard:
-    def _context(self, tmp_path: Path) -> EvaluationContext:
+    def _context(self, tmp_path: Path) -> EvaluationContext[DataQueryEntry]:
         return EvaluationContext(
             entry=create_data_query_entry(
                 instance_id="dataquery__customer-count-by-country-1",

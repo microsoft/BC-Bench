@@ -49,7 +49,7 @@ cd BC-Bench
 uv python install
 
 # Install dependencies
-uv sync --all-groups
+uv sync --all-groups --all-extras
 
 # Install pre-commit hooks
 uv run pre-commit install

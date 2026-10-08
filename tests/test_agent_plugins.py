@@ -1,15 +1,15 @@
 import json
 import os
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
-import yaml
 from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared.plugin import resolve_config_plugins
 from bcbench.config import get_config
-from bcbench.types import PluginConfig
+from bcbench.types import AgentConfig, PluginConfig
 
 _MANIFEST = get_config().file_patterns.plugin_manifest
 
@@ -22,17 +22,20 @@ def _make_plugin(root: Path, name: str = "probe-plugin") -> Path:
     return root
 
 
-def _local_entry(path: Path, **overrides) -> dict:
+def _local_entry(path: Path, **overrides) -> dict[str, Any]:
     return {"name": "probe", "source": "local", "enabled": True, "path": str(path), **overrides}
 
 
-def _github_entry(**overrides) -> dict:
+def _github_entry(**overrides) -> dict[str, Any]:
     return {"name": "superpowers", "source": "github", "enabled": True, "repo": "obra/superpowers", "revision": "a" * 40, "path": ".", **overrides}
 
 
-def _shipped_plugins() -> list[dict]:
-    config = yaml.safe_load((get_config().paths.agent_share_dir / "config.yaml").read_text(encoding="utf-8"))
-    return config["plugins"]
+def _shipped_config() -> AgentConfig:
+    return AgentConfig.from_file(get_config().paths.agent_share_dir / "config.yaml")
+
+
+def _plugins_config(*entries: dict[str, Any]) -> AgentConfig:
+    return AgentConfig.model_validate({"plugins": entries})
 
 
 def _dirs_by_record(resolved: list[tuple[PluginConfig, Path]]) -> dict[str, Path]:
@@ -71,11 +74,11 @@ class TestPluginConfigValidation:
 
     def test_enabled_entry_is_validated(self):
         with pytest.raises(ValueError, match="requires an absolute 'path'"):
-            resolve_config_plugins({"plugins": [{"name": "x", "source": "local", "enabled": True, "path": "relative"}]})
+            resolve_config_plugins(_plugins_config({"name": "x", "source": "local", "enabled": True, "path": "relative"}))
 
     def test_disabled_entry_is_inert(self):
         # A disabled entry must never break a run - it may hold a path that is only valid on another OS
-        assert resolve_config_plugins({"plugins": [{"name": "x", "source": "local", "enabled": False, "path": "C:/only/valid/on/windows"}]}) == []
+        assert resolve_config_plugins(_plugins_config({"name": "x", "source": "local", "enabled": False, "path": "C:/only/valid/on/windows"})) == []
 
     @pytest.mark.parametrize("revision", ["refs/heads/main", "main", "v1.2.3", "HEAD", "a" * 7, "a" * 41, "z" * 40])
     def test_revision_that_is_not_a_commit_sha_is_rejected(self, revision):
@@ -98,19 +101,19 @@ class TestPluginConfigValidation:
 @pytest.mark.usefixtures("plugin_root")
 class TestResolveConfigPlugins:
     def test_no_enabled_entries_resolves_to_nothing(self, tmp_path):
-        assert resolve_config_plugins({"plugins": [_local_entry(tmp_path, enabled=False)]}) == []
+        assert resolve_config_plugins(_plugins_config(_local_entry(tmp_path, enabled=False))) == []
 
     def test_local_plugin_resolves_to_its_absolute_path(self, tmp_path):
         plugin = _make_plugin(tmp_path / "my-plugin")
 
-        assert _dirs_by_record(resolve_config_plugins({"plugins": [_local_entry(plugin)]})) == {"probe@local": plugin}
+        assert _dirs_by_record(resolve_config_plugins(_plugins_config(_local_entry(plugin)))) == {"probe@local": plugin}
 
     def test_local_plugin_with_root_manifest_resolves_for_copilot(self, tmp_path):
         plugin = tmp_path / "root-manifest-plugin"
         plugin.mkdir()
         (plugin / _MANIFEST.name).write_text(json.dumps({"name": "probe", "version": "0.0.1"}), encoding="utf-8")
 
-        assert _dirs_by_record(resolve_config_plugins({"plugins": [_local_entry(plugin)]}, allow_copilot_manifest=True)) == {"probe@local": plugin}
+        assert _dirs_by_record(resolve_config_plugins(_plugins_config(_local_entry(plugin)), allow_copilot_manifest=True)) == {"probe@local": plugin}
 
     def test_root_manifest_is_rejected_without_opt_in(self, tmp_path):
         # Claude Code cannot load a root-only manifest, so the default (allow_copilot_manifest=False) must
@@ -120,29 +123,29 @@ class TestResolveConfigPlugins:
         (plugin / _MANIFEST.name).write_text(json.dumps({"name": "probe", "version": "0.0.1"}), encoding="utf-8")
 
         with pytest.raises(AgentError, match="has no manifest at"):
-            resolve_config_plugins({"plugins": [_local_entry(plugin)]})
+            resolve_config_plugins(_plugins_config(_local_entry(plugin)))
 
     def test_local_plugin_expands_user_home(self, tmp_path):
         plugin = _make_plugin(tmp_path / "my-plugin")
         with patch.object(Path, "expanduser", return_value=plugin):
-            assert _dirs_by_record(resolve_config_plugins({"plugins": [_local_entry(Path("~/my-plugin"))]})) == {"probe@local": plugin}
+            assert _dirs_by_record(resolve_config_plugins(_plugins_config(_local_entry(Path("~/my-plugin"))))) == {"probe@local": plugin}
 
     def test_missing_manifest_raises_pointing_at_the_expected_location(self, tmp_path):
         (tmp_path / "not-a-plugin").mkdir()
 
         with pytest.raises(AgentError, match="has no manifest at"):
-            resolve_config_plugins({"plugins": [_local_entry(tmp_path / "not-a-plugin")]})
+            resolve_config_plugins(_plugins_config(_local_entry(tmp_path / "not-a-plugin")))
 
     def test_github_plugin_is_cloned_into_the_plugin_root(self, plugin_root):
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)) as clone:
-            resolved = resolve_config_plugins({"plugins": [_github_entry()]})
+            resolved = resolve_config_plugins(_plugins_config(_github_entry()))
 
         clone.assert_called_once_with("obra/superpowers", "a" * 40, plugin_root / "superpowers")
         assert _dirs_by_record(resolved) == {f"superpowers@{'a' * 40}": plugin_root / "superpowers"}
 
     def test_github_plugin_never_lands_in_the_repo_under_evaluation(self, tmp_path, plugin_root):
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)):
-            resolved = resolve_config_plugins({"plugins": [_github_entry()]})
+            resolved = resolve_config_plugins(_plugins_config(_github_entry()))
 
         testbed = tmp_path / "repo"
         resolved_dirs = [plugin_dir for _, plugin_dir in resolved]
@@ -151,7 +154,7 @@ class TestResolveConfigPlugins:
 
     def test_github_path_selects_a_subfolder_of_the_clone(self, plugin_root):
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination / "plugins" / "inner")):
-            resolved = resolve_config_plugins({"plugins": [_github_entry(path="plugins/inner")]})
+            resolved = resolve_config_plugins(_plugins_config(_github_entry(path="plugins/inner")))
 
         assert _dirs_by_record(resolved) == {f"superpowers@{'a' * 40}": plugin_root / "superpowers" / "plugins" / "inner"}
 
@@ -159,26 +162,24 @@ class TestResolveConfigPlugins:
         local = _make_plugin(tmp_path / "local-plugin")
 
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)):
-            resolved = resolve_config_plugins({"plugins": [_github_entry(), _local_entry(local)]})
+            resolved = resolve_config_plugins(_plugins_config(_github_entry(), _local_entry(local)))
 
         assert [plugin.record for plugin, _ in resolved] == [f"superpowers@{'a' * 40}", "probe@local"]
 
     def test_duplicate_names_are_rejected(self, tmp_path):
         # Two enabled plugins sharing a name would clobber each other's clone and collide on their
         # record, so the loader rejects duplicate names before resolving anything.
-        entries = {
-            "plugins": [
-                _local_entry(tmp_path / "a", name="dup", grant_dir_access=True),
-                _local_entry(tmp_path / "b", name="dup"),
-            ]
-        }
+        entries = _plugins_config(
+            _local_entry(tmp_path / "a", name="dup", grant_dir_access=True),
+            _local_entry(tmp_path / "b", name="dup"),
+        )
         with pytest.raises(AgentError, match="Duplicate plugin name"):
             resolve_config_plugins(entries)
 
     def test_duplicate_github_names_are_rejected(self):
         # Same name with different revisions still clones into <plugin_root>/<name>; the name check
         # fails fast before any clone, so no plugin_root or clone mock is needed here.
-        entries = {"plugins": [_github_entry(name="dup", revision="a" * 40), _github_entry(name="dup", revision="b" * 40)]}
+        entries = _plugins_config(_github_entry(name="dup", revision="a" * 40), _github_entry(name="dup", revision="b" * 40))
         with pytest.raises(AgentError, match="Duplicate plugin name"):
             resolve_config_plugins(entries)
 
@@ -190,7 +191,7 @@ class TestGithubPluginConfinement:
     @pytest.mark.parametrize("name", ["../escaped", "../../NAV", "nested/name", "."])
     def test_name_escaping_the_plugin_root_is_rejected_before_cloning(self, name):
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision") as clone, pytest.raises(AgentError, match="must be a single directory directly under"):
-            resolve_config_plugins({"plugins": [_github_entry(name=name)]})
+            resolve_config_plugins(_plugins_config(_github_entry(name=name)))
 
         clone.assert_not_called()
 
@@ -200,21 +201,21 @@ class TestGithubPluginConfinement:
             patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)),
             pytest.raises(AgentError, match="resolves outside its clone"),
         ):
-            resolve_config_plugins({"plugins": [_github_entry(path=path)]})
+            resolve_config_plugins(_plugins_config(_github_entry(path=path)))
 
 
 class TestShippedConfig:
     def test_shipped_config_resolves_on_any_os(self):
         # Entries are disabled, so this must hold even though the `local` example carries a Windows path
         with patch.object(Path, "is_absolute", return_value=False):  # simulate posix path semantics
-            assert resolve_config_plugins({"plugins": _shipped_plugins()}) == []
+            assert resolve_config_plugins(_shipped_config()) == []
 
     def test_shipped_entries_are_disabled_by_default(self):
-        assert not [entry for entry in _shipped_plugins() if entry.get("enabled")]
+        assert not [entry for entry in _shipped_config().plugins if entry.get("enabled")]
 
     def test_every_shipped_github_entry_parses(self):
         # `local` entries are excluded: an absolute path is machine-specific by nature
-        assert [PluginConfig(**entry).name for entry in _shipped_plugins() if entry["source"] == "github"]
+        assert [PluginConfig.model_validate(entry).name for entry in _shipped_config().plugins if entry["source"] == "github"]
 
     def test_bundled_example_is_a_loadable_plugin(self):
         example = get_config().paths.agent_share_dir / "plugins" / "bcbench-example"

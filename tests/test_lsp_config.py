@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -25,7 +26,7 @@ def entry():
 
 
 @pytest.fixture
-def repo_path(tmp_path) -> Path:
+def repo_path(tmp_path: Path) -> Path:
     return tmp_path / "repo"
 
 
@@ -44,11 +45,11 @@ def no_artifacts():
         yield m
 
 
-def _read_lsp(plugin_root: Path) -> dict:
+def _read_lsp(plugin_root: Path) -> dict[str, Any]:
     return json.loads((plugin_root / _PLUGIN_FOLDER / ".lsp.json").read_text(encoding="utf-8"))
 
 
-def _read_manifest(plugin_root: Path) -> dict:
+def _read_manifest(plugin_root: Path) -> dict[str, Any]:
     return json.loads((plugin_root / _PLUGIN_FOLDER / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
 
 
@@ -61,9 +62,9 @@ def _build(entry, repo_path, harness: AgentHarness, runtime: AgentRuntimeConfig 
 
 
 @pytest.fixture(params=[AgentHarness.COPILOT, AgentHarness.CLAUDE], ids=lambda a: a.value)
-def harness(request) -> AgentHarness:
+def harness(request: pytest.FixtureRequest) -> AgentHarness:
     """Parametrize across both agents — every shared behavior gets tested twice."""
-    return request.param
+    return AgentHarness(request.param)
 
 
 class TestSharedBehavior:

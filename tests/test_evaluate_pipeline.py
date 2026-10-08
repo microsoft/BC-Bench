@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import override
 from unittest.mock import patch
 
 import pytest
@@ -25,18 +26,22 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
         self.run_agent_called = False
         self.evaluate_called = False
 
+    @override
     def setup_workspace(self, entry: E, repo_path: Path) -> None:
         pass
 
+    @override
     def setup(self, context: EvaluationContext[E]) -> None:
         self.setup_called = True
 
+    @override
     def run_agent(self, context: EvaluationContext[E], agent_runner: AgentRunner[E]) -> None:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
         context.metrics, context.experiment = agent_runner(context)
 
+    @override
     def evaluate(self, context: EvaluationContext[E]) -> None:
         self.evaluate_called = True
         if self.raise_in_evaluate is not None:
