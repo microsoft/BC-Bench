@@ -72,10 +72,20 @@ def write_bceval_results(
                 "run_id": run_id,
                 "project": result.project,
                 "error_message": result.error_message,
+                "timeout": result.timeout,
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
                 **_experiment_metadata(result.experiment, git_ref, benchmark_version),
                 **(completeness.to_metadata() if completeness else {}),
             }
+            if result.infrastructure_error:
+                metadata.update(
+                    {
+                        "infrastructure_error": True,
+                        "error_provider": result.error_provider,
+                        "error_status_code": result.error_status_code,
+                        "Error": result.error_message,
+                    }
+                )
 
             bceval_result = {
                 "id": result.instance_id,

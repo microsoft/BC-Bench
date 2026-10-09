@@ -87,6 +87,10 @@ class TestStatusLabel:
         result = create_bugfix_result(resolved=False, build=True, error_message="Tests failed")
         assert result.status_label == "Failed"
 
+    def test_infrastructure_error(self):
+        result = create_bugfix_result(resolved=False, build=False).model_copy(update={"infrastructure_error": True})
+        assert result.status_label == "Infrastructure Error"
+
 
 # ---------------------------------------------------------------------------
 # category_metrics

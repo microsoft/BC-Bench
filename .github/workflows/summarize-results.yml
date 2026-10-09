@@ -39,11 +39,21 @@ on:
         required: false
         type: number
         default: -1
+      expected-entries:
+        description: "JSON array of expected matrix entry IDs; missing IDs become infrastructure failure results"
+        required: false
+        type: string
+        default: "[]"
       artifact-pattern:
         description: "Artifact glob to download"
         required: false
         type: string
         default: "*"
+      allow-unscored-results:
+        description: "Allow complete result sets containing explicit unscored infrastructure errors"
+        required: false
+        type: boolean
+        default: false
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
@@ -77,6 +87,8 @@ jobs:
 
       - name: Summarize evaluation results
         id: summarize
+        env:
+          EXPECTED_ENTRIES_JSON: ${{ inputs.expected-entries }}
         run: >-
           uv run bcbench result summarize
           --category "${{ inputs.category }}"
@@ -85,6 +97,9 @@ jobs:
           --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}"
           --completeness-output "${{ env.COMPLETENESS_OUTPUT_FILE }}"
           --expected-total "${{ inputs.expected-total }}"
+          --expected-entries-json "${EXPECTED_ENTRIES_JSON}"
+          --model "${{ inputs.model }}"
+          --agent "${{ inputs.agent }}"
           --git-ref "${{ inputs.git-ref || github.ref_name }}"
           --github-output
 
@@ -118,6 +133,10 @@ jobs:
           MODEL_TAG="${MODEL_TAG//./-}"
           BRANCH_TAG="${{ inputs.git-ref || github.ref_name }}"
           BRANCH_TAG="${BRANCH_TAG//./-}"
+          CORE_SCORE_ARGS=(--core-score "${{ steps.bceval.outputs.core_score }}")
+          if [[ "${{ inputs.allow-unscored-results }}" == "true" ]]; then
+            CORE_SCORE_ARGS=()
+          fi
           bceval metrics calculate \
             --feature-name "BC-Bench" \
             --eval-suite-name "${{ inputs.category }}" \
@@ -127,7 +146,7 @@ jobs:
             --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
             --evaluators "${{ steps.bceval.outputs.evaluators }}" \
-            --core-score "${{ steps.bceval.outputs.core_score }}" \
+            "${CORE_SCORE_ARGS[@]}" \
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
             ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}

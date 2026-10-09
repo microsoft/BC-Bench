@@ -15,7 +15,9 @@ from bcbench.cli import _redteam_extra_installed, app
 from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtime
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
+from bcbench.evaluate.base import EvaluationOutcome
+from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
@@ -125,6 +127,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     class Pipeline:
         def execute(self, context, _agent_runner):
             captured["context"] = context
+            return EvaluationOutcome.COMPLETED
 
     with (
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
@@ -141,6 +144,37 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
         )
 
     assert captured["context"].model == expected_model
+
+
+def test_evaluate_bcal_exits_nonzero_after_persisted_timeout(tmp_path):
+    entry = create_nl2al_entry()
+
+    class EntryClass:
+        @staticmethod
+        def load(_dataset_path, entry_id: str):
+            assert entry_id == entry.instance_id
+            return [entry]
+
+    class Pipeline:
+        def execute(self, _context, _agent_runner):
+            return EvaluationOutcome.AGENT_TIMEOUT
+
+    with (
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
+        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
+        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        pytest.raises(typer.Exit) as exc_info,
+    ):
+        evaluate_commands.evaluate_bcal(
+            entry_id=entry.instance_id,
+            repo_path=tmp_path / "repo",
+            output_dir=tmp_path / "results",
+            run_id="bcal-run",
+            llm_command="python bridge.py",
+            llm_model="gpt-55-chat",
+        )
+
+    assert exc_info.value.exit_code == 1
 
 
 def _option_names(command: click.Command) -> set[str]:
@@ -499,6 +533,80 @@ def test_result_summarize_zero_results_still_writes_completeness(tmp_path):
     assert completeness["missing_entry_count"] == 110
     assert completeness["complete"] is False
     assert not (tmp_path / run_id / "evaluation_summary.json").exists()
+
+
+@pytest.mark.integration
+def test_result_summarize_synthesizes_pre_evaluation_failure_for_full_110_entry_report(tmp_path, monkeypatch):
+    run_id = "bcal-run"
+    run_dir = tmp_path / run_id
+    run_dir.mkdir()
+    entries = [create_nl2al_entry(instance_id=f"nl2al__matrix-entry-{index}") for index in range(1, 111)]
+    judge_model = EvaluationCategory.NL2AL.judge_model
+    assert judge_model is not None
+
+    for entry in entries[:-1]:
+        result = JudgeBasedEvaluationResult(
+            instance_id=entry.instance_id,
+            project=entry.extract_project_name(),
+            model="gpt-55-chat",
+            agent_name="BCal",
+            category=EvaluationCategory.NL2AL,
+            output="generated AL",
+            judge_model=judge_model,
+        )
+        result.save(run_dir, f"{entry.instance_id}.jsonl")
+
+    github_output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
+    expected_instance_ids = [entry.instance_id for entry in entries]
+    with patch.object(NL2ALEntry, "load", return_value=entries):
+        result = runner.invoke(
+            app,
+            [
+                "result",
+                "summarize",
+                "--category",
+                "nl2al",
+                "--run-id",
+                run_id,
+                "--result-dir",
+                str(tmp_path),
+                "--expected-total",
+                "110",
+                "--expected-entries-json",
+                json.dumps(expected_instance_ids),
+                "--model",
+                "gpt-55-chat",
+                "--agent",
+                "BCal",
+                "--github-output",
+            ],
+        )
+
+    assert result.exit_code == 0, result.exception
+    failed_instance_id = entries[-1].instance_id
+    completeness = json.loads((run_dir / "evaluation_completeness.json").read_text(encoding="utf-8"))
+    assert completeness["expected_entry_count"] == 110
+    assert completeness["produced_entry_count"] == 110
+    assert completeness["missing_entry_count"] == 0
+    assert completeness["infrastructure_failure_count"] == 1
+    assert completeness["infrastructure_failure_instance_ids"] == [failed_instance_id]
+    assert completeness["complete"] is True
+
+    summary = json.loads((run_dir / "evaluation_summary.json").read_text(encoding="utf-8"))
+    assert summary["total"] == 110
+    assert summary["completeness"] == completeness
+
+    exported = [json.loads(line) for line in (run_dir / "bceval_results.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(exported) == 110
+    failed_row = next(row for row in exported if row["id"] == failed_instance_id)
+    assert failed_row["metadata"]["infrastructure_error"] is True
+    assert failed_row["metadata"]["error_provider"] == "github-actions"
+    assert "before bcbench could persist a result" in failed_row["metadata"]["Error"]
+    assert "test_passed" not in failed_row["metadata"]
+    assert "produced=110" in github_output.read_text(encoding="utf-8")
+    assert "infrastructure-failures=1" in github_output.read_text(encoding="utf-8")
+    assert "complete=true" in github_output.read_text(encoding="utf-8")
 
 
 @pytest.mark.integration

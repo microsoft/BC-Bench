@@ -12,7 +12,7 @@ def test_completeness_counts_unique_missing_and_duplicate_results():
 
 
 def test_completeness_metadata_is_explicit_for_external_storage():
-    completeness = EvaluationCompleteness.from_instance_ids(2, ["a", "b"])
+    completeness = EvaluationCompleteness.from_instance_ids(2, ["a", "b"], infrastructure_failure_instance_ids=["b"])
 
     assert completeness.to_metadata() == {
         "expected_entry_count": 2,
@@ -20,5 +20,21 @@ def test_completeness_metadata_is_explicit_for_external_storage():
         "missing_entry_count": 0,
         "unexpected_entry_count": 0,
         "duplicate_result_count": 0,
+        "infrastructure_failure_count": 1,
         "evaluation_complete": True,
     }
+
+
+def test_completeness_compares_exact_expected_ids():
+    completeness = EvaluationCompleteness.from_instance_ids(
+        2,
+        ["a", "a", "c"],
+        expected_instance_ids=["a", "b"],
+    )
+
+    assert completeness.produced_entry_count == 2
+    assert completeness.missing_instance_ids == ["b"]
+    assert completeness.unexpected_instance_ids == ["c"]
+    assert completeness.duplicate_instance_ids == ["a"]
+    assert completeness.duplicate_result_count == 1
+    assert completeness.complete is False

@@ -97,6 +97,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python with UV
+        id: setup-python
+        continue-on-error: true
+        uses: $/.github/actions/setup-python-uv
+
+      - name: Wait before retrying Python setup
+        if: steps.setup-python.outcome == 'failure'
+        shell: pwsh
+        run: Start-Sleep -Seconds 20
+
+      - name: Retry Setup Python with UV
+        if: steps.setup-python.outcome == 'failure'
         uses: $/.github/actions/setup-python-uv
 
       - name: Azure Login (OIDC) for ADO feed
@@ -253,5 +264,7 @@ jobs:
       category: nl2al
       skip-leaderboard: true
       expected-total: ${{ fromJSON(needs.get-entries.outputs.entry-count) }}
+      expected-entries: ${{ needs.get-entries.outputs.entries }}
       artifact-pattern: evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*
+      allow-unscored-results: true
     secrets: inherit

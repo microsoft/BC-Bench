@@ -24,6 +24,9 @@ class BaseEvaluationResult(BaseModel):
     agent_version: str | None = None
 
     timeout: bool = False
+    infrastructure_error: bool = False
+    error_provider: str | None = None
+    error_status_code: int | None = None
 
     output: str = ""
     error_message: str | None = None
@@ -56,6 +59,23 @@ class BaseEvaluationResult(BaseModel):
     def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:
         return cls(**cls._base_fields(context), timeout=True, error_message="Agent timed out")
 
+    @classmethod
+    def create_agent_infrastructure_failure[E: BaseDatasetEntry](
+        cls,
+        context: EvaluationContext[E],
+        *,
+        error_message: str,
+        provider: str,
+        status_code: int | None,
+    ) -> Self:
+        return cls(
+            **cls._base_fields(context),
+            infrastructure_error=True,
+            error_provider=provider,
+            error_status_code=status_code,
+            error_message=error_message,
+        )
+
     def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -71,6 +91,8 @@ class BaseEvaluationResult(BaseModel):
         """Short human-readable label for the result status shown in tables (e.g. 'Completed', 'Timeout')."""
         if self.timeout:
             return "Timeout"
+        if self.infrastructure_error:
+            return "Infrastructure Error"
         if self.error_message:
             return "Error"
         return "Completed"
@@ -131,6 +153,8 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"
+        if self.infrastructure_error:
+            return "Infrastructure Error"
         return "Success" if self.resolved else "Failed"
 
     @property
@@ -151,7 +175,7 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
             return payload
 
         payload = cast(dict[str, object], payload)
-        if payload.get("timeout") is not True or "judge_model" in payload:
+        if not (payload.get("timeout") is True or payload.get("infrastructure_error") is True) or "judge_model" in payload:
             return payload
 
         category = EvaluationCategory(payload["category"])
@@ -195,6 +219,8 @@ class JudgeBasedEvaluationResult(JudgeScoredEvaluationResult):
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"
+        if self.infrastructure_error:
+            return "Infrastructure Error"
         if self.error_message:
             return "Error"
         return "Unscored"

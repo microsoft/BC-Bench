@@ -207,13 +207,34 @@ def test_agent_workflows_select_al_tool_dotnet_version_for_bc_version() -> None:
 
 def test_bcal_summary_runs_after_matrix_failures_and_enforces_completeness() -> None:
     workflow = yaml.safe_load(_workflow("bcal-evaluation.yml"))
+    evaluation_steps = workflow["jobs"]["evaluate-with-bcal"]["steps"]
     summarize = workflow["jobs"]["summarize-results"]
+    upload = next(step for step in evaluation_steps if step["name"] == "Upload evaluation results")
 
+    assert upload["if"] == "always()"
     assert summarize["needs"] == ["get-entries", "evaluate-with-bcal"]
     assert "always()" in summarize["if"]
     assert summarize["with"]["expected-total"] == "${{ fromJSON(needs.get-entries.outputs.entry-count) }}"
+    assert summarize["with"]["expected-entries"] == "${{ needs.get-entries.outputs.entries }}"
     assert summarize["with"]["results-dir"] == "evaluation_results"
     assert summarize["with"]["artifact-pattern"] == "evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*"
+    assert summarize["with"]["allow-unscored-results"] is True
+
+
+def test_bcal_retries_python_setup_once_without_hiding_final_failure() -> None:
+    workflow = yaml.safe_load(_workflow("bcal-evaluation.yml"))
+    steps = workflow["jobs"]["evaluate-with-bcal"]["steps"]
+    setup = next(step for step in steps if step["name"] == "Setup Python with UV")
+    wait = next(step for step in steps if step["name"] == "Wait before retrying Python setup")
+    retry = next(step for step in steps if step["name"] == "Retry Setup Python with UV")
+
+    assert setup["id"] == "setup-python"
+    assert setup["continue-on-error"] is True
+    assert wait["if"] == "steps.setup-python.outcome == 'failure'"
+    assert "Start-Sleep -Seconds 20" in wait["run"]
+    assert retry["if"] == "steps.setup-python.outcome == 'failure'"
+    assert retry["uses"] == setup["uses"]
+    assert "continue-on-error" not in retry
 
 
 def test_bcal_downloads_one_pinned_cached_bccontainerhelper() -> None:
@@ -231,12 +252,18 @@ def test_bcal_downloads_one_pinned_cached_bccontainerhelper() -> None:
 
 
 def test_summarize_workflow_preserves_partial_diagnostics_and_blocks_upload() -> None:
-    workflow = _workflow("summarize-results.yml")
+    workflow_text = _workflow("summarize-results.yml")
+    workflow = yaml.safe_load(workflow_text)
 
-    assert "continue-on-error: ${{ inputs.expected-total >= 0 }}" in workflow
-    assert "evaluation_completeness.json" in workflow
-    assert "bceval_results.jsonl" in workflow
-    assert "steps.summarize.outputs.complete == 'true'" in workflow
-    assert "bcbench.bceval_runner" not in workflow
-    assert "if: always()" in workflow
-    assert "bcbench result require-complete" in workflow
+    assert "continue-on-error: ${{ inputs.expected-total >= 0 }}" in workflow_text
+    assert "evaluation_completeness.json" in workflow_text
+    assert "bceval_results.jsonl" in workflow_text
+    assert "steps.summarize.outputs.complete == 'true'" in workflow_text
+    assert "bcbench.bceval_runner" not in workflow_text
+    assert "if: always()" in workflow_text
+    assert "bcbench result require-complete" in workflow_text
+    assert workflow[True]["workflow_call"]["inputs"]["allow-unscored-results"]["default"] is False
+    assert 'CORE_SCORE_ARGS=(--core-score "${{ steps.bceval.outputs.core_score }}")' in workflow_text
+    assert 'if [[ "${{ inputs.allow-unscored-results }}" == "true" ]]' in workflow_text
+    assert '"${CORE_SCORE_ARGS[@]}"' in workflow_text
+    assert "${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}" in workflow_text

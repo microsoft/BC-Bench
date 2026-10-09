@@ -16,7 +16,7 @@ console = Console()
 
 def _status_style(status_label: str) -> tuple[str, str]:
     """Return (rich_color, github_emoji) for a status label."""
-    if status_label in ("Timeout", "Error", "Failed"):
+    if status_label in ("Timeout", "Infrastructure Error", "Error", "Failed"):
         return "red", ":x:"
     if status_label == "Unscored":
         return "yellow", ":grey_question:"

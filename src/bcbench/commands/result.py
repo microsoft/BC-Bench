@@ -3,12 +3,13 @@ import logging
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 
 from bcbench.cli_options import EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.github_actions import write_step_outputs
 from bcbench.results import (
     BaseEvaluationResult,
@@ -26,8 +27,83 @@ logger = logging.getLogger(__name__)
 
 
 _config = get_config()
+_MISSING_RESULT_ERROR = "GitHub Actions matrix shard produced no evaluation result artifact. The shard failed before bcbench could persist a result; inspect the matrix job logs."
 
 result_app = typer.Typer(help="Process and display evaluation results")
+
+
+def _parse_expected_instance_ids(expected_entries_json: str | None, expected_total: int) -> list[str] | None:
+    if expected_entries_json is None or expected_entries_json.strip() in {"", "[]"}:
+        return None
+
+    try:
+        payload = json.loads(expected_entries_json)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"Expected entries must be valid JSON: {exc.msg}") from exc
+
+    if not isinstance(payload, list) or not all(isinstance(instance_id, str) and instance_id for instance_id in payload):
+        raise typer.BadParameter("Expected entries must be a JSON array of non-empty strings.")
+
+    expected_instance_ids = cast(list[str], payload)
+    if len(set(expected_instance_ids)) != len(expected_instance_ids):
+        raise typer.BadParameter("Expected entries must not contain duplicate instance IDs.")
+    if expected_total >= 0 and expected_total != len(expected_instance_ids):
+        raise typer.BadParameter(f"Expected total {expected_total} does not match {len(expected_instance_ids)} expected entry IDs.")
+    return expected_instance_ids
+
+
+def _create_missing_infrastructure_results(
+    category: EvaluationCategoryOption,
+    missing_instance_ids: list[str],
+    existing_results: list[BaseEvaluationResult],
+    model: str | None,
+    agent: str | None,
+) -> list[BaseEvaluationResult]:
+    dataset_entries: list[BaseDatasetEntry] = category.entry_class.load(category.dataset_path)
+    entries_by_id = {entry.instance_id: entry for entry in dataset_entries}
+    unknown_ids = sorted(set(missing_instance_ids) - entries_by_id.keys())
+    if unknown_ids:
+        logger.error("Expected entries are absent from the %s dataset: %s", category.value, ", ".join(unknown_ids))
+        raise typer.Exit(code=1)
+
+    template = existing_results[0] if existing_results else None
+    resolved_model = template.model if template else model
+    resolved_agent = template.agent_name if template else agent
+    if not resolved_model or not resolved_agent:
+        logger.error("Model and agent are required to synthesize infrastructure failures when no shard produced a result.")
+        raise typer.Exit(code=1)
+
+    synthetic_results: list[BaseEvaluationResult] = []
+    for instance_id in missing_instance_ids:
+        entry = entries_by_id[instance_id]
+        payload: dict[str, object] = {
+            "instance_id": instance_id,
+            "project": entry.extract_project_name(),
+            "model": resolved_model.replace(".", "-"),
+            "agent_name": resolved_agent,
+            "agent_version": template.agent_version if template else None,
+            "category": category,
+            "infrastructure_error": True,
+            "error_provider": "github-actions",
+            "error_status_code": None,
+            "error_message": _MISSING_RESULT_ERROR,
+            "experiment": template.experiment if template else None,
+        }
+        if (judge_model := category.judge_model) is not None:
+            payload["judge_model"] = judge_model
+        synthetic_results.append(category.result_class.model_validate(payload))
+
+    return synthetic_results
+
+
+def _order_results_by_expected_entries(results: list[BaseEvaluationResult], expected_instance_ids: list[str]) -> list[BaseEvaluationResult]:
+    grouped: defaultdict[str, list[BaseEvaluationResult]] = defaultdict(list)
+    for result in results:
+        grouped[result.instance_id].append(result)
+
+    ordered = [result for instance_id in expected_instance_ids for result in grouped.pop(instance_id, [])]
+    unexpected = [result for result in results if result.instance_id in grouped]
+    return [*ordered, *unexpected]
 
 
 @result_app.command("summarize")
@@ -40,6 +116,9 @@ def result_summarize(
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
     git_ref: Annotated[str | None, typer.Option("--git-ref", help="Git ref (branch/tag) the run was dispatched from; recorded in bceval metadata as git_branch")] = None,
     expected_total: Annotated[int, typer.Option(help="Expected number of unique matrix entries; negative disables completeness tracking")] = -1,
+    expected_entries_json: Annotated[str | None, typer.Option(help="JSON array of expected matrix entry IDs; missing IDs become infrastructure failure results")] = None,
+    model: Annotated[str | None, typer.Option(help="Model for synthesized infrastructure failure results when no real result is available")] = None,
+    agent: Annotated[str | None, typer.Option(help="Agent for synthesized infrastructure failure results when no real result is available")] = None,
     completeness_output: Annotated[str, typer.Option(help="Output filename for matrix completeness metadata")] = "evaluation_completeness.json",
     github_output: Annotated[bool, typer.Option(help="Write produced/expected/complete step outputs to GITHUB_OUTPUT")] = False,
 ) -> None:
@@ -49,7 +128,9 @@ def result_summarize(
     Aggregates individual instance results, displays job summaries and generates bceval output format.
     """
     run_dir: Path = result_dir / run_id
-    track_completeness = expected_total >= 0
+    expected_instance_ids = _parse_expected_instance_ids(expected_entries_json, expected_total)
+    effective_expected_total = len(expected_instance_ids) if expected_instance_ids is not None else expected_total
+    track_completeness = effective_expected_total >= 0
 
     if not run_dir.exists():
         if not track_completeness:
@@ -76,18 +157,47 @@ def result_summarize(
         with results_path.open() as f:
             results.extend(BaseEvaluationResult.from_json(json.loads(line)) for line in f if line.strip())
 
+    if expected_instance_ids is not None:
+        artifact_completeness = EvaluationCompleteness.from_instance_ids(
+            effective_expected_total,
+            (result.instance_id for result in results),
+            expected_instance_ids=expected_instance_ids,
+        )
+        if artifact_completeness.missing_instance_ids:
+            synthetic_results = _create_missing_infrastructure_results(
+                category,
+                artifact_completeness.missing_instance_ids,
+                results,
+                model,
+                agent,
+            )
+            results.extend(synthetic_results)
+            logger.warning("Synthesized %d infrastructure failure result(s) for missing matrix artifacts.", len(synthetic_results))
+        results = _order_results_by_expected_entries(results, expected_instance_ids)
+
     if not results and not track_completeness:
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    completeness = EvaluationCompleteness.from_instance_ids(expected_total, (result.instance_id for result in results)) if track_completeness else None
+    completeness = (
+        EvaluationCompleteness.from_instance_ids(
+            effective_expected_total,
+            (result.instance_id for result in results),
+            expected_instance_ids=expected_instance_ids,
+            infrastructure_failure_instance_ids=(result.instance_id for result in results if result.infrastructure_error),
+        )
+        if track_completeness
+        else None
+    )
     if completeness:
         completeness.save(run_dir / completeness_output)
         logger.info(
-            "Evaluation completeness: expected=%d produced=%d missing=%d duplicates=%d",
+            "Evaluation completeness: expected=%d produced=%d missing=%d infrastructure_failures=%d unexpected=%d duplicates=%d",
             completeness.expected_entry_count,
             completeness.produced_entry_count,
             completeness.missing_entry_count,
+            completeness.infrastructure_failure_count,
+            completeness.unexpected_entry_count,
             completeness.duplicate_result_count,
         )
         if _config.env.github_actions and not results:
@@ -100,6 +210,7 @@ def result_summarize(
                 "expected": str(output_completeness.expected_entry_count),
                 "produced": str(output_completeness.produced_entry_count),
                 "missing": str(output_completeness.missing_entry_count),
+                "infrastructure-failures": str(output_completeness.infrastructure_failure_count),
                 "complete": str(output_completeness.complete).lower(),
                 "has-results": str(bool(results)).lower(),
             }

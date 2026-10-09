@@ -10,7 +10,7 @@ import pytest
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.evaluate.base import AgentRunner, EvaluationOutcome, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -64,8 +64,9 @@ class TestExecuteHappyPath:
         ctx = create_evaluation_context(tmp_path)
         pipeline = _StubPipeline[BugFixEntry]()
 
-        pipeline.execute(ctx, _noop_runner)
+        outcome = pipeline.execute(ctx, _noop_runner)
 
+        assert outcome is EvaluationOutcome.COMPLETED
         assert pipeline.setup_called
         assert pipeline.run_agent_called
         assert pipeline.evaluate_called
@@ -78,8 +79,9 @@ class TestExecuteAgentTimeout:
         timeout_config = ExperimentConfiguration(custom_instructions=True)
         pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config))
 
-        pipeline.execute(ctx, _noop_runner)
+        outcome = pipeline.execute(ctx, _noop_runner)
 
+        assert outcome is EvaluationOutcome.AGENT_TIMEOUT
         assert pipeline.evaluate_called is False
         result = _read_only_result(ctx)
         assert result.timeout is True
@@ -92,8 +94,9 @@ class TestExecuteAgentTimeout:
         ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
         pipeline = _StubPipeline[NL2ALEntry](raise_in_run_agent=AgentTimeoutError("test timeout"))
 
-        pipeline.execute(ctx, lambda _: (None, None))
+        outcome = pipeline.execute(ctx, lambda _: (None, None))
 
+        assert outcome is EvaluationOutcome.AGENT_TIMEOUT
         result_file = ctx.result_dir / f"{entry.instance_id}{get_config().file_patterns.result_pattern}"
         payload = json.loads(result_file.read_text(encoding="utf-8"))
         assert payload["judge_model"] == EvaluationCategory.NL2AL.judge_model
