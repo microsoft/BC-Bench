@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from bcbench.cli import app
 from bcbench.commands.evaluate import evaluate_bcal
+from bcbench.commands.result import _validate_selected_coverage
 from bcbench.dataset import NL2ALEntry, NL2ALTurn
 from bcbench.exceptions import AgentError
 from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
@@ -195,6 +196,33 @@ def test_export_requires_recorded_identity_for_a_named_panel(tmp_path):
     result.dataset_sha256 = None
     with pytest.raises(ValueError, match="missing recorded"):
         write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.CHALLENGE)
+
+
+@pytest.mark.parametrize("kind", ["missing", "duplicate", "unexpected"])
+def test_selected_matrix_coverage_blocks_incomplete_scoring(tmp_path, kind):
+    entry = create_nl2al_entry()
+    path = tmp_path / "nl2al.jsonl"
+    write_entry(path, entry)
+    _, result = result_for(entry, NL2ALDataset.GOLD, path, tmp_path)
+    expected = [entry.instance_id, "nl2al__another-case-1"] if kind == "missing" else [entry.instance_id]
+    results = [result, result] if kind == "duplicate" else [result]
+    if kind == "unexpected":
+        expected = ["nl2al__different-case-1"]
+    with pytest.raises(typer.Exit):
+        _validate_selected_coverage(results, json.dumps(expected), tmp_path)
+    coverage = json.loads((tmp_path / "evaluation_coverage.json").read_text(encoding="utf-8"))
+    assert coverage[f"{kind}_entries"]
+
+
+def test_selected_smoke_subset_does_not_require_unselected_panel_cases(tmp_path):
+    entry = create_nl2al_entry()
+    path = tmp_path / "nl2al.jsonl"
+    write_entry(path, entry)
+    _, result = result_for(entry, NL2ALDataset.GOLD, path, tmp_path)
+    _validate_selected_coverage([result], json.dumps([entry.instance_id]), tmp_path)
+    coverage = json.loads((tmp_path / "evaluation_coverage.json").read_text(encoding="utf-8"))
+    assert coverage["expected_entry_count"] == 1
+    assert coverage["missing_entries"] == []
 
 
 def test_export_multiturn_marks_final_artifact_scope(tmp_path):

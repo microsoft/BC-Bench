@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: ""
+      expected-entries:
+        description: "Optional JSON array of selected entry IDs; require complete results before scoring upload"
+        required: false
+        type: string
+        default: ""
       skip-leaderboard:
         description: "Whether to skip updating the leaderboard"
         required: false
@@ -61,6 +66,7 @@ jobs:
       EVALUATION_AGENT: ${{ inputs.agent }}
       EVALUATION_MODEL: ${{ inputs.model }}
       EVALUATION_GIT_REF: ${{ inputs.git-ref || github.ref_name }}
+      EXPECTED_ENTRIES: ${{ inputs.expected-entries }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,8 +95,20 @@ jobs:
           if [[ -n "$NL2AL_DATASET" ]]; then
             cmd+=(--dataset "$NL2AL_DATASET")
           fi
+          if [[ -n "$EXPECTED_ENTRIES" ]]; then
+            cmd+=(--expected-entries "$EXPECTED_ENTRIES")
+          fi
 
           "${cmd[@]}"
+
+      - name: Upload evaluation coverage diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evaluation-coverage
+          path: ${{ inputs.results-dir }}/${{ github.run_id }}/evaluation_coverage.json
+          if-no-files-found: ignore
+          retention-days: ${{ inputs.mock && 1 || 30 }}
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

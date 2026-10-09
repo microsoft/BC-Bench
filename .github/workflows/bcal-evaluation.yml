@@ -225,4 +225,5 @@ jobs:
       category: nl2al
       dataset: ${{ inputs.dataset || 'gold' }}
       skip-leaderboard: true
+      expected-entries: ${{ needs.get-entries.outputs.entries }}
     secrets: inherit
