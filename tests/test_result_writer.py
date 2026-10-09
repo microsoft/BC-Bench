@@ -37,7 +37,7 @@ class TestWriteBcevalResults:
 
         metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
         assert metadata["ai_credits"] == (metrics.ai_credits if metrics is not None else None)
-        # bc-eval 0.6.0 adds these fields before invoking our custom metric callback.
+        # bc-eval 0.6.1 adds these fields before invoking our custom metric callback.
         assert isinstance(metadata["prompt_tokens"], int)
         assert isinstance(metadata["completion_tokens"], int)
 

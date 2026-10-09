@@ -9,12 +9,12 @@ on:
       external-model:
         description: "Model alias to use through the bc-eval M365 LLM API client"
         required: false
-        default: "gpt-55-chat-2026-04-29"
+        default: "gpt-55-chat"
         type: choice
         options:
           - "gpt-56-reasoning-nano-luna"
           - "gpt-56-reasoning-sol"
-          - "gpt-55-chat-2026-04-29"
+          - "gpt-55-chat"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -124,7 +124,7 @@ jobs:
 
           # Same transient ADO feed flakiness as the bcal install above; retry the package pull.
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            uv pip install --python .\.bcal-llm-api-venv\Scripts\python.exe "bc-eval==0.6.0" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+            uv pip install --python .\.bcal-llm-api-venv\Scripts\python.exe "bc-eval==0.6.1" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
             if ($LASTEXITCODE -eq 0) { break }
             if ($attempt -eq 3) { throw "bc-eval install failed after 3 attempts (exit code $LASTEXITCODE)." }
             Write-Output "::warning::bc-eval install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
@@ -175,7 +175,7 @@ jobs:
       - name: Run BCal for entry ${{ matrix.entry }}
         timeout-minutes: 28
         env:
-          BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat-2026-04-29' }}
+          BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
         shell: pwsh
@@ -204,7 +204,7 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
-      model: ${{ inputs.external-model || 'gpt-55-chat-2026-04-29' }}
+      model: ${{ inputs.external-model || 'gpt-55-chat' }}
       agent: BCal-external-command
       mock: ${{ inputs.test-run || false }}
       category: nl2al
