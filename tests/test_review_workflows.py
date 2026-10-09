@@ -281,7 +281,7 @@ def test_summarize_workflow_preserves_partial_diagnostics_and_blocks_upload() ->
     assert 'CORE_SCORE_ARGS=(--core-score "${{ steps.bceval.outputs.core_score }}")' in workflow_text
     assert 'if [[ "${{ inputs.allow-unscored-results }}" == "true" ]]' in workflow_text
     assert '"${CORE_SCORE_ARGS[@]}"' in workflow_text
-    assert workflow["jobs"]["summarize-results"]["permissions"]["actions"] == "read"
+    assert "permissions" not in workflow["jobs"]["summarize-results"]
     assert workflow_inputs["recovery-artifact-run-id"]["default"] == ""
     assert workflow_inputs["recovery-artifact-pattern"]["default"] == ""
     assert steps.index(current_download) < steps.index(recovery_download)
