@@ -7,6 +7,7 @@ from typing import override
 
 from bcbench_core.filesystem import clear_directory
 
+from bcbench.categories.data_query.operations import execute_al_query
 from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import EmptyGoldResultError
@@ -153,7 +154,6 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         loudly. In particular an empty gold is rejected (see EmptyGoldResultError) so an agent that
         retrieved nothing cannot spuriously match it.
         """
-        from bcbench.operations import execute_al_query
 
         logger.info(f"Running gold query live for {context.entry.instance_id}")
         company = context.get_container().company

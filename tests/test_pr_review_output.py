@@ -1,7 +1,7 @@
 import json
 
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
-from bcbench.evaluate.review_parsing import parse_review_output
+from bcbench.categories.code_review.review_parsing import parse_review_output
 
 
 def _report(findings: list[dict[str, object]]) -> dict[str, object]:

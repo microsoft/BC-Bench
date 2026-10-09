@@ -3,7 +3,7 @@ import os
 import pytest
 from bcbench_core.agent.copilot.agent import _find_copilot
 
-from bcbench.evaluate.codereview_judge_calibration import (
+from bcbench.categories.code_review.judge_calibration import (
     _load_calibration_cases,
     run_calibration,
     score_calibration,

@@ -3,7 +3,7 @@
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import PropertyMock, patch
+from unittest.mock import patch
 
 import click
 import pytest
@@ -130,8 +130,11 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             captured["context"] = context
 
     with (
-        patch.object(evaluate_commands, "category_definition", return_value=SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id))),
-        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        patch.object(
+            evaluate_commands,
+            "category_definition",
+            return_value=SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id), make_pipeline=Pipeline),
+        ),
     ):
         evaluate_commands.evaluate_bcal(
             entry_id=entry.instance_id,
@@ -178,13 +181,13 @@ def agent_command_category(tmp_path):
         def execute(self, context, agent_runner):
             agent_runner(context)
 
-    definition = SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id), requires_container=False, pass_bc_credentials=True)
+    definition = SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id), make_pipeline=Pipeline, requires_container=False, pass_bc_credentials=True)
     with (
         patch.object(run_commands, "category_definition", return_value=definition),
         patch.object(evaluate_commands, "category_definition", return_value=definition),
         patch.object(cli_options, "category_definition", return_value=definition),
     ):
-        yield entry, SimpleNamespace(pipeline=Pipeline())
+        yield entry, SimpleNamespace()
 
 
 @pytest.mark.parametrize(
