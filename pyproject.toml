@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "bcbench"
-version = "0.14.0"
+version = "0.15.0"
 description = "Benchmarking tool for Business Central (AL) ecosystem, inspired by SWE-Bench"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
@@ -95,7 +95,7 @@ exclude = ["notebooks/"]
 all = "error"
 
 [tool.ty.analysis]
-# bc-eval[capi] is internal and installed only into a separate venv by bcal-evaluation.yml
+# bc-eval is internal and installed only into a separate venv by bcal-evaluation.yml
 allowed-unresolved-imports = ["bc_eval.**"]
 
 [dependency-groups]
