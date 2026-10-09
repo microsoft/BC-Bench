@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Annotated
 
@@ -18,6 +18,7 @@ from bcbench.results import (
     create_github_job_summary,
     write_bceval_results,
 )
+from bcbench.types import NL2ALDataset
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,8 @@ def result_summarize(
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
     git_ref: Annotated[str | None, typer.Option("--git-ref", help="Git ref (branch/tag) the run was dispatched from; recorded in bceval metadata as git_branch")] = None,
+    dataset: Annotated[NL2ALDataset | None, typer.Option(help="Expected NL2AL dataset panel; verifies raw result identity")] = None,
+    expected_entries: Annotated[str | None, typer.Option(help="JSON array of selected instance IDs; incomplete or duplicate results block export")] = None,
 ) -> None:
     """
     Summarize evaluation results from a completed run.
@@ -71,7 +74,10 @@ def result_summarize(
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
+    if expected_entries is not None:
+        _validate_selected_coverage(results, expected_entries, run_dir)
+
+    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref, dataset=dataset)
 
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
 
@@ -81,6 +87,30 @@ def result_summarize(
         create_console_summary(results, summary)
 
     summary.save(run_dir, summary_output)
+
+
+def _validate_selected_coverage(results: list[BaseEvaluationResult], selected_json: str, run_dir: Path) -> None:
+    try:
+        selected = json.loads(selected_json)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter("expected-entries must be a JSON array of instance IDs") from exc
+    if not isinstance(selected, list) or not selected or not all(isinstance(value, str) and value for value in selected):
+        raise typer.BadParameter("expected-entries must be a nonempty JSON array of instance IDs")
+    expected = set(selected)
+    if len(expected) != len(selected):
+        raise typer.BadParameter("expected-entries contains duplicate IDs")
+    observed = Counter(result.instance_id for result in results)
+    coverage = {
+        "expected_entry_count": len(expected),
+        "produced_entry_count": len(observed),
+        "missing_entries": sorted(expected - observed.keys()),
+        "unexpected_entries": sorted(observed.keys() - expected),
+        "duplicate_entries": sorted(key for key, count in observed.items() if count != 1),
+    }
+    (run_dir / "evaluation_coverage.json").write_text(json.dumps(coverage, indent=2) + "\n", encoding="utf-8")
+    if coverage["missing_entries"] or coverage["unexpected_entries"] or coverage["duplicate_entries"]:
+        logger.error("Selected dataset coverage is incomplete or invalid; refusing scoring upload: %s", coverage)
+        raise typer.Exit(code=1)
 
 
 def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[LeaderboardAggregate]:

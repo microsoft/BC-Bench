@@ -114,6 +114,7 @@ def sample_results_directory(tmp_path, sample_dataset_file_for_cli):
 @pytest.mark.parametrize(("llm_model", "expected_model"), [("gpt-5.2-prod", "gpt-5.2-prod"), (None, "external-command")])
 def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     entry = create_nl2al_entry()
+    (tmp_path / "nl2al.jsonl").write_text(entry.model_dump_json() + "\n", encoding="utf-8")
     captured = {}
 
     class EntryClass:
@@ -130,6 +131,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
         patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
         patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        patch.object(evaluate_commands, "get_bcal_version", return_value="18.0.1.2-beta"),
     ):
         evaluate_commands.evaluate_bcal(
             entry_id=entry.instance_id,

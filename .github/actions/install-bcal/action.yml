@@ -1,0 +1,76 @@
+name: Install BCal
+description: Install BCal from the internal feed and report its verified package version
+
+inputs:
+  client-id:
+    description: Azure client ID for the ADO feed
+    required: true
+  tenant-id:
+    description: Azure tenant ID for the ADO feed
+    required: true
+  package-id:
+    description: BCal NuGet package ID
+    required: true
+  feed-url:
+    description: BCal NuGet feed URL
+    required: true
+  version-mode:
+    description: latest-prerelease or pinned
+    required: true
+  version:
+    description: Exact NuGet version when mode is pinned
+    required: false
+    default: ""
+
+outputs:
+  version:
+    description: Verified installed BCal package version
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Azure Login (OIDC) for ADO feed
+      uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        allow-no-subscriptions: true
+
+    - name: Install Azure Artifacts credential provider
+      shell: pwsh
+      run: |
+        dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool
+
+        echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
+
+    - name: Install and verify BCal package
+      id: install
+      shell: pwsh
+      env:
+        BCAL_PACKAGE_ID: ${{ inputs.package-id }}
+        BCAL_FEED_URL: ${{ inputs.feed-url }}
+        BCAL_VERSION_MODE: ${{ inputs.version-mode }}
+        BCAL_REQUESTED_VERSION: ${{ inputs.version }}
+      run: |
+        $PSNativeCommandUseErrorActionPreference = $false
+
+        $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+        Write-Output "::add-mask::$adoToken"
+
+        $endpoints = @{
+          endpointCredentials = @(
+            @{
+              endpoint = $env:BCAL_FEED_URL
+              username = "anything"
+              password = $adoToken
+            }
+          )
+        } | ConvertTo-Json -Compress -Depth 5
+        $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
+
+        .\scripts\Install-BCalTool.ps1 `
+          -PackageId "$env:BCAL_PACKAGE_ID" `
+          -FeedUrl "$env:BCAL_FEED_URL" `
+          -VersionMode "$env:BCAL_VERSION_MODE" `
+          -Version "$env:BCAL_REQUESTED_VERSION"
