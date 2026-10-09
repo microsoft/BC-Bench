@@ -4,6 +4,8 @@ import sys
 import types
 from typing import cast
 
+import pytest
+
 from evaluator import scores
 
 
@@ -49,7 +51,52 @@ def test_lm_checklist_delegates_normal_results_and_selects_row_core_score(monkey
 
     assert {score.name: score.score for score in result} == {"test_passed": 1.0}
     assert metadata["core_score_name"] == "test_passed"
+    assert metadata["core_score"] == 1.0
     assert len(scorer.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "delegated_scores",
+    [
+        [],
+        [_Score(name="pass_rate", score=1.0, metadata={})],
+        [_Score(name="test_passed", score=None, metadata={})],
+    ],
+)
+def test_lm_checklist_rejects_normal_results_without_core_score(monkeypatch, delegated_scores):
+    built_in = _install_lm_checklist_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        built_in,
+        "_run_eval_sync",
+        lambda self, output, expected, **kwargs: delegated_scores,
+    )
+    scorer = cast(built_in, scores.LmChecklist())
+
+    metadata = {}
+    with pytest.raises(ValueError, match="exactly one non-null 'test_passed'"):
+        scorer._run_eval_sync("answer", {"assertions": []}, metadata=metadata)
+
+    assert metadata["core_score_name"] == "test_passed"
+    with pytest.raises(ValueError, match="could not convert string to float"):
+        float(metadata["core_score"])
+
+
+def test_lm_checklist_leaves_hard_failure_guard_when_judge_raises(monkeypatch):
+    built_in = _install_lm_checklist_dependencies(monkeypatch)
+
+    def raise_judge_error(self, output, expected, **kwargs):
+        raise RuntimeError("Judge failed")
+
+    monkeypatch.setattr(built_in, "_run_eval_sync", raise_judge_error)
+    scorer = cast(built_in, scores.LmChecklist())
+    metadata = {}
+
+    with pytest.raises(RuntimeError, match="Judge failed"):
+        scorer._run_eval_sync("answer", {"assertions": []}, metadata=metadata)
+
+    assert metadata["core_score_name"] == "test_passed"
+    with pytest.raises(ValueError, match="could not convert string to float"):
+        float(metadata["core_score"])
 
 
 def test_lm_checklist_scores_timeout_without_calling_judge(monkeypatch):
@@ -72,6 +119,7 @@ def test_lm_checklist_scores_timeout_without_calling_judge(monkeypatch):
     }
     assert scorer.calls == []
     assert metadata["core_score_name"] == "test_passed"
+    assert metadata["core_score"] == 0.0
     assert metadata["assertionResults"] == [{**assertion, "pass": False, "reasoning": "Agent timed out before producing output"} for assertion in assertions]
 
 
@@ -99,4 +147,29 @@ def test_lm_checklist_skips_infrastructure_error_without_calling_judge(monkeypat
     }
     assert all(score.metadata == {"error": error_message} for score in result)
     assert metadata["core_score_name"] == "test_passed"
+    assert "core_score" not in metadata
     assert scorer.calls == []
+
+
+def test_lm_checklist_accepts_publishable_complete_mixed_batch(monkeypatch):
+    built_in = _install_lm_checklist_dependencies(monkeypatch)
+    scorer = cast(built_in, scores.LmChecklist())
+    metadata = [{} for _ in range(109)]
+
+    rows = [scorer._run_eval_sync("answer", {"assertions": []}, metadata=row_metadata) for row_metadata in metadata]
+    infrastructure_metadata = {"infrastructure_error": True, "Error": "Dependency setup failed."}
+    rows.append(
+        scorer._run_eval_sync(
+            "",
+            {"assertions": [{"text": "Critical behavior.", "level": "critical"}]},
+            metadata=infrastructure_metadata,
+        )
+    )
+
+    assert len(rows) == 110
+    assert all(row_metadata["core_score_name"] == "test_passed" for row_metadata in metadata)
+    assert all(row_metadata["core_score"] == 1.0 for row_metadata in metadata)
+    assert infrastructure_metadata["core_score_name"] == "test_passed"
+    assert "core_score" not in infrastructure_metadata
+    assert all(next(score for score in row if score.name == "test_passed").score == 1.0 for row in rows[:109])
+    assert next(score for score in rows[-1] if score.name == "test_passed").score is None
