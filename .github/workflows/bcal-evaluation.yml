@@ -158,7 +158,6 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      # Stage the app registration certificate once so each bridge call (one per agent turn) skips Key Vault.
       - name: Fetch LLM API client certificate from Key Vault
         shell: pwsh
         env:
