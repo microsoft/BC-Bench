@@ -135,7 +135,7 @@ def main() -> int:
     try:
         from bc_eval.llm.providers import create_openai_compatible_client
     except ImportError as exc:
-        raise RuntimeError("bc-eval==0.6.0 is required for the BCal LLM API bridge.") from exc
+        raise RuntimeError("bc-eval==0.6.1 is required for the BCal LLM API bridge.") from exc
 
     client = create_openai_compatible_client(
         provider=_PROVIDER,

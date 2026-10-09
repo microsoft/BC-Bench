@@ -255,12 +255,12 @@ def test_only_bcal_summary_allows_unscored_infrastructure_results() -> None:
         assert "allow-unscored-results" not in summarize
 
 
-def test_bcal_and_scoring_pin_plain_bceval_0_6_0() -> None:
+def test_bcal_and_scoring_pin_plain_bceval_0_6_1() -> None:
     bcal_workflow = _workflow("bcal-evaluation.yml")
     summarize_workflow = _workflow("summarize-results.yml")
 
-    assert bcal_workflow.count('"bc-eval==0.6.0"') == 1
-    assert summarize_workflow.count("bc-eval==0.6.0") == 1
+    assert bcal_workflow.count('"bc-eval==0.6.1"') == 1
+    assert summarize_workflow.count("bc-eval==0.6.1") == 1
     assert "bc-eval[" not in bcal_workflow
     assert "bc-eval[" not in summarize_workflow
     assert "--llm-provider llm_api" in summarize_workflow
