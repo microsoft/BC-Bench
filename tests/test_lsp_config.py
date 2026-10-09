@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import pytest
 from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared.lsp import build_al_lsp_plugin
-from bcbench.exceptions import AgentError
 from bcbench.types import AgentHarness, AgentRuntimeConfig, EvaluationCategory
 from tests.conftest import create_dataset_entry
 

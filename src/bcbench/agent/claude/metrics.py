@@ -3,7 +3,7 @@ import logging
 from collections import Counter
 from collections.abc import Sequence
 
-from bcbench.types import AgentMetrics
+from bcbench_core.agent.metrics import AgentMetrics
 
 logger = logging.getLogger(__name__)
 

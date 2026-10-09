@@ -3,10 +3,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_review_metrics
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.exceptions import AgentError
 from bcbench.results.bceval_export import write_bceval_results
 from bcbench.types import AgentHarness, EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry, create_codereview_result

@@ -8,6 +8,7 @@ from unittest.mock import PropertyMock, patch
 import click
 import pytest
 import typer
+from bcbench_core.agent.metrics import AgentMetrics
 from typer.main import get_command
 from typer.testing import CliRunner
 
@@ -16,7 +17,7 @@ from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtim
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
