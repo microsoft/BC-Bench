@@ -212,12 +212,40 @@ def test_bcal_summary_runs_after_matrix_failures_and_enforces_completeness() -> 
     upload = next(step for step in evaluation_steps if step["name"] == "Upload evaluation results")
 
     assert upload["if"] == "always()"
-    assert summarize["needs"] == ["get-entries", "evaluate-with-bcal"]
+    assert summarize["needs"] == ["get-entries", "select-entries", "evaluate-with-bcal"]
     assert "always()" in summarize["if"]
     assert summarize["with"]["expected-total"] == "${{ fromJSON(needs.get-entries.outputs.entry-count) }}"
     assert summarize["with"]["results-dir"] == "${{ needs.evaluate-with-bcal.outputs.results-dir }}"
     assert summarize["with"]["artifact-pattern"] == "evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*"
     assert summarize["with"]["allow-unscored-results"] is True
+
+
+def test_bcal_recovery_reruns_one_entry_and_merges_prior_attempt_artifacts() -> None:
+    workflow = yaml.safe_load(_workflow("bcal-evaluation.yml"))
+    dispatch_inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    select = workflow["jobs"]["select-entries"]
+    selection_step = select["steps"][0]
+    evaluate = workflow["jobs"]["evaluate-with-bcal"]
+    summarize = workflow["jobs"]["summarize-results"]
+
+    for input_name in ("recovery-source-run-id", "recovery-source-run-attempt", "recovery-entry"):
+        assert dispatch_inputs[input_name]["default"] == ""
+        assert dispatch_inputs[input_name]["type"] == "string"
+
+    assert workflow["jobs"]["get-entries"]["with"]["test-run"] == "${{ inputs.recovery-entry == '' && inputs.test-run }}"
+    assert select["needs"] == "get-entries"
+    assert selection_step["env"]["ALL_ENTRIES"] == "${{ needs.get-entries.outputs.entries }}"
+    assert "must be provided together" in selection_step["run"]
+    assert "Recovery runs must set test-run to false" in selection_step["run"]
+    assert "'index($entry) != null'" in selection_step["run"]
+    assert "jq -cn --arg entry" in selection_step["run"]
+    assert evaluate["needs"] == ["select-entries", "prepare-bccontainerhelper"]
+    assert evaluate["strategy"]["matrix"]["entry"] == "${{ fromJson(needs.select-entries.outputs.entries) }}"
+    assert summarize["permissions"]["actions"] == "read"
+    assert summarize["with"]["recovery-artifact-run-id"] == "${{ inputs.recovery-source-run-id }}"
+    assert summarize["with"]["recovery-artifact-pattern"] == (
+        "${{ inputs.recovery-source-run-id != '' && format('evaluation-results-{0}-{1}-*', inputs.recovery-source-run-id, inputs.recovery-source-run-attempt) || '' }}"
+    )
 
 
 def test_bcal_downloads_one_pinned_cached_bccontainerhelper() -> None:
@@ -237,6 +265,10 @@ def test_bcal_downloads_one_pinned_cached_bccontainerhelper() -> None:
 def test_summarize_workflow_preserves_partial_diagnostics_and_blocks_upload() -> None:
     workflow_text = _workflow("summarize-results.yml")
     workflow = yaml.safe_load(workflow_text)
+    workflow_inputs = workflow[True]["workflow_call"]["inputs"]
+    steps = workflow["jobs"]["summarize-results"]["steps"]
+    current_download = next(step for step in steps if step["name"] == "Download all evaluation results")
+    recovery_download = next(step for step in steps if step["name"] == "Download recovery evaluation results")
 
     assert "continue-on-error: ${{ inputs.expected-total >= 0 }}" in workflow_text
     assert "evaluation_completeness.json" in workflow_text
@@ -249,6 +281,17 @@ def test_summarize_workflow_preserves_partial_diagnostics_and_blocks_upload() ->
     assert 'CORE_SCORE_ARGS=(--core-score "${{ steps.bceval.outputs.core_score }}")' in workflow_text
     assert 'if [[ "${{ inputs.allow-unscored-results }}" == "true" ]]' in workflow_text
     assert '"${CORE_SCORE_ARGS[@]}"' in workflow_text
+    assert workflow["jobs"]["summarize-results"]["permissions"]["actions"] == "read"
+    assert workflow_inputs["recovery-artifact-run-id"]["default"] == ""
+    assert workflow_inputs["recovery-artifact-pattern"]["default"] == ""
+    assert steps.index(current_download) < steps.index(recovery_download)
+    assert recovery_download["if"] == "inputs.recovery-artifact-run-id != ''"
+    assert recovery_download["with"]["github-token"] == "${{ github.token }}"
+    assert recovery_download["with"]["repository"] == "${{ github.repository }}"
+    assert recovery_download["with"]["run-id"] == "${{ inputs.recovery-artifact-run-id }}"
+    assert recovery_download["with"]["path"] == "${{ inputs.results-dir }}/${{ github.run_id }}/recovered/"
+    assert recovery_download["with"]["pattern"] == "${{ inputs.recovery-artifact-pattern }}"
+    assert recovery_download["with"]["merge-multiple"] is True
 
 
 def test_only_bcal_summary_allows_unscored_infrastructure_results() -> None:

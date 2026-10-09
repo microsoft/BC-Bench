@@ -44,6 +44,16 @@ on:
         required: false
         type: string
         default: "*"
+      recovery-artifact-run-id:
+        description: "Prior workflow run ID containing artifacts to merge into this run"
+        required: false
+        type: string
+        default: ""
+      recovery-artifact-pattern:
+        description: "Artifact glob to download from the recovery source run"
+        required: false
+        type: string
+        default: ""
       allow-unscored-results:
         description: "Allow complete result sets containing explicit unscored infrastructure errors"
         required: false
@@ -62,6 +72,7 @@ jobs:
       name: ado-read
       deployment: false
     permissions:
+      actions: read
       contents: write
       id-token: write
     runs-on: ubuntu-latest
@@ -78,6 +89,17 @@ jobs:
         with:
           path: ${{ inputs.results-dir }}/
           pattern: ${{ inputs.artifact-pattern }}
+          merge-multiple: true
+
+      - name: Download recovery evaluation results
+        if: inputs.recovery-artifact-run-id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.recovery-artifact-run-id }}
+          path: ${{ inputs.results-dir }}/${{ github.run_id }}/recovered/
+          pattern: ${{ inputs.recovery-artifact-pattern }}
           merge-multiple: true
 
       - name: Summarize evaluation results

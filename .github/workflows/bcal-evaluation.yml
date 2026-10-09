@@ -21,6 +21,21 @@ on:
         required: false
         default: true
         type: boolean
+      recovery-source-run-id:
+        description: "Prior workflow run ID whose artifacts should be combined with one recovered entry"
+        required: false
+        default: ""
+        type: string
+      recovery-source-run-attempt:
+        description: "Prior workflow run attempt containing the reusable artifacts"
+        required: false
+        default: ""
+        type: string
+      recovery-entry:
+        description: "Single NL2AL entry to rerun while reusing artifacts from the prior attempt"
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "0 3 * * 0"
 
@@ -37,13 +52,56 @@ jobs:
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
-      test-run: ${{ inputs.test-run || false }}
+      test-run: ${{ inputs.recovery-entry == '' && inputs.test-run }}
       category: nl2al
+
+  select-entries:
+    runs-on: ubuntu-latest
+    needs: get-entries
+    outputs:
+      entries: ${{ steps.select.outputs.entries }}
+    steps:
+      - name: Select entries for evaluation
+        id: select
+        env:
+          ALL_ENTRIES: ${{ needs.get-entries.outputs.entries }}
+          RECOVERY_SOURCE_RUN_ID: ${{ inputs.recovery-source-run-id }}
+          RECOVERY_SOURCE_RUN_ATTEMPT: ${{ inputs.recovery-source-run-attempt }}
+          RECOVERY_ENTRY: ${{ inputs.recovery-entry }}
+          TEST_RUN: ${{ inputs.test-run }}
+        run: |
+          if [[ -z "$RECOVERY_SOURCE_RUN_ID" && -z "$RECOVERY_SOURCE_RUN_ATTEMPT" && -z "$RECOVERY_ENTRY" ]]; then
+            echo "entries=$ALL_ENTRIES" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -z "$RECOVERY_SOURCE_RUN_ID" || -z "$RECOVERY_SOURCE_RUN_ATTEMPT" || -z "$RECOVERY_ENTRY" ]]; then
+            echo "::error::recovery-source-run-id, recovery-source-run-attempt, and recovery-entry must be provided together."
+            exit 1
+          fi
+          if [[ "$TEST_RUN" == "true" ]]; then
+            echo "::error::Recovery runs must set test-run to false so the complete result is scored and uploaded."
+            exit 1
+          fi
+          if ! [[ "$RECOVERY_SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::recovery-source-run-id must be a positive integer."
+            exit 1
+          fi
+          if ! [[ "$RECOVERY_SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::recovery-source-run-attempt must be a positive integer."
+            exit 1
+          fi
+          if ! jq -e --arg entry "$RECOVERY_ENTRY" 'index($entry) != null' <<< "$ALL_ENTRIES" > /dev/null; then
+            echo "::error::Recovery entry '$RECOVERY_ENTRY' is not in the full NL2AL dataset."
+            exit 1
+          fi
+
+          echo "entries=$(jq -cn --arg entry "$RECOVERY_ENTRY" '[$entry]')" >> "$GITHUB_OUTPUT"
 
   prepare-bccontainerhelper:
     runs-on: windows-latest
-    needs: get-entries
-    if: needs.get-entries.outputs.entries != '[]'
+    needs: select-entries
+    if: needs.select-entries.outputs.entries != '[]'
     steps:
       - name: Cache pinned BcContainerHelper
         id: cache-bccontainerhelper
@@ -77,10 +135,10 @@ jobs:
 
   evaluate-with-bcal:
     runs-on: windows-latest
-    needs: [get-entries, prepare-bccontainerhelper]
+    needs: [select-entries, prepare-bccontainerhelper]
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    if: needs.get-entries.outputs.entries != '[]'
+    if: needs.select-entries.outputs.entries != '[]'
     environment:
       name: ado-read
       deployment: false
@@ -92,7 +150,7 @@ jobs:
       fail-fast: false
       max-parallel: 32
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        entry: ${{ fromJson(needs.select-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -248,10 +306,11 @@ jobs:
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: [get-entries, evaluate-with-bcal]
-    if: ${{ always() && !cancelled() && needs.get-entries.result == 'success' && needs.get-entries.outputs.entry-count != '0' }}
+    needs: [get-entries, select-entries, evaluate-with-bcal]
+    if: ${{ always() && !cancelled() && needs.get-entries.result == 'success' && needs.select-entries.result == 'success' && needs.get-entries.outputs.entry-count != '0' }}
     uses: $/.github/workflows/summarize-results.yml
     permissions:
+      actions: read
       contents: write
       id-token: write
     with:
@@ -263,5 +322,7 @@ jobs:
       skip-leaderboard: true
       expected-total: ${{ fromJSON(needs.get-entries.outputs.entry-count) }}
       artifact-pattern: evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-*
+      recovery-artifact-run-id: ${{ inputs.recovery-source-run-id }}
+      recovery-artifact-pattern: ${{ inputs.recovery-source-run-id != '' && format('evaluation-results-{0}-{1}-*', inputs.recovery-source-run-id, inputs.recovery-source-run-attempt) || '' }}
       allow-unscored-results: true
     secrets: inherit
