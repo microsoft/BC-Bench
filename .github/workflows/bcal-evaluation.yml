@@ -12,7 +12,6 @@ on:
         default: "gpt-55-chat-2026-04-29"
         type: choice
         options:
-          - "claude-opus-4-8"
           - "gpt-56-reasoning-nano-luna"
           - "gpt-56-reasoning-sol"
           - "gpt-55-chat-2026-04-29"

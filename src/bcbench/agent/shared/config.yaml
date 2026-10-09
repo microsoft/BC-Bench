@@ -2,7 +2,7 @@ judges:
   code-review:
     model: "gpt-5.3-codex"
   lm-checklist:
-    model: "gpt-56-reasoning-nano-luna"
+    model: "gpt-56-ceres"
 
 prompt:
   include_project_paths: false
