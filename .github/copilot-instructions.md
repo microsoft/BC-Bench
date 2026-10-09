@@ -34,7 +34,7 @@ BC-Bench is category-based and designed to grow over time. It currently has two 
 
 Preserve one-way dependency flow from orchestration toward lower-level abstractions. Keep domain and result models independent of runtime code. CLI commands are composition roots: they select concrete agents and inject them into evaluation pipelines through `AgentRunner`; pipelines must not select agent implementations.
 
-`bcbench.types` is the central category registry. Extend `EvaluationCategory` for category-owned mappings such as datasets, pipelines, results, and scoring behavior instead of duplicating those decisions elsewhere. Keep imports following the existing direction and avoid circular dependencies.
+Each evaluation category owns a package under `bcbench.categories` (a typed `CategoryDefinition` plus its category-specific code); code shared by several categories stays in the common modules. The CLI selects categories with `category_definition()`; runtime code receives what it needs explicitly instead of looking it up on `EvaluationCategory`. Keep imports following the existing direction and avoid circular dependencies.
 
 Logging setup lives in bcbench-core (`bcbench_core.logs.setup_logging`) so applications reuse it rather than copy it; the CLI calls it once, and modules only use `logging.getLogger(__name__)`.
 

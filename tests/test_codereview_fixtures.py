@@ -5,6 +5,8 @@ import pytest
 from bcbench_core.git import apply_patch, init_repo
 from unidiff import PatchSet
 
+from bcbench.categories import category_definition
+from bcbench.config import get_config
 from bcbench.dataset.codereview import CodeReviewEntry, Severity
 from bcbench.types import EvaluationCategory
 
@@ -21,7 +23,7 @@ def _unique_object(pairs):
 
 @pytest.fixture(scope="module")
 def materialized_entries(tmp_path_factory):
-    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    dataset = category_definition(EvaluationCategory.CODE_REVIEW).dataset_path(get_config().paths.dataset_dir)
     entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
     raw_entries = {json.loads(line)["instance_id"]: line for line in dataset.read_text(encoding="utf-8").splitlines() if line.strip()}
     materialized = {}

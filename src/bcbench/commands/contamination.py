@@ -10,6 +10,7 @@ from typing import Annotated
 import typer
 from bcbench_core.filesystem import prepare_run_dir
 
+from bcbench.categories.bug_fix.definition import DEFINITION as BUG_FIX
 from bcbench.cli_options import CopilotModel, EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import FilePathIdentificationResult
@@ -35,7 +36,7 @@ def filepath_identification(
     if category is not EvaluationCategory.BUG_FIX:
         raise typer.BadParameter("filepath-identification currently supports only bug-fix category", param_hint="--category")
 
-    entry: BugFixEntry = BugFixEntry.load(category.dataset_path, entry_id=entry_id)[0]
+    entry: BugFixEntry = BUG_FIX.load_entries(_config.paths.dataset_dir, entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
     run_filepath_identification(entry=entry, model=model, result_dir=run_dir)
 

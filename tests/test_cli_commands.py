@@ -12,6 +12,8 @@ from bcbench_core.agent.metrics import AgentMetrics
 from typer.main import get_command
 from typer.testing import CliRunner
 
+from bcbench import cli_options
+from bcbench.categories.definition import CategoryDefinition
 from bcbench.cli import _redteam_extra_installed, app
 from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtime
 from bcbench.commands import evaluate as evaluate_commands
@@ -128,8 +130,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             captured["context"] = context
 
     with (
-        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
-        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
+        patch.object(evaluate_commands, "category_definition", return_value=SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id))),
         patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
     ):
         evaluate_commands.evaluate_bcal(
@@ -177,12 +178,13 @@ def agent_command_category(tmp_path):
         def execute(self, context, agent_runner):
             agent_runner(context)
 
-    return entry, SimpleNamespace(
-        dataset_path=tmp_path / "dataset.jsonl",
-        entry_class=EntryClass,
-        pipeline=Pipeline(),
-        requires_container=False,
-    )
+    definition = SimpleNamespace(load_entries=lambda _dir, entry_id: EntryClass.load(None, entry_id), requires_container=False, pass_bc_credentials=True)
+    with (
+        patch.object(run_commands, "category_definition", return_value=definition),
+        patch.object(evaluate_commands, "category_definition", return_value=definition),
+        patch.object(cli_options, "category_definition", return_value=definition),
+    ):
+        yield entry, SimpleNamespace(pipeline=Pipeline())
 
 
 @pytest.mark.parametrize(
@@ -290,7 +292,7 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
 
     with (
         patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+        patch.object(CategoryDefinition, "dataset_path", return_value=dataset_path),
         patch.object(evaluate_commands, "get_copilot_version", side_effect=AssertionError("Must use artifact version")),
         patch.object(evaluate_commands, "get_claude_version", side_effect=AssertionError("Must use artifact version")),
         patch.object(evaluate_commands, "get_pr_review_version", side_effect=AssertionError("Must use artifact version")),
@@ -330,7 +332,7 @@ def test_result_summarize_verifies_summary_calculations(sample_results_directory
 
     with (
         patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+        patch.object(CategoryDefinition, "dataset_path", return_value=dataset_path),
     ):
         result = runner.invoke(
             app,
@@ -412,7 +414,7 @@ def test_result_summarize_with_custom_pattern(sample_results_directory, problem_
 
     with (
         patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+        patch.object(CategoryDefinition, "dataset_path", return_value=dataset_path),
     ):
         result = runner.invoke(
             app,
@@ -435,7 +437,7 @@ def test_result_summarize_with_custom_pattern(sample_results_directory, problem_
 
 @pytest.mark.integration
 def test_dataset_list_displays_all_entries(sample_dataset_file_for_cli):
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file_for_cli):
+    with patch.object(CategoryDefinition, "dataset_path", return_value=sample_dataset_file_for_cli):
         result = runner.invoke(
             app,
             [
@@ -453,7 +455,7 @@ def test_dataset_list_displays_all_entries(sample_dataset_file_for_cli):
 
 @pytest.mark.integration
 def test_dataset_bc_version_returns_entry_version(sample_dataset_file_for_cli):
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file_for_cli):
+    with patch.object(CategoryDefinition, "dataset_path", return_value=sample_dataset_file_for_cli):
         result = runner.invoke(
             app,
             [
@@ -474,7 +476,7 @@ def test_dataset_bc_version_returns_entry_version(sample_dataset_file_for_cli):
 def test_dataset_list_missing_file_fails_gracefully(tmp_path):
     nonexistent_path = tmp_path / "nonexistent.jsonl"
 
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=nonexistent_path):
+    with patch.object(CategoryDefinition, "dataset_path", return_value=nonexistent_path):
         result = runner.invoke(
             app,
             [
@@ -491,7 +493,7 @@ def test_dataset_list_empty_file_shows_zero_entries(tmp_path):
     empty_dataset = tmp_path / "empty.jsonl"
     empty_dataset.write_text("")
 
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=empty_dataset):
+    with patch.object(CategoryDefinition, "dataset_path", return_value=empty_dataset):
         result = runner.invoke(
             app,
             [
@@ -509,7 +511,7 @@ def test_dataset_list_single_entry(tmp_path):
     entry = create_dataset_entry(instance_id="microsoftInternal__NAV-100")
     dataset_path = create_dataset_file(tmp_path, [entry])
 
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path):
+    with patch.object(CategoryDefinition, "dataset_path", return_value=dataset_path):
         result = runner.invoke(
             app,
             [
@@ -525,7 +527,7 @@ def test_dataset_list_single_entry(tmp_path):
 
 @pytest.mark.integration
 def test_dataset_list_verifies_entry_format(sample_dataset_file_for_cli):
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file_for_cli):
+    with patch.object(CategoryDefinition, "dataset_path", return_value=sample_dataset_file_for_cli):
         result = runner.invoke(
             app,
             [

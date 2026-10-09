@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 from bcbench_core.exceptions import AgentError
 
+from bcbench.categories import category_definition
 from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
@@ -919,7 +920,7 @@ class TestCodeReviewPipeline:
         assert pipeline is not None
 
     def test_entry_class_is_codereview(self):
-        assert EvaluationCategory.CODE_REVIEW.entry_class == CodeReviewEntry
+        assert category_definition(EvaluationCategory.CODE_REVIEW).entry_type is CodeReviewEntry
 
     def test_context_does_not_require_container(self, tmp_path):
         entry = create_codereview_entry()

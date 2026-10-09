@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from bcbench.categories import category_definition
 from bcbench.cli_options import EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import INSTANCE_ID_PATTERN
@@ -73,7 +74,7 @@ def result_summarize(
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
+    write_bceval_results(results, run_dir, run_id, bceval_output, category_definition(category).load_entries(_config.paths.dataset_dir), git_ref=git_ref)
 
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
 

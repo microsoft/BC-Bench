@@ -1,5 +1,6 @@
 from typer.testing import CliRunner
 
+from bcbench.categories import category_definition
 from bcbench.cli import app
 from bcbench.types import EvaluationCategory
 
@@ -67,8 +68,8 @@ def test_bceval_config_supports_every_category(tmp_path, monkeypatch):
         assert result.exit_code == 0, f"{category}: {result.stdout}"
 
         contents = output_file.read_text(encoding="utf-8")
-        assert f"evaluators={','.join(category.evaluators)}" in contents
-        assert f"core_score={category.core_score}" in contents
+        assert f"evaluators={','.join(category_definition(category).evaluators)}" in contents
+        assert f"core_score={category_definition(category).core_score}" in contents
 
 
 def test_list_prints_every_category_one_per_line():
@@ -90,9 +91,9 @@ def test_runtime_config_supports_every_category(tmp_path, monkeypatch):
         assert result.exit_code == 0, f"{category}: {result.stdout}"
 
         contents = output_file.read_text(encoding="utf-8")
-        assert f"runner={category.runner}" in contents
-        assert f"requires-container={str(category.requires_container).lower()}" in contents
-        assert f"requires-repo={str(category.requires_repo).lower()}" in contents
+        assert f"runner={category_definition(category).runner}" in contents
+        assert f"requires-container={str(category_definition(category).requires_container).lower()}" in contents
+        assert f"requires-repo={str(category_definition(category).requires_repo).lower()}" in contents
 
 
 def test_runtime_config_marks_code_review_as_containerless_on_hosted_runner(tmp_path, monkeypatch):
