@@ -18,6 +18,7 @@ from bcbench.results import (
     create_github_job_summary,
     write_bceval_results,
 )
+from bcbench.types import NL2ALDataset
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ def result_summarize(
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
     git_ref: Annotated[str | None, typer.Option("--git-ref", help="Git ref (branch/tag) the run was dispatched from; recorded in bceval metadata as git_branch")] = None,
+    dataset: Annotated[NL2ALDataset | None, typer.Option(help="Expected NL2AL dataset panel; verifies raw result identity")] = None,
 ) -> None:
     """
     Summarize evaluation results from a completed run.
@@ -71,7 +73,7 @@ def result_summarize(
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
+    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref, dataset=dataset)
 
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
 

@@ -10,7 +10,7 @@ from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
-from bcbench.types import EvaluationCategory
+from bcbench.types import EvaluationCategory, NL2ALDataset
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +23,11 @@ def list_entries(
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
+    dataset: Annotated[NL2ALDataset | None, typer.Option(help="NL2AL dataset panel: gold, challenge, or multiturn")] = None,
 ) -> None:
     """List dataset entry IDs."""
     entry_cls = category.entry_class
-    resolved_path = category.dataset_path
+    resolved_path = category.dataset_path_for(dataset)
 
     if modified_only:
         import subprocess
@@ -67,13 +68,14 @@ def view_entry(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to view")],
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     show_patch: Annotated[bool, typer.Option(help="Show patch in output")] = False,
+    dataset: Annotated[NL2ALDataset | None, typer.Option(help="NL2AL dataset panel")] = None,
 ) -> None:
     """View a specific dataset entry with rich formatting."""
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
 
-    entry: BaseDatasetEntry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry: BaseDatasetEntry = category.entry_class.load(category.dataset_path_for(dataset), entry_id=entry_id)[0]
     console = Console()
 
     info_table = Table(show_header=False, box=None)
@@ -174,12 +176,14 @@ def version(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to resolve the BC version for")],
     category: EvaluationCategoryOption,
     github_output: Annotated[str | None, typer.Option(help="Write the version to GITHUB_OUTPUT with this key name")] = None,
+    dataset: Annotated[NL2ALDataset | None, typer.Option(help="NL2AL dataset panel")] = None,
 ) -> None:
     """Print an entry's environment_setup_version (the BC sandbox version)."""
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    dataset_path = category.dataset_path_for(dataset)
+    entry = category.entry_class.load(dataset_path, entry_id=entry_id)[0]
     print(entry.environment_setup_version)
     if github_output:
-        write_step_outputs({github_output: entry.environment_setup_version})
+        write_step_outputs({github_output: entry.environment_setup_version, "dataset-path": str(dataset_path)})
 
 
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:

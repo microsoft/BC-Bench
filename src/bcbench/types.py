@@ -37,6 +37,7 @@ __all__ = [
     "HttpMcpServer",
     "JudgeCalibrationReport",
     "McpServerConfig",
+    "NL2ALDataset",
     "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
@@ -275,6 +276,16 @@ class AgentHarness(StrEnum):
                 raise ValueError(f"{self.value} does not support repository setup")
 
 
+class NL2ALDataset(StrEnum):
+    GOLD = "gold"
+    CHALLENGE = "challenge"
+    MULTITURN = "multiturn"
+
+    @property
+    def version(self) -> str:
+        return "2026-10-09.candidate-v2"
+
+
 class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
@@ -287,6 +298,20 @@ class EvaluationCategory(StrEnum):
     EXT_REQUEST_IMPLEMENT = "extensibility-request-implement"
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
+
+    def dataset_path_for(self, dataset: NL2ALDataset | None = None) -> Path:
+        if dataset is None:
+            return self.dataset_path
+        if self is not EvaluationCategory.NL2AL:
+            raise ValueError("The dataset panel option is only supported for the nl2al category")
+        match dataset:
+            case NL2ALDataset.GOLD:
+                return self.dataset_path
+            case NL2ALDataset.CHALLENGE:
+                return self.dataset_path.with_name("nl2al_challenge.jsonl")
+            case NL2ALDataset.MULTITURN:
+                return self.dataset_path.with_name("nl2al_multiturn.jsonl")
+        raise ValueError(f"Unknown NL2AL dataset: {dataset}")
 
     @property
     def dataset_path(self) -> Path:
@@ -703,6 +728,9 @@ class EvaluationContext[E: BaseDatasetEntry]:
     container: ContainerConfig | None = None
 
     agent_version: str | None = None
+    dataset: NL2ALDataset | None = None
+    dataset_version: str | None = None
+    dataset_sha256: str | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

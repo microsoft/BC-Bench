@@ -1,4 +1,5 @@
 name: Evaluation with bcal
+run-name: BCal ${{ inputs.dataset || 'gold' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -6,6 +7,28 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      dataset:
+        description: "NL2AL dataset to evaluate"
+        required: false
+        default: gold
+        type: choice
+        options:
+          - gold
+          - challenge
+          - multiturn
+      bcal-version-mode:
+        description: "Install the latest prerelease or pin an exact BCal NuGet version"
+        required: false
+        default: latest-prerelease
+        type: choice
+        options:
+          - latest-prerelease
+          - pinned
+      bcal-version:
+        description: "Exact BCal NuGet version for pinned mode; leave empty for latest-prerelease"
+        required: false
+        default: ""
+        type: string
       external-model:
         description: "Model alias to use through the bc-eval M365 LLM API client"
         required: false
@@ -25,11 +48,14 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
+  NL2AL_DATASET: ${{ inputs.dataset || 'gold' }}
+  BCAL_VERSION_MODE: ${{ inputs.bcal-version-mode || 'latest-prerelease' }}
+  BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
 
 jobs:
   get-entries:
@@ -37,12 +63,15 @@ jobs:
     with:
       test-run: ${{ inputs.test-run || false }}
       category: nl2al
+      dataset: ${{ inputs.dataset || 'gold' }}
 
   evaluate-with-bcal:
     runs-on: windows-latest
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
+    env:
+      INSTANCE_ID: ${{ matrix.entry }}
     if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
@@ -63,53 +92,16 @@ jobs:
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
 
-      - name: Azure Login (OIDC) for ADO feed
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+      - name: Install bcal CLI from internal feed
+        id: install-bcal
+        uses: $/.github/actions/install-bcal
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
-      - name: Install Azure Artifacts credential provider
-        shell: pwsh
-        run: |
-          dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool
-
-          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
-
-      - name: Install bcal CLI from internal feed
-        shell: pwsh
-        env:
-          BCAL_PACKAGE_ID: ${{ secrets.BCAL_PACKAGE_ID }}
-          BCAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
-        run: |
-          # Let native non-zero exits set $LASTEXITCODE instead of throwing, so the retry loop can see them.
-          $PSNativeCommandUseErrorActionPreference = $false
-
-          $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
-          Write-Output "::add-mask::$adoToken"
-
-          $endpoints = @{
-            endpointCredentials = @(
-              @{
-                endpoint = $env:BCAL_FEED_URL
-                username = "anything"
-                password = $adoToken
-              }
-            )
-          } | ConvertTo-Json -Compress -Depth 5
-          $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
-
-          # The ADO Artifacts NuGet credential provider intermittently fails to start ("Unable to load
-          # the service index for source"), which otherwise fails the entire matrix job and skips the
-          # results upload. Retry the transient feed error a couple of times before giving up.
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
-            if ($LASTEXITCODE -eq 0) { break }
-            if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
-            Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
-            Start-Sleep -Seconds 20
-          }
+          package-id: ${{ secrets.BCAL_PACKAGE_ID }}
+          feed-url: ${{ secrets.BCAL_FEED_URL }}
+          version-mode: ${{ env.BCAL_VERSION_MODE }}
+          version: ${{ env.BCAL_REQUESTED_VERSION }}
 
       - name: Build bc-eval LLM API bridge venv
         shell: pwsh
@@ -133,7 +125,8 @@ jobs:
 
       - name: Resolve BC version for cache key
         id: bcversion
-        run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --github-output version
+        shell: pwsh
+        run: uv run bcbench dataset version "$env:INSTANCE_ID" --category nl2al --dataset "$env:NL2AL_DATASET" --github-output version
 
       # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
@@ -146,9 +139,14 @@ jobs:
       - name: Download BC Application symbols
         if: steps.bccache.outputs.cache-hit != 'true'
         shell: pwsh
+        env:
+          DATASET_PATH: ${{ steps.bcversion.outputs.dataset-path }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:DATASET_PATH)) {
+            throw "bcbench dataset version did not return a dataset-path."
+          }
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
-          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
+          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "$env:INSTANCE_ID" -DatasetPath "$env:DATASET_PATH"
 
       - name: Azure Login (OIDC) for LLM API certificate Key Vault
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
@@ -176,37 +174,55 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
+          BCAL_PACKAGE_VERSION: ${{ steps.install-bcal.outputs.version }}
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
         shell: pwsh
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:BCAL_PACKAGE_VERSION)) {
+            throw "The installed BCal package version was not reported."
+          }
           $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
           if (-not (Test-Path $env:LLM_API_CERTIFICATE_FILE)) {
             throw "Expected LLM API client cert at $env:LLM_API_CERTIFICATE_FILE but it was not fetched from Key Vault."
           }
           $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-llm-api-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py"
 
-          uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          uv run bcbench evaluate bcal "$env:INSTANCE_ID" --dataset "$env:NL2AL_DATASET" --output-dir "$env:EVALUATION_RESULTS_DIR"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+          path: |
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+            !${{ env.EVALUATION_RESULTS_DIR }}/**/bcal-scenario/**
+          if-no-files-found: error
+          retention-days: ${{ inputs.test-run && 1 || 30 }}
+
+      - name: Upload BCal scenario execution metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ always() && !cancelled() }}
+        with:
+          name: bcal-scenario-${{ github.run_id }}-${{ matrix.entry }}
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/bcal-scenario/**
+          if-no-files-found: ignore
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: evaluate-with-bcal
+    needs: [get-entries, evaluate-with-bcal]
+    if: ${{ always() && !cancelled() && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' }}
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write
     with:
-      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
+      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir || 'evaluation_results' }}
       model: ${{ inputs.external-model || 'gpt-55-chat' }}
       agent: BCal-external-command
       mock: ${{ inputs.test-run || false }}
       category: nl2al
+      dataset: ${{ inputs.dataset || 'gold' }}
       skip-leaderboard: true
     secrets: inherit

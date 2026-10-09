@@ -20,6 +20,11 @@ on:
         required: true
         type: string
         default: "bug-fix"
+      dataset:
+        description: Optional NL2AL dataset selector (gold, challenge, or multiturn)
+        required: false
+        type: string
+        default: ""
     outputs:
       entries:
         description: JSON array of dataset entries
@@ -37,6 +42,9 @@ on:
 jobs:
   get-entries:
     runs-on: ubuntu-latest
+    env:
+      EVALUATION_CATEGORY: ${{ inputs.category }}
+      NL2AL_DATASET: ${{ inputs.dataset }}
     outputs:
       entries: ${{ steps.get-entries.outputs.entries }}
       runner: ${{ steps.runtime-config.outputs.runner }}
@@ -53,17 +61,25 @@ jobs:
 
       - name: Get runtime config for matrix
         id: runtime-config
-        run: uv run bcbench category runtime-config --category ${{ inputs.category }}
+        run: uv run bcbench category runtime-config --category "$EVALUATION_CATEGORY"
 
       - name: Get entries for matrix
         id: get-entries
+        shell: bash
+        env:
+          MODIFIED_ONLY: ${{ inputs.modified-only }}
+          TEST_RUN: ${{ inputs.test-run }}
         run: |
-          cmd="uv run bcbench dataset list --category ${{ inputs.category }} --github-output entries"
+          cmd=(uv run bcbench dataset list --category "$EVALUATION_CATEGORY" --github-output entries)
 
-          if [[ "${{ inputs.modified-only }}" == "true" ]]; then
-            cmd="$cmd --modified-only"
-          elif [[ "${{ inputs.test-run }}" == "true" ]]; then
-            cmd="$cmd --test-run"
+          if [[ -n "$NL2AL_DATASET" ]]; then
+            cmd+=(--dataset "$NL2AL_DATASET")
           fi
 
-          eval "$cmd"
+          if [[ "$MODIFIED_ONLY" == "true" ]]; then
+            cmd+=(--modified-only)
+          elif [[ "$TEST_RUN" == "true" ]]; then
+            cmd+=(--test-run)
+          fi
+
+          "${cmd[@]}"

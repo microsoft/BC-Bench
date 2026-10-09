@@ -13,6 +13,7 @@ This doc is a map; the source files and their comments are the source of truth. 
 Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py). It is the category registry. Each enum value maps to the pieces the rest of the CLI and workflows consume:
 
 - `dataset_path` — the dataset file for raw tasks.
+- `dataset_path_for` — selects an optional NL2AL panel (`gold`, `challenge`, `multiturn`); other categories retain their default dataset. See [BCAL dataset panels](docs/bcal-datasets.md).
 - `entry_class` — the typed Python model for one dataset row (aka one task).
 - `result_class` — the recorded outcome for one evaluated task.
 - `summary_class` / `aggregate_class` — the aggregate views used by result summaries and leaderboards.

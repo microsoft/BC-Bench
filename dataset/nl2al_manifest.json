@@ -1,0 +1,31 @@
+{
+  "version": "2026-10-09.candidate-v2",
+  "source_canonical_sha256": "0ede70dad4fd466d180f252d758411cd378d78d6495d321801123c41dc5a1041",
+  "status": "candidate_not_execution_calibrated",
+  "panels": {
+    "gold": {
+      "file": "nl2al.jsonl",
+      "count": 110,
+      "sha256": "b16c956333fad4a2c44c4ffa69dff93724dae56d70436a3a71dadc4971d5ca4c",
+      "evaluation_scope": "single_turn"
+    },
+    "challenge": {
+      "file": "nl2al_challenge.jsonl",
+      "count": 65,
+      "sha256": "8563f49db15fa3fc90f466e677109944a83e5ddcbe99024ec5ff5588e47cdd36",
+      "evaluation_scope": "single_turn"
+    },
+    "multiturn": {
+      "file": "nl2al_multiturn.jsonl",
+      "count": 7,
+      "sha256": "1ce4292d7764e052ac41560656630f56eb190f2389ff336cbe03fe00536d1033",
+      "evaluation_scope": "final_artifact"
+    }
+  },
+  "deferred_multiturn": {
+    "file": "nl2al_multiturn_pending.jsonl",
+    "count": 7,
+    "sha256": "6c9a2e0d5e0d008146ef03d97fc720e2772f91b072538b2eadf8d5cb52fb5fcd",
+    "reason": "Requires explicit active-page context and/or ask_user interaction mappings; not selected by the current runner."
+  }
+}

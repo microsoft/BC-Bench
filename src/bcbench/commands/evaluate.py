@@ -1,5 +1,6 @@
 import logging
 import random
+from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, cast, override
 
@@ -7,6 +8,8 @@ import typer
 from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent.bcal.scenario import BCalScenarioError
+from bcbench.agent.bcal.version import get_bcal_version
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -28,8 +31,9 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
+from bcbench.exceptions import AgentError
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration, NL2ALDataset
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -238,6 +242,8 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel")] = NL2ALDataset.GOLD,
+    bcal_version: Annotated[str | None, typer.Option(envvar="BCAL_PACKAGE_VERSION", help="Expected installed BCAL NuGet version; verified against dotnet tool list")] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -245,7 +251,10 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    dataset_path = category.dataset_path_for(dataset)
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
+    if bool(entry.turns) != (dataset is NL2ALDataset.MULTITURN):
+        raise typer.BadParameter("Entry turn structure does not match the selected dataset")
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         command=llm_command,
@@ -256,22 +265,36 @@ def evaluate_bcal(
 
     context = EvaluationContext(
         entry=entry,
-        repo_path=repo_path,
+        repo_path=repo_path / entry.instance_id / "workspace",
         result_dir=run_dir,
         container=None,
-        model=llm_model or "external-command",
+        model=backend_config.model or "external-command",
         agent_name=AgentHarness.BCAL,
         category=category,
+        dataset=dataset,
+        dataset_version=dataset.version,
+        dataset_sha256=sha256(dataset_path.read_bytes()).hexdigest(),
     )
 
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_bcal_agent(
-            entry=cast(NL2ALEntry, ctx.entry),
-            repo_path=ctx.repo_path,
-            backend_config=backend_config,
-        ),
-    )
+    try:
+        context.agent_version = get_bcal_version(bcal_version)
+        category.pipeline.execute(
+            context,
+            lambda ctx: run_bcal_agent(
+                entry=cast(NL2ALEntry, ctx.entry),
+                repo_path=ctx.repo_path,
+                backend_config=backend_config,
+                result_dir=ctx.result_dir,
+            ),
+        )
+    except AgentError as exc:
+        if isinstance(exc, BCalScenarioError):
+            context.metrics = exc.metrics
+            context.experiment = exc.config
+        result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
+        category.pipeline.save_result(context, result)
+        logger.exception("BCal execution failed for %s", entry.instance_id)
+        raise typer.Exit(code=1) from exc
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
