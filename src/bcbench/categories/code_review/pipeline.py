@@ -32,6 +32,8 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     as local git changes so the agent can review the branch diff directly.
     """
 
+    result_type = CodeReviewResult
+
     @override
     def setup_workspace(self, entry: CodeReviewEntry, repo_path: Path) -> None:
         """Setup workspace for code review by applying the entry patch as local changes."""

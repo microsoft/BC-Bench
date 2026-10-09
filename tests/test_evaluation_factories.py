@@ -1,12 +1,12 @@
 import pytest
 from pydantic import ValidationError
 
+from bcbench.categories.results import aggregate_runs, summarize_results
 from bcbench.config import get_config
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResultSummary
-from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, LeaderboardAggregate
-from bcbench.results.summary import EvaluationResultSummary
+from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentHarness, EvaluationCategory
 from tests.conftest import create_codereview_result, create_dataset_entry, create_evaluation_context
@@ -102,8 +102,8 @@ class TestEvaluationResultFactories:
 
         lm_checklist_result = JudgeBasedEvaluationResult.create_raw(context, "output")
         code_review_result = create_codereview_result()
-        summary = EvaluationResultSummary.from_results([code_review_result], "run")
-        aggregate = LeaderboardAggregate.from_runs([summary])
+        summary = summarize_results([code_review_result], "run")
+        aggregate = aggregate_runs([summary])
         assert isinstance(summary, CodeReviewResultSummary)
         assert isinstance(aggregate, CodeReviewLeaderboardAggregate)
 

@@ -3,9 +3,9 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Self, cast, override
+from typing import Any, Self, override
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -104,11 +104,6 @@ class BaseEvaluationResult(BaseModel):
         """
         return {}
 
-    @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> "BaseEvaluationResult":
-        category = EvaluationCategory(payload["category"])
-        return category.result_class.model_validate(payload)
-
 
 class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     """Result for categories that involve building/compiling AL code and have binary pass/fail outcomes."""
@@ -147,26 +142,12 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
 
     judge_model: str
 
-    @model_validator(mode="before")
-    @classmethod
-    def restore_missing_timeout_judge_model(cls, payload: object) -> object:
-        if not isinstance(payload, dict):
-            return payload
-
-        payload = cast(dict[str, object], payload)
-        if payload.get("timeout") is not True or "judge_model" in payload:
-            return payload
-
-        category = EvaluationCategory(payload["category"])
-        if (judge_model := category.judge_model) is None:
-            return payload
-
-        return {**payload, "judge_model": judge_model}
-
     @classmethod
     @override
     def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
-        return {**super()._base_fields(context), "judge_model": context.category.judge_model}
+        if context.judge_model is None:
+            raise ValueError(f"{context.category.value} results need a judge model")
+        return {**super()._base_fields(context), "judge_model": context.judge_model}
 
     @property
     @override

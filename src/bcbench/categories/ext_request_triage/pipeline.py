@@ -29,6 +29,8 @@ TRIAGE_RESULT_FILE = "triage_result.json"
 class ExtRequestTriagePipeline(EvaluationPipeline[ExtRequestTriageEntry]):
     """Pipeline for the extensibility-request-triage category — no BC container, no build, no tests."""
 
+    result_type = JudgeBasedEvaluationResult
+
     @override
     def setup_workspace(self, entry: ExtRequestTriageEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)

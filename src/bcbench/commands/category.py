@@ -4,6 +4,7 @@ import typer
 
 from bcbench.categories import category_definition
 from bcbench.cli_options import EvaluationCategoryOption
+from bcbench.config import get_config
 from bcbench.github_actions import write_step_outputs
 from bcbench.types import EvaluationCategory
 
@@ -29,8 +30,8 @@ def bceval_config(category: EvaluationCategoryOption) -> None:
         "evaluators": ",".join(definition.evaluators),
         "core_score": definition.core_score,
     }
-    if ("lm_checklist" in definition.evaluators) and (category.judge_model is not None):
-        outputs["judge_model"] = category.judge_model
+    if ("lm_checklist" in definition.evaluators) and (judge_model := definition.judge_model(get_config().judge)) is not None:
+        outputs["judge_model"] = judge_model
     write_step_outputs(outputs)
 
 

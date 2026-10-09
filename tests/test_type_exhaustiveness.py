@@ -80,7 +80,7 @@ def test_all_categories_resolve_a_judge_model():
 
     judged_models = {get_config().judge.code_review_model, get_config().judge.lm_checklist_model}
     for category in EvaluationCategory:
-        judge_model = category.judge_model
+        judge_model = category_definition(category).judge_model(get_config().judge)
         assert judge_model is None or judge_model in judged_models
 
 
@@ -88,7 +88,7 @@ def test_all_categories_have_aggregate_classes():
     from bcbench.results.leaderboard import LeaderboardAggregate
 
     for category in EvaluationCategory:
-        aggregate_cls = category.aggregate_class
+        aggregate_cls = category_definition(category).aggregate_type
         assert issubclass(aggregate_cls, LeaderboardAggregate)
 
 

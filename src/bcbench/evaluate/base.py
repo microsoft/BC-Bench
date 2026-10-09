@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from bcbench_core.agent.metrics import AgentMetrics
 
@@ -28,6 +28,8 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     Subclasses implement category-specific setup, agent execution, and validation logic.
     The execute() method provides a template orchestrating the overall evaluation flow.
     """
+
+    result_type: ClassVar[type[BaseEvaluationResult]]
 
     @abstractmethod
     def setup_workspace(self, entry: E, repo_path: Path) -> None:
@@ -97,7 +99,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         except AgentTimeoutError as e:
             context.metrics = e.metrics
             context.experiment = e.config
-            result = context.category.result_class.create_agent_timeout_failure(context)
+            result = self.result_type.create_agent_timeout_failure(context)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
             return

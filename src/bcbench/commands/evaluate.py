@@ -92,6 +92,7 @@ def evaluate_copilot(
         agent_name=AgentHarness.COPILOT,
         agent_version=get_copilot_version(),
         category=category,
+        judge_model=definition.judge_model(_config.judge),
     )
 
     pipeline = definition.make_pipeline()
@@ -164,6 +165,7 @@ def evaluate_claude_code(
         agent_name=AgentHarness.CLAUDE,
         agent_version=get_claude_version(),
         category=category,
+        judge_model=definition.judge_model(_config.judge),
     )
 
     pipeline = definition.make_pipeline()
@@ -220,6 +222,7 @@ def evaluate_pr_review(
         agent_name=AgentHarness.PR_REVIEW,
         agent_version=get_pr_review_version(engine_path),
         category=category,
+        judge_model=definition.judge_model(_config.judge),
     )
 
     definition.make_pipeline().execute(
@@ -271,6 +274,7 @@ def evaluate_bcal(
         model=llm_model or "external-command",
         agent_name=AgentHarness.BCAL,
         category=category,
+        judge_model=definition.judge_model(_config.judge),
     )
 
     definition.make_pipeline().execute(
@@ -321,7 +325,8 @@ def evaluate_mock(
     """
     Evaluate mock agent on single dataset entry for testing purposes.
     """
-    entry = category_definition(category).load_entries(_config.paths.dataset_dir, entry_id)[0]
+    definition = category_definition(category)
+    entry = definition.load_entries(_config.paths.dataset_dir, entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mock agent")
@@ -333,6 +338,7 @@ def evaluate_mock(
         model="mock-model",
         agent_name=AgentHarness.MOCK,
         category=category,
+        judge_model=definition.judge_model(_config.judge),
     )
 
     pipeline = MockEvaluationPipeline()
@@ -343,6 +349,8 @@ def evaluate_mock(
 
 
 class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
+    result_type = BaseEvaluationResult
+
     """Mock pipeline for testing evaluation infrastructure.
 
     This pipeline simulates agent execution without requiring actual BC container setup.
