@@ -9,6 +9,7 @@ import typer
 
 from bcbench.cli_options import EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
+from bcbench.dataset.dataset_entry import INSTANCE_ID_PATTERN
 from bcbench.results import (
     BaseEvaluationResult,
     EvaluationResultSummary,
@@ -18,6 +19,7 @@ from bcbench.results import (
     create_github_job_summary,
     write_bceval_results,
 )
+from bcbench.results.base import RESULT_FILE_SUFFIX
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ def result_summarize(
     run_id: RunId,
     category: EvaluationCategoryOption,
     result_dir: OutputDir = _config.paths.evaluation_results_path,
-    result_pattern: Annotated[str, typer.Option(help="Pattern for the per instances result files")] = f"*{_config.file_patterns.result_pattern}",
+    result_pattern: Annotated[str, typer.Option(help="Pattern for the per instances result files")] = f"*{RESULT_FILE_SUFFIX}",
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
     git_ref: Annotated[str | None, typer.Option("--git-ref", help="Git ref (branch/tag) the run was dispatched from; recorded in bceval metadata as git_branch")] = None,
@@ -54,7 +56,7 @@ def result_summarize(
         raise typer.Exit(code=1)
 
     # Filter to only instance-specific result files (exclude combined results and summaries)
-    instance_pattern_regex = re.compile(_config.file_patterns.instance_pattern)
+    instance_pattern_regex = re.compile(INSTANCE_ID_PATTERN)
     result_files = [f for f in result_files if instance_pattern_regex.match(f.stem)]
 
     if not result_files:

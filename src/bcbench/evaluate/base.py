@@ -7,14 +7,13 @@ from typing import Protocol
 
 from bcbench_core.agent.metrics import AgentMetrics
 
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results import BaseEvaluationResult
+from bcbench.results.base import RESULT_FILE_SUFFIX
 from bcbench.types import EvaluationContext, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 __all__ = ["AgentRunner", "EvaluationPipeline"]
 
@@ -116,4 +115,4 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             result: BaseEvaluationResult to save
         """
 
-        result.save(context.result_dir, f"{context.entry.instance_id}{_config.file_patterns.result_pattern}")
+        result.save(context.result_dir, f"{context.entry.instance_id}{RESULT_FILE_SUFFIX}")

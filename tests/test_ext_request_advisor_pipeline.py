@@ -1,6 +1,5 @@
-from bcbench.config import get_config
 from bcbench.evaluate.ext_request_advisor import ADVISOR_RESULT_FILE, ExtRequestAdvisorPipeline
-from bcbench.results.base import JudgeBasedEvaluationResult
+from bcbench.results.base import RESULT_FILE_SUFFIX, JudgeBasedEvaluationResult
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_evaluation_context, create_ext_advisor_entry
 
@@ -14,7 +13,7 @@ def _advisor_context(tmp_path):
 
 
 def _read_result(context) -> JudgeBasedEvaluationResult:
-    result_file = context.result_dir / f"{context.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result_file = context.result_dir / f"{context.entry.instance_id}{RESULT_FILE_SUFFIX}"
     return JudgeBasedEvaluationResult.model_validate_json(result_file.read_text(encoding="utf-8").strip())
 
 

@@ -11,13 +11,11 @@ from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.types import ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 _BCAL_TOOL = "bcal"
 
@@ -121,6 +119,7 @@ def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
     backend_config: BCalBackendConfig,
+    timeout: int = 25 * 60,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     logger.info(f"Running bcal CLI on: {entry.instance_id}")
 
@@ -130,7 +129,7 @@ def run_bcal_agent(
     if not package_cache_path.exists():
         raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 
-    export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
+    export_folder = repo_path / project_name / "src"
     cmd_args = _bcal_cmd_args(entry, entry.get_task(), package_cache_path, export_folder, backend_config)
 
     logger.info(f"Export folder: {export_folder}")
@@ -142,7 +141,7 @@ def run_bcal_agent(
         start = time.monotonic()
         subprocess.run(
             cmd_args,
-            timeout=_config.timeout.bcal_execution,
+            timeout=timeout,
             check=True,
         )
         execution_time = time.monotonic() - start
@@ -150,8 +149,8 @@ def run_bcal_agent(
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
         return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
     except subprocess.TimeoutExpired:
-        logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
+        logger.exception(f"bcal CLI timed out after {timeout} seconds")
+        metrics = AgentMetrics(execution_time=timeout)
         raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"bcal CLI execution failed: {e.stderr}")
@@ -167,6 +166,7 @@ def run_bcal_prompt(
     package_cache_path: Path,
     export_folder: Path,
     backend_config: BCalBackendConfig,
+    timeout: int = 25 * 60,
 ) -> str:
     """Run bcal once for a raw prompt and return its output as text (used by red teaming).
 
@@ -184,7 +184,7 @@ def run_bcal_prompt(
     try:
         result = subprocess.run(
             cmd_args,
-            timeout=_config.timeout.bcal_execution,
+            timeout=timeout,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -194,10 +194,10 @@ def run_bcal_prompt(
         stdout = result.stdout or ""
     except subprocess.TimeoutExpired as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
-        message = f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds"
+        message = f"bcal CLI timed out after {timeout} seconds"
         if details:
             message = f"{message}\n{details}"
-        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
+        metrics = AgentMetrics(execution_time=timeout)
         raise AgentTimeoutError(message, metrics=metrics, config=ExperimentConfiguration()) from None
     except subprocess.CalledProcessError as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))

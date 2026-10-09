@@ -10,7 +10,6 @@ from pathlib import Path
 from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import (
     FilePathIdentificationResult,
     build_identification_prompt,
@@ -18,15 +17,15 @@ from bcbench.contamination.filepath_identification import (
     parse_prediction,
 )
 from bcbench.dataset import BugFixEntry
+from bcbench.results.base import RESULT_FILE_SUFFIX
 from bcbench.types import EvaluationCategory
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
-_RESULT_SUFFIX = f".filepath-identification{_config.file_patterns.result_pattern}"
+_RESULT_SUFFIX = f".filepath-identification{RESULT_FILE_SUFFIX}"
 
 
-def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path) -> FilePathIdentificationResult:
+def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path, timeout: int = 15 * 60) -> FilePathIdentificationResult:
     task = entry.get_task()
     prompt: str = build_identification_prompt(task, repo=entry.repo)
 
@@ -36,7 +35,7 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
             prompt=prompt,
             model=model,
             work_dir=Path(tmp),
-            timeout=_config.timeout.filepath_identification,
+            timeout=timeout,
             env=os.environ,
             options=CopilotOptions(allow_all_tools=False),
         )

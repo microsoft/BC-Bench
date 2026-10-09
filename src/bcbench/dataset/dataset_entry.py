@@ -4,7 +4,7 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Literal, Self, override
+from typing import Annotated, ClassVar, Literal, Self, override
 
 from bcbench_core.dataset import TestEntry
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -14,6 +14,8 @@ from bcbench.exceptions import EntryNotFoundError
 from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
 
 _config = get_config()
+
+INSTANCE_ID_PATTERN = r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$"
 
 __all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestGenEntry"]
 
@@ -33,7 +35,7 @@ class BaseDatasetEntry(BaseModel):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
+    instance_id: str = Field(pattern=INSTANCE_ID_PATTERN)
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
     project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = []
@@ -113,6 +115,10 @@ class RepoGroundedEntry(BaseDatasetEntry):
     Categories that scaffold their own workspace (e.g. nl2al) must not subclass this.
     """
 
+    PROBLEM_STATEMENT_FILE: ClassVar[str] = "README.md"
+    # The problem statement folder is copied here in the agent's workspace; task image links are rewritten to match
+    WORKSPACE_PROBLEM_DIR: ClassVar[str] = "problem"
+
     repo: RepoSlug = "microsoft/BCApps"
     base_commit: CommitSha
     patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
@@ -128,7 +134,7 @@ class RepoGroundedEntry(BaseDatasetEntry):
 
     @override
     def get_task(self) -> str:
-        readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
+        readme_path = self.problem_statement_dir / self.PROBLEM_STATEMENT_FILE
         return readme_path.read_text(encoding="utf-8")
 
 

@@ -2,13 +2,14 @@ import logging
 from pathlib import Path
 from shutil import copytree, rmtree
 
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.dataset_entry import RepoGroundedEntry
+from bcbench.paths import AGENT_SHARE_DIR
 from bcbench.types import AgentConfig, AgentHarness
 
 logger = logging.getLogger(__name__)
-_config = get_config()
+
+INSTRUCTION_SOURCE_FILE = "AGENTS.md"
 
 
 def setup_instructions_from_config(agent_config: AgentConfig, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
@@ -36,7 +37,7 @@ def setup_instructions_from_config(agent_config: AgentConfig, entry: BaseDataset
         copytree(source_instructions, target_dir)
 
         # Rename canonical instruction file to agent-specific name
-        canonical = target_dir / _config.file_patterns.instruction_source_naming
+        canonical = target_dir / INSTRUCTION_SOURCE_FILE
         expected = target_dir / harness.instruction_filename
         if canonical.exists() and canonical != expected:
             canonical.rename(expected)
@@ -71,7 +72,7 @@ def _get_source_instructions_path(profile: str) -> Path:
     Raises:
         FileNotFoundError: If instruction file doesn't exist
     """
-    instructions_path = _config.paths.agent_share_dir / _config.file_patterns.instructions_dirname / profile
+    instructions_path = AGENT_SHARE_DIR / "instructions" / profile
 
     if not instructions_path.exists():
         raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for profile: {profile}")
@@ -90,7 +91,7 @@ def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> 
         repo_path: Path to testbed repository where folder will be copied
     """
     source_dir: Path = entry.problem_statement_dir
-    dest_dir: Path = repo_path / _config.file_patterns.problem_statement_dest_dir
+    dest_dir: Path = repo_path / entry.WORKSPACE_PROBLEM_DIR
 
     if dest_dir.exists():
         rmtree(dest_dir)
