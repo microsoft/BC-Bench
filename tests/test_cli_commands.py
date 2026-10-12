@@ -131,6 +131,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
         patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
         patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        patch.object(evaluate_commands, "get_bcal_version", return_value="18.0.1.2-beta"),
     ):
         evaluate_commands.evaluate_bcal(
             entry_id=entry.instance_id,
@@ -142,6 +143,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
         )
 
     assert captured["context"].model == expected_model
+    assert captured["context"].agent_version == "18.0.1.2-beta"
 
 
 def _option_names(command: click.Command) -> set[str]:

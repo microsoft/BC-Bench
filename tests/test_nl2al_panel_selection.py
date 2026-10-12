@@ -117,7 +117,10 @@ def test_evaluate_bcal_persists_selected_panel_identity(tmp_path):
         def execute(self, context, _agent_runner):
             captured["context"] = context
 
-    with patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()):
+    with (
+        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        patch.object(evaluate_commands, "get_bcal_version", return_value="18.0.1.2-beta"),
+    ):
         evaluate_commands.evaluate_bcal(
             entry.instance_id,
             repo_path=tmp_path / "repo",
@@ -132,6 +135,7 @@ def test_evaluate_bcal_persists_selected_panel_identity(tmp_path):
     assert context.dataset is NL2ALDataset.CHALLENGE
     assert context.dataset_version == NL2ALDataset.CHALLENGE.version
     assert context.dataset_sha256 == sha256(path.read_bytes()).hexdigest()
+    assert context.agent_version == "18.0.1.2-beta"
 
 
 @pytest.mark.parametrize("factory", ["raw", "timeout", "failure"])

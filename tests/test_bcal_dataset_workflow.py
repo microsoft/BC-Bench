@@ -63,9 +63,8 @@ def test_bcal_resolves_symbols_and_evaluation_from_selected_panel():
 def test_bcal_keeps_existing_installation_and_single_turn_execution():
     workflow = _workflow_text("bcal-evaluation.yml")
 
-    assert "dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL" in workflow
-    assert ".github/actions/install-bcal" not in workflow
-    assert "bcal-version" not in workflow
+    assert ".github/actions/install-bcal" in workflow
+    assert "bcal-version-mode" in workflow
     assert "scenario" not in workflow.lower()
 
 
