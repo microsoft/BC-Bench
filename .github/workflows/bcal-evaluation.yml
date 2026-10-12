@@ -1,4 +1,5 @@
 name: Evaluation with bcal
+run-name: BCal ${{ inputs.dataset || 'gold' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -6,6 +7,14 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      dataset:
+        description: "NL2AL dataset to evaluate"
+        required: false
+        default: gold
+        type: choice
+        options:
+          - gold
+          - challenge
       external-model:
         description: "Model alias to use through the bc-eval M365 LLM API client"
         required: false
@@ -25,11 +34,12 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
+  NL2AL_DATASET: ${{ inputs.dataset || 'gold' }}
 
 jobs:
   get-entries:
@@ -37,12 +47,15 @@ jobs:
     with:
       test-run: ${{ inputs.test-run || false }}
       category: nl2al
+      dataset: ${{ inputs.dataset || 'gold' }}
 
   evaluate-with-bcal:
     runs-on: windows-latest
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
+    env:
+      INSTANCE_ID: ${{ matrix.entry }}
     if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
@@ -133,7 +146,8 @@ jobs:
 
       - name: Resolve BC version for cache key
         id: bcversion
-        run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --github-output version
+        shell: pwsh
+        run: uv run bcbench dataset version "$env:INSTANCE_ID" --category nl2al --dataset "$env:NL2AL_DATASET" --github-output version
 
       # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
@@ -146,9 +160,14 @@ jobs:
       - name: Download BC Application symbols
         if: steps.bccache.outputs.cache-hit != 'true'
         shell: pwsh
+        env:
+          DATASET_PATH: ${{ steps.bcversion.outputs.dataset-path }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:DATASET_PATH)) {
+            throw "bcbench dataset version did not return a dataset-path."
+          }
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
-          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
+          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "$env:INSTANCE_ID" -DatasetPath "$env:DATASET_PATH"
 
       - name: Azure Login (OIDC) for LLM API certificate Key Vault
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
@@ -186,7 +205,7 @@ jobs:
           }
           $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-llm-api-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py"
 
-          uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          uv run bcbench evaluate bcal "$env:INSTANCE_ID" --dataset "$env:NL2AL_DATASET" --output-dir "$env:EVALUATION_RESULTS_DIR"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -197,16 +216,19 @@ jobs:
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: evaluate-with-bcal
+    needs: [get-entries, evaluate-with-bcal]
+    if: ${{ always() && !cancelled() && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' }}
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write
     with:
-      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
+      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir || 'evaluation_results' }}
       model: ${{ inputs.external-model || 'gpt-55-chat' }}
       agent: BCal-external-command
       mock: ${{ inputs.test-run || false }}
       category: nl2al
+      dataset: ${{ inputs.dataset || 'gold' }}
       skip-leaderboard: true
+      expected-entries: ${{ needs.get-entries.outputs.entries }}
     secrets: inherit

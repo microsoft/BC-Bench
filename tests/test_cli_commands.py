@@ -114,6 +114,7 @@ def sample_results_directory(tmp_path, sample_dataset_file_for_cli):
 @pytest.mark.parametrize(("llm_model", "expected_model"), [("gpt-5.2-prod", "gpt-5.2-prod"), (None, "external-command")])
 def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     entry = create_nl2al_entry()
+    (tmp_path / "nl2al.jsonl").write_text(entry.model_dump_json() + "\n", encoding="utf-8")
     captured = {}
 
     class EntryClass:
