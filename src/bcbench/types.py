@@ -279,10 +279,19 @@ class AgentHarness(StrEnum):
 class NL2ALDataset(StrEnum):
     GOLD = "gold"
     CHALLENGE = "challenge"
+    MULTITURN = "multiturn"
 
     @property
     def version(self) -> str:
         return "2026-10-09.candidate-v2"
+
+    def validate_entry(self, entry: BaseDatasetEntry) -> None:
+        from bcbench.dataset import NL2ALEntry
+
+        if not isinstance(entry, NL2ALEntry):
+            raise TypeError(f"Selected NL2AL dataset returned {type(entry).__name__}")
+        if bool(entry.turns) != (self is NL2ALDataset.MULTITURN):
+            raise ValueError(f"Entry {entry.instance_id} turn structure does not match dataset {self.value}")
 
 
 class EvaluationCategory(StrEnum):
@@ -309,6 +318,8 @@ class EvaluationCategory(StrEnum):
                 return self.dataset_path
             case NL2ALDataset.CHALLENGE:
                 return self.dataset_path.with_name("nl2al_challenge.jsonl")
+            case NL2ALDataset.MULTITURN:
+                return self.dataset_path.with_name("nl2al_multiturn.jsonl")
 
         raise ValueError(f"Unknown NL2AL dataset: {dataset}")
 

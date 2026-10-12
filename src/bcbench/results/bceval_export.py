@@ -65,6 +65,8 @@ def write_bceval_results(
             dataset_path = category.dataset_path_for(panel)
             entry_cache[panel] = entry_cls.load(dataset_path)
             if panel is not None:
+                for dataset_entry in entry_cache[panel]:
+                    panel.validate_entry(dataset_entry)
                 hash_cache[panel] = sha256(dataset_path.read_bytes()).hexdigest()
 
         if panel is not None:
@@ -85,16 +87,20 @@ def write_bceval_results(
         dataset_metadata: dict[str, Any] = {}
         tags: list[str] = []
         if panel is not None:
+            panel.validate_entry(matched_entry)
             if not isinstance(matched_entry, NL2ALEntry):
                 raise TypeError(f"Selected NL2AL dataset returned {type(matched_entry).__name__}")
+
+            dataset_mode = "multiturn" if matched_entry.turns else "single_turn"
+            evaluation_scope = "final_artifact" if matched_entry.turns else "single_turn"
 
             dataset_metadata = {
                 "dataset": panel.value,
                 "dataset_version": result.dataset_version,
                 "dataset_sha256": hash_cache[panel],
-                "dataset_mode": "single_turn",
-                "dataset_turn_count": 1,
-                "evaluation_scope": "single_turn",
+                "dataset_mode": dataset_mode,
+                "dataset_turn_count": len(matched_entry.turns) or 1,
+                "evaluation_scope": evaluation_scope,
                 "area": matched_entry.metadata.area,
                 "family": matched_entry.metadata.family,
                 "scenario_tier": matched_entry.metadata.tier,
@@ -102,8 +108,8 @@ def write_bceval_results(
             tags = [
                 f"dataset-{panel.value}",
                 f"dataset-version-{panel.version}",
-                "dataset-mode-single-turn",
-                "evaluation-scope-single-turn",
+                f"dataset-mode-{dataset_mode.replace('_', '-')}",
+                f"evaluation-scope-{evaluation_scope.replace('_', '-')}",
                 *(
                     f"{name}-{value}"
                     for name, value in (

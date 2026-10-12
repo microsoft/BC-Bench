@@ -21,7 +21,7 @@ on:
         type: string
         default: "bug-fix"
       dataset:
-        description: Optional NL2AL dataset selector (gold or challenge)
+        description: Optional NL2AL dataset selector (gold, challenge, or multiturn)
         required: false
         type: string
         default: ""

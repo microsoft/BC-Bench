@@ -1,5 +1,6 @@
 import json
 from hashlib import sha256
+from typing import Literal
 from unittest.mock import PropertyMock, patch
 
 import pytest
@@ -20,7 +21,7 @@ def _write_entry(path, entry):
     path.write_text(entry.model_dump_json() + "\n", encoding="utf-8")
 
 
-def _panel_entry(panel: NL2ALDataset, *, prompt: str, expected=None) -> NL2ALEntry:
+def _panel_entry(panel: Literal[NL2ALDataset.GOLD, NL2ALDataset.CHALLENGE], *, prompt: str, expected=None) -> NL2ALEntry:
     entry = create_nl2al_entry(nl_prompt=prompt, expected=expected)
     return entry.model_copy(
         update={
@@ -44,7 +45,7 @@ def test_committed_panels_have_reviewed_single_turn_identity(panel, count):
     entries = NL2ALEntry.load(path)
     manifest = json.loads(path.with_name("nl2al_manifest.json").read_text(encoding="utf-8"))
 
-    assert list(NL2ALDataset) == [NL2ALDataset.GOLD, NL2ALDataset.CHALLENGE]
+    assert list(NL2ALDataset) == [NL2ALDataset.GOLD, NL2ALDataset.CHALLENGE, NL2ALDataset.MULTITURN]
     assert len(entries) == count
     assert len({entry.instance_id for entry in entries}) == count
     assert manifest["version"] == panel.version
@@ -54,7 +55,7 @@ def test_committed_panels_have_reviewed_single_turn_identity(panel, count):
     assert all(entry.metadata.family for entry in entries)
     assert all(entry.metadata.tier == panel.value for entry in entries)
     assert all(entry.language for entry in entries)
-    assert all(not hasattr(entry, "turns") for entry in entries)
+    assert all(not entry.turns for entry in entries)
 
 
 def test_panel_selector_is_rejected_for_other_categories():
@@ -88,7 +89,7 @@ def test_cli_selects_challenge_for_listing_view_and_version(tmp_path, monkeypatc
     assert "nl2al_challenge.jsonl" in outputs
 
 
-def test_run_bcal_uses_selected_panel_without_changing_workspace_behavior(tmp_path):
+def test_run_bcal_uses_selected_panel_in_an_isolated_workspace(tmp_path):
     entry = NL2ALEntry.load(EvaluationCategory.NL2AL.dataset_path_for(NL2ALDataset.CHALLENGE))[0]
     captured = {}
 
@@ -104,8 +105,9 @@ def test_run_bcal_uses_selected_panel_without_changing_workspace_behavior(tmp_pa
         run_commands.run_bcal(entry.instance_id, repo_path=tmp_path, llm_command="bridge", dataset=NL2ALDataset.CHALLENGE)
 
     assert captured["entry"].instance_id == entry.instance_id
-    assert captured["repo_path"] == tmp_path
-    assert run_agent.call_args.kwargs["repo_path"] == tmp_path
+    workspace = tmp_path / entry.instance_id / "workspace"
+    assert captured["repo_path"] == workspace
+    assert run_agent.call_args.kwargs["repo_path"] == workspace
 
 
 def test_evaluate_bcal_persists_selected_panel_identity(tmp_path):
@@ -131,7 +133,7 @@ def test_evaluate_bcal_persists_selected_panel_identity(tmp_path):
         )
 
     context = captured["context"]
-    assert context.repo_path == tmp_path / "repo"
+    assert context.repo_path == tmp_path / "repo" / entry.instance_id / "workspace"
     assert context.dataset is NL2ALDataset.CHALLENGE
     assert context.dataset_version == NL2ALDataset.CHALLENGE.version
     assert context.dataset_sha256 == sha256(path.read_bytes()).hexdigest()

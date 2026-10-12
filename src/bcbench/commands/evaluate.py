@@ -8,6 +8,7 @@ import typer
 from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent.bcal.scenario import BCalScenarioError
 from bcbench.agent.bcal.version import get_bcal_version, verify_bcal_version
 from bcbench.cli_options import (
     ClaudeCodeModel,
@@ -241,7 +242,7 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
-    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
+    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel")] = NL2ALDataset.GOLD,
     bcal_version: Annotated[str | None, typer.Option(envvar="BCAL_PACKAGE_VERSION", help="Expected installed BCAL NuGet version; verified against dotnet tool list")] = None,
 ) -> None:
     """
@@ -252,6 +253,10 @@ def evaluate_bcal(
     category = EvaluationCategory.NL2AL
     dataset_path = category.dataset_path_for(dataset)
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
+    try:
+        dataset.validate_entry(entry)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         command=llm_command,
@@ -262,10 +267,10 @@ def evaluate_bcal(
 
     context = EvaluationContext(
         entry=entry,
-        repo_path=repo_path,
+        repo_path=repo_path / entry.instance_id / "workspace",
         result_dir=run_dir,
         container=None,
-        model=llm_model or "external-command",
+        model=backend_config.model or "external-command",
         agent_name=AgentHarness.BCAL,
         category=category,
         dataset=dataset,
@@ -282,9 +287,13 @@ def evaluate_bcal(
                 entry=cast(NL2ALEntry, ctx.entry),
                 repo_path=ctx.repo_path,
                 backend_config=backend_config,
+                result_dir=ctx.result_dir,
             ),
         )
     except AgentError as exc:
+        if isinstance(exc, BCalScenarioError):
+            context.metrics = exc.metrics
+            context.experiment = exc.config
         result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
         category.pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
