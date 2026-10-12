@@ -1,6 +1,7 @@
 import json
 from hashlib import sha256
-from unittest.mock import PropertyMock, patch
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 import typer
@@ -12,6 +13,7 @@ from bcbench.commands.evaluate import evaluate_bcal
 from bcbench.commands.result import _validate_selected_coverage
 from bcbench.dataset import NL2ALEntry, NL2ALTurn
 from bcbench.exceptions import AgentError
+from bcbench.nl2al_manifest import load_nl2al_manifest
 from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bceval_export import write_bceval_results
 from bcbench.types import AgentHarness, EvaluationCategory, NL2ALDataset
@@ -38,21 +40,68 @@ def test_committed_panels_have_expected_counts_and_identity(panel, count):
     assert len(entries) == count
     assert len({entry.instance_id for entry in entries}) == count
     assert all(bool(entry.turns) == (panel is NL2ALDataset.MULTITURN) for entry in entries)
-    manifest = json.loads(path.with_name("nl2al_manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == panel.version
-    assert manifest["panels"][panel.value]["sha256"] == sha256(path.read_bytes()).hexdigest()
+    manifest = load_nl2al_manifest(path.parent)
+    assert manifest.version == panel.version
+    assert manifest.source_repository == "bic/BC-DeveloperExperience"
+    assert manifest.panels[panel.value].sha256 == sha256(path.read_bytes()).hexdigest()
     assert all(entry.metadata.family and entry.metadata.tier for entry in entries)
     if panel is NL2ALDataset.MULTITURN:
         assert all(turn.intent == "customize" for entry in entries for turn in entry.turns)
 
 
-def test_mixed_conversations_are_preserved_but_not_selected():
+def test_deferred_datasets_are_manifested_but_not_committed():
     base = EvaluationCategory.NL2AL.dataset_path
-    pending = NL2ALEntry.load(base.with_name("nl2al_multiturn_pending.jsonl"))
-    runnable = NL2ALEntry.load(EvaluationCategory.NL2AL.dataset_path_for(NL2ALDataset.MULTITURN))
-    assert len(pending) == 7
-    assert all(any(turn.intent != "customize" for turn in entry.turns) for entry in pending)
-    assert not {entry.instance_id for entry in pending}.intersection(entry.instance_id for entry in runnable)
+    deferred = load_nl2al_manifest(base.parent).deferred
+    assert deferred is not None
+    assert set(deferred) == {"multiturn-pending", "quarantine"}
+    assert deferred["multiturn-pending"].count == 7
+    assert deferred["quarantine"].count == 13
+    assert all(not (base.parent / panel.file).exists() for panel in deferred.values())
+
+
+def test_manifest_drives_version_and_panel_files(tmp_path, monkeypatch):
+    manifest = {
+        "schema_version": "1.0",
+        "version": "manifest-version",
+        "source_canonical_sha256": "a" * 64,
+        "status": "candidate",
+        "source_repository": "bic/BC-DeveloperExperience",
+        "source_commit": "b" * 40,
+        "source_dataset": "test-source",
+        "source_schema_version": "1.0",
+        "imported_from": {
+            "repository": "microsoft/BC-Bench",
+            "ref": "bcal/dataset-panels",
+            "commit": "c" * 40,
+        },
+        "generator": "Export-BCalDataset.ps1/1.0",
+        "panels": {
+            "gold": {
+                "file": "generated-gold.jsonl",
+                "count": 1,
+                "sha256": "d" * 64,
+                "evaluation_scope": "single_turn",
+            },
+            "challenge": {
+                "file": "generated-challenge.jsonl",
+                "count": 1,
+                "sha256": "e" * 64,
+                "evaluation_scope": "single_turn",
+            },
+            "multiturn": {
+                "file": "generated-multiturn.jsonl",
+                "count": 1,
+                "sha256": "f" * 64,
+                "evaluation_scope": "final_artifact",
+            },
+        },
+    }
+    (tmp_path / "nl2al_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr("bcbench.config.get_config", lambda: SimpleNamespace(paths=SimpleNamespace(dataset_dir=tmp_path)))
+
+    assert NL2ALDataset.GOLD.version == "manifest-version"
+    assert EvaluationCategory.NL2AL.dataset_path == tmp_path / "generated-gold.jsonl"
+    assert EvaluationCategory.NL2AL.dataset_path_for(NL2ALDataset.CHALLENGE) == tmp_path / "generated-challenge.jsonl"
 
 
 def test_panels_are_disjoint_and_only_publishable_inputs_are_committed():
@@ -146,7 +195,7 @@ def test_export_uses_selected_panel_assertions_and_kusto_metadata(tmp_path):
     _, result = result_for(challenge, NL2ALDataset.CHALLENGE, path, tmp_path)
     result.model = "generation-model-a"
     result.judge_model = "checklist-model-b"
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"):
+    with patch.object(EvaluationCategory, "dataset_path_for", return_value=path):
         write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.CHALLENGE)
     payload = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))
     assert payload["input"] == "Challenge prompt"
@@ -167,7 +216,7 @@ def test_export_rejects_wrong_panel_or_changed_assertions(tmp_path):
     path = tmp_path / "nl2al_challenge.jsonl"
     write_entry(path, entry)
     _, result = result_for(entry, NL2ALDataset.CHALLENGE, path, tmp_path)
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"):
+    with patch.object(EvaluationCategory, "dataset_path_for", return_value=path):
         with pytest.raises(ValueError, match="does not match selected"):
             write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.GOLD)
         path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
@@ -181,7 +230,7 @@ def test_export_does_not_guess_gold_identity_for_legacy_results(tmp_path):
     write_entry(path, entry)
     context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
     result = JudgeBasedEvaluationResult.create_raw(context, "AL")
-    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=path):
+    with patch.object(EvaluationCategory, "dataset_path_for", return_value=path):
         write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL)
     row = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))
     assert "dataset" not in row["metadata"]

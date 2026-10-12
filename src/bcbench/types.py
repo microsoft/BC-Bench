@@ -283,7 +283,10 @@ class NL2ALDataset(StrEnum):
 
     @property
     def version(self) -> str:
-        return "2026-10-09.candidate-v2"
+        from bcbench.config import get_config
+        from bcbench.nl2al_manifest import load_nl2al_manifest
+
+        return load_nl2al_manifest(get_config().paths.dataset_dir).version
 
 
 class EvaluationCategory(StrEnum):
@@ -300,18 +303,17 @@ class EvaluationCategory(StrEnum):
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
     def dataset_path_for(self, dataset: NL2ALDataset | None = None) -> Path:
-        if dataset is None:
-            return self.dataset_path
-        if self is not EvaluationCategory.NL2AL:
+        if self is EvaluationCategory.NL2AL:
+            from bcbench.config import get_config
+            from bcbench.nl2al_manifest import load_nl2al_manifest
+
+            selected_dataset = dataset or NL2ALDataset.GOLD
+            dataset_dir = get_config().paths.dataset_dir
+            manifest = load_nl2al_manifest(dataset_dir)
+            return dataset_dir / manifest.panels[selected_dataset.value].file
+        if dataset is not None:
             raise ValueError("The dataset panel option is only supported for the nl2al category")
-        match dataset:
-            case NL2ALDataset.GOLD:
-                return self.dataset_path
-            case NL2ALDataset.CHALLENGE:
-                return self.dataset_path.with_name("nl2al_challenge.jsonl")
-            case NL2ALDataset.MULTITURN:
-                return self.dataset_path.with_name("nl2al_multiturn.jsonl")
-        raise ValueError(f"Unknown NL2AL dataset: {dataset}")
+        return self.dataset_path
 
     @property
     def dataset_path(self) -> Path:
@@ -325,7 +327,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.CODE_REVIEW:
                 return get_config().paths.dataset_dir / "codereview.jsonl"
             case EvaluationCategory.NL2AL:
-                return get_config().paths.dataset_dir / "nl2al.jsonl"
+                return self.dataset_path_for()
             case EvaluationCategory.DATA_QUERY:
                 return get_config().paths.dataset_dir / "dataquery.jsonl"
             case EvaluationCategory.EXT_REQUEST_ADVISOR:

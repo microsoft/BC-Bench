@@ -1,7 +1,18 @@
 {
+  "schema_version": "1.0",
   "version": "2026-10-09.candidate-v2",
-  "source_canonical_sha256": "0ede70dad4fd466d180f252d758411cd378d78d6495d321801123c41dc5a1041",
+  "source_canonical_sha256": "52cf22b660c4cf986f090dcd158d34956c36c589e150e5a6efd3b5fdab3e831a",
   "status": "candidate_not_execution_calibrated",
+  "source_repository": "bic/BC-DeveloperExperience",
+  "source_commit": "9875458ecdf8f4ac98af97426a084b11c364684b",
+  "source_dataset": "candidate-v2",
+  "source_schema_version": "1.0",
+  "imported_from": {
+    "repository": "microsoft/BC-Bench",
+    "ref": "bcal/dataset-panels",
+    "commit": "443bc4856163e74207499772a0ffc63c61bc7b57"
+  },
+  "generator": "Export-BCalDataset.ps1/1.0",
   "panels": {
     "gold": {
       "file": "nl2al.jsonl",
@@ -22,10 +33,20 @@
       "evaluation_scope": "final_artifact"
     }
   },
-  "deferred_multiturn": {
-    "file": "nl2al_multiturn_pending.jsonl",
-    "count": 7,
-    "sha256": "6c9a2e0d5e0d008146ef03d97fc720e2772f91b072538b2eadf8d5cb52fb5fcd",
-    "reason": "Requires explicit active-page context and/or ask_user interaction mappings; not selected by the current runner."
+  "deferred": {
+    "multiturn-pending": {
+      "file": "nl2al_multiturn_pending.jsonl",
+      "count": 7,
+      "sha256": "6c9a2e0d5e0d008146ef03d97fc720e2772f91b072538b2eadf8d5cb52fb5fcd",
+      "evaluation_scope": "deferred",
+      "reason": "These cases require explicit active-page context or interaction mappings that the current runner does not supply."
+    },
+    "quarantine": {
+      "file": "nl2al_quarantine.jsonl",
+      "count": 13,
+      "sha256": "ea017ca7ec69c813f9c983f13a4b83aa5f4eace7bfe28e59b238dceb57f8662a",
+      "evaluation_scope": "deferred",
+      "reason": "Legacy quarantine data is retained for investigation and is not part of the candidate release."
+    }
   }
 }

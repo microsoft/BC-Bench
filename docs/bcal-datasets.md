@@ -1,5 +1,7 @@
 # BCAL dataset panels
 
+All human-edited BCAL dataset definitions live in the private `bic/BC-DeveloperExperience` repository. BC-Bench contains only generated, reviewable artifacts and never contacts the private repository during normal benchmark runs.
+
 The **Evaluation with bcal** workflow has a `dataset` dropdown:
 
 | Selection | Entries | Input | Scoring scope |
@@ -42,7 +44,7 @@ The scenario sets `publish=never`, requests review, and cancels unexpected clari
 
 The native protocol exports a **final** workspace. Consequently this workflow scores the cumulative artifact checklist from the **last customization turn**, after all scripted turns have run. Earlier requirements that were explicitly withdrawn are not incorrectly required again. It does not claim to score intermediate filesystem snapshots, every interaction, actual UI behavior, business-record persistence or deployment.
 
-Seven mixed plan/clarification/inspection conversations are retained in `dataset\nl2al_multiturn_pending.jsonl`, but are not selectable yet. BCAL's synchronous `ask_user` cannot consume a later scripted user turn automatically, and routing metadata must not supply a page where the case requires no active-page context. These cases need explicit, reviewed interaction/context mappings rather than canceled clarifications or fabricated answers. The seven runnable cases are the local bundle's native scenario index.
+Seven mixed plan/clarification/inspection conversations are recorded as deferred metadata in `dataset\nl2al_manifest.json`, but their source rows are not committed or selectable. BCAL's synchronous `ask_user` cannot consume a later scripted user turn automatically, and routing metadata must not supply a page where the case requires no active-page context. These cases need explicit, reviewed interaction/context mappings rather than canceled clarifications or fabricated answers.
 
 Four interaction-only conversations from the local curation bundle are intentionally not included: no generated AL is their correct outcome, and this pipeline evaluates AL artifacts. Full SEVAL data, diagnostic variants, private source snapshots and research notes are not published here.
 
@@ -101,10 +103,21 @@ AIEvalResults
 
 ## Dataset maintenance
 
-`dataset\nl2al_manifest.json` records counts, source canonical hash and exported-file hashes. The import tool takes a reviewed local bundle and writes only publishable BC-Bench panels:
+The generated artifacts committed to BC-Bench are:
+
+- `dataset\nl2al.jsonl`
+- `dataset\nl2al_challenge.jsonl`
+- `dataset\nl2al_multiturn.jsonl`
+- `dataset\nl2al_manifest.json`
+
+Never hand-edit these files or copy individual rows between repositories. Make source changes and run `Export-BCalDataset.ps1` in `bic/BC-DeveloperExperience`, then sync its generated BC-Bench folder from the BC-Bench repository root:
 
 ```powershell
-uv run python tools\import_nl2al_bundle.py <local-reviewed-bundle>
+python tools\import_bcal_dataset.py --source <generated-folder>
 ```
 
-The underlying candidate-v2 collection has 110 gold single-shot cases, 65 challenge single-shot cases and 14 functional conversations, of which seven currently qualify for native scripted execution. It was expanded with 32 distinct designed cases rather than padding gold with diagnostic variants. Prompts and intended final checks are preserved; internal source attribution is deliberately not imported. Dataset/evaluation changes use a new benchmark major version under the repository versioning policy.
+The importer requires exactly the three selectable JSONL files and the manifest. Before replacing any checked-in artifact, it validates the manifest schema and provenance, panel names and file mappings, SHA-256 hashes, row counts, and globally unique instance IDs. Re-running it with the same generated folder is a no-op. Review and commit the resulting generated-file diff through the normal BC-Bench pull request flow.
+
+`nl2al_manifest.json` records the private source repository and commit, generator, original import provenance, canonical source hash, selectable panel metadata, and optional deferred metadata. Normal dataset listing, execution, and scoring read only these checked-in files; they do not download data or require access to `bic/BC-DeveloperExperience`.
+
+The underlying candidate-v2 collection has 110 gold single-shot cases, 65 challenge single-shot cases and 14 functional conversations, of which seven currently qualify for native scripted execution. It was expanded with 32 distinct designed cases rather than padding gold with diagnostic variants. Prompts and intended final checks are preserved; per-row internal source attribution is deliberately not imported. Dataset/evaluation changes use a new benchmark major version under the repository versioning policy.
