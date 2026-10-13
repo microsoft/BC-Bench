@@ -9,6 +9,18 @@ BC-Bench exposes two reviewed single-turn NL2AL panels for BCAL evaluation:
 
 The **Evaluation with bcal** workflow defaults to `gold` for both scheduled and manual runs. Manual runs can select either panel from the `dataset` input. The selected panel is included in the workflow run name, concurrency group, bc-eval run name, and bc-eval tags.
 
+## BCAL package version
+
+The workflow defaults to `latest-prerelease`, preserving the existing installation behavior. Manual runs can instead select `pinned` and provide an exact NuGet version in `bcal-version`, including an optional fourth numeric component, prerelease suffix, or build metadata. Empty, floating, and range values are rejected before `dotnet` runs.
+
+Every matrix job resolves and installs its own package version. The installer reads the structured global-tool list after installation and passes the verified actual NuGet version to evaluation. Raw results record that observed value as `agent_version`, including agent failures and timeouts; they never record `latest`, `unknown`, or an unchecked requested string. Because a feed can publish between matrix jobs, use a pinned version when every case must run with the same package.
+
+Local `evaluate bcal` performs the same global-tool discovery. Use `--bcal-version <exact-version>` or set `BCAL_PACKAGE_VERSION` to require the installed version to match an expected value:
+
+```powershell
+uv run bcbench evaluate bcal <instance-id> --dataset gold --bcal-version 18.0.38.47039-beta
+```
+
 ## Local usage
 
 ```powershell

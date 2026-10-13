@@ -15,6 +15,19 @@ on:
         options:
           - gold
           - challenge
+      bcal-version-mode:
+        description: "Install the latest prerelease or pin an exact BCal NuGet version"
+        required: false
+        default: latest-prerelease
+        type: choice
+        options:
+          - latest-prerelease
+          - pinned
+      bcal-version:
+        description: "Exact BCal NuGet version for pinned mode; leave empty for latest-prerelease"
+        required: false
+        default: ""
+        type: string
       external-model:
         description: "Model alias to use through the bc-eval M365 LLM API client"
         required: false
@@ -40,6 +53,8 @@ concurrency:
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
   NL2AL_DATASET: ${{ inputs.dataset || 'gold' }}
+  BCAL_VERSION_MODE: ${{ inputs.bcal-version-mode || 'latest-prerelease' }}
+  BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
 
 jobs:
   get-entries:
@@ -76,53 +91,16 @@ jobs:
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
 
-      - name: Azure Login (OIDC) for ADO feed
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+      - name: Install bcal CLI from internal feed
+        id: install-bcal
+        uses: $/.github/actions/install-bcal
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
-      - name: Install Azure Artifacts credential provider
-        shell: pwsh
-        run: |
-          dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool
-
-          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
-
-      - name: Install bcal CLI from internal feed
-        shell: pwsh
-        env:
-          BCAL_PACKAGE_ID: ${{ secrets.BCAL_PACKAGE_ID }}
-          BCAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
-        run: |
-          # Let native non-zero exits set $LASTEXITCODE instead of throwing, so the retry loop can see them.
-          $PSNativeCommandUseErrorActionPreference = $false
-
-          $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
-          Write-Output "::add-mask::$adoToken"
-
-          $endpoints = @{
-            endpointCredentials = @(
-              @{
-                endpoint = $env:BCAL_FEED_URL
-                username = "anything"
-                password = $adoToken
-              }
-            )
-          } | ConvertTo-Json -Compress -Depth 5
-          $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
-
-          # The ADO Artifacts NuGet credential provider intermittently fails to start ("Unable to load
-          # the service index for source"), which otherwise fails the entire matrix job and skips the
-          # results upload. Retry the transient feed error a couple of times before giving up.
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
-            if ($LASTEXITCODE -eq 0) { break }
-            if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
-            Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
-            Start-Sleep -Seconds 20
-          }
+          package-id: ${{ secrets.BCAL_PACKAGE_ID }}
+          feed-url: ${{ secrets.BCAL_FEED_URL }}
+          version-mode: ${{ env.BCAL_VERSION_MODE }}
+          version: ${{ env.BCAL_REQUESTED_VERSION }}
 
       - name: Build bc-eval LLM API bridge venv
         shell: pwsh
@@ -195,10 +173,14 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
+          BCAL_PACKAGE_VERSION: ${{ steps.install-bcal.outputs.version }}
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
         shell: pwsh
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:BCAL_PACKAGE_VERSION)) {
+            throw "The installed BCal package version was not reported."
+          }
           $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
           if (-not (Test-Path $env:LLM_API_CERTIFICATE_FILE)) {
             throw "Expected LLM API client cert at $env:LLM_API_CERTIFICATE_FILE but it was not fetched from Key Vault."
