@@ -31,7 +31,7 @@ if ($VersionMode -eq "pinned") {
 else {
     $installArguments += "--prerelease"
 }
-$installArguments += @("--add-source", $FeedUrl)
+$installArguments += @("--source", $FeedUrl)
 
 for ($attempt = 1; $attempt -le 3; $attempt++) {
     & dotnet @installArguments

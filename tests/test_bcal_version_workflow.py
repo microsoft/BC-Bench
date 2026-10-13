@@ -25,21 +25,22 @@ def _step(workflow: dict[Any, Any], name: str) -> dict[str, Any]:
     return next(step for step in workflow["jobs"]["evaluate-with-bcal"]["steps"] if step.get("name") == name)
 
 
-def test_bcal_version_selection_defaults_to_latest_prerelease_for_dispatch_and_schedule() -> None:
+def test_bcal_package_selection_encodes_valid_channel_and_version_modes() -> None:
     workflow = _workflow()
     inputs = workflow[True]["workflow_dispatch"]["inputs"]
-    mode = inputs["bcal-version-mode"]
+    selection = inputs["bcal-package-selection"]
     version = inputs["bcal-version"]
 
-    assert mode["type"] == "choice"
-    assert mode["default"] == "latest-prerelease"
-    assert mode["options"] == ["latest-prerelease", "pinned"]
-    assert mode["required"] is False
+    assert selection["type"] == "choice"
+    assert selection["default"] == "official-latest"
+    assert selection["options"] == ["official-latest", "official-pinned", "experiment-pinned"]
+    assert selection["required"] is False
     assert version["type"] == "string"
     assert version["default"] == ""
     assert version["required"] is False
-    assert workflow["env"]["BCAL_VERSION_MODE"] == "${{ inputs.bcal-version-mode || 'latest-prerelease' }}"
+    assert "BCAL_VERSION_MODE" not in workflow["env"]
     assert workflow["env"]["BCAL_REQUESTED_VERSION"] == "${{ inputs.bcal-version }}"
+    assert workflow["jobs"]["validate-bcal-package"]["outputs"]["version-mode"] == "${{ steps.resolve.outputs.version-mode }}"
 
 
 def test_bcal_installed_version_output_flows_to_evaluation_metadata() -> None:
@@ -59,6 +60,8 @@ def test_bcal_installed_version_output_flows_to_evaluation_metadata() -> None:
     assert '-FeedUrl "$env:BCAL_FEED_URL"' in action_install["run"]
     assert "${{ inputs." not in action_install["run"]
     assert evaluate["env"]["BCAL_PACKAGE_VERSION"] == "${{ steps.install-bcal.outputs.version }}"
+    assert evaluate["env"]["BCAL_PACKAGE_CHANNEL"] == "${{ needs.validate-bcal-package.outputs.source }}"
+    assert evaluate["env"]["BCAL_PACKAGE_BRANCH"] == "${{ needs.validate-bcal-package.outputs.branch }}"
     assert "[string]::IsNullOrWhiteSpace($env:BCAL_PACKAGE_VERSION)" in evaluate["run"]
     assert evaluate["run"].index("BCAL_PACKAGE_VERSION") < evaluate["run"].index("bcbench evaluate bcal")
 
@@ -71,14 +74,14 @@ def test_bcal_matrix_resolves_versions_per_job_and_preserves_feed_authentication
     login, credential_provider, action_install = action["runs"]["steps"]
 
     assert "resolve-bcal-version" not in workflow["jobs"]
-    assert matrix["needs"] == "get-entries"
+    assert set(matrix["needs"]) == {"validate-bcal-package", "get-entries"}
     assert len([step for step in matrix["steps"] if step.get("uses") == "$/.github/actions/install-bcal"]) == 1
     assert install["with"] == {
         "client-id": "${{ secrets.AZURE_CLIENT_ID }}",
         "tenant-id": "${{ secrets.AZURE_TENANT_ID }}",
         "package-id": "${{ secrets.BCAL_PACKAGE_ID }}",
-        "feed-url": "${{ secrets.BCAL_FEED_URL }}",
-        "version-mode": "${{ env.BCAL_VERSION_MODE }}",
+        "feed-url": "${{ needs.validate-bcal-package.outputs.source == 'experiment' && secrets.BCAL_TEST_FEED_URL || secrets.BCAL_FEED_URL }}",
+        "version-mode": "${{ needs.validate-bcal-package.outputs.version-mode }}",
         "version": "${{ env.BCAL_REQUESTED_VERSION }}",
     }
     assert action["runs"]["using"] == "composite"
@@ -209,7 +212,7 @@ def test_bcal_install_uses_selected_mode_and_records_actual_version(mode: str, v
 
     assert result["error"] == ""
     assert result["calls"] == [
-        ["tool", "install", "--global", PACKAGE_ID, *version_arguments, "--add-source", FEED_URL],
+        ["tool", "install", "--global", PACKAGE_ID, *version_arguments, "--source", FEED_URL],
         ["tool", "list", PACKAGE_ID, "--global", "--format", "json"],
     ]
     assert result["outputs"] == [f"version={actual_version}"]
@@ -305,7 +308,7 @@ def test_bcal_transient_install_failure_retries_same_exact_pin() -> None:
     result = _install_bcal_tool(mode="pinned", version="1.2.3-preview.4", install_exit_codes=[1, 1, 0])
 
     assert result["error"] == ""
-    assert result["calls"][:3] == [["tool", "install", "--global", PACKAGE_ID, "--version", "1.2.3-preview.4", "--add-source", FEED_URL]] * 3
+    assert result["calls"][:3] == [["tool", "install", "--global", PACKAGE_ID, "--version", "1.2.3-preview.4", "--source", FEED_URL]] * 3
     assert result["calls"][3] == ["tool", "list", PACKAGE_ID, "--global", "--format", "json"]
     assert result["outputs"] == ["version=1.2.3-preview.4"]
     assert result["sleeps"] == [20, 20]

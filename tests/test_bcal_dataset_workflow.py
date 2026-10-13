@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -16,6 +17,10 @@ def _workflow(name: str):
     return yaml.safe_load(_workflow_text(name))
 
 
+def _step(workflow: dict[Any, Any], job: str, name: str) -> dict[str, Any]:
+    return next(step for step in workflow["jobs"][job]["steps"] if step.get("name") == name)
+
+
 def test_bcal_dispatch_exposes_only_gold_and_challenge():
     workflow = _workflow("bcal-evaluation.yml")
     dataset = workflow[True]["workflow_dispatch"]["inputs"]["dataset"]
@@ -26,11 +31,47 @@ def test_bcal_dispatch_exposes_only_gold_and_challenge():
 
 
 def test_bcal_run_identity_includes_selected_dataset():
-    workflow = _workflow_text("bcal-evaluation.yml")
+    workflow = _workflow("bcal-evaluation.yml")
 
-    assert "run-name: BCal ${{ inputs.dataset || 'gold' }}" in workflow
-    assert "group: bcal-evaluation-${{ inputs.dataset || 'gold' }}-" in workflow
-    assert "dataset: ${{ inputs.dataset || 'gold' }}" in workflow
+    assert "${{ inputs.dataset || 'gold' }}" in workflow["run-name"]
+    assert (
+        "${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }}"
+        in workflow["run-name"]
+    )
+    assert workflow["concurrency"]["group"] == (
+        "bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.test-run && 'test' || 'full' }}"
+    )
+    assert workflow["jobs"]["get-entries"]["with"]["dataset"] == "${{ inputs.dataset || 'gold' }}"
+
+
+def test_bcal_package_selection_defaults_to_official_latest_and_derives_branch_provenance():
+    workflow = _workflow("bcal-evaluation.yml")
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    validation = _step(workflow, "validate-bcal-package", "Validate and resolve BCal package selection")
+    provenance = _step(workflow, "validate-bcal-package", "Verify experimental package provenance")
+
+    assert inputs["bcal-package-selection"] == {
+        "description": "BCAL package selection",
+        "required": False,
+        "default": "official-latest",
+        "type": "choice",
+        "options": ["official-latest", "official-pinned", "experiment-pinned"],
+    }
+    assert "bcal-package-channel" not in inputs
+    assert "bcal-version-mode" not in inputs
+    assert "bcal-branch" not in inputs
+    assert "BCAL_TEST_FEED_URL" not in workflow["env"]
+    assert validation["env"]["EXPERIMENT_FEED_URL"] == "${{ secrets.BCAL_TEST_FEED_URL }}"
+    assert "pkgs.dev.azure.com" not in _workflow_text("bcal-evaluation.yml")
+    assert 'channel="experiment"' in validation["run"]
+    assert 'version_mode="pinned"' in validation["run"]
+    assert 'echo "version-mode=$version_mode" >> "$GITHUB_OUTPUT"' in validation["run"]
+    assert 'feed="DynamicsSMBTest@Local"' in validation["run"]
+    assert provenance["if"] == "${{ steps.resolve.outputs.source == 'experiment' }}"
+    assert ".\\scripts\\Resolve-BCalPackageProvenance.ps1" in provenance["run"]
+    assert "-ExpectedBranch" not in provenance["run"]
+    assert '-TestFeedUrl "$env:BCAL_TEST_FEED_URL"' in provenance["run"]
+    assert workflow["jobs"]["validate-bcal-package"]["outputs"]["branch"] == "${{ steps.provenance.outputs.branch || steps.resolve.outputs.branch }}"
 
 
 @pytest.mark.parametrize("workflow_name", ["get-entries.yml", "summarize-results.yml"])
@@ -64,20 +105,25 @@ def test_bcal_keeps_existing_installation_and_single_turn_execution():
     workflow = _workflow_text("bcal-evaluation.yml")
 
     assert ".github/actions/install-bcal" in workflow
-    assert "bcal-version-mode" in workflow
+    assert "bcal-package-selection" in workflow
+    assert "bcal-version-mode" not in workflow
     assert "scenario" not in workflow.lower()
 
 
 def test_summary_runs_after_non_cancelled_matrix_failures_with_exact_ids():
     job = _workflow("bcal-evaluation.yml")["jobs"]["summarize-results"]
 
-    assert set(job["needs"]) == {"get-entries", "evaluate-with-bcal"}
+    assert set(job["needs"]) == {"validate-bcal-package", "get-entries", "evaluate-with-bcal"}
     assert "always()" in job["if"]
     assert "!cancelled()" in job["if"]
+    assert "needs.validate-bcal-package.result == 'success'" in job["if"]
     assert "needs.get-entries.result == 'success'" in job["if"]
     assert "needs.get-entries.outputs.entries != '[]'" in job["if"]
     assert job["with"]["expected-entries"] == "${{ needs.get-entries.outputs.entries }}"
     assert job["with"]["dataset"] == "${{ inputs.dataset || 'gold' }}"
+    assert job["with"]["bcal-package-channel"] == "${{ needs.validate-bcal-package.outputs.source }}"
+    assert job["with"]["bcal-package-branch"] == "${{ needs.validate-bcal-package.outputs.branch }}"
+    assert job["with"]["bcal-package-feed"] == "${{ needs.validate-bcal-package.outputs.feed }}"
 
 
 def test_summary_validates_coverage_and_tags_selected_dataset():
@@ -90,3 +136,7 @@ def test_summary_validates_coverage_and_tags_selected_dataset():
     assert "if: always()" in workflow
     assert 'RUN_NAME="${RUN_NAME} [${NL2AL_DATASET}]"' in workflow
     assert 'RUN_TAGS="${RUN_TAGS},dataset-${NL2AL_DATASET}"' in workflow
+    assert 'RUN_NAME="${RUN_NAME} [${BCAL_PACKAGE_CHANNEL}:${BCAL_PACKAGE_BRANCH}]"' in workflow
+    assert "bcal-channel-${CHANNEL_TAG}" in workflow
+    assert "bcal-branch-${PACKAGE_BRANCH_TAG}" in workflow
+    assert "bcal-feed-${FEED_TAG}" in workflow
