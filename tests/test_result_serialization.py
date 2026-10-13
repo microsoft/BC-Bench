@@ -4,7 +4,7 @@ import pytest
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import AgentHarness, AgentMetrics, BCalPackageProvenance, BCalPackageSource, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
@@ -184,6 +184,16 @@ class TestCategorySerialization:
         assert data["experiment"]["custom_agent"] == "custom-agent"
         assert data["experiment"]["custom_instructions"] is True
         assert data["experiment"]["mcp_servers"] is None
+
+    def test_bcal_package_provenance_round_trips(self, tmp_path, sample_result_bug_fix):
+        sample_result_bug_fix.bcal_package = BCalPackageProvenance(source=BCalPackageSource.EXPERIMENT, branch="private/user/change")
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert payload["bcal_package"] == {"source": "experiment", "branch": "private/user/change"}
+        assert loaded.bcal_package == sample_result_bug_fix.bcal_package
 
     def test_tool_usage_saves_as_dict(self, tmp_path):
         tool_usage = {"bash": 5, "view": 3, "search": 2}

@@ -6,7 +6,7 @@ import pytest
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import AgentHarness, AgentMetrics, BCalPackageProvenance, BCalPackageSource, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
 
 
@@ -328,3 +328,33 @@ class TestWriteBcevalResults:
         assert data["metadata"]["experiment"]["al_lsp_enabled"] is True
         assert data["metadata"]["experiment"]["custom_instructions"] is True
         assert data["metadata"]["git_branch"] == "feat/al-mcp"
+
+    @pytest.mark.parametrize(
+        ("package", "run_type", "feed"),
+        [
+            (BCalPackageProvenance(source=BCalPackageSource.OFFICIAL, branch="master"), "baseline", "DynamicsSMBPackages"),
+            (BCalPackageProvenance(source=BCalPackageSource.EXPERIMENT, branch="private/user/change"), "experiment", "DynamicsSMBTest@Local"),
+        ],
+    )
+    def test_bcal_package_provenance_is_exported_and_classifies_the_run(self, tmp_path, sample_dataset_file, problem_statement_dir, package, run_type, feed):
+        result = create_bugfix_result(metrics=AgentMetrics(execution_time=1.0), experiment=ExperimentConfiguration())
+        result.bcal_package = package
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[result],
+                out_dir=tmp_path,
+                run_id="bcal-package",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        assert metadata["bcal_package_source"] == package.source
+        assert metadata["bcal_package_branch"] == package.branch
+        assert metadata["bcal_package_feed"] == feed
+        assert metadata["EvalRunType"] == run_type
+        assert metadata["experiment"] is None

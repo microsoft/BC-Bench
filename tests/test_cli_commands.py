@@ -16,7 +16,7 @@ from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtim
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import AgentMetrics, BCalPackageProvenance, BCalPackageSource, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
@@ -144,6 +144,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
 
     assert captured["context"].model == expected_model
     assert captured["context"].agent_version == "18.0.1.2-beta"
+    assert captured["context"].bcal_package == BCalPackageProvenance(source=BCalPackageSource.OFFICIAL, branch="master")
 
 
 def _option_names(command: click.Command) -> set[str]:
@@ -160,6 +161,10 @@ def test_bcal_commands_only_expose_external_command_options(command_group):
 
     assert {"--llm-command", "--llm-model"} <= options
     assert options.isdisjoint({"--backend", "--endpoint", "--deployment"})
+    if command_group == "evaluate":
+        assert {"--bcal-package-channel", "--bcal-branch"} <= options
+    else:
+        assert options.isdisjoint({"--bcal-package-channel", "--bcal-branch"})
 
 
 @pytest.fixture

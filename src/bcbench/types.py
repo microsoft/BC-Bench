@@ -26,6 +26,8 @@ __all__ = [
     "AgentMetrics",
     "AgentMetricsContract",
     "AnyAgentMetrics",
+    "BCalPackageProvenance",
+    "BCalPackageSource",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
@@ -68,6 +70,44 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
+
+
+class BCalPackageSource(StrEnum):
+    OFFICIAL = "official"
+    EXPERIMENT = "experiment"
+
+    @property
+    def feed_name(self) -> Literal["DynamicsSMBPackages", "DynamicsSMBTest@Local"]:
+        match self:
+            case BCalPackageSource.OFFICIAL:
+                return "DynamicsSMBPackages"
+            case BCalPackageSource.EXPERIMENT:
+                return "DynamicsSMBTest@Local"
+
+        raise ValueError(f"Unknown BCal package source: {self}")
+
+
+class BCalPackageProvenance(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source: BCalPackageSource
+    branch: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_source_branch(self) -> BCalPackageProvenance:
+        if self.source is BCalPackageSource.OFFICIAL and self.branch != "master":
+            raise ValueError("Official BCAL packages must use branch 'master'")
+        if self.source is BCalPackageSource.EXPERIMENT and self.branch.casefold() == "master":
+            raise ValueError("Experimental BCAL packages must name a non-master branch")
+        return self
+
+    @property
+    def feed_name(self) -> Literal["DynamicsSMBPackages", "DynamicsSMBTest@Local"]:
+        return self.source.feed_name
+
+    @property
+    def is_experiment(self) -> bool:
+        return self.source is BCalPackageSource.EXPERIMENT
 
 
 class AgentMetrics(BaseModel):
@@ -727,6 +767,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     container: ContainerConfig | None = None
 
     agent_version: str | None = None
+    bcal_package: BCalPackageProvenance | None = None
     dataset: NL2ALDataset | None = None
     dataset_version: str | None = None
     dataset_sha256: str | None = None

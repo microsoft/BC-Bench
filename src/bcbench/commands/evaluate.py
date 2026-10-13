@@ -6,6 +6,7 @@ from typing import Annotated, cast, override
 
 import typer
 from bcbench_core.filesystem import prepare_run_dir
+from pydantic import ValidationError
 
 from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.agent.bcal.version import get_bcal_version, verify_bcal_version
@@ -32,7 +33,16 @@ from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.exceptions import AgentError
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration, NL2ALDataset
+from bcbench.types import (
+    AgentHarness,
+    AgentMetrics,
+    BCalPackageProvenance,
+    BCalPackageSource,
+    EvaluationCategory,
+    EvaluationContext,
+    ExperimentConfiguration,
+    NL2ALDataset,
+)
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -243,6 +253,14 @@ def evaluate_bcal(
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
     dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
     bcal_version: Annotated[str | None, typer.Option(envvar="BCAL_PACKAGE_VERSION", help="Expected installed BCAL NuGet version; verified against dotnet tool list")] = None,
+    bcal_package_channel: Annotated[
+        BCalPackageSource,
+        typer.Option("--bcal-package-channel", envvar="BCAL_PACKAGE_CHANNEL", help="BCAL package channel: official baseline or experimental package"),
+    ] = BCalPackageSource.OFFICIAL,
+    bcal_branch: Annotated[
+        str,
+        typer.Option(envvar="BCAL_PACKAGE_BRANCH", help="BCAL source branch; official packages use master"),
+    ] = "master",
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -257,8 +275,13 @@ def evaluate_bcal(
         command=llm_command,
         model=llm_model,
     )
+    try:
+        bcal_package = BCalPackageProvenance(source=bcal_package_channel, branch=bcal_branch)
+    except ValidationError as exc:
+        message = exc.errors()[0]["msg"].removeprefix("Value error, ")
+        raise typer.BadParameter(message, param_hint="--bcal-branch") from exc
 
-    logger.info(f"Running evaluation on entry {entry_id} with BCal")
+    logger.info(f"Running evaluation on entry {entry_id} with BCal package {bcal_package.source}/{bcal_package.branch}")
 
     context = EvaluationContext(
         entry=entry,
@@ -268,6 +291,7 @@ def evaluate_bcal(
         model=llm_model or "external-command",
         agent_name=AgentHarness.BCAL,
         category=category,
+        bcal_package=bcal_package,
         dataset=dataset,
         dataset_version=dataset.version,
         dataset_sha256=sha256(dataset_path.read_bytes()).hexdigest(),

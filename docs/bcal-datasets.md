@@ -11,9 +11,19 @@ The **Evaluation with bcal** workflow defaults to `gold` for both scheduled and 
 
 ## BCAL package version
 
-The workflow defaults to `latest-prerelease`, preserving the existing installation behavior. Manual runs can instead select `pinned` and provide an exact NuGet version in `bcal-version`, including an optional fourth numeric component, prerelease suffix, or build metadata. Empty, floating, and range values are rejected before `dotnet` runs.
+The workflow combines channel and version mode into one package selection:
 
-Every matrix job resolves and installs its own package version. The installer reads the structured global-tool list after installation and passes the verified actual NuGet version to evaluation. Raw results record that observed value as `agent_version`, including agent failures and timeouts; they never record `latest`, `unknown`, or an unchecked requested string. Because a feed can publish between matrix jobs, use a pinned version when every case must run with the same package.
+- **`official-latest`** (default): installs the latest prerelease from the official feed and records the BCAL source branch as `master`.
+- **`official-pinned`**: installs an exact version from the official feed.
+- **`experiment-pinned`**: installs an exact package from the configured experimental `@Local` feed and records the originating BC-DeveloperExperience branch or PR.
+
+Pinned selections require an exact NuGet version in `bcal-version`, including an optional fourth numeric component, prerelease suffix, or build metadata. `official-latest` requires the version field to be empty. Empty pinned versions, floating versions, and ranges are rejected before `dotnet` runs.
+
+There is no experimental-latest option because the feed contains packages from multiple branches and PRs. `experiment-pinned` requires the `BCAL_TEST_FEED_URL` repository secret to point to the experimental `@Local` feed.
+
+Before starting the matrix, BC-Bench verifies that the exact experimental package was published directly from BC-DeveloperExperience and derives its branch or `pr/<number>` identity.
+
+Every official matrix job resolves and installs its own package version; experimental jobs install the exact requested pin. Raw results record the verified installed version as `agent_version`.
 
 Local `evaluate bcal` performs the same global-tool discovery. Use `--bcal-version <exact-version>` or set `BCAL_PACKAGE_VERSION` to require the installed version to match an expected value:
 
@@ -57,6 +67,10 @@ Each named-panel bc-eval row includes:
 
 | Metadata | Value |
 |---|---|
+| `agent_version` | Actual installed BCAL NuGet package version |
+| `bcal_package_source` | `official` or `experiment` |
+| `bcal_package_branch` | `master` or the provenance-derived BC-DeveloperExperience source branch |
+| `bcal_package_feed` | `DynamicsSMBPackages` or `DynamicsSMBTest@Local` |
 | `dataset`, `dataset_version`, `dataset_sha256` | Exact panel identity |
 | `dataset_mode` | `single_turn` |
 | `dataset_turn_count` | `1` |
@@ -64,6 +78,8 @@ Each named-panel bc-eval row includes:
 | `area`, `family`, `scenario_tier` | Entry classification |
 
 The row tags include the dataset, reviewed version, single-turn mode, evaluation scope, and available area/family/tier classifications.
+
+Do not pool different dataset hashes or BCAL package variants as if they were the same population. Rows without package provenance are older/unclassified results, not automatically official or master.
 
 ## Complete-panel safety
 
