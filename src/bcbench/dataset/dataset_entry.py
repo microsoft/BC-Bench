@@ -15,7 +15,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "NL2ALTurn", "RepoGroundedEntry", "TestGenEntry"]
 
 
 class EntryMetadata(BaseModel):
@@ -175,6 +175,20 @@ class TestGenEntry(_BugFixTestGenBase):
         return self.test_patch
 
 
+class NL2ALTurn(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
+    intent: Literal["customize", "inspect", "clarify", "plan", "refuse", "cancel"]
+    expected: list[ChecklistAssertion] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_artifact_expectations(self) -> Self:
+        if (self.intent == "customize") != bool(self.expected):
+            raise ValueError("Only customization turns must have nonempty artifact expectations")
+        return self
+
+
 class NL2ALEntry(BaseDatasetEntry):
     """Dataset entry for NL2AL category — generate AL code from natural language."""
 
@@ -183,6 +197,20 @@ class NL2ALEntry(BaseDatasetEntry):
     page: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./]*$")]
     audience: Literal["Business", "Technical", "Both"]
     language: str = "en-US"
+    turns: list[NL2ALTurn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_turns(self) -> Self:
+        if not self.turns:
+            return self
+        if len(self.turns) < 2:
+            raise ValueError("A multi-turn entry requires at least two user turns")
+        if self.nl_prompt != self.turns[0].prompt:
+            raise ValueError("nl_prompt must match the first actual user turn")
+        customization_turns = [turn for turn in self.turns if turn.intent == "customize"]
+        if not customization_turns or self.expected != customization_turns[-1].expected:
+            raise ValueError("Multi-turn expected must be the final customization checkpoint's artifact checklist")
+        return self
 
     @property
     @override
@@ -191,7 +219,9 @@ class NL2ALEntry(BaseDatasetEntry):
 
     @override
     def get_task(self) -> str:
-        return self.nl_prompt
+        if not self.turns:
+            return self.nl_prompt
+        return "\n\n".join(f"User turn {index} ({turn.intent}):\n{turn.prompt}" for index, turn in enumerate(self.turns, 1))
 
     @override
     def get_expected_output(self) -> Checklist:

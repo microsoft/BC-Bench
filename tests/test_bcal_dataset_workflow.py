@@ -16,13 +16,12 @@ def _workflow(name: str):
     return yaml.safe_load(_workflow_text(name))
 
 
-def test_bcal_dispatch_exposes_only_gold_and_challenge():
+def test_bcal_dispatch_exposes_gold_challenge_and_multiturn():
     workflow = _workflow("bcal-evaluation.yml")
     dataset = workflow[True]["workflow_dispatch"]["inputs"]["dataset"]
 
     assert dataset["default"] == "gold"
-    assert dataset["options"] == ["gold", "challenge"]
-    assert "multiturn" not in _workflow_text("bcal-evaluation.yml")
+    assert dataset["options"] == ["gold", "challenge", "multiturn"]
 
 
 def test_bcal_run_identity_includes_selected_dataset():
@@ -60,12 +59,30 @@ def test_bcal_resolves_symbols_and_evaluation_from_selected_panel():
     assert 'evaluate bcal "$env:INSTANCE_ID" --dataset "$env:NL2AL_DATASET"' in workflow
 
 
-def test_bcal_keeps_existing_installation_and_single_turn_execution():
+def test_bcal_keeps_version_control_installation():
     workflow = _workflow_text("bcal-evaluation.yml")
 
     assert ".github/actions/install-bcal" in workflow
     assert "bcal-version-mode" in workflow
-    assert "scenario" not in workflow.lower()
+    assert "BCAL_PACKAGE_VERSION" in workflow
+
+
+def test_scenario_diagnostics_are_uploaded_separately_from_result_jsonl():
+    workflow = _workflow("bcal-evaluation.yml")
+    steps = {step["name"]: step for step in workflow["jobs"]["evaluate-with-bcal"]["steps"]}
+    results = steps["Upload evaluation results"]
+    scenario = steps["Upload BCal scenario execution metadata"]
+
+    assert results["with"]["path"].splitlines() == [
+        "${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl",
+        "!${{ env.EVALUATION_RESULTS_DIR }}/**/bcal-scenario/**",
+    ]
+    assert results["with"]["if-no-files-found"] == "error"
+    assert scenario["with"]["path"] == "${{ env.EVALUATION_RESULTS_DIR }}/**/bcal-scenario/**"
+    assert scenario["with"]["if-no-files-found"] == "ignore"
+    assert "always()" in results["if"]
+    assert "always()" in scenario["if"]
+    assert results["with"]["retention-days"] == scenario["with"]["retention-days"] == "${{ inputs.test-run && 1 || 30 }}"
 
 
 def test_summary_runs_after_non_cancelled_matrix_failures_with_exact_ids():

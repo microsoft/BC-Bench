@@ -15,6 +15,7 @@ on:
         options:
           - gold
           - challenge
+          - multiturn
       bcal-version-mode:
         description: "Install the latest prerelease or pin an exact BCal NuGet version"
         required: false
@@ -194,7 +195,19 @@ jobs:
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+          path: |
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+            !${{ env.EVALUATION_RESULTS_DIR }}/**/bcal-scenario/**
+          if-no-files-found: error
+          retention-days: ${{ inputs.test-run && 1 || 30 }}
+
+      - name: Upload BCal scenario execution metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ always() && !cancelled() }}
+        with:
+          name: bcal-scenario-${{ github.run_id }}-${{ matrix.entry }}
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/bcal-scenario/**
+          if-no-files-found: ignore
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:

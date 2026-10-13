@@ -77,6 +77,8 @@ class TestRunBcalAgent:
         assert "--deployment=gpt-5" in args
         assert "--llm-backend=external-command" in args
         assert "--llm-command=python bridge.py" in args
+        assert f"--prompt={entry.nl_prompt}" in args
+        assert not any(a.startswith(("--scenario=", "--result=")) for a in args)
         assert not any(a.startswith("--endpoint=") for a in args)
         assert not any(a.startswith("--capi-") for a in args)
 
