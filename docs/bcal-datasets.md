@@ -9,6 +9,21 @@ BC-Bench exposes two reviewed single-turn NL2AL panels for BCAL evaluation:
 
 The **Evaluation with bcal** workflow defaults to `gold` for both scheduled and manual runs. Manual runs can select either panel from the `dataset` input. The selected panel is included in the workflow run name, concurrency group, bc-eval run name, and bc-eval tags.
 
+## Dataset source and freshness
+
+BC-DeveloperExperience is the source of truth for the `candidate-v2` BCAL datasets. BC-Bench keeps a reviewed snapshot so evaluations remain reproducible and do not depend on another repository at runtime.
+
+`dataset/nl2al_manifest.json` records the source dataset name and the date the snapshot was synchronized. It deliberately does not expose private repository URLs or internal revision identifiers. The per-panel SHA-256 values identify the exact public content evaluated.
+
+Treat the committed JSONL files as vendored data:
+
+1. Make dataset changes in BC-DeveloperExperience.
+2. After those changes merge, copy each changed panel into `dataset/`.
+3. Update the manifest version, synchronization date, counts, and SHA-256 values, plus `NL2ALDataset.version`.
+4. Run the NL2AL panel and BCAL workflow tests.
+
+The synchronization date is provenance, not a guarantee that the snapshot is current. When BC-DeveloperExperience has newer merged dataset changes, refresh BC-Bench before starting an evaluation intended to include them.
+
 ## BCAL package version
 
 The workflow combines channel and version mode into one package selection:

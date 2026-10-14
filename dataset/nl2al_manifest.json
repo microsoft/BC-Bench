@@ -1,6 +1,11 @@
 {
   "version": "2026-10-14.candidate-v2",
   "source_canonical_sha256": "0ede70dad4fd466d180f252d758411cd378d78d6495d321801123c41dc5a1041",
+  "source": {
+    "name": "BC-DeveloperExperience",
+    "dataset": "candidate-v2",
+    "synced_at": "2026-10-14"
+  },
   "status": "candidate_not_execution_calibrated",
   "panels": {
     "gold": {

@@ -48,6 +48,11 @@ def test_committed_panels_have_reviewed_single_turn_identity(panel, count):
     assert len(entries) == count
     assert len({entry.instance_id for entry in entries}) == count
     assert manifest["version"] == panel.version
+    assert manifest["source"] == {
+        "name": "BC-DeveloperExperience",
+        "dataset": "candidate-v2",
+        "synced_at": manifest["version"].split(".", maxsplit=1)[0],
+    }
     assert manifest["panels"][panel.value]["count"] == count
     assert manifest["panels"][panel.value]["sha256"] == sha256(path.read_bytes()).hexdigest()
     assert manifest["panels"][panel.value]["evaluation_scope"] == "single_turn"
