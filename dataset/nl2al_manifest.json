@@ -1,12 +1,12 @@
 {
-  "version": "2026-10-09.candidate-v2",
+  "version": "2026-10-14.candidate-v2",
   "source_canonical_sha256": "0ede70dad4fd466d180f252d758411cd378d78d6495d321801123c41dc5a1041",
   "status": "candidate_not_execution_calibrated",
   "panels": {
     "gold": {
       "file": "nl2al.jsonl",
       "count": 110,
-      "sha256": "b16c956333fad4a2c44c4ffa69dff93724dae56d70436a3a71dadc4971d5ca4c",
+      "sha256": "fce1a4c1d4b63d9b593b5d8c2c14a65727c5c6063dc0cf5d754208619aac4ab9",
       "evaluation_scope": "single_turn"
     },
     "challenge": {
