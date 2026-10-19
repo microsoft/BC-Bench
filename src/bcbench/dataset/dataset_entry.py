@@ -24,8 +24,6 @@ class EntryMetadata(BaseModel):
     area: str | None = None
     image_count: Annotated[int, Field(ge=0)] | None = None
     persona: str | None = None
-    family: str | None = None
-    tier: Literal["gold", "challenge"] | None = None
 
 
 class BaseDatasetEntry(BaseModel):
@@ -182,7 +180,6 @@ class NL2ALEntry(BaseDatasetEntry):
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
     page: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./]*$")]
     audience: Literal["Business", "Technical", "Both"]
-    language: str = "en-US"
 
     @property
     @override

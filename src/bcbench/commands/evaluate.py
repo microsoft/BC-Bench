@@ -1,6 +1,5 @@
 import logging
 import random
-from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, cast, override
 
@@ -41,7 +40,6 @@ from bcbench.types import (
     EvaluationCategory,
     EvaluationContext,
     ExperimentConfiguration,
-    NL2ALDataset,
 )
 
 logger = logging.getLogger(__name__)
@@ -251,7 +249,6 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
-    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
     bcal_version: Annotated[str | None, typer.Option(envvar="BCAL_PACKAGE_VERSION", help="Expected installed BCAL NuGet version; verified against dotnet tool list")] = None,
     bcal_package_channel: Annotated[
         BCalPackageSource,
@@ -268,8 +265,7 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    dataset_path = category.dataset_path_for(dataset)
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         command=llm_command,
@@ -292,9 +288,6 @@ def evaluate_bcal(
         agent_name=AgentHarness.BCAL,
         category=category,
         bcal_package=bcal_package,
-        dataset=dataset,
-        dataset_version=dataset.version,
-        dataset_sha256=sha256(dataset_path.read_bytes()).hexdigest(),
     )
 
     try:
