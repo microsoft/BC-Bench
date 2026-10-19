@@ -1,5 +1,19 @@
 # BCAL evaluation
 
+## Dataset tiers
+
+All single-turn NL2AL entries live in `dataset/nl2al.jsonl`. Each entry's `metadata.tier` puts it in the `gold` benchmark set (default) or the harder held-out `challenge` set.
+
+The **Evaluation with bcal** workflow evaluates `gold` by default; manual runs can pick a tier from the `tier` input. The tier is part of the workflow run name, concurrency group, and bc-eval run name and tags, and every raw result and bc-eval row records it.
+
+Every command that loads entries accepts the same filter:
+
+```powershell
+uv run bcbench dataset list --category nl2al --tier challenge
+uv run bcbench run bcal <instance-id> --tier challenge
+uv run bcbench evaluate bcal <instance-id> --tier challenge
+```
+
 ## BCAL package version
 
 The workflow combines channel and version mode into one package selection:
