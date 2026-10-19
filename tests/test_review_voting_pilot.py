@@ -1,6 +1,8 @@
 import hashlib
 import json
+import shutil
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -8,6 +10,7 @@ from pydantic import ValidationError
 from tools import review_voting_pilot as pilot
 from tools.review_voting_evidence import (
     EvidenceBundle,
+    EvidenceCapture,
     ProtectedView,
     aggregate,
     check_bundle,
@@ -282,12 +285,13 @@ def test_verifier_wiring_offline_only(captured, tmp_path, monkeypatch):
     folder = tmp_path / "voter"
     votes = pilot.run_verifier(folder, source, knowledge, patch, candidates, "not-a-real-cli", bundle=bundle, expected_bundle_sha256=bundle.sha256)
     assert len(calls) == 1
-    assert "--available-tools=none" in calls[0]
+    assert "--available-tools=view,rg,glob" in calls[0]
     assert "--add-dir" not in calls[0]
+    assert (folder / "work/protected-evidence.json").exists()
     assert votes[0].semantic_correctness == "not_assessed"
     invocation = json.loads((folder / "invocation.json").read_text())
     assert invocation["bundle_sha256"] == bundle.sha256
-    assert invocation["adapter_version"] == "evidence-ids-v2"
+    assert invocation["adapter_version"] == "evidence-ids-v2.1"
     with pytest.raises(FileExistsError):
         pilot.run_verifier(folder, source, knowledge, patch, candidates, "not-a-real-cli", bundle=bundle, expected_bundle_sha256=bundle.sha256)
     assert len(calls) == 1
@@ -399,3 +403,164 @@ def test_v1_quote_range_output_is_not_reinterpreted(captured):
     payload["evidence"] = [{"tree": "source", "file": "helper.al", "line_start": 22, "line_end": 22, "quote": "synthetic wrong citation"}]
     with pytest.raises(ValidationError, match="validation"):
         validate_votes(["F001"], [payload])
+
+
+@pytest.fixture
+def prepared_captures(captured, tmp_path):
+    source, knowledge, _, patch, bundle = captured
+    directory = tmp_path / "protected-captures"
+    capture = EvidenceCapture.model_validate_json(json.dumps(bundle.model_dump(mode="json", exclude={"candidates_sha256"})))
+    manifest = {}
+    cases = []
+    for index in range(1, 7):
+        name = f"case-{index:02}"
+        instance_id = f"synthetic__offline-{index}"
+        folder = directory / name
+        folder.mkdir(parents=True)
+        shutil.copytree(source, folder / "source")
+        shutil.copytree(knowledge, folder / "knowledge")
+        pilot.save(folder / "capture.json", capture.model_dump(mode="json"))
+        manifest[name] = {"instance_id": instance_id, "sha256": capture.sha256}
+        cases.append((instance_id, patch))
+    pilot.save(directory / "manifest.json", manifest)
+    return directory, cases
+
+
+def test_root_cli_still_dispatches_execution(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(pilot, "run", lambda *args: calls.append(args))
+    pilot.main(["--root", str(tmp_path)])
+    assert len(calls) == 1
+    assert calls[0][0] == tmp_path.resolve()
+
+
+def test_validation_requires_explicit_mode(captured, tmp_path, monkeypatch, capsys):
+    _, _, candidates, patch, bundle = captured
+    case = tmp_path
+    pilot.save(case / "candidates.json", candidates)
+    (case / "frozen.diff").write_text(patch)
+    pilot.save(case / "bundle.json", bundle.model_dump(mode="json"))
+    args = ["--case-dir", str(case), "--bundle", str(case / "bundle.json"), "--bundle-sha256", bundle.sha256]
+    monkeypatch.setattr(pilot, "run", lambda *args: pytest.fail("Validation must not execute"))
+    with pytest.raises(SystemExit, match="2"):
+        pilot.main(args)
+    pilot.main(["--validate-evidence", *args])
+    assert "Evidence identities valid" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("fault", ["absent", "five-cases", "missing-capture", "stale-source", "redacted", "wrong-case", "changed-manifest", "missing-knowledge"])
+def test_incomplete_capture_preflight_launches_zero_processes(prepared_captures, tmp_path, monkeypatch, fault):
+    directory, cases = prepared_captures
+    if fault == "absent":
+        directory = tmp_path / "absent"
+    elif fault == "five-cases":
+        manifest = json.loads((directory / "manifest.json").read_text())
+        del manifest["case-06"]
+        pilot.save(directory / "manifest.json", manifest)
+    elif fault == "missing-capture":
+        (directory / "case-06/capture.json").unlink()
+    elif fault == "stale-source":
+        (directory / "case-06/source/helper.al").write_text("changed fixture")
+    elif fault in ("redacted", "missing-knowledge"):
+        path = directory / "case-06/capture.json"
+        data = json.loads(path.read_text())
+        if fault == "redacted":
+            data["views"][0].update(status="redacted", text=None)
+        else:
+            data["views"] = [data["views"][0]]
+        modified = EvidenceCapture.model_validate_json(json.dumps(data))
+        pilot.save(path, modified.model_dump(mode="json"))
+        manifest = json.loads((directory / "manifest.json").read_text())
+        manifest["case-06"]["sha256"] = modified.sha256
+        pilot.save(directory / "manifest.json", manifest)
+    elif fault == "wrong-case":
+        cases[-1] = ("synthetic__wrong-1", cases[-1][1])
+    elif fault == "changed-manifest":
+        manifest = json.loads((directory / "manifest.json").read_text())
+        manifest["case-06"]["sha256"] = "0" * 64
+        pilot.save(directory / "manifest.json", manifest)
+    root = tmp_path / "run"
+    pilot.save(root / "selection.json", {"cases": [{"instance_id": key} for key, _ in cases]})
+    entries = [SimpleNamespace(instance_id=key, patch=patch) for key, patch in cases]
+    monkeypatch.setattr(pilot.CodeReviewEntry, "load", lambda _: entries)
+    monkeypatch.setattr(pilot, "run_pr_review_agent", lambda *args, **kwargs: pytest.fail("Baseline must not launch"))
+    monkeypatch.setattr(pilot, "run_verifier", lambda *args, **kwargs: pytest.fail("Verifier must not launch"))
+    monkeypatch.setattr(pilot, "judge_verdicts", lambda *args, **kwargs: pytest.fail("Judge must not launch"))
+    with pytest.raises(ValueError, match="Protected captures are required before any baseline"):
+        pilot.run(root, tmp_path, directory)
+    assert not (root / "execution/started.json").exists()
+    assert not (root / "failure.json").exists()
+
+
+def test_valid_capture_preflight_has_no_subprocesses(prepared_captures):
+    directory, cases = prepared_captures
+    captures = pilot.preflight_captures(directory, cases)
+    assert len(captures) == 6
+    assert all("candidates_sha256" not in capture.model_dump() for capture in captures)
+
+
+def test_original_six_baseline_then_verifier_then_score_order_offline(captured, prepared_captures, tmp_path, monkeypatch):
+    source_fixture, knowledge_fixture, candidates, patch, _ = captured
+    directory, cases = prepared_captures
+    root = tmp_path / "run"
+    selection = {"cases": [{"instance_id": key} for key, _ in cases], "engine_commit": "engine", "benchmark_commit": "bench"}
+    pilot.save(root / "selection.json", selection)
+    (tmp_path / "dataset").mkdir()
+    (tmp_path / "dataset/codereview.jsonl").write_text("safe fixture")
+    cli = tmp_path / "fake-cli"
+    cli.write_text("never executed")
+    entries = [SimpleNamespace(instance_id=key, patch=patch, base_commit="base", model_dump=lambda **kwargs: {}) for key, _ in cases]
+    monkeypatch.setattr(pilot.CodeReviewEntry, "load", lambda _: entries)
+    monkeypatch.setattr(pilot, "get_pr_review_version", lambda _: "engine")
+    monkeypatch.setattr(pilot.shutil, "which", lambda _: str(cli))
+    monkeypatch.setattr(pilot, "command", lambda args, cwd=None: "bench" if args == ["git", "rev-parse", "HEAD"] else "fixture")
+    monkeypatch.setattr(pilot, "isolated_environment", lambda _: {})
+    monkeypatch.setattr(pilot.CodeReviewPipeline, "setup_workspace", lambda self, entry, source: shutil.copytree(source_fixture, source))
+    events = []
+
+    def baseline(entry, model, category, source, output, **kwargs):
+        events.append("baseline")
+        assert model == "gpt-5.6-sol"
+        assert kwargs["engine_path"] == root / "engine"
+        shutil.copytree(knowledge_fixture, output / "bcquality")
+        pilot.save(source / "review.json", [c["comment"] for c in candidates])
+        return SimpleNamespace(model_dump=lambda **kwargs: {}), None
+
+    def verifier(folder, source, knowledge, patch, candidates, cli, *, bundle, expected_bundle_sha256):
+        events.append("verifier")
+        check_bundle(bundle, expected_bundle_sha256, source, knowledge, candidates, patch)
+        return resolved(bundle)
+
+    def score(*args):
+        events.append("judge")
+        return {"fixture": True}
+
+    monkeypatch.setattr(pilot, "run_pr_review_agent", baseline)
+    monkeypatch.setattr(pilot, "run_verifier", verifier)
+    monkeypatch.setattr(pilot, "score_arms", score)
+    pilot.run(root, tmp_path, directory)
+    assert events == ["baseline"] * 6 + ["verifier"] * 18 + ["judge"] * 6
+    assert len(json.loads((root / "results.json").read_text())["cases"]) == 6
+    for n in range(1, 7):
+        identity = json.loads((root / f"case-{n:02}/evidence-identity.json").read_text())
+        bundle = EvidenceBundle.model_validate_json((root / f"case-{n:02}/evidence-bundle.json").read_text())
+        assert identity["bundle_sha256"] == bundle.sha256
+
+
+def test_default_root_capture_precondition_is_actionable(tmp_path, monkeypatch):
+    cases = [(f"synthetic__offline-{n}", "safe fixture") for n in range(1, 7)]
+    pilot.save(tmp_path / "selection.json", {"cases": [{"instance_id": key} for key, _ in cases]})
+    monkeypatch.setattr(pilot.CodeReviewEntry, "load", lambda _: [SimpleNamespace(instance_id=key, patch=patch) for key, patch in cases])
+    with pytest.raises(ValueError, match="No supported capture producer is bundled") as failure:
+        pilot.main(["--root", str(tmp_path)])
+    assert str(tmp_path / "protected-captures") in str(failure.value)
+    assert not (tmp_path / "execution").exists()
+
+
+def test_existing_run_is_never_reinterpreted_or_overwritten(tmp_path):
+    pilot.save(tmp_path / "selection.json", {"cases": [{"instance_id": f"synthetic__offline-{n}"} for n in range(1, 7)]})
+    pilot.save(tmp_path / "execution/started.json", {"historical": True})
+    pilot.save(tmp_path / "failure.json", {"historical_failure": True})
+    with pytest.raises(FileExistsError, match="cannot be retried"):
+        pilot.main(["--root", str(tmp_path)])
+    assert json.loads((tmp_path / "failure.json").read_text()) == {"historical_failure": True}
