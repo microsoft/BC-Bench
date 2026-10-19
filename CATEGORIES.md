@@ -12,7 +12,7 @@ This doc is a map; the source files and their comments are the source of truth. 
 
 Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py). It is the category registry. Each enum value maps to the pieces the rest of the CLI and workflows consume:
 
-- `dataset_path` — the dataset file for raw tasks.
+- `dataset_path` — the dataset file for raw tasks. Entries may set `metadata.tier` (`gold` by default, or `challenge`); commands select a tier with `--tier` (default `gold`) and results record it.
 - `entry_class` — the typed Python model for one dataset row (aka one task).
 - `result_class` — the recorded outcome for one evaluated task.
 - `summary_class` / `aggregate_class` — the aggregate views used by result summaries and leaderboards.

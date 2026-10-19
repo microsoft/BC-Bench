@@ -118,7 +118,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
 
     class EntryClass:
         @staticmethod
-        def load(_dataset_path, entry_id: str):
+        def load(_dataset_path, entry_id: str, tier=None):
             assert entry_id == entry.instance_id
             return [entry]
 
@@ -172,7 +172,7 @@ def agent_command_category(tmp_path):
 
     class EntryClass:
         @staticmethod
-        def load(_dataset_path, entry_id: str):
+        def load(_dataset_path, entry_id: str, tier=None):
             assert entry_id == entry.instance_id
             return [entry]
 

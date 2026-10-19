@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
-from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
+from bcbench.types import Checklist, ChecklistAssertion, CommitSha, DatasetTier, ExpectedOutput, RepoSlug
 
 _config = get_config()
 
@@ -24,6 +24,7 @@ class EntryMetadata(BaseModel):
     area: str | None = None
     image_count: Annotated[int, Field(ge=0)] | None = None
     persona: str | None = None
+    tier: DatasetTier = DatasetTier.GOLD
 
 
 class BaseDatasetEntry(BaseModel):
@@ -39,7 +40,7 @@ class BaseDatasetEntry(BaseModel):
     project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = []
 
     @classmethod
-    def load(cls, dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[Self]:
+    def load(cls, dataset_path: Path, entry_id: str | None = None, random: int | None = None, tier: DatasetTier | None = None) -> list[Self]:
         if not dataset_path.exists():
             raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
 
@@ -52,6 +53,9 @@ class BaseDatasetEntry(BaseModel):
                     continue
 
                 entry = cls.model_validate_json(stripped_line)
+
+                if tier is not None and entry.metadata.tier is not tier:
+                    continue
 
                 if entry_id:
                     if entry.instance_id == entry_id:

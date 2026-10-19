@@ -24,6 +24,11 @@ on:
         description: "Evaluation category"
         required: true
         type: string
+      tier:
+        description: "Dataset tier the run was evaluated on"
+        required: false
+        type: string
+        default: "gold"
       bcal-package-channel:
         description: "Optional BCAL package channel label"
         required: false
@@ -65,6 +70,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     env:
+      EVALUATION_TIER: ${{ inputs.tier }}
       EVALUATION_AGENT: ${{ inputs.agent }}
       EVALUATION_MODEL: ${{ inputs.model }}
       BCAL_PACKAGE_CHANNEL: ${{ inputs.bcal-package-channel }}
@@ -123,7 +129,10 @@ jobs:
           BRANCH_TAG="${{ inputs.git-ref || github.ref_name }}"
           BRANCH_TAG="${BRANCH_TAG//./-}"
           RUN_NAME="${EVALUATION_AGENT} (${EVALUATION_MODEL}) - #${GITHUB_RUN_ID}"
-          RUN_TAGS="${EVALUATION_AGENT},${MODEL_TAG},${BRANCH_TAG}"
+          RUN_TAGS="${EVALUATION_AGENT},${MODEL_TAG},${BRANCH_TAG},tier-${EVALUATION_TIER}"
+          if [[ "$EVALUATION_TIER" != "gold" ]]; then
+            RUN_NAME="${RUN_NAME} [${EVALUATION_TIER}]"
+          fi
           if [[ -n "$BCAL_PACKAGE_CHANNEL" ]]; then
             CHANNEL_TAG="$(printf '%s' "$BCAL_PACKAGE_CHANNEL" | tr -c '[:alnum:]_-' '-' | sed -E 's/^-+|-+$//g')"
             PACKAGE_BRANCH_TAG="$(printf '%s' "$BCAL_PACKAGE_BRANCH" | tr -c '[:alnum:]_-' '-' | sed -E 's/^-+|-+$//g')"

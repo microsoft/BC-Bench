@@ -32,6 +32,7 @@ __all__ = [
     "ChecklistAssertion",
     "ChecklistLevel",
     "CommitSha",
+    "DatasetTier",
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
@@ -313,6 +314,11 @@ class AgentHarness(StrEnum):
                 return repo_path / ".claude"
             case _:
                 raise ValueError(f"{self.value} does not support repository setup")
+
+
+class DatasetTier(StrEnum):
+    GOLD = "gold"
+    CHALLENGE = "challenge"
 
 
 class EvaluationCategory(StrEnum):
@@ -738,6 +744,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # Evaluation category
     category: EvaluationCategory
+    tier: DatasetTier = DatasetTier.GOLD
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None

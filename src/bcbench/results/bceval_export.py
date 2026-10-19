@@ -64,6 +64,7 @@ def write_bceval_results(
 
             metadata: dict[str, Any] = {
                 "model": result.model,
+                "tier": result.tier,
                 "agent_version": result.agent_version,
                 "bcal_package_source": result.bcal_package.source if result.bcal_package else None,
                 "bcal_package_branch": result.bcal_package.branch if result.bcal_package else None,
