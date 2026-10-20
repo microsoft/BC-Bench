@@ -1,0 +1,10 @@
+{
+  "engineCommit": "29c3407af10321af34574fe292deda3e83bca7cf",
+  "bcQualityCommit": "bf9513972139eac68665fde51cd478bc2f496b84",
+  "datasetHash": "4BB90627EA444D4C36EF5A1103738A6727AA48D8CD6F08398E0CD8EF6204B754",
+  "entryIds": [
+    "synthetic__sec-internal-reschedule-job-01"
+  ],
+  "model": "gpt-5.6-luna",
+  "judgeModel": "gpt-5.3-codex"
+}

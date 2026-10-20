@@ -43,7 +43,7 @@ runs:
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       with:
         repository: microsoft/BC-ALAgents
-        ref: ${{ steps.engine-sha.outputs.sha }}
+        ref: 29c3407af10321af34574fe292deda3e83bca7cf
         path: .agent-harnesses/bc-alagents
         persist-credentials: false
 
