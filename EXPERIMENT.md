@@ -128,6 +128,17 @@ preparation revision. No source commits, prompts, models, global Windows setting
 or cumulative invocation limits change. An incomplete continuation is not a
 license to reset a marker or retry inference.
 
+Git inventories also honor the pinned `.gitattributes` and native checkout
+line endings: raw blob mismatches must match Git's exact checkout-produced
+hashes. External filters and working-tree encodings fail closed. No converted
+content is logged or supplied as citation evidence. If the reserved successor
+stopped during source verification, before selection/inputs/preflight were
+written, `--finish-continuation --root C:\bv3-e900-02` explicitly creates an
+`r2` validation revision. It retains the earlier records and reuses a completed
+copy only after its entire inventory matches exactly; partial or changed copies
+fail. This offline action neither resets execution markers nor permits inference
+retries.
+
 `tools\review_voting_pilot.py` is an isolated, one-shot experiment, not a full
 evaluation workflow. Its checked-in `tools\review_voting_config.json` freezes six
 sample IDs, the immutable deterministic-leaf engine SHA and its transitive

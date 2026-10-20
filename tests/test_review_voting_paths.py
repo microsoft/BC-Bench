@@ -8,7 +8,7 @@ from bcbench_core.git import apply_patch
 from bcbench.dataset.codereview import CodeReviewEntry
 from tools import review_voting_paths as paths
 from tools.review_voting_evidence import file_digest, tree_digest
-from tools.review_voting_recovery import expected_source_inventory, prove_no_inference
+from tools.review_voting_recovery import expected_source_inventory, prove_no_inference, validate_checkout
 
 
 def test_long_path_inventory_hash_and_execution_copy_account_for_every_file(tmp_path):
@@ -127,3 +127,46 @@ def test_pre_inference_proof_rejects_any_inference_artifact(tmp_path):
     (tmp_path / "case-01" / "baseline").mkdir()
     with pytest.raises(ValueError, match="Unexpected inference"):
         prove_no_inference(tmp_path)
+
+
+def test_pinned_checkout_attributes_resolve_crlf_without_changing_source(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=source, capture_output=True, check=True).stdout
+
+    git("init", "--quiet")
+    git("config", "core.autocrlf", "false")
+    (source / ".gitattributes").write_bytes(b"* text=auto eol=crlf\n")
+    (source / "existing.al").write_bytes(b"first\nsecond\n")
+    git("add", ".")
+    git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Fixture")
+    git("checkout-index", "--all", "--force")
+    # Make the normal checkout conversion explicit even if Git kept an up-to-date worktree file.
+    (source / "existing.al").write_bytes(b"first\r\nsecond\r\n")
+    patch = "diff --git a/new.al b/new.al\nnew file mode 100644\n--- /dev/null\n+++ b/new.al\n@@ -0,0 +1 @@\n+new\n"
+    entry = CodeReviewEntry.model_validate(
+        {
+            "instance_id": "synthetic__fixture-01",
+            "base_commit": git("rev-parse", "HEAD").decode().strip(),
+            "created_at": "2026-01-01",
+            "environment_setup_version": "27.0",
+            "project_paths": [],
+            "patch": patch,
+            "metadata": {"area": "security"},
+            "expected_comments": [],
+        }
+    )
+    apply_patch(source, patch)
+    scratch = tmp_path / "validation"
+    expected = expected_source_inventory(source, entry, scratch)
+    actual = paths.snapshot_inventory(source)
+    before = tree_digest(source)
+    assert "existing.al" in validate_checkout(source, scratch, actual, expected)
+    assert tree_digest(source) == before
+    (source / "existing.al").write_bytes(b"wrong\r\n")
+    scratch2 = tmp_path / "validation2"
+    expected2 = expected_source_inventory(source, entry, scratch2)
+    with pytest.raises(ValueError, match="differs from pinned Git checkout"):
+        validate_checkout(source, scratch2, paths.snapshot_inventory(source), expected2)

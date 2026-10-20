@@ -516,7 +516,8 @@ def test_actual_copy_preflight_failure_prevents_first_paid_marker(ready, monkeyp
     assert not (root / "case-01").exists()
 
 
-def test_continuation_preserves_old_markers_and_revalidates_before_execution(ready, monkeypatch, tmp_path):
+@pytest.mark.parametrize("finish", [False, True])
+def test_continuation_preserves_old_markers_and_revalidates_before_execution(ready, monkeypatch, tmp_path, finish):
     from tools import review_voting_recovery as recovery
     from tools.review_voting_paths import snapshot_inventory
 
@@ -535,7 +536,27 @@ def test_continuation_preserves_old_markers_and_revalidates_before_execution(rea
     monkeypatch.setattr(recovery, "verify_knowledge", lambda *a: {"inventory": snapshot_inventory(origin / "knowledge")})
     monkeypatch.setattr(pilot, "command", lambda args, cwd=None: config["bcquality_sha"] if cwd and cwd.name == "knowledge" else "a" * 40)
     destination = tmp_path / "continuation"
-    recovery.prepare_continuation(origin, destination, benchmark)
+    if finish:
+        validate = recovery.validate_checkout
+        seen = []
+
+        def interrupted(source, scratch, actual, expected):
+            seen.append(source)
+            if len(seen) == 3:
+                raise ValueError("fixture pre-readiness inventory failure")
+            return validate(source, scratch, actual, expected)
+
+        monkeypatch.setattr(recovery, "validate_checkout", interrupted)
+        with pytest.raises(ValueError, match="pre-readiness inventory failure"):
+            recovery.prepare_continuation(origin, destination, benchmark)
+        previous = pilot.sha(destination / "preparation-revision.json")
+        monkeypatch.setattr(recovery, "validate_checkout", validate)
+        recovery.prepare_continuation(origin, destination, benchmark, finish=True)
+        assert pilot.sha(destination / "preparation-revision.json") == previous
+        manifest = json.loads((destination / "validation-r2" / "case-01" / "manifest.json").read_text())
+        assert manifest["previous_copy_reuse_requires_exact_inventory"]
+    else:
+        recovery.prepare_continuation(origin, destination, benchmark)
     assert pilot.sha(origin / "execution" / "started.json") == old_marker
     assert all(pilot.sha(origin / name) == value for name, value in historical.items())
     assert not (destination / "execution").exists()
@@ -546,3 +567,13 @@ def test_continuation_preserves_old_markers_and_revalidates_before_execution(rea
     with pytest.raises(ValueError, match="Unexpected inference"):
         pilot.run(destination, benchmark)
     assert not (destination / "execution").exists()
+
+
+def test_finish_continuation_is_explicit_offline_dispatch(tmp_path, monkeypatch):
+    from tools import review_voting_recovery as recovery
+
+    calls = []
+    pilot.save(tmp_path / "preparation-revision.json", {"origin": str(tmp_path / "old")})
+    monkeypatch.setattr(recovery, "prepare_continuation", lambda *a, **k: calls.append(k))
+    pilot.main(["--finish-continuation", "--root", str(tmp_path)])
+    assert calls == [{"finish": True}]

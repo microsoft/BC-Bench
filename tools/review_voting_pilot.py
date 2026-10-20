@@ -567,6 +567,7 @@ def main(argv: list[str] | None = None) -> None:
     modes.add_argument("--preflight", action="store_true", help="Offline runtime checks only; no inference")
     modes.add_argument("--execute", action="store_true", help="Explicit paid execution; requires separate approval")
     modes.add_argument("--prepare-continuation", type=Path, metavar="FAILED_ROOT", help="Revalidate and copy a proven pre-inference failure to fresh --root; no inference")
+    modes.add_argument("--finish-continuation", action="store_true", help="Finish the preserved pre-readiness recovery with checkout-aware inventories; no inference")
     parser.add_argument("--cli", type=Path, help="Native engine-supported executable; required only for preparation")
     arguments = parser.parse_args(argv)
     root = arguments.root.resolve()
@@ -581,6 +582,11 @@ def main(argv: list[str] | None = None) -> None:
         from tools.review_voting_recovery import prepare_continuation
 
         prepare_continuation(arguments.prepare_continuation.resolve(), root, benchmark)
+    elif arguments.finish_continuation:
+        from tools.review_voting_recovery import prepare_continuation
+
+        revision = json.loads((root / "preparation-revision.json").read_text(encoding="utf-8"))
+        prepare_continuation(Path(revision["origin"]), root, benchmark, finish=True)
     elif arguments.preflight:
         print(json.dumps(preflight(root, benchmark), indent=2))
     else:

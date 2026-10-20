@@ -64,6 +64,60 @@ def expected_source_inventory(source: Path, entry: CodeReviewEntry, scratch: Pat
     return expected
 
 
+def checkout_hashes(source: Path, scratch: Path, blobs: dict[str, str]) -> dict[str, dict[str, Any]]:
+    env = dict(os.environ)
+    env.update(
+        GIT_INDEX_FILE=str(scratch / "index"),
+        GIT_OBJECT_DIRECTORY=str(scratch / "objects"),
+        GIT_ALTERNATE_OBJECT_DIRECTORIES=pilot.command(["git", "rev-parse", "--path-format=absolute", "--git-path", "objects"], source),
+    )
+    tree = subprocess.run(["git", "write-tree"], cwd=source, env=env, capture_output=True, check=True).stdout.decode().strip()
+    args = ["git", "-c", "core.longpaths=true", "--attr-source=" + tree]
+    attributes = (
+        subprocess.run(
+            [*args, "check-attr", "-z", "--stdin", "filter", "working-tree-encoding"],
+            cwd=source,
+            env=env,
+            input=("\0".join(blobs) + "\0").encode(),
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode()
+        .rstrip("\0")
+        .split("\0")
+    )
+    if len(attributes) != len(blobs) * 6 or any(value not in ("unspecified", "unset") for value in attributes[2::3]):
+        raise ValueError("External checkout filters/encodings are unsupported; no transformed source is recovered")
+    reference = scratch / "checkout-reference"
+    reference.mkdir()
+    # Materialize only paths needing native checkout conversion, from the
+    # independent index. Compare hashes only, never decode this as citation evidence.
+    subprocess.run(
+        [*args, "checkout-index", "--prefix=" + str(reference) + os.sep, "-z", "--stdin"],
+        cwd=source,
+        env=env,
+        input=("\0".join(blobs) + "\0").encode(),
+        capture_output=True,
+        check=True,
+    )
+    result = snapshot_inventory(reference)
+    if set(result) != set(blobs):
+        raise ValueError("Independent checkout path inventory is incomplete")
+    return result
+
+
+def validate_checkout(source: Path, scratch: Path, actual: dict[str, dict[str, Any]], expected: dict[str, str]) -> list[str]:
+    if set(actual) != set(expected):
+        validate_inventory(actual, expected)
+    mismatches = {path: blob for path, blob in expected.items() if actual[path]["git_blob"] != blob}
+    if mismatches:
+        converted = checkout_hashes(source, scratch, mismatches)
+        bad = [path for path in mismatches if actual[path] != converted[path]]
+        if bad:
+            raise ValueError(f"Snapshot differs from pinned Git checkout/patch contents: {bad[:5]}")
+    return sorted(mismatches)
+
+
 def verify_knowledge(origin: Path, root: Path, config: dict[str, Any]) -> dict[str, Any]:
     reference = root / "validation" / "knowledge-reference"
     pilot.command(["git", "clone", "--quiet", "--shared", "--no-checkout", str(origin / "knowledge"), str(reference)])
@@ -116,7 +170,7 @@ def verify_knowledge(origin: Path, root: Path, config: dict[str, Any]) -> dict[s
     return {"inventory": actual, "generated_comparisons": canonical, "reference_inventory": expected}
 
 
-def prepare_continuation(origin: Path, root: Path, benchmark: Path) -> None:
+def prepare_continuation(origin: Path, root: Path, benchmark: Path, *, finish: bool = False) -> None:
     proof = prove_no_inference(origin)
     selection = json.loads((origin / "selection.json").read_text(encoding="utf-8"))
     config = pilot.load_config()
@@ -129,15 +183,31 @@ def prepare_continuation(origin: Path, root: Path, benchmark: Path) -> None:
         raise ValueError("Original engine is not clean at its frozen pin")
     if pilot.command(["git", "rev-parse", "HEAD"], origin / "knowledge") != config["bcquality_sha"]:
         raise ValueError("Original knowledge pin changed")
-    root.mkdir(parents=True, exist_ok=False)
-    claim = {"destination": str(root), "created_unix": time.time(), **proof}
-    with (origin / "continuation-claim.json").open("x", encoding="utf-8") as stream:
-        json.dump(claim, stream, indent=2)
-    pilot.save(root / "zero-inference-proof.json", proof)
+    validation = root / ("validation-r2" if finish else "validation")
+    if finish:
+        for name in ("execution", "selection.json", "inputs.json", "preflight.json", "copy-preflight"):
+            if (root / name).exists():
+                raise ValueError(f"Cannot finish an executed, ready or later-stage preparation: {name}")
+        if any(root.glob("case-*")):
+            raise ValueError("Unexpected execution case artifacts in incomplete preparation")
+        if json.loads((origin / "continuation-claim.json").read_text())["destination"] != str(root):
+            raise ValueError("Not the reserved successor")
+        if json.loads((root / "zero-inference-proof.json").read_text()) != proof:
+            raise ValueError("Predecessor proof changed")
+        previous = json.loads((root / "preparation-revision.json").read_text())
+        if previous["original_selection"] != selection:
+            raise ValueError("Original frozen selection changed")
+        validation.mkdir()
+    else:
+        root.mkdir(parents=True, exist_ok=False)
+        claim = {"destination": str(root), "created_unix": time.time(), **proof}
+        with (origin / "continuation-claim.json").open("x", encoding="utf-8") as stream:
+            json.dump(claim, stream, indent=2)
+        pilot.save(root / "zero-inference-proof.json", proof)
     pilot.save(
-        root / "preparation-revision.json",
+        root / ("preparation-revision-r2.json" if finish else "preparation-revision.json"),
         {
-            "revision": "strict-long-paths-v3-r1",
+            "revision": "strict-long-paths-native-checkout-v3-r2",
             "origin": str(origin),
             "historical_readiness": "invalid: enumeration silently omitted unstatable long paths",
             "historical_records": {name: pilot.sha(origin / name) for name in ("selection.json", "inputs.json", "preflight.json", "readiness-summary.json")},
@@ -145,27 +215,35 @@ def prepare_continuation(origin: Path, root: Path, benchmark: Path) -> None:
             "original_selection": selection,
         },
     )
-    copy_tree(origin / "engine", root / "engine")
+    if finish:
+        if pilot.get_pr_review_version(root / "engine") != config["engine_sha"]:
+            raise ValueError("Existing engine copy is not clean at the frozen pin")
+    else:
+        copy_tree(origin / "engine", root / "engine")
     entries = pilot.selected_entries(benchmark, config)
     digests = []
     for number, entry in enumerate(entries, 1):
         case = f"case-{number:02}"
         source = origin / "prepared" / case / "source"
-        expected = expected_source_inventory(source, entry, root / "validation" / case)
+        expected = expected_source_inventory(source, entry, validation / case)
         actual = snapshot_inventory(source)
-        validate_inventory(actual, expected)
+        converted = validate_checkout(source, validation / case, actual, expected)
+        destination = root / "prepared" / case / "source"
+        reuse = finish and destination.exists()
         pilot.save(
-            root / "validation" / case / "manifest.json",
+            validation / case / "manifest.json",
             {
                 "instance_id": entry.instance_id,
                 "base_commit": entry.base_commit,
                 "patch_serialization": "bcbench_core.git.apply_patch: UTF-8 native text newline",
                 "expected_git_blobs": expected,
                 "inventory": actual,
+                "git_checkout_conversion_paths": converted,
+                "previous_copy_reuse_requires_exact_inventory": reuse,
             },
         )
-        destination = root / "prepared" / case / "source"
-        copy_tree(source, destination)
+        if not reuse:
+            copy_tree(source, destination)
         if snapshot_inventory(destination) != actual:
             raise ValueError(f"Execution preparation copy changed {case}")
         # Live tools still use ordinary paths. Keep every planned verifier path below MAX_PATH.
