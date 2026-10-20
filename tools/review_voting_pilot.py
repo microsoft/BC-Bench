@@ -14,12 +14,10 @@ complete-case A/B/C comparisons have separate denominators.
 """
 
 import argparse
-import hashlib
 import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -48,10 +46,12 @@ from tools.review_voting_evidence import (
     aggregate,
     digest_json,
     evidence_prompt,
+    file_digest,
     resolve_evidence,
     tree_digest,
     validate_votes,
 )
+from tools.review_voting_paths import copy_tree, filesystem_path
 
 MODEL = "gpt-5.6-sol"
 JUDGE = "gpt-5.3-codex"
@@ -70,7 +70,7 @@ def save(path: Path, value: object) -> None:
 
 
 def sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return file_digest(path)
 
 
 def check_snapshot(root: Path, expected: str) -> None:
@@ -131,8 +131,8 @@ def run_verifier(
     start = start_once(folder)
     work = folder / "work"
     work.mkdir()
-    shutil.copytree(source, work / "source", ignore=shutil.ignore_patterns(".git"))
-    shutil.copytree(knowledge, work / "knowledge", ignore=shutil.ignore_patterns(".git"))
+    copy_tree(source, work / "source", exclude_git=True)
+    copy_tree(knowledge, work / "knowledge", exclude_git=True)
     save(work / "candidates.json", candidates)
     save(work / "context.json", context)
     before = tree_digest(work)
@@ -171,6 +171,8 @@ def run_verifier(
             "candidate_sha256": digest_json(candidates),
             "adapter_sha256": sha(Path(__file__)),
             "evidence_adapter_sha256": sha(Path(__file__).with_name("review_voting_evidence.py")),
+            "recovery_adapter_sha256": sha(Path(__file__).with_name("review_voting_recovery.py")),
+            "filesystem_adapter_sha256": sha(Path(__file__).with_name("review_voting_paths.py")),
         },
     )
     with (folder / "stdout.jsonl").open("w", encoding="utf-8") as out, (folder / "stderr.txt").open("w", encoding="utf-8") as err:
@@ -288,6 +290,8 @@ def implementation_identity(benchmark: Path) -> dict[str, str]:
         "dataset_sha256": sha(benchmark / "dataset" / "codereview.jsonl"),
         "adapter_sha256": sha(Path(__file__)),
         "evidence_adapter_sha256": sha(Path(__file__).with_name("review_voting_evidence.py")),
+        "filesystem_adapter_sha256": sha(Path(__file__).with_name("review_voting_paths.py")),
+        "recovery_adapter_sha256": sha(Path(__file__).with_name("review_voting_recovery.py")),
         "config_sha256": sha(CONFIG_PATH),
         "shared_config_sha256": sha(benchmark / "src" / "bcbench" / "agent" / "shared" / "config.yaml"),
     }
@@ -324,8 +328,18 @@ def prepare(root: Path, benchmark: Path, cli: Path) -> None:
 def preflight(root: Path, benchmark: Path) -> dict[str, Any]:
     config = load_config()
     selection = json.loads((root / "selection.json").read_text(encoding="utf-8"))
-    if selection["config"] != config or any(selection[key] != value for key, value in implementation_identity(benchmark).items()):
+    if selection["config"] != config or any(selection.get(key) != value for key, value in implementation_identity(benchmark).items()):
         raise ValueError("Frozen selection/implementation changed; prepare a fresh root")
+    if (root / "zero-inference-proof.json").exists():
+        from tools.review_voting_recovery import prove_no_inference
+
+        proof = json.loads((root / "zero-inference-proof.json").read_text(encoding="utf-8"))
+        origin = Path(proof["origin"])
+        if prove_no_inference(origin) != proof:
+            raise ValueError("Predecessor is no longer a proven pre-inference failure")
+        claim = json.loads((origin / "continuation-claim.json").read_text(encoding="utf-8"))
+        if claim["destination"] != str(root):
+            raise ValueError("This is not the exclusively reserved continuation")
     if get_pr_review_version(root / "engine") != config["engine_sha"]:
         raise ValueError("Engine checkout must be clean at the frozen experiment SHA")
     declared = yaml.safe_load((root / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml").read_text(encoding="utf-8"))
@@ -362,19 +376,39 @@ def preflight(root: Path, benchmark: Path) -> dict[str, Any]:
             raise ValueError("Prepared base revision mismatch")
         command(["git", "cat-file", "-e", entry.base_commit + "^{commit}"], source)
         for line in entry.patch.splitlines():
-            if line.startswith("+++ b/") and not (source / line[6:].strip()).is_file():
-                raise ValueError("Prepared changed source file missing")
+            if line.startswith("+++ b/"):
+                filesystem_path(source / line[6:].strip()).stat()
     if not any((root / "knowledge" / "microsoft" / "knowledge").rglob("*.md")):
         raise ValueError("No engine-pinned knowledge articles available")
+    execution_copy_preflight(root, inputs)
     return {
         "status": "offline_checks_passed",
         "config": config,
         "cli": cli,
         "credentials_present": bool(os.environ.get("COPILOT_GITHUB_TOKEN") or os.environ.get("GH_TOKEN")),
         "paid_calls": 0,
+        "source_sha256": observed,
         "limits": {"baseline": 6, "verifier": 18, "judge_batches": 6, "retries": 0},
         "unproven": ["model availability/authentication", "live read visibility and JSONL view shape", "baseline execution/telemetry", "semantic correctness"],
     }
+
+
+def execution_copy_preflight(root: Path, inputs: dict[str, Any]) -> None:
+    folder = root / "copy-preflight"
+    receipt = root / "copy-preflight.json"
+    if not receipt.exists():
+        folder.mkdir()
+        for n in range(1, 7):
+            copy_tree(root / "prepared" / f"case-{n:02}" / "source", folder / f"case-{n:02}" / "source")
+        copy_tree(root / "knowledge", folder / "knowledge", exclude_git=True)
+    for n, expected in enumerate(inputs["source_sha256"], 1):
+        check_snapshot(folder / f"case-{n:02}" / "source", expected)
+    check_snapshot(folder / "knowledge", inputs["knowledge_sha256"])
+    if receipt.exists():
+        if json.loads(receipt.read_text(encoding="utf-8")) != inputs:
+            raise ValueError("Execution-copy preflight identity changed")
+    else:
+        save(receipt, inputs)
 
 
 def set_run_environment(original: dict[str, str], home: Path, selection: dict[str, Any]) -> None:
@@ -462,7 +496,8 @@ def run(root: Path, benchmark: Path) -> None:
         for index, entry in enumerate(entries, 1):
             case = root / f"case-{index:02}"
             source = case / "source"
-            shutil.copytree(root / "prepared" / f"case-{index:02}" / "source", source)
+            copy_tree(root / "prepared" / f"case-{index:02}" / "source", source)
+            check_snapshot(source, checks["source_sha256"][index - 1])
             save(case / "gold-private.json", entry.model_dump(mode="json"))
             baseline = case / "baseline"
             try:
@@ -531,6 +566,7 @@ def main(argv: list[str] | None = None) -> None:
     modes.add_argument("--prepare", action="store_true", help="Prepare fixed source/engine/knowledge; no inference")
     modes.add_argument("--preflight", action="store_true", help="Offline runtime checks only; no inference")
     modes.add_argument("--execute", action="store_true", help="Explicit paid execution; requires separate approval")
+    modes.add_argument("--prepare-continuation", type=Path, metavar="FAILED_ROOT", help="Revalidate and copy a proven pre-inference failure to fresh --root; no inference")
     parser.add_argument("--cli", type=Path, help="Native engine-supported executable; required only for preparation")
     arguments = parser.parse_args(argv)
     root = arguments.root.resolve()
@@ -541,6 +577,10 @@ def main(argv: list[str] | None = None) -> None:
         prepare(root, benchmark, arguments.cli.resolve())
     elif arguments.cli:
         parser.error("--cli can only be set when freezing preparation")
+    elif arguments.prepare_continuation:
+        from tools.review_voting_recovery import prepare_continuation
+
+        prepare_continuation(arguments.prepare_continuation.resolve(), root, benchmark)
     elif arguments.preflight:
         print(json.dumps(preflight(root, benchmark), indent=2))
     else:

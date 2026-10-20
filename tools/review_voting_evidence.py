@@ -9,6 +9,8 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from tools.review_voting_paths import filesystem_path, snapshot_inventory
+
 ADAPTER_VERSION = "live-views-v3"
 PROMPT_VERSION = "read-only-verification-v3"
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -21,23 +23,12 @@ def digest_json(value: object) -> str:
 
 def file_digest(path: Path) -> str:
     # Opaque identity only; source bytes are never decoded for citation matching.
-    with path.open("rb") as stream:
+    with filesystem_path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def tree_digest(root: Path) -> str:
-    if not root.is_dir() or root.is_symlink():
-        raise ValueError("Snapshot root must be a real directory")
-    files = []
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root)
-        if ".git" in relative.parts:
-            continue
-        if path.is_symlink():
-            raise ValueError("Snapshot contains a symbolic link")
-        if path.is_file():
-            files.append((relative.as_posix(), file_digest(path)))
-    return digest_json(files)
+    return digest_json([(path, record["sha256"]) for path, record in snapshot_inventory(root).items()])
 
 
 class FrozenModel(BaseModel):

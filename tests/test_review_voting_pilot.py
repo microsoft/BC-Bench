@@ -500,3 +500,49 @@ def test_prompt_preserves_evidence_requirements_and_no_raw_injection():
         assert required in prompt
     assert "Protected views:" not in prompt
     assert "Frozen diff:" not in prompt
+
+
+def test_actual_copy_preflight_failure_prevents_first_paid_marker(ready, monkeypatch):
+    root, benchmark, _, _ = ready
+    monkeypatch.setenv("GH_TOKEN", "fixture")
+
+    def broken_copy(*args, **kwargs):
+        raise FileNotFoundError("fixture execution-copy failure")
+
+    monkeypatch.setattr(pilot, "copy_tree", broken_copy)
+    with pytest.raises(FileNotFoundError, match="execution-copy failure"):
+        pilot.run(root, benchmark)
+    assert not (root / "execution").exists()
+    assert not (root / "case-01").exists()
+
+
+def test_continuation_preserves_old_markers_and_revalidates_before_execution(ready, monkeypatch, tmp_path):
+    from tools import review_voting_recovery as recovery
+    from tools.review_voting_paths import snapshot_inventory
+
+    origin, benchmark, _, config = ready
+    identity = {"fixture_identity": "frozen", "dataset_sha256": "dataset", "config_sha256": "config", "shared_config_sha256": "shared"}
+    monkeypatch.setattr(pilot, "implementation_identity", lambda *a: identity)
+    selection = json.loads((origin / "selection.json").read_text())
+    pilot.save(origin / "selection.json", selection | identity)
+    pilot.save(origin / "preflight.json", {"old": "invalid readiness"})
+    pilot.save(origin / "readiness-summary.json", {"old": "invalid readiness"})
+    pilot.start_once(origin / "execution")
+    (origin / "case-01" / "source").mkdir(parents=True)
+    historical = {p.name: pilot.sha(p) for p in origin.glob("*.json")}
+    old_marker = pilot.sha(origin / "execution" / "started.json")
+    monkeypatch.setattr(recovery, "expected_source_inventory", lambda source, *a: {p: r["git_blob"] for p, r in snapshot_inventory(source).items()})
+    monkeypatch.setattr(recovery, "verify_knowledge", lambda *a: {"inventory": snapshot_inventory(origin / "knowledge")})
+    monkeypatch.setattr(pilot, "command", lambda args, cwd=None: config["bcquality_sha"] if cwd and cwd.name == "knowledge" else "a" * 40)
+    destination = tmp_path / "continuation"
+    recovery.prepare_continuation(origin, destination, benchmark)
+    assert pilot.sha(origin / "execution" / "started.json") == old_marker
+    assert all(pilot.sha(origin / name) == value for name, value in historical.items())
+    assert not (destination / "execution").exists()
+    assert not (destination / "case-01").exists()
+    assert (destination / "copy-preflight.json").is_file()
+    assert json.loads((destination / "preflight.json").read_text())["paid_calls"] == 0
+    (origin / "case-01" / "baseline").mkdir()
+    with pytest.raises(ValueError, match="Unexpected inference"):
+        pilot.run(destination, benchmark)
+    assert not (destination / "execution").exists()

@@ -100,6 +100,34 @@ Articulate what you expect to see before triggering anything. A short hypothesis
 
 ### Bounded local review-verification pilot
 
+Windows snapshot enumeration, hashing and copying use extended-length filesystem
+paths and reject unstatable entries. Offline preflight performs the actual
+execution copy of all six sources and knowledge before allowing the first paid
+invocation; failed copy artifacts are retained.
+
+For the documented v3 **pre-inference** copy failure only, keep the failed root
+unchanged and reserve a fresh, short, uniquely owned continuation root:
+
+```powershell
+python -m uv run python tools\review_voting_pilot.py --prepare-continuation $failedRoot --root C:\bv3-e900-02
+python -m uv run python tools\review_voting_pilot.py --preflight --root C:\bv3-e900-02
+# Only under the existing explicit paid authorization:
+python -m uv run python tools\review_voting_pilot.py --execute --root C:\bv3-e900-02
+```
+
+Continuation preparation makes **zero inference calls**. It rejects any previous
+baseline/verifier/judge artifacts, reserves one successor, and independently
+compares every source path/blob to the pinned Git tree plus dataset patch using
+an isolated index/object directory. Nonempty `project_paths` are unsupported and
+fail closed. Knowledge is compared to a fresh local checkout filtered by the
+same pinned engine: only the generated filter-report root and skill-index
+timestamp are excluded from the generated JSON comparison, not from the frozen
+snapshot hash. Old incomplete digests remain historical invalid readiness;
+corrected manifests, implementation identity and copy receipts live in the new
+preparation revision. No source commits, prompts, models, global Windows settings
+or cumulative invocation limits change. An incomplete continuation is not a
+license to reset a marker or retry inference.
+
 `tools\review_voting_pilot.py` is an isolated, one-shot experiment, not a full
 evaluation workflow. Its checked-in `tools\review_voting_config.json` freezes six
 sample IDs, the immutable deterministic-leaf engine SHA and its transitive
