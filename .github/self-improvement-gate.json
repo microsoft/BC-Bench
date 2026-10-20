@@ -1,0 +1,10 @@
+{
+  "engineCommit": "edd46ef34e9b38d7cc2fc3e1c1c806ff8e476ab6",
+  "bcQualityCommit": "f820aa1e8515a6483b828d9a5b1c55112461b4d9",
+  "datasetHash": "A99E41E40A33234EBBA8B4BE4DBC721D5AAC2204C16EFEB5BB7BA0EBA545E8DE",
+  "entryIds": [
+    "synthetic__breaking-access-unsupported-page-property-01"
+  ],
+  "model": "gpt-5.6-luna",
+  "judgeModel": "gpt-5.3-codex"
+}
