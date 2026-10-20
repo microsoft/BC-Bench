@@ -1,566 +1,500 @@
-import hashlib
 import json
-import shutil
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from pydantic import ValidationError
 
+from bcbench.dataset.codereview import CodeReviewEntry
 from tools import review_voting_pilot as pilot
-from tools.review_voting_evidence import (
-    EvidenceBundle,
-    EvidenceCapture,
-    ProtectedView,
-    aggregate,
-    check_bundle,
-    digest_json,
-    evidence_prompt,
-    file_digest,
-    resolve_evidence,
-    tree_digest,
-    validate_votes,
-)
+from tools.review_voting_evidence import aggregate, evidence_prompt, resolve_evidence, tree_digest, validate_votes
 
 
 @pytest.fixture(autouse=True)
-def forbid_real_subprocesses(monkeypatch):
-    monkeypatch.setattr(pilot.subprocess, "run", lambda *args, **kwargs: pytest.fail("Tests must never launch a model or subprocess"))
+def no_real_process(monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("No real subprocess or paid calls in tests"))
 
 
-@pytest.fixture
-def captured(tmp_path):
-    source = tmp_path / "source"
-    knowledge = tmp_path / "knowledge"
-    source.mkdir()
-    knowledge.mkdir()
-    source_text = "procedure Validate()\nbegin\n    exit;\nend;\n"
-    knowledge_text = "# Guidance\n\nChoose access deliberately.\n"
-    (source / "helper.al").write_text(source_text, encoding="utf-8")
-    (knowledge / "guide.md").write_text(knowledge_text, encoding="utf-8")
-    candidates = [{"id": "F001", "comment": {"file": "helper.al", "body": "Example claim"}}]
-    patch = "synthetic fixture diff"
-    bundle = EvidenceBundle(
-        capture_provider="policy-filtered-view",
-        source_sha256=tree_digest(source),
-        knowledge_sha256=tree_digest(knowledge),
-        candidates_sha256=digest_json(candidates),
-        diff_sha256=hashlib.sha256(patch.encode()).hexdigest(),
-        views=(
-            ProtectedView(
-                capture_id="fixture-source",
-                tree="source",
-                file="helper.al",
-                file_sha256=file_digest(source / "helper.al"),
-                line_start=1,
-                line_end=4,
-                status="available",
-                text=source_text,
-                reason="Known non-sensitive synthetic fixture",
-            ),
-            ProtectedView(
-                capture_id="fixture-knowledge",
-                tree="knowledge",
-                file="guide.md",
-                file_sha256=file_digest(knowledge / "guide.md"),
-                line_start=3,
-                line_end=3,
-                status="available",
-                text="Choose access deliberately.",
-                reason="Known fixture range",
-            ),
-        ),
-    )
-    return source, knowledge, candidates, patch, bundle
-
-
-def decision(bundle, key="F001", verdict="supported", status="available"):
+def vote(verdict="supported", status="available"):
     return {
-        "id": key,
+        "id": "F001",
         "verdict": verdict,
-        "trigger": "input",
-        "call_path_and_guards": "caller unknown",
-        "impact": "example impact",
-        "counterevidence": "intent unknown",
-        "evidence_ids": list(bundle.indexed_views()),
+        "trigger": "the input branch is reached",
+        "call_path_and_guards": "caller invokes helper; no earlier guard in the viewed branch",
+        "impact": "operation fails on this input",
+        "counterevidence": "the adjacent early exit is not taken",
         "source_view_status": status,
+        "evidence": [
+            {"tree": "source", "file": "helper.al", "line_start": 2, "line_end": 3, "quote": "begin\nend;"},
+            {"tree": "knowledge", "file": "guide.md", "line_start": 2, "line_end": 2, "quote": "Check the guard."},
+        ],
     }
 
 
-def resolved(bundle, ids=("F001",), verdicts=("supported",)):
-    return resolve_evidence(validate_votes(list(ids), [decision(bundle, key, verdict) for key, verdict in zip(ids, verdicts, strict=True)]), bundle)
+def view_events(work, *, failed=False, masked=False, numbered=False):
+    events = []
+    for name, original, span in (
+        ("source/helper.al", "begin\nend;", [2, 3]),
+        ("knowledge/guide.md", "Check the guard.", [2, 2]),
+    ):
+        text = "****\nend;" if masked and name.startswith("source") else original
+        if numbered:
+            text = "\n".join(f"L{n}:{line}" for n, line in enumerate(text.splitlines(), span[0]))
+        events.extend(
+            [
+                {"type": "tool.execution_start", "data": {"toolName": "view", "toolCallId": name, "arguments": {"path": str(work / name), "view_range": span}}},
+                {"type": "tool.execution_complete", "data": {"toolCallId": name, "success": not failed, "result": {"content": text}}},
+            ]
+        )
+    return events
 
 
-def changed_bundle(bundle, **changes):
-    return EvidenceBundle.model_validate_json(json.dumps(bundle.model_dump(mode="json") | changes))
+def resolved(work, verdict="supported"):
+    return resolve_evidence(validate_votes(["F001"], [vote(verdict)]), view_events(work), work)
 
 
-@pytest.mark.parametrize("payload", [[], [{"id": "unknown"}], [{"id": "F001"}, {"id": "F001"}]])
-def test_missing_or_incomplete_decisions_rejected(payload):
-    with pytest.raises(ValueError, match=r"Missing|validation"):
-        validate_votes(["F001"], payload)
+@pytest.fixture
+def safe_source(tmp_path):
+    source, knowledge = tmp_path / "source", tmp_path / "knowledge"
+    source.mkdir()
+    knowledge.mkdir()
+    (source / "helper.al").write_text("procedure Test()\nbegin\nend;\n")
+    (knowledge / "guide.md").write_text("# Rule\nCheck the guard.\n")
+    return source, knowledge
 
 
-def test_unknown_duplicate_and_missing_candidate_ids(captured):
-    bundle = captured[-1]
-    for payload in ([decision(bundle, "unknown")], [decision(bundle), decision(bundle)], []):
-        with pytest.raises(ValueError, match="Missing, duplicate, or unexpected"):
-            validate_votes(["F001"], payload)
-    with pytest.raises(ValueError, match="Duplicate candidate"):
-        validate_votes(["F001", "F001"], [])
-    with pytest.raises(TypeError, match="JSON array"):
-        validate_votes(["F001"], {})
+@pytest.mark.parametrize("numbered", [False, True])
+def test_resolves_only_permitted_tool_view(tmp_path, numbered):
+    votes = resolve_evidence(validate_votes(["F001"], [vote()]), view_events(tmp_path, numbered=numbered), tmp_path)
+    assert votes[0].evidence_resolution == "tool_view_matched"
+    assert votes[0].evidence[0].reference.line_start == 2
+    assert votes[0].evidence[0].permitted_content
+    assert votes[0].semantic_correctness == votes[0].disk_text_equivalence == "not_assessed"
 
 
-def test_immutable_ids_resolve_authoritative_ranges_and_content(captured):
-    bundle = captured[-1]
-    roundtrip = EvidenceBundle.model_validate_json(bundle.model_dump_json())
-    assert roundtrip.indexed_views() == bundle.indexed_views()
-    result = resolved(bundle)[0]
-    assert result.evidence[1].view.file == "guide.md"
-    assert result.evidence[1].view.line_start == result.evidence[1].view.line_end == 3
-    assert result.evidence[1].view.text == "Choose access deliberately."
-    assert result.evidence_resolution == "resolved"
-    assert result.semantic_correctness == "not_assessed"
-    with pytest.raises(ValidationError, match="frozen"):
-        bundle.views[0].line_start = 2
-
-
-def test_model_cannot_author_a_quote_or_wrong_line_number(captured):
-    for field, value in (("quote", "invented"), ("line_start", 22), ("file", "other.al")):
-        payload = decision(captured[-1]) | {field: value}
-        with pytest.raises(ValidationError, match="Extra inputs"):
-            validate_votes(["F001"], [payload])
-
-
-@pytest.mark.parametrize("kind", ["unknown", "duplicate", "no-source"])
-def test_invalid_evidence_references(captured, kind):
-    bundle = captured[-1]
-    payload = decision(bundle)
-    keys = payload["evidence_ids"]
-    payload["evidence_ids"] = ["E-unknown"] if kind == "unknown" else [keys[0], keys[0]] if kind == "duplicate" else [keys[1]]
-    with pytest.raises(ValueError, match=r"unknown|duplicate|source evidence"):
-        resolve_evidence(validate_votes(["F001"], [payload]), bundle)
-
-
-def test_incorrect_real_reference_does_not_prove_claim(captured):
-    result = resolved(captured[-1])[0]
-    # Authentic source selection cannot prove this fixture's unsubstantiated claim.
-    assert result.decision.verdict == "supported"
-    assert result.semantic_correctness == "not_assessed"
-    assert result.evidence_resolution == "resolved"
-
-
-@pytest.mark.parametrize("change", ["source", "knowledge", "new-file", "deleted-file"])
-def test_changed_snapshot_rejected(captured, change):
-    source, knowledge, candidates, patch, bundle = captured
-    if change == "deleted-file":
-        (source / "helper.al").unlink()
+@pytest.mark.parametrize("change", ["wrong-quote", "wrong-range", "unknown-file", "duplicate", "no-source", "no-knowledge"])
+def test_incorrect_references_never_become_negative_votes(tmp_path, change):
+    payload = vote("refuted")
+    ref = payload["evidence"][0]
+    if change == "wrong-quote":
+        ref["quote"] = "invented"
+    elif change == "wrong-range":
+        ref.update(line_start=12, line_end=13)
+    elif change == "unknown-file":
+        ref["file"] = "missing.al"
+    elif change == "duplicate":
+        payload["evidence"].append(dict(ref))
     else:
-        path = knowledge / "guide.md" if change == "knowledge" else source / ("new.al" if change == "new-file" else "helper.al")
-        path.write_text("different safe fixture\n")
-    with pytest.raises(ValueError, match="snapshot is stale"):
-        check_bundle(bundle, bundle.sha256, source, knowledge, candidates, patch)
+        payload["evidence"] = [payload["evidence"][1 if change == "no-source" else 0]]
+    votes = resolve_evidence(validate_votes(["F001"], [payload]), view_events(tmp_path), tmp_path)
+    assert votes[0].evidence_resolution == "unresolved"
+    with pytest.raises(ValueError, match="exclude"):
+        aggregate(["F001"], [votes] * 3)
 
 
-def test_tampered_bundle_and_stale_capture_identity(captured):
-    source, knowledge, candidates, patch, bundle = captured
-    views = bundle.model_dump(mode="json")["views"]
-    views[1]["line_start"] = views[1]["line_end"] = 2
-    altered = changed_bundle(bundle, views=views)
-    assert set(altered.indexed_views()).isdisjoint(bundle.indexed_views())
-    with pytest.raises(ValueError, match="bundle changed"):
-        check_bundle(altered, bundle.sha256, source, knowledge, candidates, patch)
-    views[0]["file_sha256"] = "0" * 64
-    stale = changed_bundle(bundle, views=views)
-    with pytest.raises(ValueError, match="Captured file identity"):
-        check_bundle(stale, stale.sha256, source, knowledge, candidates, patch)
-
-
-@pytest.mark.parametrize("field", ["candidates", "diff"])
-def test_changed_inputs_rejected(captured, field):
-    source, knowledge, candidates, patch, bundle = captured
-    with pytest.raises(ValueError, match="candidate/diff identity"):
-        check_bundle(bundle, bundle.sha256, source, knowledge, [] if field == "candidates" else candidates, "new" if field == "diff" else patch)
-
-
-@pytest.mark.parametrize("status", ["redacted", "unavailable"])
-def test_unavailable_views_are_explicit_not_negative_votes(captured, status):
-    bundle = captured[-1]
-    views = bundle.model_dump(mode="json")["views"]
-    views[0].update(status=status, text=None, reason="Protected view cannot be safely established")
-    bundle = changed_bundle(bundle, views=views)
-    payload = decision(bundle, verdict="insufficient_evidence", status=status)
-    votes = resolve_evidence(validate_votes(["F001"], [payload]), bundle)
+@pytest.mark.parametrize("status", ["unavailable", "redacted"])
+def test_unavailable_source_is_explicit_even_with_empty_references(tmp_path, status):
+    payload = vote("insufficient_evidence", status)
+    payload["evidence"] = []
+    votes = resolve_evidence(validate_votes(["F001"], [payload]), [], tmp_path)
     assert votes[0].evidence_resolution == status
-    assert votes[0].evidence[0].view.text is None
-    with pytest.raises(ValueError, match="not a negative vote"):
-        aggregate(["F001"], [votes] * 3, bundle)
-    for verdict in ("supported", "refuted"):
-        payload["verdict"] = verdict
-        with pytest.raises(ValueError, match="cannot support a verdict"):
-            resolve_evidence(validate_votes(["F001"], [payload]), bundle)
+    with pytest.raises(ValueError, match="exclude"):
+        aggregate(["F001"], [votes] * 3)
 
 
-def test_model_observed_redaction_overrides_available_capture(captured):
-    bundle = captured[-1]
-    payload = decision(bundle, verdict="insufficient_evidence", status="redacted")
-    votes = resolve_evidence(validate_votes(["F001"], [payload]), bundle)
+def test_masked_view_not_matched_against_disk(safe_source, monkeypatch):
+    source, _ = safe_source
+    payload = vote()
+    payload["evidence"][0]["quote"] = "****\nend;"
+    monkeypatch.setattr(Path, "read_text", lambda *a, **k: pytest.fail("Cannot recover disk text"))
+    votes = resolve_evidence(validate_votes(["F001"], [payload]), view_events(source.parent, masked=True), source.parent)
     assert votes[0].evidence_resolution == "redacted"
-    with pytest.raises(ValueError, match="not a negative vote"):
-        aggregate(["F001"], [votes] * 3, bundle)
+
+
+@pytest.mark.parametrize("kind", ["failure", "missing", "unbounded", "truncated", "wrong-number", "unsupported"])
+def test_unsupported_views_fail_closed(tmp_path, kind):
+    events = view_events(tmp_path, failed=kind == "failure")
+    if kind == "missing":
+        events = []
+    elif kind == "unbounded":
+        events[0]["data"]["arguments"].pop("view_range")
+    elif kind == "truncated":
+        events[1]["data"]["result"]["content"] = "truncated"
+    elif kind == "wrong-number":
+        events[1]["data"]["result"]["content"] = "L8:begin\nL9:end;"
+    elif kind == "unsupported":
+        events[1]["data"]["result"] = {"detailedContent": "begin\nend;"}
+    result = resolve_evidence(validate_votes(["F001"], [vote()]), events, tmp_path)
+    assert result[0].evidence_resolution == "unresolved"
+
+
+@pytest.mark.parametrize("part", [0, 1])
+def test_duplicate_tool_identity_rejected(tmp_path, part):
+    events = view_events(tmp_path)
+    events.append(events[part])
+    with pytest.raises(ValueError, match="Duplicate"):
+        resolve_evidence(validate_votes(["F001"], [vote()]), events, tmp_path)
+
+
+@pytest.mark.parametrize("message", ["Access denied", "Content truncated", "Blocked by content exclusion"])
+def test_error_shaped_view_is_unavailable_not_source_evidence(tmp_path, message):
+    events = view_events(tmp_path)
+    events[1]["data"]["result"]["content"] = message + "\nend;"
+    payload = vote("refuted")
+    payload["evidence"][0]["quote"] = message + "\nend;"
+    result = resolve_evidence(validate_votes(["F001"], [payload]), events, tmp_path)
+    assert result[0].evidence_resolution == "unavailable"
+    with pytest.raises(ValueError, match="exclude"):
+        aggregate(["F001"], [result] * 3)
+
+
+@pytest.mark.parametrize("bad", [[], [vote(), vote()], [vote() | {"id": "F002"}], [vote() | {"unexpected": True}]])
+def test_missing_duplicate_unknown_votes_rejected(bad):
+    with pytest.raises(ValueError, match=r"Missing|validation"):
+        validate_votes(["F001"], bad)
+
+
+@pytest.mark.parametrize("path", ["../secret.al", "C:/secret.al", "/secret.al", "a\\secret.al"])
+def test_reference_cannot_escape_tree(path):
+    payload = vote()
+    payload["evidence"][0]["file"] = path
+    with pytest.raises(ValueError, match="tree-relative"):
+        validate_votes(["F001"], [payload])
 
 
 @pytest.mark.parametrize(
-    "changes",
+    ("verdicts", "b", "c"),
     [
-        {"line_start": 4, "line_end": 2},
-        {"line_end": 9},
-        {"file": "../outside.al"},
-        {"file": "C:\\outside.al"},
-        {"status": "redacted"},
+        (["supported", "refuted", "refuted"], ["F001"], []),
+        (["refuted", "supported", "supported"], [], ["F001"]),
+        (["supported", "supported", "insufficient_evidence"], ["F001"], ["F001"]),
+        (["insufficient_evidence"] * 3, [], []),
     ],
 )
-def test_invalid_capture_metadata(captured, changes):
-    view = captured[-1].views[0].model_dump(mode="json") | changes
-    with pytest.raises(ValueError, match=r"range|path|must not carry text"):
-        ProtectedView.model_validate(view)
+def test_preselected_first_voter_and_two_of_three(tmp_path, verdicts, b, c):
+    assert aggregate(["F001"], [resolved(tmp_path, v) for v in verdicts]) == {"A": ["F001"], "B": b, "C": c}
 
 
-def test_duplicate_capture_ranges_rejected(captured):
-    bundle = captured[-1]
-    views = bundle.model_dump(mode="json")["views"]
-    with pytest.raises(ValueError, match="Duplicate captured evidence range"):
-        changed_bundle(bundle, views=[*views, views[0]])
+def test_failed_voter_excludes_case_even_when_other_two_support(tmp_path):
+    with pytest.raises(ValueError, match="failure is not a vote"):
+        aggregate(["F001"], [resolved(tmp_path), None, resolved(tmp_path)])
+    assert aggregate([], []) == {"A": [], "B": [], "C": []}
 
 
-def test_failed_or_missing_voter_blocks_aggregation(captured):
-    bundle = captured[-1]
-    valid = resolved(bundle)
-    for voters in ([valid, valid, None], [valid, valid]):
-        with pytest.raises(ValueError, match="failure is not a vote"):
-            aggregate(["F001"], voters, bundle)
+def test_changed_snapshot_detected(safe_source):
+    source, _ = safe_source
+    digest = tree_digest(source)
+    (source / "helper.al").write_text("changed\n")
+    with pytest.raises(ValueError, match="altered"):
+        pilot.check_snapshot(source, digest)
 
 
-def test_threshold_preselected_first_voter_and_resolved_uncertainty(captured):
-    bundle = captured[-1]
-    ids = ["F001", "F002", "F003"]
-    voters = [
-        resolved(bundle, ids, ("supported", "refuted", "insufficient_evidence")),
-        resolved(bundle, ids, ("refuted", "supported", "insufficient_evidence")),
-        resolved(bundle, ids, ("insufficient_evidence", "supported", "supported")),
-    ]
-    assert aggregate(ids, voters, bundle) == {"A": ids, "B": ["F001"], "C": ["F002"]}
-    assert aggregate([], [], bundle) == {"A": [], "B": [], "C": []}
-
-
-def test_stale_resolved_votes_rejected(captured):
-    bundle = captured[-1]
-    updated = changed_bundle(bundle, source_sha256="0" * 64)
-    with pytest.raises(ValueError, match="unknown evidence reference"):
-        aggregate(["F001"], [resolved(bundle)] * 3, updated)
-
-
-def test_same_gold_blind_prompt_for_all_voters(captured):
-    _, _, candidates, patch, bundle = captured
-    prompts = [evidence_prompt(bundle, candidates) for _ in range(3)]
-    assert len(set(prompts)) == 1
-    assert patch not in prompts[0]
-    assert "expected_comments" not in prompts[0]
-    assert "ignored_comments" not in prompts[0]
-    assert "protected-views-v2" in prompts[0]
-
-
-def test_verifier_wiring_offline_only(captured, tmp_path, monkeypatch):
-    source, knowledge, candidates, patch, bundle = captured
+def fake_cli(monkeypatch, *, failure_index=None, mutate=False):
     calls = []
 
-    def fake_run(args, **kwargs):
+    def process(args, **kwargs):
+        assert "--prompt" in args
+        work = kwargs["cwd"]
         calls.append(args)
-        return subprocess.CompletedProcess(args, 0)
+        if len(calls) == failure_index:
+            return SimpleNamespace(returncode=9)
+        events = view_events(work)
+        events.append({"type": "assistant.message", "data": {"phase": "final_answer", "content": json.dumps([vote()])}})
+        kwargs["stdout"].write("\n".join(json.dumps(e) for e in events))
+        kwargs["stdout"].flush()
+        if mutate:
+            (work / "source" / "helper.al").write_text("altered")
+        return SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr(pilot.subprocess, "run", fake_run)
-    monkeypatch.setattr(pilot, "isolated_environment", lambda _: {})
-    monkeypatch.setattr(pilot, "parse_output", lambda _: (None, json.dumps([decision(bundle)])))
+    monkeypatch.setattr(subprocess, "run", process)
+    monkeypatch.setenv("GH_TOKEN", "fixture-not-a-credential")
+    return calls
+
+
+def test_verifier_arguments_and_input_isolation(safe_source, monkeypatch, tmp_path):
+    source, knowledge = safe_source
+    calls = fake_cli(monkeypatch)
+    candidates: list[pilot.Candidate] = [{"id": "F001", "comment": {"body": "fixture"}}]
     folder = tmp_path / "voter"
-    votes = pilot.run_verifier(folder, source, knowledge, patch, candidates, "not-a-real-cli", bundle=bundle, expected_bundle_sha256=bundle.sha256)
-    assert len(calls) == 1
-    assert "--available-tools=view,rg,glob" in calls[0]
-    assert "--add-dir" not in calls[0]
-    assert (folder / "work/protected-evidence.json").exists()
-    assert votes[0].semantic_correctness == "not_assessed"
-    invocation = json.loads((folder / "invocation.json").read_text())
-    assert invocation["bundle_sha256"] == bundle.sha256
-    assert invocation["adapter_version"] == "evidence-ids-v2.1"
+    result = pilot.run_verifier(folder, source, knowledge, {"changed_paths": ["helper.al"]}, candidates, "copilot.exe")
+    assert result[0].evidence_resolution == "tool_view_matched"
+    args = calls[0]
+    assert "--model=gpt-5.6-sol" in args
+    assert "--available-tools=view,rg,glob" in args
+    assert "--disallow-temp-dir" in args
+    assert "--add-dir" not in args
+    assert "--allow-all-paths" not in args
+    assert "fixture" not in args[-1]
+    assert "begin" not in args[-1]
+    assert json.loads((folder / "work" / "candidates.json").read_text()) == candidates
+    assert {p.name for p in (folder / "work").iterdir()} == {"source", "knowledge", "context.json", "candidates.json"}
     with pytest.raises(FileExistsError):
-        pilot.run_verifier(folder, source, knowledge, patch, candidates, "not-a-real-cli", bundle=bundle, expected_bundle_sha256=bundle.sha256)
+        pilot.run_verifier(folder, source, knowledge, {}, candidates, "copilot.exe")
     assert len(calls) == 1
 
 
-def test_source_unavailable_blocks_before_any_subprocess(captured, tmp_path, monkeypatch):
-    source, knowledge, candidates, patch, bundle = captured
-    views = bundle.model_dump(mode="json")["views"]
-    views[0].update(status="unavailable", text=None)
-    bundle = changed_bundle(bundle, views=views)
-    monkeypatch.setattr(pilot.subprocess, "run", lambda *args, **kwargs: pytest.fail("Must not invoke a model"))
-    with pytest.raises(ValueError, match="Source view unavailable"):
-        pilot.run_verifier(tmp_path / "voter", source, knowledge, patch, candidates, "unused", bundle=bundle, expected_bundle_sha256=bundle.sha256)
+def test_mutated_verifier_inputs_preserve_failure(safe_source, monkeypatch, tmp_path):
+    source, knowledge = safe_source
+    calls = fake_cli(monkeypatch, mutate=True)
+    with pytest.raises(ValueError, match="altered"):
+        pilot.run_verifier(tmp_path / "voter", source, knowledge, {}, [{"id": "F001", "comment": {}}], "copilot.exe")
+    assert len(calls) == 1
+    assert (tmp_path / "voter" / "validation-failure.json").exists()
 
 
-@pytest.mark.parametrize("exit_code", [1, 124])
-def test_subprocess_error_is_not_a_vote(captured, tmp_path, monkeypatch, exit_code):
-    source, knowledge, candidates, patch, bundle = captured
-    monkeypatch.setattr(pilot, "isolated_environment", lambda _: {})
-    monkeypatch.setattr(pilot.subprocess, "run", lambda args, **kwargs: subprocess.CompletedProcess(args, exit_code))
-    with pytest.raises(RuntimeError, match="Verifier failed"):
-        pilot.run_verifier(tmp_path / "voter", source, knowledge, patch, candidates, "unused", bundle=bundle, expected_bundle_sha256=bundle.sha256)
-    assert not (tmp_path / "voter/decisions.json").exists()
+def test_empty_candidates_launch_no_process(safe_source, tmp_path):
+    source, knowledge = safe_source
+    assert pilot.run_verifier(tmp_path / "voter", source, knowledge, {}, [], "copilot.exe") == []
+    assert not (tmp_path / "voter").exists()
 
 
-def test_timeout_recorded_without_vote_or_retry(captured, tmp_path, monkeypatch):
-    source, knowledge, candidates, patch, bundle = captured
+def test_timeout_is_one_attempt_with_preserved_process_failure(safe_source, tmp_path, monkeypatch):
+    source, knowledge = safe_source
     calls = []
 
     def timeout(args, **kwargs):
         calls.append(args)
-        raise subprocess.TimeoutExpired("fake", 1800)
+        raise subprocess.TimeoutExpired(args, 1800)
 
-    monkeypatch.setattr(pilot, "isolated_environment", lambda _: {})
-    monkeypatch.setattr(pilot.subprocess, "run", timeout)
+    monkeypatch.setenv("GH_TOKEN", "fixture")
+    monkeypatch.setattr(subprocess, "run", timeout)
     folder = tmp_path / "voter"
     with pytest.raises(subprocess.TimeoutExpired):
-        pilot.run_verifier(folder, source, knowledge, patch, candidates, "unused", bundle=bundle, expected_bundle_sha256=bundle.sha256)
+        pilot.run_verifier(folder, source, knowledge, {}, [{"id": "F001", "comment": {}}], "copilot.exe")
     assert len(calls) == 1
     assert json.loads((folder / "process.json").read_text())["status"] == "failed"
-    assert not (folder / "decisions.json").exists()
-
-
-@pytest.mark.parametrize("response", ["", "[]", '{"not":"an array"}'])
-def test_invalid_output_preserves_failure(captured, tmp_path, monkeypatch, response):
-    source, knowledge, candidates, patch, bundle = captured
-    monkeypatch.setattr(pilot, "isolated_environment", lambda _: {})
-    monkeypatch.setattr(pilot.subprocess, "run", lambda args, **kwargs: subprocess.CompletedProcess(args, 0))
-    monkeypatch.setattr(pilot, "parse_output", lambda _: (None, response))
-    folder = tmp_path / "voter"
-    with pytest.raises((ValueError, TypeError)):
-        pilot.run_verifier(folder, source, knowledge, patch, candidates, "unused", bundle=bundle, expected_bundle_sha256=bundle.sha256)
-    assert (folder / "validation-failure.json").exists()
-    assert (folder / "final.txt").read_text() == response
-    assert not (folder / "decisions.json").exists()
-
-
-def test_source_changed_during_invocation_rejects_result(captured, tmp_path, monkeypatch):
-    source, knowledge, candidates, patch, bundle = captured
-
-    def change_source(args, **kwargs):
-        (source / "helper.al").write_text("changed synthetic fixture\n")
-        return subprocess.CompletedProcess(args, 0)
-
-    monkeypatch.setattr(pilot, "isolated_environment", lambda _: {})
-    monkeypatch.setattr(pilot.subprocess, "run", change_source)
-    monkeypatch.setattr(pilot, "parse_output", lambda _: (None, json.dumps([decision(bundle)])))
-    folder = tmp_path / "voter"
-    with pytest.raises(ValueError, match="snapshot is stale"):
-        pilot.run_verifier(folder, source, knowledge, patch, candidates, "unused", bundle=bundle, expected_bundle_sha256=bundle.sha256)
-    assert (folder / "validation-failure.json").exists()
-    assert not (folder / "decisions.json").exists()
-
-
-def test_no_raw_source_or_diff_export(captured):
-    source, _, candidates, patch, bundle = captured
-    # A wholly synthetic sentinel, not hidden/redacted content from the pilot.
-    (source / "not-captured.al").write_text("UNCAPTURED_FIXTURE_SENTINEL\n")
-    prompt = evidence_prompt(bundle, candidates)
-    assert "UNCAPTURED_FIXTURE_SENTINEL" not in prompt
-    assert patch not in prompt
-
-
-def test_gold_fields_not_accepted_as_capture_metadata(captured):
-    bundle = captured[-1]
-    payload = bundle.model_dump(mode="json") | {"expected_comments": []}
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        EvidenceBundle.model_validate_json(json.dumps(payload))
-
-
-def test_zero_candidates_skips_invocation(captured, tmp_path):
-    source, knowledge, _, patch, bundle = captured
-    bundle = changed_bundle(bundle, candidates_sha256=digest_json([]))
-    folder = tmp_path / "no-voter-needed"
-    assert pilot.run_verifier(folder, source, knowledge, patch, [], "unused", bundle=bundle, expected_bundle_sha256=bundle.sha256) == []
-    assert not folder.exists()
-
-
-def test_refuted_verdict_resolves_without_model_authored_coordinates(captured):
-    vote = resolved(captured[-1], verdicts=("refuted",))[0]
-    assert vote.evidence_resolution == "resolved"
-    assert vote.decision.verdict == "refuted"
-    assert vote.semantic_correctness == "not_assessed"
-
-
-def test_v1_quote_range_output_is_not_reinterpreted(captured):
-    payload = decision(captured[-1])
-    payload.pop("evidence_ids")
-    payload["evidence"] = [{"tree": "source", "file": "helper.al", "line_start": 22, "line_end": 22, "quote": "synthetic wrong citation"}]
-    with pytest.raises(ValidationError, match="validation"):
-        validate_votes(["F001"], [payload])
 
 
 @pytest.fixture
-def prepared_captures(captured, tmp_path):
-    source, knowledge, _, patch, bundle = captured
-    directory = tmp_path / "protected-captures"
-    capture = EvidenceCapture.model_validate_json(json.dumps(bundle.model_dump(mode="json", exclude={"candidates_sha256"})))
-    manifest = {}
-    cases = []
-    for index in range(1, 7):
-        name = f"case-{index:02}"
-        instance_id = f"synthetic__offline-{index}"
-        folder = directory / name
-        folder.mkdir(parents=True)
-        shutil.copytree(source, folder / "source")
-        shutil.copytree(knowledge, folder / "knowledge")
-        pilot.save(folder / "capture.json", capture.model_dump(mode="json"))
-        manifest[name] = {"instance_id": instance_id, "sha256": capture.sha256}
-        cases.append((instance_id, patch))
-    pilot.save(directory / "manifest.json", manifest)
-    return directory, cases
+def ready(tmp_path, monkeypatch):
+    root, benchmark = tmp_path / "experiment", tmp_path / "benchmark"
+    config = pilot.load_config()
+    entries = [
+        CodeReviewEntry.model_validate(
+            {
+                "instance_id": key,
+                "repo": "microsoft/BCApps",
+                "base_commit": "a" * 40,
+                "created_at": "2026-01-01",
+                "environment_setup_version": "27.0",
+                "project_paths": [],
+                "patch": "+++ b/helper.al",
+                "metadata": {"area": "security"},
+                "expected_comments": [{"file": "helper.al", "line_start": 2, "line_end": 3, "body": "fixture", "severity": "high"}] if n < 3 else [],
+            }
+        )
+        for n, key in enumerate(config["cases"])
+    ]
+    monkeypatch.setattr(pilot, "selected_entries", lambda *a: entries)
+    monkeypatch.setattr(pilot, "implementation_identity", lambda *a: {"fixture_identity": "frozen"})
+    monkeypatch.setattr(pilot, "get_pr_review_version", lambda *a: config["engine_sha"])
+    cli = {"path": str(tmp_path / "cli" / "copilot.exe"), "sha256": "0" * 64, "version": "1.0.88"}
+    monkeypatch.setattr(pilot, "probe_cli", lambda *a: cli)
+    monkeypatch.setattr(pilot, "command", lambda args, cwd=None: config["bcquality_sha"] if cwd == root / "knowledge" else "a" * 40)
+    pilot.save(root / "selection.json", {"config": config, "fixture_identity": "frozen", "cli": cli})
+    pilot.save(root / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml", {"bcquality": {"ref": config["bcquality_sha"]}})
+    knowledge = root / "knowledge"
+    (knowledge / "microsoft" / "knowledge").mkdir(parents=True)
+    (knowledge / "microsoft" / "knowledge" / "rule.md").write_text("# Rule")
+    (knowledge / "guide.md").write_text("# Rule\nCheck the guard.")
+    for n in range(1, 7):
+        source = root / "prepared" / f"case-{n:02}" / "source"
+        source.mkdir(parents=True)
+        (source / "helper.al").write_text("procedure Test()\nbegin\nend;\n")
+    pilot.save(root / "inputs.json", {"source_sha256": [tree_digest(root / "prepared" / f"case-{n:02}" / "source") for n in range(1, 7)], "knowledge_sha256": tree_digest(knowledge)})
+    return root, benchmark, entries, config
 
 
-def test_root_cli_still_dispatches_execution(tmp_path, monkeypatch):
-    calls = []
-    monkeypatch.setattr(pilot, "run", lambda *args: calls.append(args))
-    pilot.main(["--root", str(tmp_path)])
-    assert len(calls) == 1
-    assert calls[0][0] == tmp_path.resolve()
+def test_offline_preflight_without_captures_or_credentials(ready, monkeypatch):
+    root, benchmark, _, _ = ready
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+    result = pilot.preflight(root, benchmark)
+    assert result["status"] == "offline_checks_passed"
+    assert result["paid_calls"] == 0
+    assert not result["credentials_present"]
+    assert result["limits"] == {"baseline": 6, "verifier": 18, "judge_batches": 6, "retries": 0}
+    assert not (root / "protected-captures").exists()
 
 
-def test_validation_requires_explicit_mode(captured, tmp_path, monkeypatch, capsys):
-    _, _, candidates, patch, bundle = captured
-    case = tmp_path
-    pilot.save(case / "candidates.json", candidates)
-    (case / "frozen.diff").write_text(patch)
-    pilot.save(case / "bundle.json", bundle.model_dump(mode="json"))
-    args = ["--case-dir", str(case), "--bundle", str(case / "bundle.json"), "--bundle-sha256", bundle.sha256]
-    monkeypatch.setattr(pilot, "run", lambda *args: pytest.fail("Validation must not execute"))
-    with pytest.raises(SystemExit, match="2"):
-        pilot.main(args)
-    pilot.main(["--validate-evidence", *args])
-    assert "Evidence identities valid" in capsys.readouterr().out
+def test_prepare_reuses_pipeline_and_finishes_with_offline_preflight(ready, monkeypatch, tmp_path):
+    _, benchmark, entries, config = ready
+    destination = tmp_path / "new-preparation"
+    seen = []
+
+    def checkout(path, repository, commit):
+        path.mkdir(parents=True)
+        seen.append(("checkout", repository, commit))
+
+    def command(args, cwd=None):
+        assert "--prompt" not in args
+        if "clone" in args:
+            Path(args[-1]).mkdir()
+        return ""
+
+    def setup(self, entry, source):
+        seen.append(("setup", entry.instance_id))
+        (source / "helper.al").write_text("safe fixture")
+
+    def knowledge(engine, pwsh, dest):
+        dest.mkdir()
+        (dest / "guide.md").write_text("safe knowledge")
+        return dest
+
+    def preflight(root, bench):
+        assert len([item for item in seen if item[0] == "setup"]) == 6
+        assert (root / "inputs.json").is_file()
+        return {"paid_calls": 0}
+
+    monkeypatch.setattr(pilot, "checkout_commit", checkout)
+    monkeypatch.setattr(pilot, "command", command)
+    monkeypatch.setattr(pilot.CodeReviewPipeline, "setup_workspace", setup)
+    monkeypatch.setattr(pilot, "_prepare_bcquality_root", knowledge)
+    monkeypatch.setattr(pilot, "preflight", preflight)
+    pilot.prepare(destination, benchmark, tmp_path / "cli.exe")
+    selection = json.loads((destination / "selection.json").read_text())
+    assert selection["config"]["cases"] == [entry.instance_id for entry in entries]
+    assert seen[0] == ("checkout", "https://github.com/microsoft/BC-ALAgents", config["engine_sha"])
+    assert json.loads((destination / "preflight.json").read_text())["paid_calls"] == 0
+    assert not (destination / "execution").exists()
 
 
-@pytest.mark.parametrize("fault", ["absent", "five-cases", "missing-capture", "stale-source", "redacted", "wrong-case", "changed-manifest", "missing-knowledge"])
-def test_incomplete_capture_preflight_launches_zero_processes(prepared_captures, tmp_path, monkeypatch, fault):
-    directory, cases = prepared_captures
-    if fault == "absent":
-        directory = tmp_path / "absent"
-    elif fault == "five-cases":
-        manifest = json.loads((directory / "manifest.json").read_text())
-        del manifest["case-06"]
-        pilot.save(directory / "manifest.json", manifest)
-    elif fault == "missing-capture":
-        (directory / "case-06/capture.json").unlink()
-    elif fault == "stale-source":
-        (directory / "case-06/source/helper.al").write_text("changed fixture")
-    elif fault in ("redacted", "missing-knowledge"):
-        path = directory / "case-06/capture.json"
-        data = json.loads(path.read_text())
-        if fault == "redacted":
-            data["views"][0].update(status="redacted", text=None)
-        else:
-            data["views"] = [data["views"][0]]
-        modified = EvidenceCapture.model_validate_json(json.dumps(data))
-        pilot.save(path, modified.model_dump(mode="json"))
-        manifest = json.loads((directory / "manifest.json").read_text())
-        manifest["case-06"]["sha256"] = modified.sha256
-        pilot.save(directory / "manifest.json", manifest)
-    elif fault == "wrong-case":
-        cases[-1] = ("synthetic__wrong-1", cases[-1][1])
-    elif fault == "changed-manifest":
-        manifest = json.loads((directory / "manifest.json").read_text())
-        manifest["case-06"]["sha256"] = "0" * 64
-        pilot.save(directory / "manifest.json", manifest)
-    root = tmp_path / "run"
-    pilot.save(root / "selection.json", {"cases": [{"instance_id": key} for key, _ in cases]})
-    entries = [SimpleNamespace(instance_id=key, patch=patch) for key, patch in cases]
-    monkeypatch.setattr(pilot.CodeReviewEntry, "load", lambda _: entries)
-    monkeypatch.setattr(pilot, "run_pr_review_agent", lambda *args, **kwargs: pytest.fail("Baseline must not launch"))
-    monkeypatch.setattr(pilot, "run_verifier", lambda *args, **kwargs: pytest.fail("Verifier must not launch"))
-    monkeypatch.setattr(pilot, "judge_verdicts", lambda *args, **kwargs: pytest.fail("Judge must not launch"))
-    with pytest.raises(ValueError, match="Protected captures are required before any baseline"):
-        pilot.run(root, tmp_path, directory)
-    assert not (root / "execution/started.json").exists()
-    assert not (root / "failure.json").exists()
+@pytest.mark.parametrize("kind", ["sixth-source", "knowledge", "selection", "engine", "cli", "missing-inputs"])
+def test_preflight_failure_launches_zero_paid_processes(ready, monkeypatch, kind):
+    root, benchmark, _, _ = ready
+    monkeypatch.setenv("GH_TOKEN", "fixture")
+    monkeypatch.setattr(pilot, "run_pr_review_agent", lambda *a, **k: pytest.fail("Baseline must not start"))
+    if kind == "sixth-source":
+        (root / "prepared" / "case-06" / "source" / "helper.al").write_text("changed")
+    elif kind == "knowledge":
+        (root / "knowledge" / "guide.md").write_text("changed")
+    elif kind == "selection":
+        selection = json.loads((root / "selection.json").read_text())
+        selection["config"]["cases"].pop()
+        pilot.save(root / "selection.json", selection)
+    elif kind == "engine":
+        monkeypatch.setattr(pilot, "get_pr_review_version", lambda *a: "wrong")
+    elif kind == "cli":
+        monkeypatch.setattr(pilot, "probe_cli", lambda *a: {})
+    else:
+        (root / "inputs.json").unlink()
+    with pytest.raises((ValueError, OSError)):
+        pilot.run(root, benchmark)
+    assert not (root / "execution").exists()
 
 
-def test_valid_capture_preflight_has_no_subprocesses(prepared_captures):
-    directory, cases = prepared_captures
-    captures = pilot.preflight_captures(directory, cases)
-    assert len(captures) == 6
-    assert all("candidates_sha256" not in capture.model_dump() for capture in captures)
+@pytest.mark.parametrize("empty_last", [True, False])
+def test_entire_driver_with_failure_keeps_denominators_and_no_retries(ready, monkeypatch, empty_last):
+    root, benchmark, entries, config = ready
+    calls = fake_cli(monkeypatch, failure_index=10)
+    order = []
 
+    def baseline(entry, model, category, source, folder, **kwargs):
+        assert model == config["root_model"]
+        assert pilot.os.environ["COPILOT_REVIEW_LEAF_MODEL"] == config["leaf_model"]
+        assert pilot.os.environ["COPILOT_REVIEW_CLI_VERSION"] == "1.0.88"
+        assert not any(key.startswith("BCQUALITY_") for key in pilot.os.environ)
+        order.append(entry.instance_id)
+        comment = {"file": "helper.al", "line_start": 2, "line_end": 3, "body": "fixture", "severity": "high"}
+        pilot.save(source / "review.json", [] if empty_last and entry is entries[-1] else [comment])
+        return SimpleNamespace(model_dump=lambda **k: {"ai_credits": None}), None
 
-def test_original_six_baseline_then_verifier_then_score_order_offline(captured, prepared_captures, tmp_path, monkeypatch):
-    source_fixture, knowledge_fixture, candidates, patch, _ = captured
-    directory, cases = prepared_captures
-    root = tmp_path / "run"
-    selection = {"cases": [{"instance_id": key} for key, _ in cases], "engine_commit": "engine", "benchmark_commit": "bench"}
-    pilot.save(root / "selection.json", selection)
-    (tmp_path / "dataset").mkdir()
-    (tmp_path / "dataset/codereview.jsonl").write_text("safe fixture")
-    cli = tmp_path / "fake-cli"
-    cli.write_text("never executed")
-    entries = [SimpleNamespace(instance_id=key, patch=patch, base_commit="base", model_dump=lambda **kwargs: {}) for key, _ in cases]
-    monkeypatch.setattr(pilot.CodeReviewEntry, "load", lambda _: entries)
-    monkeypatch.setattr(pilot, "get_pr_review_version", lambda _: "engine")
-    monkeypatch.setattr(pilot.shutil, "which", lambda _: str(cli))
-    monkeypatch.setattr(pilot, "command", lambda args, cwd=None: "bench" if args == ["git", "rev-parse", "HEAD"] else "fixture")
-    monkeypatch.setattr(pilot, "isolated_environment", lambda _: {})
-    monkeypatch.setattr(pilot.CodeReviewPipeline, "setup_workspace", lambda self, entry, source: shutil.copytree(source_fixture, source))
-    events = []
-
-    def baseline(entry, model, category, source, output, **kwargs):
-        events.append("baseline")
-        assert model == "gpt-5.6-sol"
-        assert kwargs["engine_path"] == root / "engine"
-        shutil.copytree(knowledge_fixture, output / "bcquality")
-        pilot.save(source / "review.json", [c["comment"] for c in candidates])
-        return SimpleNamespace(model_dump=lambda **kwargs: {}), None
-
-    def verifier(folder, source, knowledge, patch, candidates, cli, *, bundle, expected_bundle_sha256):
-        events.append("verifier")
-        check_bundle(bundle, expected_bundle_sha256, source, knowledge, candidates, patch)
-        return resolved(bundle)
-
-    def score(*args):
-        events.append("judge")
-        return {"fixture": True}
+    def judge(pairs, folder, model):
+        assert len(order) == 6
+        assert model == pilot.JUDGE
+        return [True] * len(pairs)
 
     monkeypatch.setattr(pilot, "run_pr_review_agent", baseline)
-    monkeypatch.setattr(pilot, "run_verifier", verifier)
+    monkeypatch.setattr(pilot, "judge_verdicts", judge)
+    monkeypatch.setenv("BCQUALITY_REF", "must-not-leak")
+    original = dict(pilot.os.environ)
+    pilot.run(root, benchmark)
+    assert dict(pilot.os.environ) == original
+    assert len(order) == 6
+    assert len(calls) == (15 if empty_last else 18)
+    report = json.loads((root / "results.json").read_text())
+    assert report["denominators"] == {"selected": 6, "baseline_completed": 6, "baseline_scored": 6, "paired_scored": 5}
+    assert len(report["exclusions"]) == 1
+    assert report["exclusions"][0]["instance_id"] == entries[3].instance_id
+    assert report["cases"][3]["arms"].keys() == {"A"}
+    assert (root / "case-04" / "voter-3" / "decisions.json").is_file()
+    assert (root / "case-05" / "voter-3" / "decisions.json").is_file()
+    assert (root / "case-06" / "voter-1").exists() != empty_last
+    assert report["summary"]["full_scored_baseline"]["cases"] == 6
+    assert report["summary"]["complete_case_paired"]["A"]["cases"] == 5
+    with pytest.raises(FileExistsError):
+        pilot.run(root, benchmark)
+    assert len(calls) == (15 if empty_last else 18)
+
+
+def test_baseline_and_judge_failures_continue_other_independent_cases(ready, monkeypatch):
+    root, benchmark, entries, _ = ready
+    monkeypatch.setenv("GH_TOKEN", "fixture")
+    baselines, judges = [], []
+
+    def baseline(entry, model, category, source, folder, **kwargs):
+        baselines.append(entry.instance_id)
+        if entry is entries[0]:
+            raise RuntimeError("fixture baseline failed")
+        pilot.save(source / "review.json", [])
+        return SimpleNamespace(model_dump=lambda **k: {}), None
+
+    def score(entry, candidates, arms, folder):
+        judges.append(entry.instance_id)
+        if entry is entries[1]:
+            raise RuntimeError("fixture judge failed")
+        return {arm: {"generated": 0, "expected": 0, "matched": 0, "ignored": 0, "false": 0, "missed": 0, "matched_ids": [], "ignored_ids": []} for arm in arms}
+
+    monkeypatch.setattr(pilot, "run_pr_review_agent", baseline)
     monkeypatch.setattr(pilot, "score_arms", score)
-    pilot.run(root, tmp_path, directory)
-    assert events == ["baseline"] * 6 + ["verifier"] * 18 + ["judge"] * 6
-    assert len(json.loads((root / "results.json").read_text())["cases"]) == 6
-    for n in range(1, 7):
-        identity = json.loads((root / f"case-{n:02}/evidence-identity.json").read_text())
-        bundle = EvidenceBundle.model_validate_json((root / f"case-{n:02}/evidence-bundle.json").read_text())
-        assert identity["bundle_sha256"] == bundle.sha256
+    pilot.run(root, benchmark)
+    assert len(baselines) == 6
+    assert len(judges) == 5
+    report = json.loads((root / "results.json").read_text())
+    assert report["denominators"] == {"selected": 6, "baseline_completed": 5, "baseline_scored": 4, "paired_scored": 4}
+    assert [e["stage"] for e in report["exclusions"]] == ["baseline", "judge"]
 
 
-def test_default_root_capture_precondition_is_actionable(tmp_path, monkeypatch):
-    cases = [(f"synthetic__offline-{n}", "safe fixture") for n in range(1, 7)]
-    pilot.save(tmp_path / "selection.json", {"cases": [{"instance_id": key} for key, _ in cases]})
-    monkeypatch.setattr(pilot.CodeReviewEntry, "load", lambda _: [SimpleNamespace(instance_id=key, patch=patch) for key, patch in cases])
-    with pytest.raises(ValueError, match="No supported capture producer is bundled") as failure:
+@pytest.mark.parametrize("mode", ["--prepare", "--preflight", "--execute"])
+def test_cli_dispatch_is_explicit(monkeypatch, tmp_path, mode):
+    calls = []
+    monkeypatch.setattr(pilot, "prepare", lambda *a: calls.append("prepare"))
+    monkeypatch.setattr(pilot, "preflight", lambda *a: calls.append("preflight"))
+    monkeypatch.setattr(pilot, "run", lambda *a: calls.append("execute"))
+    args = [mode, "--root", str(tmp_path)]
+    if mode == "--prepare":
+        args += ["--cli", "copilot.exe"]
+    pilot.main(args)
+    assert calls == [mode[2:]]
+
+
+def test_root_alone_never_starts_paid_execution(tmp_path):
+    with pytest.raises(SystemExit):
         pilot.main(["--root", str(tmp_path)])
-    assert str(tmp_path / "protected-captures") in str(failure.value)
-    assert not (tmp_path / "execution").exists()
 
 
-def test_existing_run_is_never_reinterpreted_or_overwritten(tmp_path):
-    pilot.save(tmp_path / "selection.json", {"cases": [{"instance_id": f"synthetic__offline-{n}"} for n in range(1, 7)]})
-    pilot.save(tmp_path / "execution/started.json", {"historical": True})
-    pilot.save(tmp_path / "failure.json", {"historical_failure": True})
-    with pytest.raises(FileExistsError, match="cannot be retried"):
-        pilot.main(["--root", str(tmp_path)])
-    assert json.loads((tmp_path / "failure.json").read_text()) == {"historical_failure": True}
+def test_cli_probe_is_non_inference_and_exact_version(monkeypatch, tmp_path):
+    cli = tmp_path / "copilot.exe"
+    cli.write_text("safe executable placeholder")
+    seen = []
+
+    def command(args):
+        seen.append(args)
+        assert "--prompt" not in args
+        assert "-p" not in args
+        return "GitHub Copilot CLI 1.0.88." if "--version" in args else "--available-tools --no-custom-instructions --disable-builtin-mcps --usage-output-file --disallow-temp-dir --no-remote-export"
+
+    monkeypatch.setattr(pilot, "command", command)
+    assert pilot.probe_cli(cli, pilot.load_config())["sha256"] == pilot.sha(cli)
+    assert len(seen) == 2
+    monkeypatch.setattr(pilot, "command", lambda *a: "GitHub Copilot CLI 1.0.99-2.")
+    with pytest.raises(ValueError, match="Required engine-supported"):
+        pilot.probe_cli(cli, pilot.load_config())
+
+
+def test_prompt_preserves_evidence_requirements_and_no_raw_injection():
+    prompt = evidence_prompt()
+    for required in ("source AND knowledge", "counterevidence", "callers", "insufficient_evidence", "Never recover", "candidates.json"):
+        assert required in prompt
+    assert "Protected views:" not in prompt
+    assert "Frozen diff:" not in prompt
