@@ -303,17 +303,15 @@ def prepare(root: Path, benchmark: Path, cli: Path) -> None:
     save(root / "selection.json", {"config": config, **implementation_identity(benchmark), "cli": cli_identity})
     checkout_commit(root / "engine", "https://github.com/microsoft/BC-ALAgents", config["engine_sha"])
     knowledge = _prepare_bcquality_root(root / "engine", "pwsh", root / "knowledge")
-    targets = {(entry.repo, entry.base_commit) for entry in entries}
-    if len(targets) != 1:
-        raise ValueError("This bounded pilot expects the six preselected cases to share one base")
-    repo, base = targets.pop()
-    checkout_commit(root / "target-store", f"https://github.com/{repo}", base)
-    command(["git", "update-ref", "refs/heads/pilot-base", base], root / "target-store")
+    targets = {(repo, base): root / "targets" / f"base-{n:02}" for n, (repo, base) in enumerate(sorted({(entry.repo, entry.base_commit) for entry in entries}), 1)}
+    for (repo, base), target in targets.items():
+        checkout_commit(target, f"https://github.com/{repo}", base)
+        command(["git", "update-ref", "refs/heads/pilot-base", base], target)
     identities = []
     for n, entry in enumerate(entries, 1):
         source = root / "prepared" / f"case-{n:02}" / "source"
         source.parent.mkdir(parents=True)
-        command(["git", "clone", "--quiet", "--shared", "--no-checkout", str(root / "target-store"), str(source)])
+        command(["git", "clone", "--quiet", "--shared", "--no-checkout", str(targets[(entry.repo, entry.base_commit)]), str(source)])
         command(["git", "config", "core.longpaths", "true"], source)
         command(["git", "config", "core.autocrlf", "false"], source)
         command(["git", "checkout", "--quiet", "--detach", entry.base_commit], source)
@@ -362,6 +360,7 @@ def preflight(root: Path, benchmark: Path) -> dict[str, Any]:
         source = root / "prepared" / f"case-{n:02}" / "source"
         if command(["git", "rev-parse", "HEAD"], source) != entry.base_commit:
             raise ValueError("Prepared base revision mismatch")
+        command(["git", "cat-file", "-e", entry.base_commit + "^{commit}"], source)
         for line in entry.patch.splitlines():
             if line.startswith("+++ b/") and not (source / line[6:].strip()).is_file():
                 raise ValueError("Prepared changed source file missing")

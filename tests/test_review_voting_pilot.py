@@ -319,6 +319,7 @@ def test_offline_preflight_without_captures_or_credentials(ready, monkeypatch):
 
 def test_prepare_reuses_pipeline_and_finishes_with_offline_preflight(ready, monkeypatch, tmp_path):
     _, benchmark, entries, config = ready
+    entries[0] = entries[0].model_copy(update={"base_commit": "b" * 40})
     destination = tmp_path / "new-preparation"
     seen = []
 
@@ -355,6 +356,7 @@ def test_prepare_reuses_pipeline_and_finishes_with_offline_preflight(ready, monk
     selection = json.loads((destination / "selection.json").read_text())
     assert selection["config"]["cases"] == [entry.instance_id for entry in entries]
     assert seen[0] == ("checkout", "https://github.com/microsoft/BC-ALAgents", config["engine_sha"])
+    assert len([item for item in seen if item[0] == "checkout"]) == 3
     assert json.loads((destination / "preflight.json").read_text())["paid_calls"] == 0
     assert not (destination / "execution").exists()
 

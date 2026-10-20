@@ -132,7 +132,7 @@ uv run python tools\review_voting_pilot.py --prepare --root $root --cli $cli
 uv run python tools\review_voting_pilot.py --preflight --root $root
 ```
 
-Preparation fetches the pinned engine/knowledge and one target base, applies the
+Preparation fetches the pinned engine/knowledge and each distinct target base, applies the
 six dataset patches using the existing pipeline, and freezes snapshot hashes.
 It requires Git access, PowerShell 7 with `powershell-yaml` and `Test-Json`, and
 the supported CLI. `--preflight` verifies local executable version/hash, CLI
