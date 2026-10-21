@@ -79,9 +79,65 @@ def resolve(tmp_path, source, span, quote, extra=None):
 @pytest.mark.parametrize(("actual", "claimed"), [([12, 18], [12, 20]), ([172, 186], [172, 187]), ([293, 308], [293, 310])])
 def test_genuinely_wrong_ranges_never_shift_or_gain_lines(tmp_path, actual, claimed):
     text = "\n".join(f"safe line {n}" for n in range(actual[0], actual[1] + 1))
-    source = events(tmp_path / "source" / "example.al", [actual[0], claimed[1]], text + "\n" * (claimed[1] - actual[1]))
+    source = events(tmp_path / "source" / "example.al", [actual[0], claimed[1]], text + "\nnonempty missing line" * (claimed[1] - actual[1]))
     result = resolve(tmp_path, source, claimed, text)
     assert result.evidence_resolution == "unresolved"
+
+
+@pytest.mark.parametrize(
+    ("text", "span", "quote", "omitted"),
+    [
+        ("body\n", [1, 2], "body", 1),
+        ("body\n\n", [1, 3], "body", 2),
+        ("L37:body\nL38:\nL39:", [37, 39], "body\n", 1),
+    ],
+)
+def test_only_explicitly_proven_trailing_empty_lines_can_be_omitted(tmp_path, text, span, quote, omitted):
+    result = resolve(tmp_path, events(tmp_path / "source" / "example.al", span, text), span, quote)
+    assert result.evidence_resolution == "tool_view_matched"
+    assert result.evidence[0].omitted_trailing_empty_lines == omitted
+    assert result.evidence[0].reference.quote == quote
+    assert (result.evidence[0].reference.line_start, result.evidence[0].reference.line_end) == tuple(span)
+    assert "EMPTY lines explicitly proven" in result.reason
+    assert result.resolver_version == "permitted-view-ranges-v5-trailing-empty"
+    assert result.semantic_correctness == "not_assessed"
+
+
+@pytest.mark.parametrize(
+    ("text", "requested", "claimed", "quote"),
+    [
+        ("body\nnonempty", [1, 2], [1, 2], "body"),
+        ("\nbody", [1, 2], [1, 2], "body"),
+        ("body\n\nend", [1, 3], [1, 3], "body\nend"),
+        ("body\n ", [1, 2], [1, 2], "body"),
+        ("body\n\t", [1, 2], [1, 2], "body"),
+        (" body\n", [1, 2], [1, 2], "body"),
+        ("body\n", [2, 3], [1, 2], "body"),
+        ("body\n", [1, 10], [1, 2], "body"),
+        ("L1:body", [1, 2], [1, 2], "body"),
+        ("L1:body\nL3:", [1, 3], [1, 2], "body"),
+        ("L1:body\nL1:", [1, 2], [1, 2], "body"),
+    ],
+)
+def test_trailing_empty_tolerance_never_infers_lines_or_strips_other_content(tmp_path, text, requested, claimed, quote):
+    result = resolve(tmp_path, events(tmp_path / "source" / "example.al", requested, text), claimed, quote)
+    assert result.evidence_resolution == "unresolved"
+    assert not result.evidence or all(item.reference.tree != "source" for item in result.evidence)
+
+
+@pytest.mark.parametrize("marker", ["[truncated]", "[redacted]", "****", "Content omitted"])
+def test_full_range_with_trailing_empty_line_cannot_bypass_view_restrictions(tmp_path, marker):
+    source = events(tmp_path / "source" / "example.al", [1, 3], f"L1:{marker}\nL2:body\nL3:")
+    assert resolve(tmp_path, source, [2, 3], "body").evidence_resolution in ("unavailable", "redacted")
+
+
+def test_trailing_empty_tolerance_requires_successful_view_and_no_conflict(tmp_path):
+    path = tmp_path / "source" / "example.al"
+    source = events(path, [1, 2], "body\n")
+    source[1]["data"]["success"] = False
+    assert resolve(tmp_path, source, [1, 2], "body").evidence_resolution == "unresolved"
+    assert resolve(tmp_path, [], [1, 2], "body").evidence_resolution == "unresolved"
+    assert resolve(tmp_path, events(path, [1, 2], "body\n"), [1, 2], "body", events(path, [2, 2], "not empty", "conflict")).evidence_resolution == "unresolved"
 
 
 def test_conflicting_successful_visible_views_cannot_cherry_pick(tmp_path):

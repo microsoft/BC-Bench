@@ -117,11 +117,18 @@ accuracy, clean-case silence, or the value of increasing voter count.
 <artifact-manifest.json>` re-resolves existing permitted `result.content` only
 and reuses the original semantic judge edges. It verifies historical artifact
 hashes before and after analysis and never writes into the historical run.
-Resolver `permitted-view-ranges-v4` preserves selected trailing blank lines,
+Resolver `permitted-view-ranges-v5-trailing-empty` preserves selected trailing blank lines,
 uses actual contiguous numbered ranges rather than assuming the requested end
 was returned, and accepts unnumbered short output only when another accepted
 view from that invocation corroborates it. Ambiguous/omitted/truncated/masked
 views and incorrect quote ranges remain non-countable; ranges are never shifted.
+The only quote normalization permitted is omitted trailing **empty** lines
+explicitly established at their original positions by a complete successful
+view. Nonempty or whitespace-only lines, leading/interior omissions, shortened
+or masked views cannot justify it. Raw quotes/ranges remain unchanged; resolved
+references record `omitted_trailing_empty_lines` and the decision explains the
+normalization separately from semantic correctness. This correction does not
+authorize any new invocation or change historical decisions.
 The corrected report includes the old-to-new validity table and separate full
 baseline versus complete-case paired denominators. Reference validity is still
 not a judgment of semantic correctness.

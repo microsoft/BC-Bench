@@ -13,7 +13,7 @@ from tools.review_voting_paths import filesystem_path, snapshot_inventory
 
 ADAPTER_VERSION = "live-views-v3"
 PROMPT_VERSION = "read-only-verification-v3"
-RESOLVER_VERSION = "permitted-view-ranges-v4"
+RESOLVER_VERSION = "permitted-view-ranges-v5-trailing-empty"
 SHARED_ROOTS_PROMPT_VERSION = "read-only-verification-v4-shared-roots"
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 ViewStatus = Literal["available", "redacted", "unavailable"]
@@ -69,6 +69,7 @@ class ResolvedReference(FrozenModel):
     reference: Reference
     tool_call_id: str
     permitted_content: str
+    omitted_trailing_empty_lines: int = Field(default=0, ge=0)
 
 
 class ResolvedDecision(FrozenModel):
@@ -179,18 +180,27 @@ def resolve_evidence(decisions: Sequence[Decision], events: Sequence[dict[str, A
             path = (tree_root / ref.file).resolve()
             matches = []
             quoted_lines = ref.quote.split("\n")
-            conflicting = len(quoted_lines) != ref.line_end - ref.line_start + 1
+            missing = ref.line_end - ref.line_start + 1 - len(quoted_lines)
+            compared_lines = quoted_lines
+            if missing > 0:
+                for _, read_path, first, lines, _ in records:
+                    if path == read_path and path.is_relative_to(tree_root) and first <= ref.line_start <= ref.line_end < first + len(lines):
+                        excerpt = lines[ref.line_start - first : ref.line_end - first + 1]
+                        if excerpt[: len(quoted_lines)] == quoted_lines and all(line == "" for line in excerpt[len(quoted_lines) :]):
+                            compared_lines = excerpt
+                            break
+            conflicting = len(compared_lines) != ref.line_end - ref.line_start + 1
             for key, read_path, first, lines, content in records:
                 if path != read_path or not path.is_relative_to(tree_root):
                     continue
                 overlap_first = max(first, ref.line_start)
                 overlap_last = min(first + len(lines) - 1, ref.line_end)
-                if overlap_first <= overlap_last and lines[overlap_first - first : overlap_last - first + 1] != quoted_lines[overlap_first - ref.line_start : overlap_last - ref.line_start + 1]:
+                if overlap_first <= overlap_last and lines[overlap_first - first : overlap_last - first + 1] != compared_lines[overlap_first - ref.line_start : overlap_last - ref.line_start + 1]:
                     conflicting = True
                 if first <= ref.line_start <= ref.line_end < first + len(lines):
-                    excerpt = "\n".join(lines[ref.line_start - first : ref.line_end - first + 1])
-                    if excerpt == ref.quote:
-                        matches.append(ResolvedReference(reference=ref, tool_call_id=key, permitted_content=content))
+                    excerpt = lines[ref.line_start - first : ref.line_end - first + 1]
+                    if excerpt == compared_lines:
+                        matches.append(ResolvedReference(reference=ref, tool_call_id=key, permitted_content=content, omitted_trailing_empty_lines=max(missing, 0)))
                     else:
                         conflicting = True
             if conflicting:
@@ -212,6 +222,8 @@ def resolve_evidence(decisions: Sequence[Decision], events: Sequence[dict[str, A
                 resolved.append(matches[0])
         if decision.source_view_status != "available":
             status, reason = decision.source_view_status, "Verifier reports necessary context unavailable/redacted."
+        if status == "tool_view_matched" and any(item.omitted_trailing_empty_lines for item in resolved):
+            reason = "Citation matched after tolerating omitted trailing EMPTY lines explicitly proven by a complete successful view; raw quote/range preserved. Not a correctness judgment."
         results.append(
             ResolvedDecision(
                 decision=decision,
