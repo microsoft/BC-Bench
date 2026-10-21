@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -51,7 +52,7 @@ from tools.review_voting_evidence import (
     tree_digest,
     validate_votes,
 )
-from tools.review_voting_paths import copy_tree, filesystem_path
+from tools.review_voting_paths import copy_tree, copy_verified, filesystem_path, metadata_scan
 
 MODEL = "gpt-5.6-sol"
 JUDGE = "gpt-5.3-codex"
@@ -78,8 +79,13 @@ def check_snapshot(root: Path, expected: str) -> None:
         raise ValueError("Source/knowledge/input snapshot was altered")
 
 
+def check_metadata(root: Path, expected: dict[str, tuple[int, int]], progress: Path, stage: str) -> None:
+    if metadata_scan(root, progress, stage) != expected:
+        raise ValueError(f"{stage}: source/context metadata changed; exclude rather than use altered inputs")
+
+
 def command(args: list[str], cwd: Path | None = None) -> str:
-    result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", check=False)
+    result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", check=False, timeout=120)
     if result.returncode:
         raise RuntimeError(f"Command failed ({result.returncode}): {args}\n{result.stderr}")
     return result.stdout.strip()
@@ -122,6 +128,7 @@ def run_verifier(
     context: dict[str, Any],
     candidates: list[Candidate],
     cli: str,
+    shared_work: Path | None = None,
 ) -> list[ResolvedDecision]:
     candidate_ids = [c["id"] for c in candidates]
     if len(candidate_ids) != len(set(candidate_ids)):
@@ -129,13 +136,21 @@ def run_verifier(
     if not candidate_ids:
         return []
     start = start_once(folder)
-    work = folder / "work"
-    work.mkdir()
-    copy_tree(source, work / "source", exclude_git=True)
-    copy_tree(knowledge, work / "knowledge", exclude_git=True)
-    save(work / "candidates.json", candidates)
-    save(work / "context.json", context)
-    before = tree_digest(work)
+    work = shared_work or folder / "work"
+    if shared_work is None:
+        work.mkdir()
+        copy_tree(source, work / "source", exclude_git=True)
+        copy_tree(knowledge, work / "knowledge", exclude_git=True)
+        save(work / "candidates.json", candidates)
+        save(work / "context.json", context)
+        before = tree_digest(work)
+        before_metadata = None
+    else:
+        before_metadata = metadata_scan(work, folder / "io-progress.jsonl", "readonly-context-before")
+        receipt = json.loads((work.parent / "context-receipt.json").read_text())
+        if digest_json(before_metadata) != receipt["metadata_sha256"] or json.loads((work / "candidates.json").read_text()) != candidates or json.loads((work / "context.json").read_text()) != context:
+            raise ValueError("Frozen shared verifier context changed before invocation")
+        before = digest_json({"candidates": candidates, "context": context, "verified_context_receipt": sha(work.parent / "context-receipt.json")})
     prompt = evidence_prompt()
     (folder / "prompt.txt").write_text(prompt, encoding="utf-8")
     args = [
@@ -168,6 +183,7 @@ def run_verifier(
             "adapter_version": ADAPTER_VERSION,
             "prompt_version": PROMPT_VERSION,
             "input_sha256": before,
+            "input_binding": "fresh tree hash" if shared_work is None else "verified shared read-only context receipt; metadata change detection, not fresh content hashing",
             "candidate_sha256": digest_json(candidates),
             "adapter_sha256": sha(Path(__file__)),
             "evidence_adapter_sha256": sha(Path(__file__).with_name("review_voting_evidence.py")),
@@ -190,7 +206,10 @@ def run_verifier(
         save(folder / "parsed-metrics.json", metrics.model_dump(mode="json"))
     try:
         decisions = validate_votes(candidate_ids, json.loads(response or ""))
-        check_snapshot(work, before)
+        if before_metadata is None:
+            check_snapshot(work, before)
+        else:
+            check_metadata(work, before_metadata, folder / "io-progress.jsonl", "readonly-context-after")
         events = [json.loads(line) for line in (folder / "stdout.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
         resolved = resolve_evidence(decisions, events, work)
     except (ValueError, TypeError, OSError) as exc:
@@ -325,21 +344,8 @@ def prepare(root: Path, benchmark: Path, cli: Path) -> None:
     save(root / "preflight.json", preflight(root, benchmark))
 
 
-def preflight(root: Path, benchmark: Path) -> dict[str, Any]:
-    config = load_config()
-    selection = json.loads((root / "selection.json").read_text(encoding="utf-8"))
-    if selection["config"] != config or any(selection.get(key) != value for key, value in implementation_identity(benchmark).items()):
-        raise ValueError("Frozen selection/implementation changed; prepare a fresh root")
-    if (root / "zero-inference-proof.json").exists():
-        from tools.review_voting_recovery import prove_no_inference
-
-        proof = json.loads((root / "zero-inference-proof.json").read_text(encoding="utf-8"))
-        origin = Path(proof["origin"])
-        if prove_no_inference(origin) != proof:
-            raise ValueError("Predecessor is no longer a proven pre-inference failure")
-        claim = json.loads((origin / "continuation-claim.json").read_text(encoding="utf-8"))
-        if claim["destination"] != str(root):
-            raise ValueError("This is not the exclusively reserved continuation")
+def runtime_guards(root: Path, selection: dict[str, Any]) -> dict[str, str]:
+    config = selection["config"]
     if get_pr_review_version(root / "engine") != config["engine_sha"]:
         raise ValueError("Engine checkout must be clean at the frozen experiment SHA")
     declared = yaml.safe_load((root / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml").read_text(encoding="utf-8"))
@@ -365,6 +371,27 @@ def preflight(root: Path, benchmark: Path) -> dict[str, Any]:
     cli = probe_cli(Path(selection["cli"]["path"]), config)
     if cli != selection["cli"]:
         raise ValueError("Frozen CLI identity changed")
+    return cli
+
+
+def preflight(root: Path, benchmark: Path) -> dict[str, Any]:
+    if (root / "checkpoint.json").exists():
+        return checkpoint_guards(root, benchmark, json.loads((root / "checkpoint.json").read_text()))
+    config = load_config()
+    selection = json.loads((root / "selection.json").read_text(encoding="utf-8"))
+    if selection["config"] != config or any(selection.get(key) != value for key, value in implementation_identity(benchmark).items()):
+        raise ValueError("Frozen selection/implementation changed; prepare a fresh root")
+    if (root / "zero-inference-proof.json").exists():
+        from tools.review_voting_recovery import prove_no_inference
+
+        proof = json.loads((root / "zero-inference-proof.json").read_text(encoding="utf-8"))
+        origin = Path(proof["origin"])
+        if prove_no_inference(origin) != proof:
+            raise ValueError("Predecessor is no longer a proven pre-inference failure")
+        claim = json.loads((origin / "continuation-claim.json").read_text(encoding="utf-8"))
+        if claim["destination"] != str(root):
+            raise ValueError("This is not the exclusively reserved continuation")
+    cli = runtime_guards(root, selection)
     inputs = json.loads((root / "inputs.json").read_text(encoding="utf-8"))
     entries = selected_entries(benchmark, config)
     observed = [tree_digest(root / "prepared" / f"case-{n:02}" / "source") for n in range(1, 7)]
@@ -391,6 +418,88 @@ def preflight(root: Path, benchmark: Path) -> dict[str, Any]:
         "limits": {"baseline": 6, "verifier": 18, "judge_batches": 6, "retries": 0},
         "unproven": ["model availability/authentication", "live read visibility and JSONL view shape", "baseline execution/telemetry", "semantic correctness"],
     }
+
+
+def checkpoint_manifests(root: Path, entries: list[CodeReviewEntry]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    sources = []
+    for n, entry in enumerate(entries, 1):
+        record = json.loads((root / "validation-r2" / f"case-{n:02}" / "manifest.json").read_text())
+        if record["instance_id"] != entry.instance_id or record["base_commit"] != entry.base_commit:
+            raise ValueError("Checkpoint sample/base identity mismatch")
+        sources.append(record["inventory"])
+    knowledge = json.loads((root / "validation" / "knowledge-manifest.json").read_text())["inventory"]
+    return sources, knowledge
+
+
+def inventory_digest(inventory: dict[str, Any]) -> str:
+    return digest_json([(name, record["sha256"]) for name, record in inventory.items()])
+
+
+def checkpoint_guards(root: Path, benchmark: Path, checkpoint: dict[str, Any]) -> dict[str, Any]:
+    from tools.review_voting_recovery import prove_no_inference
+
+    if (root / "execution").exists() or any((root / f"case-{n:02}").exists() for n in range(1, 7)):
+        raise FileExistsError("Checkpoint already has invocation/output markers; never restart")
+    identity = implementation_identity(benchmark)
+    if checkpoint["execution_identity"] != identity:
+        raise ValueError("Checkpoint execution implementation changed")
+    for relative, expected in checkpoint["artifact_sha256"].items():
+        if sha(root / relative) != expected:
+            raise ValueError(f"Checkpoint artifact changed: {relative}")
+    selection = json.loads((root / "selection.json").read_text())
+    config = load_config()
+    if selection["config"] != config or any(selection[key] != identity[key] for key in ("dataset_sha256", "config_sha256", "shared_config_sha256")):
+        raise ValueError("Checkpoint frozen configuration changed")
+    proof = json.loads((root / "zero-inference-proof.json").read_text())
+    origin = Path(proof["origin"])
+    if prove_no_inference(origin) != proof or json.loads((origin / "continuation-claim.json").read_text())["destination"] != str(root):
+        raise ValueError("Predecessor zero-inference proof/reservation changed")
+    entries = selected_entries(benchmark, config)
+    sources, knowledge = checkpoint_manifests(root, entries)
+    inputs = json.loads((root / "inputs.json").read_text())
+    if inputs != {"source_sha256": [inventory_digest(item) for item in sources], "knowledge_sha256": inventory_digest(knowledge)}:
+        raise ValueError("Completed checkpoint digests do not match all six inputs")
+    for n, inventory in enumerate(sources, 1):
+        source = root / "prepared" / f"case-{n:02}" / "source"
+        observed = metadata_scan(source, root / "checkpoint-progress.jsonl", f"case-{n:02}-metadata-only")
+        if {name: item[0] for name, item in observed.items()} != {name: item["bytes"] for name, item in inventory.items()}:
+            raise ValueError("Checkpoint source path/size inventory changed")
+        if command(["git", "rev-parse", "HEAD"], source) != entries[n - 1].base_commit:
+            raise ValueError("Checkpoint source base commit changed")
+    observed_knowledge = metadata_scan(root / "knowledge", root / "checkpoint-progress.jsonl", "knowledge-metadata-only")
+    if {name: item[0] for name, item in observed_knowledge.items()} != {name: item["bytes"] for name, item in knowledge.items()}:
+        raise ValueError("Checkpoint knowledge path/size inventory changed")
+    cli = runtime_guards(root, selection)
+    return {
+        "status": "completed_content_checkpoint_reused",
+        "content_checkpoint_utc": checkpoint["content_checkpoint_utc"],
+        "fresh_content_verification": False,
+        "interval_change_risk": checkpoint["interval_change_risk"],
+        "source_sha256": inputs["source_sha256"],
+        "credentials_present": bool(os.environ.get("GH_TOKEN") or os.environ.get("COPILOT_GITHUB_TOKEN")),
+        "cli": cli,
+        "paid_calls": 0,
+        "limits": {"baseline": 6, "verifier": 18, "judge_batches": 6, "retries": 0},
+    }
+
+
+def adopt_checkpoint(root: Path, benchmark: Path) -> None:
+    if (root / "checkpoint.json").exists():
+        raise FileExistsError("Checkpoint already adopted")
+    artifacts = ["selection.json", "inputs.json", "zero-inference-proof.json", "preparation-revision-r2.json", "preparation-termination-r2.json", "validation/knowledge-manifest.json"]
+    artifacts += [f"validation-r2/case-{n:02}/manifest.json" for n in range(1, 7)]
+    checkpoint = {
+        "content_checkpoint_utc": datetime.fromtimestamp((root / "inputs.json").stat().st_mtime, UTC).isoformat(),
+        "provenance": "inputs.json was persisted only after six independent Git/patch inventories, exact prepared-copy comparisons, and pinned filtered knowledge comparison succeeded",
+        "execution_identity": implementation_identity(benchmark),
+        "artifact_sha256": {name: sha(root / name) for name in artifacts},
+        "interval_change_risk": "Reusing completed content validation, not freshly hashing current bytes. Same-size changes since that checkpoint may evade entry metadata guards. Voter context copies are independently checked against the checkpoint content hashes.",
+        "workspace_policy": "One prepared baseline workspace per case; voters use a separate shared read-only context copied from the untouched predecessor sources, never from the baseline-mutated working tree. Every voter has a fresh CLI process and home.",
+    }
+    checks = checkpoint_guards(root, benchmark, checkpoint)
+    with (root / "checkpoint.json").open("x", encoding="utf-8") as stream:
+        json.dump(checkpoint, stream, indent=2)
+    save(root / "checkpoint-entry-checks.json", checks)
 
 
 def execution_copy_preflight(root: Path, inputs: dict[str, Any]) -> None:
@@ -449,14 +558,17 @@ def summarize_scores(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def case_arms(case: Path, source: Path, knowledge: Path, entry: CodeReviewEntry, candidates: list[Candidate], cli: str) -> tuple[dict[str, list[str]], str | None]:
+def case_arms(case: Path, source: Path, knowledge: Path, entry: CodeReviewEntry, candidates: list[Candidate], cli: str, shared_work: Path | None = None) -> tuple[dict[str, list[str]], str | None]:
     context = {"base_commit": entry.base_commit, "changed_paths": [line[6:].strip() for line in entry.patch.splitlines() if line.startswith("+++ b/")]}
     voters = []
     if candidates:
         for number in range(1, 4):
             folder = case / f"voter-{number}"
             try:
-                voters.append(run_verifier(folder, source, knowledge, context, candidates, cli))
+                voters.append(run_verifier(folder, source, knowledge, context, candidates, cli, shared_work))
+            except TimeoutError as exc:
+                failure(folder / "failure.json", exc)
+                raise
             except (OSError, ValueError, TypeError, RuntimeError, subprocess.SubprocessError) as exc:
                 failure(folder / "failure.json", exc)
                 voters.append(None)
@@ -470,12 +582,16 @@ def case_arms(case: Path, source: Path, knowledge: Path, entry: CodeReviewEntry,
 def run(root: Path, benchmark: Path) -> None:
     if (root / "execution").exists() or any((root / f"case-{n:02}").exists() for n in range(1, 7)):
         raise FileExistsError("One-shot execution requires fresh outputs; historical/partial runs cannot be retried")
-    checks = preflight(root, benchmark)
+    checkpoint_path = root / "checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text()) if checkpoint_path.exists() else None
+    checks = checkpoint_guards(root, benchmark, checkpoint) if checkpoint else preflight(root, benchmark)
     if not checks["credentials_present"]:
         raise RuntimeError("Set GH_TOKEN or COPILOT_GITHUB_TOKEN before --execute; credentials were not probed by inference")
     selection = json.loads((root / "selection.json").read_text(encoding="utf-8"))
     config = selection["config"]
     entries = selected_entries(benchmark, config)
+    inventories, knowledge_inventory = checkpoint_manifests(root, entries) if checkpoint else ([], {})
+    origin = Path(json.loads((root / "zero-inference-proof.json").read_text())["origin"]) if checkpoint else root
     start = start_once(root / "execution")
     save(
         root / "metadata.json",
@@ -485,6 +601,7 @@ def run(root: Path, benchmark: Path) -> None:
             "baseline_label": "Frozen deterministic-engine baseline",
             "ci_exact_reproduction": False,
             "workflow_cli_pin": "1.0.82",
+            "checkpoint_reuse": checkpoint,
             "observed_root_and_leaf_models": "Unknown until execution; retain each baseline's raw run manifest and metrics.",
         },
     )
@@ -495,14 +612,17 @@ def run(root: Path, benchmark: Path) -> None:
     try:
         for index, entry in enumerate(entries, 1):
             case = root / f"case-{index:02}"
-            source = case / "source"
-            copy_tree(root / "prepared" / f"case-{index:02}" / "source", source)
-            check_snapshot(source, checks["source_sha256"][index - 1])
+            source = root / "prepared" / f"case-{index:02}" / "source" if checkpoint else case / "source"
+            if checkpoint is None:
+                copy_tree(root / "prepared" / f"case-{index:02}" / "source", source)
+                check_snapshot(source, checks["source_sha256"][index - 1])
             save(case / "gold-private.json", entry.model_dump(mode="json"))
             baseline = case / "baseline"
             try:
+                source_metadata = metadata_scan(source, case / "io-progress.jsonl", "baseline-source-before") if checkpoint else None
                 baseline_start = start_once(baseline)
                 set_run_environment(original_environment, baseline / "home", selection)
+                print(json.dumps({"stage": "baseline-invocation-start", "case": index, "instance_id": entry.instance_id}), flush=True)
                 metrics, _ = run_pr_review_agent(
                     entry,
                     config["root_model"],
@@ -518,16 +638,46 @@ def run(root: Path, benchmark: Path) -> None:
                 (source / "review.json").replace(case / "frozen-review.json")
                 candidates = [Candidate(id=f"F{n:03}", comment=ReviewComment.model_validate(comment).model_dump(mode="json")) for n, comment in enumerate(raw, 1)]
                 save(case / "candidates.json", candidates)
-                # Verify the actual baseline source remained the prepared input.
-                check_snapshot(source, tree_digest(root / "prepared" / f"case-{index:02}" / "source"))
+                if source_metadata is None:
+                    check_snapshot(source, tree_digest(root / "prepared" / f"case-{index:02}" / "source"))
+                else:
+                    check_metadata(source, source_metadata, case / "io-progress.jsonl", "baseline-source-after")
                 completed.append((entry, case, source, candidates))
+            except TimeoutError as exc:
+                failure(baseline / "failure.json", exc)
+                raise
             except (OSError, ValueError, TypeError, RuntimeError, subprocess.SubprocessError, AgentError) as exc:
                 failure(baseline / "failure.json", exc)
                 exclusions.append({"instance_id": entry.instance_id, "stage": "baseline", "reason": str(exc)})
         results = []
         for entry, case, source, candidates in completed:
             set_run_environment(original_environment, case / "verification-home", selection)
-            arms, excluded = case_arms(case, source, root / "knowledge", entry, candidates, selection["cli"]["path"])
+            shared_work = None
+            if checkpoint and candidates:
+                index = config["cases"].index(entry.instance_id)
+                shared_work = case / "context"
+                try:
+                    copy_verified(origin / "prepared" / case.name / "source", shared_work / "source", inventories[index], case / "context-progress.jsonl")
+                    copy_verified(root / "knowledge", shared_work / "knowledge", knowledge_inventory, case / "context-progress.jsonl")
+                    context = {"base_commit": entry.base_commit, "changed_paths": [line[6:].strip() for line in entry.patch.splitlines() if line.startswith("+++ b/")]}
+                    save(shared_work / "candidates.json", candidates)
+                    save(shared_work / "context.json", context)
+                    save(
+                        case / "context-receipt.json",
+                        {
+                            "source_sha256": checks["source_sha256"][index],
+                            "knowledge_sha256": inventory_digest(knowledge_inventory),
+                            "candidate_sha256": digest_json(candidates),
+                            "metadata_sha256": digest_json(metadata_scan(shared_work, case / "context-progress.jsonl", "context-after-materialization")),
+                            "validated_unix": time.time(),
+                            "read_only_tools": ["view", "rg", "glob"],
+                            "voter_processes_and_homes": "independent",
+                        },
+                    )
+                except (OSError, ValueError) as exc:
+                    failure(case / "context-failure.json", exc)
+                    raise
+            arms, excluded = case_arms(case, source, root / "knowledge", entry, candidates, selection["cli"]["path"], shared_work)
             save(case / "arms.json", arms)
             if excluded:
                 exclusions.append({"instance_id": entry.instance_id, "stage": "verification", "reason": excluded})
@@ -554,6 +704,9 @@ def run(root: Path, benchmark: Path) -> None:
                 "summary": summarize_scores(results),
             },
         )
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        failure(root / "halted.json", exc)
+        raise
     finally:
         os.environ.clear()
         os.environ.update(original_environment)
@@ -568,6 +721,7 @@ def main(argv: list[str] | None = None) -> None:
     modes.add_argument("--execute", action="store_true", help="Explicit paid execution; requires separate approval")
     modes.add_argument("--prepare-continuation", type=Path, metavar="FAILED_ROOT", help="Revalidate and copy a proven pre-inference failure to fresh --root; no inference")
     modes.add_argument("--finish-continuation", action="store_true", help="Finish the preserved pre-readiness recovery with checkout-aware inventories; no inference")
+    modes.add_argument("--adopt-checkpoint", action="store_true", help="Explicitly reuse completed content validation with interval-change risk; metadata/runtime guards only")
     parser.add_argument("--cli", type=Path, help="Native engine-supported executable; required only for preparation")
     arguments = parser.parse_args(argv)
     root = arguments.root.resolve()
@@ -587,6 +741,8 @@ def main(argv: list[str] | None = None) -> None:
 
         revision = json.loads((root / "preparation-revision.json").read_text(encoding="utf-8"))
         prepare_continuation(Path(revision["origin"]), root, benchmark, finish=True)
+    elif arguments.adopt_checkpoint:
+        adopt_checkpoint(root, benchmark)
     elif arguments.preflight:
         print(json.dumps(preflight(root, benchmark), indent=2))
     else:

@@ -170,3 +170,23 @@ def test_pinned_checkout_attributes_resolve_crlf_without_changing_source(tmp_pat
     expected2 = expected_source_inventory(source, entry, scratch2)
     with pytest.raises(ValueError, match="differs from pinned Git checkout"):
         validate_checkout(source, scratch2, paths.snapshot_inventory(source), expected2)
+
+
+def test_metadata_scan_has_finite_deadline(tmp_path, monkeypatch):
+    clock = iter([0, 121])
+    monkeypatch.setattr(paths.time, "monotonic", lambda: next(clock))
+    with pytest.raises(TimeoutError, match="deadline"):
+        paths.metadata_scan(tmp_path, tmp_path / "progress.jsonl", "fixture")
+
+
+def test_context_copy_timeout_preserves_partial_output(tmp_path, monkeypatch):
+    source, destination = tmp_path / "source", tmp_path / "context"
+    source.mkdir()
+    (source / "a.al").write_bytes(b"fixture")
+    expected = paths.snapshot_inventory(source)
+    monkeypatch.setattr(paths, "metadata_scan", lambda *a, **k: {"a.al": (7, 0)})
+    clock = iter([0, 601])
+    monkeypatch.setattr(paths.time, "monotonic", lambda: next(clock))
+    with pytest.raises(TimeoutError, match="600 seconds"):
+        paths.copy_verified(source, destination, expected, tmp_path / "progress.jsonl")
+    assert destination.is_dir()

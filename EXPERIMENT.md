@@ -100,6 +100,36 @@ Articulate what you expect to see before triggering anything. A short hypothesis
 
 ### Bounded local review-verification pilot
 
+**Completed-checkpoint recovery:** after the six short-path prepared workspaces
+have already passed independent content/copy validation and `inputs.json` was
+persisted, the explicitly approved checkpoint-reuse path is:
+
+```powershell
+python -m uv run python tools\review_voting_pilot.py --adopt-checkpoint --root C:\bv3-e900-02
+python -m uv run python tools\review_voting_pilot.py --execute --root C:\bv3-e900-02
+```
+
+This preserves the original selection and all failure/termination records.
+`checkpoint.json` records the original content-validation timestamp and digests,
+manifest provenance, new execution identity, and the residual risk of changes
+since validation. Entry guards check the six selected identities, all expected
+paths/sizes, frozen pins/configuration, CLI compatibility and absence of prior
+invocations. **Metadata checks are not fresh byte verification.** This path
+does not call full preparation, rehash all prepared content, or create duplicate
+copy-preflight trees.
+
+Each baseline reuses its own prepared working tree. Voters never consume that
+potentially baseline-mutated tree: when findings exist, one separate context per
+case is copied from the preserved predecessor input and verified against the
+checkpoint hashes. Three independent CLI processes/homes share that identical
+context using only `view`, `rg` and `glob`; candidates/context and metadata are
+checked for changes. This removes the other two redundant voter copies without
+sharing conversation history, votes or gold labels. Metadata scans have a
+120-second deadline; each necessary verified context copy has a 600-second
+deadline and stage/file/byte progress. A timeout retains partial output and
+halts the driver without retrying. This does not remove the separately approved
+paid-run action or change the 6/18/6 cumulative limits.
+
 Windows snapshot enumeration, hashing and copying use extended-length filesystem
 paths and reject unstatable entries. Offline preflight performs the actual
 execution copy of all six sources and knowledge before allowing the first paid

@@ -577,3 +577,121 @@ def test_finish_continuation_is_explicit_offline_dispatch(tmp_path, monkeypatch)
     monkeypatch.setattr(recovery, "prepare_continuation", lambda *a, **k: calls.append(k))
     pilot.main(["--finish-continuation", "--root", str(tmp_path)])
     assert calls == [{"finish": True}]
+
+
+@pytest.fixture
+def completed_checkpoint(ready, monkeypatch, tmp_path):
+    from tools.review_voting_paths import snapshot_inventory
+    from tools.review_voting_recovery import prove_no_inference
+
+    root, benchmark, entries, config = ready
+    identity = {"fixture_identity": "new", "dataset_sha256": "dataset", "config_sha256": "config", "shared_config_sha256": "shared"}
+    monkeypatch.setattr(pilot, "implementation_identity", lambda *a: identity)
+    selection = json.loads((root / "selection.json").read_text())
+    pilot.save(root / "selection.json", selection | identity)
+    origin = tmp_path / "predecessor"
+    pilot.start_once(origin / "execution")
+    (origin / "case-01" / "source").mkdir(parents=True)
+    pilot.save(origin / "continuation-claim.json", {"destination": str(root)})
+    pilot.save(root / "zero-inference-proof.json", prove_no_inference(origin))
+    pilot.save(root / "preparation-revision-r2.json", {"fixture": "preserved"})
+    pilot.save(root / "preparation-termination-r2.json", {"status": "operator_terminated_before_inference"})
+    for n, entry in enumerate(entries, 1):
+        source = root / "prepared" / f"case-{n:02}" / "source"
+        pilot.copy_tree(source, origin / "prepared" / f"case-{n:02}" / "source")
+        pilot.save(root / "validation-r2" / f"case-{n:02}" / "manifest.json", {"instance_id": entry.instance_id, "base_commit": entry.base_commit, "inventory": snapshot_inventory(source)})
+    pilot.save(root / "validation" / "knowledge-manifest.json", {"inventory": snapshot_inventory(root / "knowledge")})
+    return root, benchmark, entries, config, origin
+
+
+def forbid_expensive_preparation(monkeypatch):
+    def forbidden(*a, **k):
+        pytest.fail("Completed checkpoint must not rehash or duplicate preparation trees")
+
+    for name in ("tree_digest", "copy_tree", "execution_copy_preflight", "preflight", "prepare"):
+        monkeypatch.setattr(pilot, name, forbidden)
+
+
+def test_checkpoint_execution_reuses_workspaces_and_one_readonly_context_per_case(completed_checkpoint, monkeypatch):
+    root, benchmark, entries, _, _ = completed_checkpoint
+    forbid_expensive_preparation(monkeypatch)
+    pilot.adopt_checkpoint(root, benchmark)
+    calls = fake_cli(monkeypatch, failure_index=10)
+    contexts = []
+    real_copy = pilot.copy_verified
+
+    def copy(source, dest, expected, progress):
+        contexts.append(dest)
+        real_copy(source, dest, expected, progress)
+
+    def baseline(entry, model, category, source, folder, **kwargs):
+        assert source == root / "prepared" / f"case-{entries.index(entry) + 1:02}" / "source"
+        pilot.save(source / "review.json", [{"file": "helper.al", "line_start": 2, "line_end": 3, "body": "fixture", "severity": "high"}])
+        return SimpleNamespace(model_dump=lambda **k: {}), None
+
+    monkeypatch.setattr(pilot, "copy_verified", copy)
+    monkeypatch.setattr(pilot, "run_pr_review_agent", baseline)
+    monkeypatch.setattr(pilot, "judge_verdicts", lambda pairs, *a, **k: [True] * len(pairs))
+    pilot.run(root, benchmark)
+    assert len(calls) == 18
+    assert len(contexts) == 12
+    assert not (root / "copy-preflight").exists()
+    assert not (root / "case-01" / "source").exists()
+    assert not (root / "case-01" / "voter-1" / "work").exists()
+    report = json.loads((root / "results.json").read_text())
+    assert report["denominators"]["paired_scored"] == 5
+    assert report["exclusions"][0]["instance_id"] == entries[3].instance_id
+    invocation = json.loads((root / "case-01" / "voter-1" / "invocation.json").read_text())
+    assert invocation["cwd"] == str(root / "case-01" / "context")
+    assert "not fresh content hashing" in invocation["input_binding"]
+    with pytest.raises(FileExistsError):
+        pilot.run(root, benchmark)
+
+
+@pytest.mark.parametrize("invalid", ["missing", "wrong-sample", "incomplete", "stale-config", "paid", "missing-source"])
+def test_checkpoint_rejects_incomplete_or_changed_inputs_without_inference(completed_checkpoint, monkeypatch, invalid):
+    root, benchmark, _, _, _ = completed_checkpoint
+    forbid_expensive_preparation(monkeypatch)
+    manifest = root / "validation-r2" / "case-06" / "manifest.json"
+    if invalid == "missing":
+        manifest.unlink()
+    elif invalid == "wrong-sample":
+        record = json.loads(manifest.read_text())
+        record["instance_id"] = "synthetic__wrong-01"
+        pilot.save(manifest, record)
+    elif invalid == "incomplete":
+        values = json.loads((root / "inputs.json").read_text())
+        values["source_sha256"].pop()
+        pilot.save(root / "inputs.json", values)
+    elif invalid == "stale-config":
+        selection = json.loads((root / "selection.json").read_text())
+        selection["config"]["root_model"] = "wrong"
+        pilot.save(root / "selection.json", selection)
+    elif invalid == "paid":
+        pilot.start_once(root / "case-01" / "baseline")
+    else:
+        (root / "prepared" / "case-06" / "source" / "helper.al").unlink()
+    with pytest.raises((ValueError, FileNotFoundError, FileExistsError)):
+        pilot.adopt_checkpoint(root, benchmark)
+    assert not (root / "checkpoint.json").exists()
+
+
+def test_baseline_mutation_excludes_case_without_overwriting_voter_source(completed_checkpoint, monkeypatch):
+    root, benchmark, entries, _, origin = completed_checkpoint
+    forbid_expensive_preparation(monkeypatch)
+    pilot.adopt_checkpoint(root, benchmark)
+    monkeypatch.setenv("GH_TOKEN", "fixture")
+
+    def baseline(entry, model, category, source, folder, **kwargs):
+        if entry is entries[0]:
+            (source / "helper.al").write_text("unexpected baseline mutation")
+        pilot.save(source / "review.json", [])
+        return SimpleNamespace(model_dump=lambda **k: {}), None
+
+    monkeypatch.setattr(pilot, "run_pr_review_agent", baseline)
+    monkeypatch.setattr(pilot, "judge_verdicts", lambda *a, **k: [])
+    pilot.run(root, benchmark)
+    assert "unexpected" not in (origin / "prepared" / "case-01" / "source" / "helper.al").read_text()
+    report = json.loads((root / "results.json").read_text())
+    assert report["denominators"]["baseline_completed"] == 5
+    assert "metadata changed" in report["exclusions"][0]["reason"]
