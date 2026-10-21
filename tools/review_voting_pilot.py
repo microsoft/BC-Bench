@@ -228,13 +228,25 @@ def score_arms(entry: CodeReviewEntry, candidates: list[Candidate], arms: dict[s
     if expected or ignored:
         start_once(folder)
     verdicts = judge_verdicts(expected + ignored, folder, model=JUDGE)
-    save(
-        folder / "edges.json",
-        [
-            {"gold_bucket": "expected" if n < len(expected) else "ignored", "gold": gold.model_dump(mode="json"), "candidate_id": keys[id(candidate)], "match": match}
-            for n, ((gold, candidate), match) in enumerate(zip(expected + ignored, verdicts, strict=True))
-        ],
-    )
+    edges = [
+        {"gold_bucket": "expected" if n < len(expected) else "ignored", "gold": gold.model_dump(mode="json"), "candidate_id": keys[id(candidate)], "match": match}
+        for n, ((gold, candidate), match) in enumerate(zip(expected + ignored, verdicts, strict=True))
+    ]
+    save(folder / "edges.json", edges)
+    return score_frozen_edges(entry, candidates, arms, edges)
+
+
+def score_frozen_edges(entry: CodeReviewEntry, candidates: list[Candidate], arms: dict[str, list[str]], edges: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    generated = [ReviewComment.model_validate(c["comment"]) for c in candidates]
+    keys = {id(comment): c["id"] for comment, c in zip(generated, candidates, strict=True)}
+    expected = candidate_comment_pairs(entry.expected_comments, generated)
+    ignored = candidate_comment_pairs(entry.ignored_comments, generated)
+    verdicts = []
+    for n, ((gold, candidate), edge) in enumerate(zip(expected + ignored, edges, strict=True)):
+        identity = {"gold_bucket": "expected" if n < len(expected) else "ignored", "gold": gold.model_dump(mode="json"), "candidate_id": keys[id(candidate)]}
+        if {key: edge.get(key) for key in identity} != identity or type(edge.get("match")) is not bool:
+            raise ValueError("Frozen judge edges do not match the original candidate/gold pairs")
+        verdicts.append(edge["match"])
     accepted_expected = [pair for pair, verdict in zip(expected, verdicts[: len(expected)], strict=True) if verdict]
     accepted_ignored = [pair for pair, verdict in zip(ignored, verdicts[len(expected) :], strict=True) if verdict]
     result = {}

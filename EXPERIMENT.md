@@ -100,6 +100,20 @@ Articulate what you expect to see before triggering anything. A short hypothesis
 
 ### Bounded local review-verification pilot
 
+**Offline correction, no inference:** `tools\review_voting_reanalyze.py --root
+<historical-root> --output <new-analysis-directory> --historical-hashes
+<artifact-manifest.json>` re-resolves existing permitted `result.content` only
+and reuses the original semantic judge edges. It verifies historical artifact
+hashes before and after analysis and never writes into the historical run.
+Resolver `permitted-view-ranges-v4` preserves selected trailing blank lines,
+uses actual contiguous numbered ranges rather than assuming the requested end
+was returned, and accepts unnumbered short output only when another accepted
+view from that invocation corroborates it. Ambiguous/omitted/truncated/masked
+views and incorrect quote ranges remain non-countable; ranges are never shifted.
+The corrected report includes the old-to-new validity table and separate full
+baseline versus complete-case paired denominators. Reference validity is still
+not a judgment of semantic correctness.
+
 **Recorded mid-run interruption:** `--resume-unstarted --root C:\bv3-e900-02`
 is a separate, one-shot continuation for the observed four completed baselines,
 one interrupted baseline and one never-started baseline. It refuses any previous

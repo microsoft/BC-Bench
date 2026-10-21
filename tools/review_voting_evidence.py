@@ -13,6 +13,7 @@ from tools.review_voting_paths import filesystem_path, snapshot_inventory
 
 ADAPTER_VERSION = "live-views-v3"
 PROMPT_VERSION = "read-only-verification-v3"
+RESOLVER_VERSION = "permitted-view-ranges-v4"
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 ViewStatus = Literal["available", "redacted", "unavailable"]
 
@@ -76,6 +77,29 @@ class ResolvedDecision(FrozenModel):
     semantic_correctness: Literal["not_assessed"] = "not_assessed"
     disk_text_equivalence: Literal["not_assessed"] = "not_assessed"
     evidence: tuple[ResolvedReference, ...]
+    resolver_version: str = RESOLVER_VERSION
+
+
+def visible_lines(content: str, first: int, last: int) -> tuple[int, list[str]] | None:
+    # A view is joined lines, not a file stream: splitlines() loses a final
+    # empty line selected by an inclusive range.
+    lines = content.replace("\r\n", "\n").split("\n")
+    if lines[-1] == "" and len(lines) == last - first + 2:
+        lines.pop()
+    numbered = [re.fullmatch(r"L(\d+):(.*)", line) for line in lines]
+    if any(re.match(r"^L\d+\s*:", line) for line in lines):
+        if lines[-1] == "":
+            lines.pop()
+            numbered.pop()
+        if not numbered or not all(numbered):
+            return None
+        numbers = [int(match[1]) for match in numbered if match is not None]
+        if numbers != list(range(numbers[0], numbers[0] + len(numbers))) or not first <= numbers[0] <= numbers[-1] <= last:
+            return None
+        return numbers[0], [match[2] for match in numbered if match is not None]
+    if len(lines) != last - first + 1:
+        return None
+    return first, lines
 
 
 def validate_votes(candidate_ids: list[str], payload: object) -> list[Decision]:
@@ -94,6 +118,7 @@ def view_records(events: Sequence[dict[str, Any]], work: Path) -> list[tuple[str
     starts = {}
     records: list[tuple[str, Path, int, list[str], str]] = []
     seen = set()
+    short_views = []
     for event in events:
         data = event.get("data", {})
         key = data.get("toolCallId")
@@ -117,17 +142,23 @@ def view_records(events: Sequence[dict[str, Any]], work: Path) -> list[tuple[str
         first, last = span
         if type(first) is not int or type(last) is not int or first < 1 or last < first or not isinstance(args.get("path"), str):
             continue
-        # Only finite, complete views have unambiguous line attribution.
-        lines = content.splitlines()
-        if len(lines) != last - first + 1:
-            continue
-        numbered = [re.fullmatch(r"L(\d+):(.*)", line) for line in lines]
-        if all(numbered):
-            if any(match is None or int(match[1]) != first + n for n, match in enumerate(numbered)):
-                continue
-            lines = [match[2] for match in numbered if match is not None]
         path = Path(args["path"])
-        records.append((key, (path if path.is_absolute() else work / path).resolve(), first, lines, content))
+        path = (path if path.is_absolute() else work / path).resolve()
+        visible = visible_lines(content, first, last)
+        if visible is not None:
+            actual_first, lines = visible
+            records.append((key, path, actual_first, lines, content))
+        elif not re.search(r"(?m)^L\d+\s*:", content):
+            short_views.append((key, path, first, content.splitlines(), content))
+    # An unnumbered short response alone cannot prove EOF or omitted lines.
+    # Admit only a prefix whose positions are independently shown by an
+    # accepted view from this same invocation, never by reading disk.
+    for key, path, first, lines, content in short_views:
+        if lines and any(
+            path == other_path and other_first <= first and first + len(lines) <= other_first + len(other_lines) and other_lines[first - other_first : first - other_first + len(lines)] == lines
+            for _, other_path, other_first, other_lines, _ in records
+        ):
+            records.append((key, path, first, lines, content))
     return records
 
 
@@ -144,6 +175,7 @@ def resolve_evidence(decisions: Sequence[Decision], events: Sequence[dict[str, A
         for ref in refs:
             path = (work / ref.tree / ref.file).resolve()
             matches = []
+            conflicting = False
             for key, read_path, first, lines, content in records:
                 if path != read_path or not path.is_relative_to((work / ref.tree).resolve()):
                     continue
@@ -151,9 +183,20 @@ def resolve_evidence(decisions: Sequence[Decision], events: Sequence[dict[str, A
                     excerpt = "\n".join(lines[ref.line_start - first : ref.line_end - first + 1])
                     if excerpt == ref.quote:
                         matches.append(ResolvedReference(reference=ref, tool_call_id=key, permitted_content=content))
-            if not matches:
+                    else:
+                        conflicting = True
+            if conflicting:
+                status, reason = "unresolved", "Citation range/quote disagrees with a successful visible range; do not shift or normalize it."
+            elif not matches:
                 status, reason = "unresolved", "Citation did not match a supported successful view; no raw-disk fallback."
-            elif any(re.search(r"truncated|access denied|permission denied|content exclusion|content omitted", item.permitted_content, re.IGNORECASE) for item in matches):
+            elif any(
+                re.search(
+                    r"truncated|access denied|permission denied|content exclusion|(?:content|lines?) omitted|omitted \d+ lines?|^\s*(?:\.\.\.|\[\.\.\.\])\s*$",
+                    item.permitted_content,
+                    re.IGNORECASE | re.MULTILINE,
+                )
+                for item in matches
+            ):
                 status, reason = "unavailable", "Read-tool output reports truncated or unavailable content."
             elif any(re.search(r"\*{4,}|\[redacted\]|\[hidden\]|<redacted>|content exclusion", item.permitted_content, re.IGNORECASE) for item in matches):
                 status, reason = "redacted", "Read-tool output contains a masking/exclusion marker."
