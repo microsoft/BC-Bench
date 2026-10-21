@@ -138,6 +138,8 @@ def test_trailing_empty_tolerance_requires_successful_view_and_no_conflict(tmp_p
     assert resolve(tmp_path, source, [1, 2], "body").evidence_resolution == "unresolved"
     assert resolve(tmp_path, [], [1, 2], "body").evidence_resolution == "unresolved"
     assert resolve(tmp_path, events(path, [1, 2], "body\n"), [1, 2], "body", events(path, [2, 2], "not empty", "conflict")).evidence_resolution == "unresolved"
+    partials = events(path, [1, 2], "body\n") + events(path, [3, 3], "", "tail")
+    assert resolve(tmp_path, partials, [1, 3], "body").evidence_resolution == "unresolved"
 
 
 def test_conflicting_successful_visible_views_cannot_cherry_pick(tmp_path):
