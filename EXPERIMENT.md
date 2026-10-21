@@ -100,6 +100,18 @@ Articulate what you expect to see before triggering anything. A short hypothesis
 
 ### Bounded local review-verification pilot
 
+**Separately authorized two-case engineering smoke:** `tools\review_voting_smoke.py`
+reuses the frozen case03 and case06 candidates only. `--prepare --root <fresh-phase>
+--historical-root C:\bv3-e900-02` validates their identities and prepares small
+receipts without inference or source copies. `--execute --root <fresh-phase>` is
+the explicit paid action: at most six sequential `gpt-5.6-sol` verifiers, zero
+baselines/judges/retries. Each returned invocation must pass the live reference
+and read-tool gate before the next starts; a failure halts the phase. A new phase
+manifest, invocation markers, ten-second heartbeat and terminal outcome preserve
+the old run. Each invocation has a 30-minute timeout, and the phase starts no new
+call after three hours. The smoke tests engineering feasibility, not semantic
+accuracy, clean-case silence, or the value of increasing voter count.
+
 **Offline correction, no inference:** `tools\review_voting_reanalyze.py --root
 <historical-root> --output <new-analysis-directory> --historical-hashes
 <artifact-manifest.json>` re-resolves existing permitted `result.content` only
