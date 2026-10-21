@@ -199,11 +199,15 @@ def fake_cli(monkeypatch, *, failure_index=None, mutate=False):
         if len(calls) == failure_index:
             return SimpleNamespace(returncode=9)
         events = view_events(work)
+        roots = [Path(arg.removeprefix("--add-dir=")) for arg in args if arg.startswith("--add-dir=")]
+        for event, root in zip((events[0], events[2]), roots, strict=True):
+            original = Path(event["data"]["arguments"]["path"])
+            event["data"]["arguments"]["path"] = str(root / original.name)
         events.append({"type": "assistant.message", "data": {"phase": "final_answer", "content": json.dumps([vote()])}})
         kwargs["stdout"].write("\n".join(json.dumps(e) for e in events))
         kwargs["stdout"].flush()
         if mutate:
-            (work / "source" / "helper.al").write_text("altered")
+            (roots[0] / "helper.al").write_text("altered")
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(subprocess, "run", process)
@@ -211,40 +215,51 @@ def fake_cli(monkeypatch, *, failure_index=None, mutate=False):
     return calls
 
 
+def fixture_receipt(source, knowledge, context, candidates):
+    return pilot.prepare_verifier_context(source.parent / "binding", source, knowledge, context, candidates, "a" * 64, "b" * 64)
+
+
 def test_verifier_arguments_and_input_isolation(safe_source, monkeypatch, tmp_path):
     source, knowledge = safe_source
     calls = fake_cli(monkeypatch)
     candidates: list[pilot.Candidate] = [{"id": "F001", "comment": {"body": "fixture"}}]
     folder = tmp_path / "voter"
-    result = pilot.run_verifier(folder, source, knowledge, {"changed_paths": ["helper.al"]}, candidates, "copilot.exe")
+    context = {"changed_paths": ["helper.al"]}
+    receipt = fixture_receipt(source, knowledge, context, candidates)
+    result = pilot.run_verifier(folder, source, knowledge, context, candidates, "copilot.exe", receipt)
     assert result[0].evidence_resolution == "tool_view_matched"
     args = calls[0]
     assert "--model=gpt-5.6-sol" in args
     assert "--available-tools=view,rg,glob" in args
     assert "--disallow-temp-dir" in args
-    assert "--add-dir" not in args
+    assert [arg for arg in args if arg.startswith("--add-dir=")] == [f"--add-dir={source}", f"--add-dir={knowledge}"]
+    assert {"--deny-tool=write", "--deny-tool=shell", "--deny-tool=url"} <= set(args)
     assert "--allow-all-paths" not in args
     assert "fixture" not in args[-1]
     assert "begin" not in args[-1]
-    assert json.loads((folder / "work" / "candidates.json").read_text()) == candidates
-    assert {p.name for p in (folder / "work").iterdir()} == {"source", "knowledge", "context.json", "candidates.json"}
+    assert json.loads((folder / "context" / "candidates.json").read_text()) == candidates
+    assert {p.name for p in (folder / "context").iterdir()} == {"context.json", "candidates.json"}
+    assert json.loads((folder / "home" / ".copilot" / "config.json").read_text())["disableAllHooks"] is True
     with pytest.raises(FileExistsError):
-        pilot.run_verifier(folder, source, knowledge, {}, candidates, "copilot.exe")
+        pilot.run_verifier(folder, source, knowledge, context, candidates, "copilot.exe", receipt)
     assert len(calls) == 1
 
 
 def test_mutated_verifier_inputs_preserve_failure(safe_source, monkeypatch, tmp_path):
     source, knowledge = safe_source
     calls = fake_cli(monkeypatch, mutate=True)
-    with pytest.raises(ValueError, match="altered"):
-        pilot.run_verifier(tmp_path / "voter", source, knowledge, {}, [{"id": "F001", "comment": {}}], "copilot.exe")
+    candidates: list[pilot.Candidate] = [{"id": "F001", "comment": {}}]
+    context = {"changed_paths": ["helper.al"]}
+    receipt = fixture_receipt(source, knowledge, context, candidates)
+    with pytest.raises(ValueError, match="guards changed"):
+        pilot.run_verifier(tmp_path / "voter", source, knowledge, context, candidates, "copilot.exe", receipt)
     assert len(calls) == 1
     assert (tmp_path / "voter" / "validation-failure.json").exists()
 
 
 def test_empty_candidates_launch_no_process(safe_source, tmp_path):
     source, knowledge = safe_source
-    assert pilot.run_verifier(tmp_path / "voter", source, knowledge, {}, [], "copilot.exe") == []
+    assert pilot.run_verifier(tmp_path / "voter", source, knowledge, {}, [], "copilot.exe", {}) == []
     assert not (tmp_path / "voter").exists()
 
 
@@ -259,8 +274,11 @@ def test_timeout_is_one_attempt_with_preserved_process_failure(safe_source, tmp_
     monkeypatch.setenv("GH_TOKEN", "fixture")
     monkeypatch.setattr(subprocess, "run", timeout)
     folder = tmp_path / "voter"
+    candidates: list[pilot.Candidate] = [{"id": "F001", "comment": {}}]
+    context = {"changed_paths": ["helper.al"]}
+    receipt = fixture_receipt(source, knowledge, context, candidates)
     with pytest.raises(subprocess.TimeoutExpired):
-        pilot.run_verifier(folder, source, knowledge, {}, [{"id": "F001", "comment": {}}], "copilot.exe")
+        pilot.run_verifier(folder, source, knowledge, context, candidates, "copilot.exe", receipt)
     assert len(calls) == 1
     assert json.loads((folder / "process.json").read_text())["status"] == "failed"
 
@@ -612,29 +630,30 @@ def forbid_expensive_preparation(monkeypatch):
         monkeypatch.setattr(pilot, name, forbidden)
 
 
-def test_checkpoint_execution_reuses_workspaces_and_one_readonly_context_per_case(completed_checkpoint, monkeypatch):
+def test_checkpoint_execution_reuses_workspaces_without_verifier_copies(completed_checkpoint, monkeypatch):
     root, benchmark, entries, _, _ = completed_checkpoint
     forbid_expensive_preparation(monkeypatch)
     pilot.adopt_checkpoint(root, benchmark)
     calls = fake_cli(monkeypatch, failure_index=10)
-    contexts = []
-    real_copy = pilot.copy_verified
+    scans = []
+    real_scan = pilot.metadata_scan
 
-    def copy(source, dest, expected, progress):
-        contexts.append(dest)
-        real_copy(source, dest, expected, progress)
+    def scan(source, progress, stage):
+        assert not stage.startswith(("readonly-context", "context-"))
+        scans.append(stage)
+        return real_scan(source, progress, stage)
 
     def baseline(entry, model, category, source, folder, **kwargs):
         assert source == root / "prepared" / f"case-{entries.index(entry) + 1:02}" / "source"
         pilot.save(source / "review.json", [{"file": "helper.al", "line_start": 2, "line_end": 3, "body": "fixture", "severity": "high"}])
         return SimpleNamespace(model_dump=lambda **k: {}), None
 
-    monkeypatch.setattr(pilot, "copy_verified", copy)
+    monkeypatch.setattr(pilot, "metadata_scan", scan)
     monkeypatch.setattr(pilot, "run_pr_review_agent", baseline)
     monkeypatch.setattr(pilot, "judge_verdicts", lambda pairs, *a, **k: [True] * len(pairs))
     pilot.run(root, benchmark)
     assert len(calls) == 18
-    assert len(contexts) == 12
+    assert len(scans) == 19  # One checkpoint metadata pass and baseline before/after, never per voter.
     assert not (root / "copy-preflight").exists()
     assert not (root / "case-01" / "source").exists()
     assert not (root / "case-01" / "voter-1" / "work").exists()
@@ -642,8 +661,8 @@ def test_checkpoint_execution_reuses_workspaces_and_one_readonly_context_per_cas
     assert report["denominators"]["paired_scored"] == 5
     assert report["exclusions"][0]["instance_id"] == entries[3].instance_id
     invocation = json.loads((root / "case-01" / "voter-1" / "invocation.json").read_text())
-    assert invocation["cwd"] == str(root / "case-01" / "context")
-    assert "not fresh content hashing" in invocation["input_binding"]
+    assert invocation["cwd"] == str(root / "case-01" / "voter-1" / "context")
+    assert "not fresh byte verification" in invocation["input_binding"]
     with pytest.raises(FileExistsError):
         pilot.run(root, benchmark)
 
@@ -773,3 +792,69 @@ def test_resume_cli_is_explicit(tmp_path, monkeypatch):
     monkeypatch.setattr(pilot, "run", lambda *a, **k: calls.append(k))
     pilot.main(["--resume-unstarted", "--root", str(tmp_path)])
     assert calls == [{"resume_unstarted": True}]
+
+
+@pytest.mark.parametrize("failed_case", [1, 3])
+def test_context_failure_skips_its_voters_but_scores_and_continues_other_cases(completed_checkpoint, monkeypatch, failed_case):
+    root, benchmark, entries, _, _ = completed_checkpoint
+    forbid_expensive_preparation(monkeypatch)
+    pilot.adopt_checkpoint(root, benchmark)
+    calls = fake_cli(monkeypatch)
+    prepare = pilot.prepare_verifier_context
+
+    def prepare_context(case, *args):
+        if case.name == f"case-{failed_case:02}":
+            raise TimeoutError("fixture bounded preparation failure")
+        return prepare(case, *args)
+
+    def baseline(entry, model, category, source, folder, **kwargs):
+        pilot.save(source / "review.json", [{"file": "helper.al", "line_start": 2, "line_end": 3, "body": "fixture", "severity": "high"}])
+        return SimpleNamespace(model_dump=lambda **k: {}), None
+
+    monkeypatch.setattr(pilot, "prepare_verifier_context", prepare_context)
+    monkeypatch.setattr(pilot, "run_pr_review_agent", baseline)
+    monkeypatch.setattr(pilot, "judge_verdicts", lambda pairs, *a, **k: [True] * len(pairs))
+    pilot.run(root, benchmark)
+    assert len(calls) == 15
+    failed = root / f"case-{failed_case:02}"
+    assert (failed / "context-failure.json").exists()
+    assert not (failed / "voter-1").exists()
+    assert (failed / "scores.json").exists()
+    results = json.loads((root / "results.json").read_text())
+    assert results["denominators"] == {"selected": 6, "baseline_completed": 6, "baseline_scored": 6, "paired_scored": 5}
+    assert results["exclusions"][0]["instance_id"] == entries[failed_case - 1].instance_id
+
+
+@pytest.mark.parametrize("relative", [".github/hooks", ".github/copilot/settings.json", ".github/copilot/settings.local.json", ".github/extensions", ".mcp.json"])
+def test_shared_roots_reject_auto_loaded_configuration_before_invocation(safe_source, tmp_path, relative):
+    source, knowledge = safe_source
+    path = source / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}")
+    with pytest.raises(ValueError, match="auto-loaded configuration"):
+        fixture_receipt(source, knowledge, {"changed_paths": ["helper.al"]}, [])
+    assert not (tmp_path / "voter" / "started.json").exists()
+
+
+def test_shared_roots_must_not_expose_outputs_or_overlap(safe_source, tmp_path):
+    source, knowledge = safe_source
+    with pytest.raises(ValueError, match="gold, votes, or outputs"):
+        pilot.prepare_verifier_context(source / "case", source, knowledge, {"changed_paths": []}, [], "a" * 64, "b" * 64)
+    with pytest.raises(ValueError, match="overlap"):
+        pilot.prepare_verifier_context(tmp_path / "case", source, source, {"changed_paths": []}, [], "a" * 64, "b" * 64)
+
+
+def test_each_voter_has_disjoint_cwd_output_and_home(safe_source, tmp_path, monkeypatch):
+    source, knowledge = safe_source
+    calls = fake_cli(monkeypatch)
+    candidates: list[pilot.Candidate] = [{"id": "F001", "comment": {}}]
+    context = {"changed_paths": ["helper.al"]}
+    receipt = fixture_receipt(source, knowledge, context, candidates)
+    for number in range(1, 4):
+        folder = tmp_path / f"voter-{number}"
+        pilot.run_verifier(folder, source, knowledge, context, candidates, "copilot.exe", receipt)
+        invocation = json.loads((folder / "invocation.json").read_text())
+        allowed = [Path(arg.removeprefix("--add-dir=")) for arg in invocation["args"] if arg.startswith("--add-dir=")] + [Path(invocation["cwd"])]
+        for forbidden in (tmp_path / "gold-private.json", folder / "home", folder / "stdout.jsonl", tmp_path / f"voter-{number % 3 + 1}"):
+            assert not any(forbidden.is_relative_to(path) for path in allowed)
+    assert len(calls) == 3

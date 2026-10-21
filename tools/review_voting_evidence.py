@@ -14,6 +14,7 @@ from tools.review_voting_paths import filesystem_path, snapshot_inventory
 ADAPTER_VERSION = "live-views-v3"
 PROMPT_VERSION = "read-only-verification-v3"
 RESOLVER_VERSION = "permitted-view-ranges-v4"
+SHARED_ROOTS_PROMPT_VERSION = "read-only-verification-v4-shared-roots"
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 ViewStatus = Literal["available", "redacted", "unavailable"]
 
@@ -162,8 +163,9 @@ def view_records(events: Sequence[dict[str, Any]], work: Path) -> list[tuple[str
     return records
 
 
-def resolve_evidence(decisions: Sequence[Decision], events: Sequence[dict[str, Any]], work: Path) -> list[ResolvedDecision]:
+def resolve_evidence(decisions: Sequence[Decision], events: Sequence[dict[str, Any]], work: Path, *, roots: dict[str, Path] | None = None) -> list[ResolvedDecision]:
     records = view_records(events, work)
+    roots = roots or {name: work / name for name in ("source", "knowledge")}
     results = []
     for decision in decisions:
         resolved = []
@@ -173,12 +175,18 @@ def resolve_evidence(decisions: Sequence[Decision], events: Sequence[dict[str, A
         if len(refs) != len(set(refs)) or {r.tree for r in refs} != {"source", "knowledge"}:
             status, reason = "unresolved", "Unique source and knowledge references are required."
         for ref in refs:
-            path = (work / ref.tree / ref.file).resolve()
+            tree_root = roots[ref.tree].resolve()
+            path = (tree_root / ref.file).resolve()
             matches = []
-            conflicting = False
+            quoted_lines = ref.quote.split("\n")
+            conflicting = len(quoted_lines) != ref.line_end - ref.line_start + 1
             for key, read_path, first, lines, content in records:
-                if path != read_path or not path.is_relative_to((work / ref.tree).resolve()):
+                if path != read_path or not path.is_relative_to(tree_root):
                     continue
+                overlap_first = max(first, ref.line_start)
+                overlap_last = min(first + len(lines) - 1, ref.line_end)
+                if overlap_first <= overlap_last and lines[overlap_first - first : overlap_last - first + 1] != quoted_lines[overlap_first - ref.line_start : overlap_last - ref.line_start + 1]:
+                    conflicting = True
                 if first <= ref.line_start <= ref.line_end < first + len(lines):
                     excerpt = "\n".join(lines[ref.line_start - first : ref.line_end - first + 1])
                     if excerpt == ref.quote:
@@ -231,8 +239,8 @@ def aggregate(candidate_ids: list[str], voters: Sequence[Sequence[ResolvedDecisi
     return {"A": candidate_ids, "B": [key for key in candidate_ids if key in supported[0]], "C": [key for key in candidate_ids if sum(key in votes for votes in supported) >= 2]}
 
 
-def evidence_prompt() -> str:
-    return f"""Protocol {PROMPT_VERSION}. Independently verify ONLY candidates.json.
+def evidence_prompt(*, shared_roots: bool = False) -> str:
+    prompt = f"""Protocol {PROMPT_VERSION}. Independently verify ONLY candidates.json.
 Use live read-only view/rg/glob on source/ and knowledge/. The changed paths and
 original base identity are in context.json. Candidate IDs are fixed; no new findings.
 Read source, relevant BCQuality articles, triggers, callers, guards, impact and
@@ -253,3 +261,6 @@ Unavailable context may have empty evidence. Do not treat masks as code defects.
 Citation resolution against tool-visible output is not source truth or semantic
 correctness. State unknown assumptions. No Markdown fences or additional keys.
 """
+    if shared_roots:
+        return prompt.replace(PROMPT_VERSION, SHARED_ROOTS_PROMPT_VERSION).replace("on source/ and knowledge/.", "on the absolute source_root and knowledge_root in context.json.")
+    return prompt

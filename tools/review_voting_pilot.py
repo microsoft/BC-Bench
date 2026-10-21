@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -42,7 +43,8 @@ from bcbench.results.codereview import assign_comment_matches, candidate_comment
 from bcbench.types import EvaluationCategory
 from tools.review_voting_evidence import (
     ADAPTER_VERSION,
-    PROMPT_VERSION,
+    RESOLVER_VERSION,
+    SHARED_ROOTS_PROMPT_VERSION,
     ResolvedDecision,
     aggregate,
     digest_json,
@@ -52,7 +54,7 @@ from tools.review_voting_evidence import (
     tree_digest,
     validate_votes,
 )
-from tools.review_voting_paths import copy_tree, copy_verified, filesystem_path, metadata_scan
+from tools.review_voting_paths import copy_tree, filesystem_path, metadata_scan
 
 MODEL = "gpt-5.6-sol"
 JUDGE = "gpt-5.3-codex"
@@ -121,6 +123,56 @@ def isolated_environment(home: Path) -> dict[str, str]:
     return env
 
 
+def shared_root_guards(source: Path, knowledge: Path, context: dict[str, Any]) -> dict[str, Any]:
+    result = {}
+    for name, root in (("source", source), ("knowledge", knowledge)):
+        for component in (root, *root.parents):
+            info = filesystem_path(component).lstat()
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                raise ValueError("Prepared root path must not traverse links/reparse points")
+        info = filesystem_path(root).lstat()
+        if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise ValueError("Read-only roots must be real prepared directories, not links")
+        for relative in (".github/hooks", ".github/extensions", ".github/copilot/settings.json", ".github/copilot/settings.local.json", ".mcp.json"):
+            try:
+                filesystem_path(root / relative).lstat()
+            except FileNotFoundError:
+                continue
+            raise ValueError(f"Shared root contains auto-loaded configuration: {relative}")
+        result[name] = {"path": str(root.resolve()), "device": info.st_dev, "inode": info.st_ino}
+    if source.resolve().is_relative_to(knowledge.resolve()) or knowledge.resolve().is_relative_to(source.resolve()):
+        raise ValueError("Source and knowledge roots must not overlap")
+    changed = {}
+    for relative in context["changed_paths"]:
+        path = source / relative
+        if not path.resolve().is_relative_to(source.resolve()):
+            raise ValueError("Changed path escapes prepared source")
+        info = filesystem_path(path).lstat()
+        if not stat.S_ISREG(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise ValueError("Changed source must be a regular file")
+        changed[relative] = (info.st_size, info.st_mtime_ns)
+    result["changed_paths_metadata"] = changed
+    return result
+
+
+def prepare_verifier_context(case: Path, source: Path, knowledge: Path, context: dict[str, Any], candidates: list[Candidate], source_sha256: str, knowledge_sha256: str) -> dict[str, Any]:
+    for root in (source, knowledge):
+        if case.resolve().is_relative_to(root.resolve()):
+            raise ValueError("Prepared read roots must not contain gold, votes, or outputs")
+    receipt = {
+        "layout": "shared-roots-v4",
+        "source_sha256": source_sha256,
+        "knowledge_sha256": knowledge_sha256,
+        "candidate_sha256": digest_json(candidates),
+        "context_sha256": digest_json(context),
+        "root_guards_sha256": digest_json(shared_root_guards(source, knowledge, context)),
+        "read_only_tools": ["view", "rg", "glob"],
+        "input_binding": "Historical content checkpoint; shallow root and changed-path metadata guards only, not fresh byte verification. External changes elsewhere may evade guards.",
+    }
+    save(case / "context-receipt.json", receipt)
+    return receipt
+
+
 def run_verifier(
     folder: Path,
     source: Path,
@@ -128,30 +180,32 @@ def run_verifier(
     context: dict[str, Any],
     candidates: list[Candidate],
     cli: str,
-    shared_work: Path | None = None,
+    context_receipt: dict[str, Any],
 ) -> list[ResolvedDecision]:
     candidate_ids = [c["id"] for c in candidates]
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ValueError("Duplicate candidate IDs")
     if not candidate_ids:
         return []
+    roots = {"source": source.resolve(), "knowledge": knowledge.resolve()}
+    work = folder / "context"
+    if any(folder.resolve().is_relative_to(root) or root.is_relative_to(work.resolve()) for root in roots.values()):
+        raise ValueError("Read roots must exclude voter output/home")
+    if (
+        context_receipt.get("layout") != "shared-roots-v4"
+        or context_receipt["candidate_sha256"] != digest_json(candidates)
+        or context_receipt["context_sha256"] != digest_json(context)
+        or context_receipt["root_guards_sha256"] != digest_json(shared_root_guards(source, knowledge, context))
+    ):
+        raise ValueError("Frozen shared verifier context changed before invocation")
     start = start_once(folder)
-    work = shared_work or folder / "work"
-    if shared_work is None:
-        work.mkdir()
-        copy_tree(source, work / "source", exclude_git=True)
-        copy_tree(knowledge, work / "knowledge", exclude_git=True)
-        save(work / "candidates.json", candidates)
-        save(work / "context.json", context)
-        before = tree_digest(work)
-        before_metadata = None
-    else:
-        before_metadata = metadata_scan(work, folder / "io-progress.jsonl", "readonly-context-before")
-        receipt = json.loads((work.parent / "context-receipt.json").read_text())
-        if digest_json(before_metadata) != receipt["metadata_sha256"] or json.loads((work / "candidates.json").read_text()) != candidates or json.loads((work / "context.json").read_text()) != context:
-            raise ValueError("Frozen shared verifier context changed before invocation")
-        before = digest_json({"candidates": candidates, "context": context, "verified_context_receipt": sha(work.parent / "context-receipt.json")})
-    prompt = evidence_prompt()
+    work.mkdir()
+    save(work / "candidates.json", candidates)
+    save(work / "context.json", context | {"source_root": str(roots["source"]), "knowledge_root": str(roots["knowledge"])})
+    before = {name: sha(work / name) for name in ("candidates.json", "context.json")}
+    env = isolated_environment(folder / "home")
+    save(Path(env["COPILOT_HOME"]) / "config.json", {"disableAllHooks": True, "memory": False, "ide": {"autoConnect": False}, "trustedFolders": []})
+    prompt = evidence_prompt(shared_roots=True)
     (folder / "prompt.txt").write_text(prompt, encoding="utf-8")
     args = [
         cli,
@@ -160,6 +214,11 @@ def run_verifier(
         "--disable-builtin-mcps",
         "--available-tools=view,rg,glob",
         "--allow-all-tools",
+        "--deny-tool=write",
+        "--deny-tool=shell",
+        "--deny-tool=url",
+        "--add-dir=" + str(roots["source"]),
+        "--add-dir=" + str(roots["knowledge"]),
         "--no-ask-user",
         "--disallow-temp-dir",
         "--no-remote",
@@ -181,9 +240,12 @@ def run_verifier(
             "cwd": str(work),
             "model": MODEL,
             "adapter_version": ADAPTER_VERSION,
-            "prompt_version": PROMPT_VERSION,
-            "input_sha256": before,
-            "input_binding": "fresh tree hash" if shared_work is None else "verified shared read-only context receipt; metadata change detection, not fresh content hashing",
+            "prompt_version": SHARED_ROOTS_PROMPT_VERSION,
+            "resolver_version": RESOLVER_VERSION,
+            "input_sha256": digest_json(before),
+            "input_binding": context_receipt["input_binding"],
+            "context_receipt": context_receipt,
+            "allowed_read_roots": {name: str(path) for name, path in roots.items()},
             "candidate_sha256": digest_json(candidates),
             "adapter_sha256": sha(Path(__file__)),
             "evidence_adapter_sha256": sha(Path(__file__).with_name("review_voting_evidence.py")),
@@ -193,7 +255,7 @@ def run_verifier(
     )
     with (folder / "stdout.jsonl").open("w", encoding="utf-8") as out, (folder / "stderr.txt").open("w", encoding="utf-8") as err:
         try:
-            completed = subprocess.run(args, cwd=work, env=isolated_environment(folder / "home"), stdout=out, stderr=err, timeout=1800, check=False)
+            completed = subprocess.run(args, cwd=work, env=env, stdout=out, stderr=err, timeout=1800, check=False)
         except (subprocess.TimeoutExpired, OSError) as exc:
             save(folder / "process.json", {"status": "failed", "error_type": type(exc).__name__, "wall_seconds": time.monotonic() - start})
             raise
@@ -206,12 +268,10 @@ def run_verifier(
         save(folder / "parsed-metrics.json", metrics.model_dump(mode="json"))
     try:
         decisions = validate_votes(candidate_ids, json.loads(response or ""))
-        if before_metadata is None:
-            check_snapshot(work, before)
-        else:
-            check_metadata(work, before_metadata, folder / "io-progress.jsonl", "readonly-context-after")
+        if {name: sha(work / name) for name in before} != before or context_receipt["root_guards_sha256"] != digest_json(shared_root_guards(source, knowledge, context)):
+            raise ValueError("Verifier inputs or root guards changed; exclude the invocation")  # noqa: TRY301 - Persist the same validation-failure receipt as parsing failures.
         events = [json.loads(line) for line in (folder / "stdout.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
-        resolved = resolve_evidence(decisions, events, work)
+        resolved = resolve_evidence(decisions, events, work, roots=roots)
     except (ValueError, TypeError, OSError) as exc:
         save(folder / "validation-failure.json", {"status": "failed", "error_type": type(exc).__name__, "reason": str(exc)})
         raise
@@ -570,17 +630,14 @@ def summarize_scores(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def case_arms(case: Path, source: Path, knowledge: Path, entry: CodeReviewEntry, candidates: list[Candidate], cli: str, shared_work: Path | None = None) -> tuple[dict[str, list[str]], str | None]:
+def case_arms(case: Path, source: Path, knowledge: Path, entry: CodeReviewEntry, candidates: list[Candidate], cli: str, context_receipt: dict[str, Any]) -> tuple[dict[str, list[str]], str | None]:
     context = {"base_commit": entry.base_commit, "changed_paths": [line[6:].strip() for line in entry.patch.splitlines() if line.startswith("+++ b/")]}
     voters = []
     if candidates:
         for number in range(1, 4):
             folder = case / f"voter-{number}"
             try:
-                voters.append(run_verifier(folder, source, knowledge, context, candidates, cli, shared_work))
-            except TimeoutError as exc:
-                failure(folder / "failure.json", exc)
-                raise
+                voters.append(run_verifier(folder, source, knowledge, context, candidates, cli, context_receipt))
             except (OSError, ValueError, TypeError, RuntimeError, subprocess.SubprocessError) as exc:
                 failure(folder / "failure.json", exc)
                 voters.append(None)
@@ -684,7 +741,6 @@ def run(root: Path, benchmark: Path, *, resume_unstarted: bool = False) -> None:
     selection = json.loads((root / "selection.json").read_text(encoding="utf-8"))
     config = selection["config"]
     entries = selected_entries(benchmark, config)
-    inventories, knowledge_inventory = checkpoint_manifests(root, entries) if checkpoint else ([], {})
     origin = Path(json.loads((root / "zero-inference-proof.json").read_text())["origin"]) if checkpoint else root
     start = start_once(root / ("execution-continuation" if resume_unstarted else "execution"))
     if resume_unstarted:
@@ -746,41 +802,29 @@ def run(root: Path, benchmark: Path, *, resume_unstarted: bool = False) -> None:
                 else:
                     check_metadata(source, source_metadata, case / "io-progress.jsonl", "baseline-source-after")
                 completed.append((entry, case, source, candidates))
-            except TimeoutError as exc:
-                failure(baseline / "failure.json", exc)
-                raise
             except (OSError, ValueError, TypeError, RuntimeError, subprocess.SubprocessError, AgentError) as exc:
                 failure(baseline / "failure.json", exc)
                 exclusions.append({"instance_id": entry.instance_id, "stage": "baseline", "reason": str(exc)})
         results = []
-        for entry, case, source, candidates in completed:
+        for entry, case, _source, candidates in completed:
             set_run_environment(original_environment, case / "verification-home", selection)
-            shared_work = None
-            if checkpoint and candidates:
+            receipt = {}
+            excluded = None
+            verifier_source = origin / "prepared" / case.name / "source"
+            if candidates:
                 index = config["cases"].index(entry.instance_id)
-                shared_work = case / "context"
                 try:
-                    copy_verified(origin / "prepared" / case.name / "source", shared_work / "source", inventories[index], case / "context-progress.jsonl")
-                    copy_verified(root / "knowledge", shared_work / "knowledge", knowledge_inventory, case / "context-progress.jsonl")
                     context = {"base_commit": entry.base_commit, "changed_paths": [line[6:].strip() for line in entry.patch.splitlines() if line.startswith("+++ b/")]}
-                    save(shared_work / "candidates.json", candidates)
-                    save(shared_work / "context.json", context)
-                    save(
-                        case / "context-receipt.json",
-                        {
-                            "source_sha256": checks["source_sha256"][index],
-                            "knowledge_sha256": inventory_digest(knowledge_inventory),
-                            "candidate_sha256": digest_json(candidates),
-                            "metadata_sha256": digest_json(metadata_scan(shared_work, case / "context-progress.jsonl", "context-after-materialization")),
-                            "validated_unix": time.time(),
-                            "read_only_tools": ["view", "rg", "glob"],
-                            "voter_processes_and_homes": "independent",
-                        },
+                    receipt = prepare_verifier_context(
+                        case, verifier_source, root / "knowledge", context, candidates, checks["source_sha256"][index], json.loads((root / "inputs.json").read_text())["knowledge_sha256"]
                     )
                 except (OSError, ValueError) as exc:
                     failure(case / "context-failure.json", exc)
-                    raise
-            arms, excluded = case_arms(case, source, root / "knowledge", entry, candidates, selection["cli"]["path"], shared_work)
+                    excluded = str(exc)
+            if excluded is None:
+                arms, excluded = case_arms(case, verifier_source, root / "knowledge", entry, candidates, selection["cli"]["path"], receipt)
+            else:
+                arms = {"A": [c["id"] for c in candidates]}
             save(case / "arms.json", arms)
             if excluded:
                 exclusions.append({"instance_id": entry.instance_id, "stage": "verification", "reason": excluded})

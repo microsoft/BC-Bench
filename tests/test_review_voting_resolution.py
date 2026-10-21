@@ -90,6 +90,12 @@ def test_conflicting_successful_visible_views_cannot_cherry_pick(tmp_path):
     assert result.evidence_resolution == "unresolved"
 
 
+def test_partially_overlapping_conflicting_view_is_ambiguous(tmp_path):
+    path = tmp_path / "source" / "example.al"
+    result = resolve(tmp_path, events(path, [2, 3], "begin\nend;"), [2, 3], "begin\nend;", events(path, [3, 3], "different;", "overlap"))
+    assert result.evidence_resolution == "unresolved"
+
+
 @pytest.mark.parametrize("marker", ["[truncated]", "Content omitted", "Access denied", "[redacted]", "****", "[one line omitted]"])
 def test_partial_or_masked_output_never_supports_a_verdict(tmp_path, marker):
     source = events(tmp_path / "source" / "example.al", [1, 3], f"L1:begin\nL2:{marker}\nL3:end;")
@@ -147,3 +153,49 @@ def test_historical_integrity_verification_rejects_changes(tmp_path):
     path.write_text("changed")
     with pytest.raises(ValueError, match="Historical artifact changed"):
         verify_history(tmp_path, manifest)
+
+
+@pytest.mark.parametrize(
+    ("fixture", "requested", "visible", "claim", "quoted", "valid"),
+    [
+        ("long-knowledge-range", [12, 22], [12, 22], [12, 20], [12, 18], False),
+        ("short-source-range", [172, 195], [172, 187], [172, 187], [172, 186], False),
+        ("blank-after-article", [10, 23], [10, 23], [20, 22], [20, 22], True),
+        ("long-source-range", [286, 313], [286, 313], [293, 310], [293, 308], False),
+        ("blank-after-description", [12, 15], [12, 15], [12, 15], [12, 15], True),
+        ("blank-after-antipattern", [19, 25], [19, 25], [19, 25], [19, 25], True),
+        ("blank-after-other-description", [12, 15], [12, 15], [12, 15], [12, 15], True),
+        ("single-description-line", [11, 19], [11, 19], [14, 14], [14, 14], True),
+        ("single-practice-line", [11, 19], [11, 19], [18, 18], [18, 18], True),
+    ],
+)
+def test_nine_historical_failure_shapes_without_historical_content(tmp_path, fixture, requested, visible, claim, quoted, valid):
+    lines = {n: f"{fixture} line {n}" for n in range(visible[0], visible[1] + 1)}
+    lines[visible[1]] = ""
+    content = "\n".join(lines.values())
+    quote = "\n".join(lines[n] for n in range(quoted[0], quoted[1] + 1))
+    source = events(tmp_path / "source" / "example.al", requested, content)
+    result = resolve(tmp_path, source, claim, quote)
+    assert (result.evidence_resolution == "tool_view_matched") is valid
+
+
+def test_shared_source_references_cannot_resolve_from_output_or_gold(tmp_path):
+    roots = {"source": tmp_path / "prepared", "knowledge": tmp_path / "knowledge"}
+    payload = {
+        "id": "F001",
+        "verdict": "supported",
+        "trigger": "fixture",
+        "call_path_and_guards": "fixture",
+        "impact": "fixture",
+        "counterevidence": "fixture",
+        "source_view_status": "available",
+        "evidence": [
+            {"tree": "source", "file": "example.al", "line_start": 1, "line_end": 1, "quote": "Safe code"},
+            {"tree": "knowledge", "file": "rule.md", "line_start": 1, "line_end": 1, "quote": "Rule"},
+        ],
+    }
+    work = tmp_path / "voter" / "context"
+    allowed = events(roots["source"] / "example.al", [1, 1], "Safe code") + events(roots["knowledge"] / "rule.md", [1, 1], "Rule", "knowledge")
+    assert resolve_evidence(validate_votes(["F001"], [payload]), allowed, work, roots=roots)[0].evidence_resolution == "tool_view_matched"
+    allowed[0]["data"]["arguments"]["path"] = str(tmp_path / "gold" / "example.al")
+    assert resolve_evidence(validate_votes(["F001"], [payload]), allowed, work, roots=roots)[0].evidence_resolution == "unresolved"

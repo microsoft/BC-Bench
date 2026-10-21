@@ -114,6 +114,32 @@ The corrected report includes the old-to-new validity table and separate full
 baseline versus complete-case paired denominators. Reference validity is still
 not a judgment of semantic correctness.
 
+**Future copy-free verifier layout (offline-tested, not executed):** each voter
+has a fresh context directory containing only `candidates.json` and
+`context.json`. The latter names the two absolute prepared source/knowledge
+roots. These exact roots are passed through CLI `--add-dir`; the case root,
+gold, outputs, homes and other voters are not permitted paths. The only available
+tools are `view,rg,glob`, with explicit `write`, `shell` and `url` denials,
+temporary-directory access disabled, no builtin MCPs and no custom instructions.
+Each fresh CLI home disables hooks, memory and IDE auto-connection. Shared roots
+with hooks, extensions, permission settings or custom MCP configuration are
+rejected before invocation; root links/reparse points are also rejected.
+This uses the installed CLI's documented tool/path controls, not a prompt-only
+read-only request or a filesystem sandbox. Runtime enforcement and long-path
+visibility have **not** been tested through a new model invocation.
+
+The binding keeps the content checkpoint digests, source/knowledge roots,
+candidate/context hashes and shallow root/changed-path metadata. No verifier
+copies or recursively scans the source/knowledge trees. These checks do **not**
+freshly prove all source bytes or prevent unrelated local processes modifying
+them. Context preparation failure excludes only that case from paired analysis;
+its baseline can still be scored, and independent cases continue. The access
+sentence alone is mechanically changed to refer to roots in `context.json`;
+verdict, evidence, counterevidence and voting requirements are unchanged.
+The layout/prompt is versioned `read-only-verification-v4-shared-roots`; it is
+not retroactively applied to historical invocations. Existing execution and
+continuation markers still reject reruns; no new paid execution is authorized.
+
 **Recorded mid-run interruption:** `--resume-unstarted --root C:\bv3-e900-02`
 is a separate, one-shot continuation for the observed four completed baselines,
 one interrupted baseline and one never-started baseline. It refuses any previous
@@ -146,16 +172,13 @@ does not call full preparation, rehash all prepared content, or create duplicate
 copy-preflight trees.
 
 Each baseline reuses its own prepared working tree. Voters never consume that
-potentially baseline-mutated tree: when findings exist, one separate context per
-case is copied from the preserved predecessor input and verified against the
-checkpoint hashes. Three independent CLI processes/homes share that identical
-context using only `view`, `rg` and `glob`; candidates/context and metadata are
-checked for changes. This removes the other two redundant voter copies without
-sharing conversation history, votes or gold labels. Metadata scans have a
-120-second deadline; each necessary verified context copy has a 600-second
-deadline and stage/file/byte progress. A timeout retains partial output and
-halts the driver without retrying. This does not remove the separately approved
-paid-run action or change the 6/18/6 cumulative limits.
+potentially baseline-mutated tree: the preserved predecessor input is used
+instead. The original v3 execution copied it once per case with a 600-second
+deadline; its case03 timeout and partial copy remain historical evidence.
+The future copy-free layout above supersedes that verifier preparation path,
+not those historical outcomes. Baseline/checkpoint metadata scans retain their
+120-second deadlines. These changes do not authorize another paid run or alter
+the original 6/18/6 cumulative limits.
 
 Windows snapshot enumeration, hashing and copying use extended-length filesystem
 paths and reject unstatable entries. Offline preflight performs the actual
@@ -204,9 +227,9 @@ interface; it does not change the workflow's default pin or use BCQUALITY
 overrides. No PR, push, leaderboard, Braintrust or Kusto publication is involved.
 
 This revision uses **live read-only verification**, not the earlier external
-capture-ID protocol. Each voter gets an isolated copy of the same source,
-knowledge, frozen candidates and changed-path metadata, without gold labels or
-other votes. Only `view`, `rg` and `glob` are available; source text is not
+capture-ID protocol. Each voter gets isolated context/output and read access
+to the same prepared source, knowledge, frozen candidates and changed-path
+metadata, without gold labels or other votes. Only `view`, `rg` and `glob` are available; source text is not
 injected into prompts. Citations must match successful finite `view` ranges in
 that invocation's JSONL tool results, including source and knowledge evidence.
 Unrecognized output formats, missing references, masking and unavailable
