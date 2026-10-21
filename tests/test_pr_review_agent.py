@@ -112,7 +112,8 @@ def test_not_applicable_engine_outcome_raises_instead_of_clean_review(tmp_path: 
     assert not (repo / "review.json").exists()
 
 
-def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("explicit_controls", [False, True])
+def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, explicit_controls: bool) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "microsoft/BC-Bench")
     monkeypatch.setenv("BCQUALITY_REF", "ambient-override")
@@ -170,6 +171,8 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
             repo_path=tmp_path / "repo",
             output_dir=Path("output"),
             engine_path=tmp_path / "engine",
+            leaf_model="gpt-5.6-luna" if explicit_controls else None,
+            cli_version="1.0.88" if explicit_controls else None,
         )
 
     assert isinstance(metrics, PRReviewMetrics)
@@ -193,5 +196,11 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert "BCQUALITY_REF" not in engine_env
     assert engine_env["GITHUB_REPOSITORY"] == "microsoft/BCApps"
     assert engine_env["AGENT_MINIMUM_SEVERITY"] == "Medium"
+    if explicit_controls:
+        assert engine_env["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.6-luna"
+        assert engine_env["COPILOT_REVIEW_CLI_VERSION"] == "1.0.88"
+        assert engine_env["COPILOT_REVIEW_LEAF_EXECUTION"] == "serial"
+        assert engine_env["COPILOT_REVIEW_MAX_LEAF_CONCURRENCY"] == "4"
+        assert engine_env["MINIMUM_SEVERITY"] == "Medium"
     assert run_process.call_args.args[0][-1].endswith("Invoke-CopilotPRReview.ps1")
     assert "-GenerateOnly" not in run_process.call_args.args[0]

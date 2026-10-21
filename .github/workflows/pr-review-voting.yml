@@ -1,0 +1,166 @@
+name: BC PR Review voting experiment
+
+on:
+  workflow_call:
+    inputs:
+      phase:
+        description: Frozen two-case smoke or authorized full one-round experiment
+        type: string
+        default: smoke
+        required: true
+      revision:
+        description: Exact experiment commit SHA (must equal this workflow revision)
+        type: string
+        required: true
+      smoke-run:
+        description: Successful smoke run ID at the same revision (required for full)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: pr-review-voting-${{ inputs.revision }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      entries: ${{ steps.plan.outputs.entries }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/setup-python-uv
+      - name: Validate immutable phase and reject retries or duplicate dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ inputs.revision }}
+          PHASE: ${{ inputs.phase }}
+          SMOKE_RUN: ${{ inputs.smoke-run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$REVISION" = "$GITHUB_SHA"
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PHASE" == smoke || "$PHASE" == full ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pr-review-evaluation.yml/runs?head_sha=$REVISION&per_page=100" > runs.json
+          # At most one initial smoke and one full invocation at this commit.
+          if [ "$PHASE" = smoke ]; then
+            test "$(jq '[.workflow_runs[] | select(.event=="workflow_dispatch")] | length' runs.json)" -eq 1
+          else
+            test "$(jq '[.workflow_runs[] | select(.event=="workflow_dispatch")] | length' runs.json)" -eq 2
+            [[ "$SMOKE_RUN" =~ ^[0-9]+$ ]]
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SMOKE_RUN" > smoke-run.json
+            jq -e --arg sha "$REVISION" '.head_sha==$sha and .conclusion=="success" and .run_attempt==1 and .path==".github/workflows/pr-review-evaluation.yml"' smoke-run.json
+            gh run download "$SMOKE_RUN" --repo "$GITHUB_REPOSITORY" --name voting-summary-smoke --dir smoke-proof
+            jq -e '.selection.phase=="smoke" and .smoke_gate_passed==true and .paired==2 and (.selection.selected|length)==2' smoke-proof/summary.json
+            uv run bcbench evaluate pr-review-voting-plan --phase smoke > expected-smoke.json
+            jq -e --slurpfile expected expected-smoke.json '.selection == $expected[0]' smoke-proof/summary.json
+          fi
+      - name: Freeze selection
+        id: plan
+        env:
+          PHASE: ${{ inputs.phase }}
+        run: |
+          uv run bcbench evaluate pr-review-voting-plan --phase "$PHASE" > selection.json
+          echo "entries=$(jq -c .selected selection.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: voting-selection-${{ inputs.phase }}
+          path: selection.json
+          retention-days: 30
+
+  evaluate:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    environment:
+      name: ado-read
+      deployment: false
+    permissions:
+      contents: read
+      id-token: write
+      copilot-requests: write
+    strategy:
+      fail-fast: false
+      max-parallel: 64
+      matrix:
+        entry: ${{ fromJson(needs.plan.outputs.entries) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/setup-bc-container-repo
+        id: setup
+        timeout-minutes: 40
+        with:
+          instance-id: ${{ matrix.entry }}
+          category: code-review
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-container: true
+          skip-repo: false
+      - uses: $/.github/actions/setup-python-uv
+      - uses: $/.github/actions/install-agent-harnesses
+        id: harness
+        with:
+          engine-sha: 9607dea1c84fcf660983a5e3791dece1fb2f1623
+          copilot-version: 1.0.88
+      - name: One baseline, three serial verifiers, one shared judge graph
+        timeout-minutes: 180
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          ENTRY: ${{ matrix.entry }}
+          SOURCE: ${{ steps.setup.outputs.repo_path }}
+          ENGINE: ${{ steps.harness.outputs.bc-alagents-path }}
+          PHASE: ${{ inputs.phase }}
+        run: |
+          uv run bcbench evaluate pr-review-voting "$ENTRY" \
+            --phase "$PHASE" --repo-path "$SOURCE" --engine-path "$ENGINE" \
+            --output-dir "$GITHUB_WORKSPACE/voting-artifacts"
+      - name: Preserve safe entry artifacts even on failure
+        if: always()
+        run: uv run bcbench evaluate pr-review-voting-export --output-dir "$GITHUB_WORKSPACE/voting-artifacts"
+      - name: Upload safe entry artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: voting-entry-${{ matrix.entry }}
+          path: voting-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
+
+  summarize:
+    if: ${{ always() && needs.plan.result == 'success' }}
+    needs: [plan, evaluate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/setup-python-uv
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          pattern: voting-entry-*
+          path: voting-artifacts
+          merge-multiple: true
+      - name: Artifact-only paired and full-population analysis
+        env:
+          PHASE: ${{ inputs.phase }}
+        run: |
+          uv run bcbench evaluate pr-review-voting-summary \
+            --phase "$PHASE" --input-dir voting-artifacts --output-dir voting-summary
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: voting-summary-${{ inputs.phase }}
+          path: voting-summary/
+          retention-days: 30

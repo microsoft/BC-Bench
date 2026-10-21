@@ -1,9 +1,8 @@
-import json
 from pathlib import Path
 
 import pytest
 
-from tools.review_voting_evidence import resolve_evidence, validate_votes, view_records, visible_lines
+from bcbench.evaluate.review_verification import resolve_evidence, validate_votes, view_records, visible_lines
 
 
 def events(path, span, text, key="view"):
@@ -58,7 +57,7 @@ def test_unnumbered_short_view_requires_visible_corroboration(tmp_path):
     assert not any(r[0] == "view" for r in view_records(short + events(path, [170, 174], "header\n\nbegin\nother;\n", "proof"), tmp_path))
 
 
-def resolve(tmp_path, source, span, quote, extra=None):
+def resolve(tmp_path, source, span, quote, extra=None, *, require_exact_reads=False):
     raw = {
         "id": "F001",
         "verdict": "supported",
@@ -73,7 +72,16 @@ def resolve(tmp_path, source, span, quote, extra=None):
         ],
     }
     all_events = source + events(tmp_path / "knowledge" / "rule.md", [1, 1], "Rule", "knowledge") + (extra or [])
-    return resolve_evidence(validate_votes(["F001"], [raw]), all_events, tmp_path)[0]
+    return resolve_evidence(validate_votes(["F001"], [raw]), all_events, tmp_path, require_exact_reads=require_exact_reads)[0]
+
+
+def test_formal_exact_read_gate_does_not_relax_historical_resolution(tmp_path):
+    source = tmp_path / "source/example.al"
+    wide = events(source, [1, 3], "first\nsecond\nthird")
+    assert resolve(tmp_path, wide, [2, 2], "second").evidence_resolution == "tool_view_matched"
+    assert resolve(tmp_path, wide, [2, 2], "second", require_exact_reads=True).evidence_resolution == "unresolved"
+    exact = events(source, [2, 2], "second", "final")
+    assert resolve(tmp_path, wide + exact, [2, 2], "second", require_exact_reads=True).evidence_resolution == "tool_view_matched"
 
 
 @pytest.mark.parametrize(("actual", "claimed"), [([12, 18], [12, 20]), ([172, 186], [172, 187]), ([293, 308], [293, 310])])
@@ -171,46 +179,6 @@ def test_short_view_does_not_read_disk_or_detailed_content(tmp_path, monkeypatch
 def test_plain_omitted_lines_are_not_contiguous_source(tmp_path):
     source = events(tmp_path / "source" / "example.al", [1, 3], "begin\n...\nend;")
     assert resolve(tmp_path, source, [1, 1], "begin").evidence_resolution == "unavailable"
-
-
-def test_frozen_edges_are_reused_without_judging(monkeypatch):
-    from bcbench.dataset.codereview import CodeReviewEntry
-    from tools import review_voting_pilot as pilot
-
-    monkeypatch.setattr(pilot, "judge_verdicts", lambda *a, **k: pytest.fail("Offline analysis cannot judge"))
-    entry = CodeReviewEntry(
-        instance_id="synthetic__fixture-01",
-        repo="microsoft/BCApps",
-        base_commit="a" * 40,
-        created_at="2026-01-01",
-        environment_setup_version="27.0",
-        project_paths=[],
-        patch="fixture patch",
-        expected_comments=[{"file": "example.al", "line_start": 1, "body": "bug", "severity": "high"}],
-    )
-    comment = entry.expected_comments[0].model_dump(mode="json")
-    candidates: list[pilot.Candidate] = [{"id": "F001", "comment": comment}]
-    edge = {"gold_bucket": "expected", "gold": comment, "candidate_id": "F001", "match": True}
-    result = pilot.score_frozen_edges(entry, candidates, {"A": ["F001"], "B": [], "C": ["F001"]}, [edge])
-    assert result["A"]["matched"] == result["C"]["matched"] == 1
-    assert result["B"]["missed"] == 1
-    with pytest.raises(ValueError, match="Frozen judge edges"):
-        pilot.score_frozen_edges(entry, candidates, {"A": ["F001"]}, [edge | {"candidate_id": "wrong"}])
-    with pytest.raises(ValueError, match="shorter"):
-        pilot.score_frozen_edges(entry, candidates, {"A": ["F001"]}, [])
-
-
-def test_historical_integrity_verification_rejects_changes(tmp_path):
-    from tools.review_voting_evidence import file_digest
-    from tools.review_voting_reanalyze import verify_history
-
-    path = tmp_path / "decisions.json"
-    path.write_text(json.dumps([]))
-    manifest = {"root": str(tmp_path), "artifacts": {path.name: file_digest(path)}}
-    verify_history(tmp_path, manifest)
-    path.write_text("changed")
-    with pytest.raises(ValueError, match="Historical artifact changed"):
-        verify_history(tmp_path, manifest)
 
 
 @pytest.mark.parametrize(

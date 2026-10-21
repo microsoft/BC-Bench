@@ -98,220 +98,78 @@ Articulate what you expect to see before triggering anything. A short hypothesis
 
 ## Running an Experiment
 
-### Bounded local review-verification pilot
+### Frozen reviewer verification experiment
 
-**Separately authorized two-case engineering smoke:** `tools\review_voting_smoke.py`
-reuses the frozen case03 and case06 candidates only. `--prepare --root <fresh-phase>
---historical-root C:\bv3-e900-02` validates their identities and prepares small
-receipts without inference or source copies. `--execute --root <fresh-phase>` is
-the explicit paid action: at most six sequential `gpt-5.6-sol` verifiers, zero
-baselines/judges/retries. Each returned invocation must pass the live reference
-and read-tool gate before the next starts; a failure halts the phase. A new phase
-manifest, invocation markers, ten-second heartbeat and terminal outcome preserve
-the old run. Each invocation has a 30-minute timeout, and the phase starts no new
-call after three hours. The smoke tests engineering feasibility, not semantic
-accuracy, clean-case silence, or the value of increasing voter count.
+The experiment branch adds `voting-phase=smoke|full` to **Evaluation with BC PR
+Review** (`pr-review-evaluation.yml`). The default `off` preserves the ordinary
+workflow. Voting calls `pr-review-voting.yml` and never invokes the ordinary
+publisher or repeat chain. This branch is a **draft experiment PR**, not a
+production rollout; do not merge it.
 
-The separately authorized two-slot continuation uses `--prepare-remaining
-<prior-smoke> --corrected-analysis <offline-v6-root> --root <fresh-phase>`,
-then `--execute --root <fresh-phase>`. It binds the four retained raw/corrected
-votes and original configuration, permits only case06 voters2/3, checks each
-slot has never started, and stops after two calls or the first failed gate.
-No old execution marker is reset. Report this as mixed acquisition, not six
-new calls or semantic adjudication.
+The frozen dataset is BC-Bench `7c98b750c200d88ed0a81daaea5e71184a3af01b`:
+145 entries, 106 with expected findings, 39 empty-gold entries, 233 expected
+comments and one ignored comment. A dataset hash guard rejects changes.
+The smoke selects `synthetic__errh-tryfunction-swallowed-01` and
+`synthetic__get-clean-01` before generation.
 
-**Offline correction, no inference:** `tools\review_voting_reanalyze.py --root
-<historical-root> --output <new-analysis-directory> --historical-hashes
-<artifact-manifest.json>` re-resolves existing permitted `result.content` only
-and reuses the original semantic judge edges. It verifies historical artifact
-hashes before and after analysis and never writes into the historical run.
-Resolver `permitted-view-ranges-v5-trailing-empty` preserves selected trailing blank lines,
-uses actual contiguous numbered ranges rather than assuming the requested end
-was returned, and accepts unnumbered short output only when another accepted
-view from that invocation corroborates it. Ambiguous/omitted/truncated/masked
-views and incorrect quote ranges remain non-countable; ranges are never shifted.
-The only quote normalization permitted is omitted trailing **empty** lines
-explicitly established at their original positions by a complete successful
-view. Nonempty or whitespace-only lines, leading/interior omissions, shortened
-or masked views cannot justify it. Raw quotes/ranges remain unchanged; resolved
-references record `omitted_trailing_empty_lines` and the decision explains the
-normalization separately from semantic correctness. This correction does not
-authorize any new invocation or change historical decisions.
-The corrected report includes the old-to-new validity table and separate full
-baseline versus complete-case paired denominators. Reference validity is still
-not a judgment of semantic correctness.
+| Configuration | Frozen value |
+|---|---|
+| BC-ALAgents | `9607dea1c84fcf660983a5e3791dece1fb2f1623` |
+| Inherited BCQuality | `b74967bc5b7a454eae19d6a1250199afd869f064` |
+| Copilot CLI | `1.0.88` |
+| Root / leaves | `gpt-5.6-sol` / `gpt-5.6-luna`, serial |
+| Severity | Medium |
+| Three verifiers | Independent `gpt-5.6-sol` sessions, serial within each entry |
+| Semantic judge | `gpt-5.3-codex` |
 
-**Future copy-free verifier layout (offline-tested, not executed):** each voter
-has a fresh context directory containing only `candidates.json` and
-`context.json`. The latter names the two absolute prepared source/knowledge
-roots. These exact roots are passed through CLI `--add-dir`; the case root,
-gold, outputs, homes and other voters are not permitted paths. The only available
-tools are `view,rg,glob`, with explicit `write`, `shell` and `url` denials,
-temporary-directory access disabled, no builtin MCPs and no custom instructions.
-Each fresh CLI home disables hooks, memory and IDE auto-connection. Shared roots
-with hooks, extensions, permission settings or custom MCP configuration are
-rejected before invocation; root links/reparse points are also rejected.
-This uses the installed CLI's documented tool/path controls, not a prompt-only
-read-only request or a filesystem sandbox. Runtime enforcement and long-path
-visibility have **not** been tested through a new model invocation.
+Each entry uses the production `run_pr_review_agent` once. Its findings are
+frozen with stable IDs. A keeps all candidates; B keeps voter1's supported
+subset; C needs two explicit supported decisions. Insufficient evidence is
+not refutation; invalid/missing votes exclude paired comparisons instead of
+becoming negative votes. One complete candidate-to-gold same-file semantic
+edge graph is judged, including ignored comments, and reused to recompute
+the existing one-to-one assignment for each subset. Empty-gold cases with no
+ignored comments need no judge invocation.
 
-The binding keeps the content checkpoint digests, source/knowledge roots,
-candidate/context hashes and shallow root/changed-path metadata. No verifier
-copies or recursively scans the source/knowledge trees. These checks do **not**
-freshly prove all source bytes or prevent unrelated local processes modifying
-them. Context preparation failure excludes only that case from paired analysis;
-its baseline can still be scored, and independent cases continue. The access
-sentence alone is mechanically changed to refer to roots in `context.json`;
-verdict, evidence, counterevidence and voting requirements are unchanged.
-The layout/prompt is versioned `read-only-verification-v4-shared-roots`; it is
-not retroactively applied to historical invocations. Existing execution and
-continuation markers still reject reruns; no new paid execution is authorized.
+The **separate** smoke budget is at most 2 full reviews, 6 verifiers and 2
+judge batches; the full budget is at most 145 full reviews, 435 verifiers and
+106 judge batches. No invocation retries or repeat rounds are permitted.
+A review itself contains multiple domain leaves/root model calls. Zero
+candidates skip verification and cannot demonstrate a passing smoke.
 
-**Recorded mid-run interruption:** `--resume-unstarted --root C:\bv3-e900-02`
-is a separate, one-shot continuation for the observed four completed baselines,
-one interrupted baseline and one never-started baseline. It refuses any previous
-verifier/judge/context output or previous continuation, validates the frozen
-candidate reports and checkpoint/configuration artifacts, and reuses cases01-04
-without baseline calls. Case05 remains interrupted, excluded and never retried;
-only case06 may start a baseline. At most 15 verifiers and 5 judge batches remain
-applicable to the five possible complete cases. Original execution markers,
-metadata and partial telemetry are preserved; the new identity and plan are in
-`execution-continuation`. This is not a general retry/resume facility. Launch
-under an observed host with a persisted PID/heartbeat and finite timeout; a
-stale manifest saying `running` is not proof of a live process.
+Dispatch the existing workflow at the exact experiment commit with
+`voting-phase=smoke` and `voting-revision=<that SHA>`. After inspecting a
+successful smoke, dispatch **the same SHA** with `voting-phase=full`,
+`voting-revision=<that SHA>`, and `voting-smoke-run=<successful run ID>`.
+The workflow rejects rerun attempts, duplicate phase dispatches, revision
+mismatches, and full runs without a successful same-revision smoke artifact.
+The smoke requires both valid baselines, nonempty candidates, every applicable
+vote/evidence resolved, correct observed model/pin identities, successful
+strict scoring and A/B/C artifacts. It does not require reduced FPs or silence
+on the empty-gold case. Failure stops promotion; a repair and paid retry needs
+separate approval.
 
-**Completed-checkpoint recovery:** after the six short-path prepared workspaces
-have already passed independent content/copy validation and `inputs.json` was
-persisted, the explicitly approved checkpoint-reuse path is:
+Each matrix job uses one Linux source checkout and the engine's declared
+knowledge, with fresh voter homes, working directories and output directories.
+Only `view`, `rg`, and `glob` are available; writes/shell/URLs are denied and
+only the source/knowledge roots are added. Gold and other votes are outside
+those roots. The verifier must perform final **exact finite range reads** in
+the same context. The resolver preserves the existing conservative rules for
+short, unnumbered, masked and truncated views. Omitted trailing empty quote
+lines are accepted only when a complete successful view proves them explicitly,
+with normalization recorded separately from semantic correctness. These are
+CLI permission controls, not an OS sandbox or a guarantee against unrelated
+external modifications. There are no per-voter repository copies or full-tree
+hash passes.
 
-```powershell
-python -m uv run python tools\review_voting_pilot.py --adopt-checkpoint --root C:\bv3-e900-02
-python -m uv run python tools\review_voting_pilot.py --execute --root C:\bv3-e900-02
-```
-
-This preserves the original selection and all failure/termination records.
-`checkpoint.json` records the original content-validation timestamp and digests,
-manifest provenance, new execution identity, and the residual risk of changes
-since validation. Entry guards check the six selected identities, all expected
-paths/sizes, frozen pins/configuration, CLI compatibility and absence of prior
-invocations. **Metadata checks are not fresh byte verification.** This path
-does not call full preparation, rehash all prepared content, or create duplicate
-copy-preflight trees.
-
-Each baseline reuses its own prepared working tree. Voters never consume that
-potentially baseline-mutated tree: the preserved predecessor input is used
-instead. The original v3 execution copied it once per case with a 600-second
-deadline; its case03 timeout and partial copy remain historical evidence.
-The future copy-free layout above supersedes that verifier preparation path,
-not those historical outcomes. Baseline/checkpoint metadata scans retain their
-120-second deadlines. These changes do not authorize another paid run or alter
-the original 6/18/6 cumulative limits.
-
-Windows snapshot enumeration, hashing and copying use extended-length filesystem
-paths and reject unstatable entries. Offline preflight performs the actual
-execution copy of all six sources and knowledge before allowing the first paid
-invocation; failed copy artifacts are retained.
-
-For the documented v3 **pre-inference** copy failure only, keep the failed root
-unchanged and reserve a fresh, short, uniquely owned continuation root:
-
-```powershell
-python -m uv run python tools\review_voting_pilot.py --prepare-continuation $failedRoot --root C:\bv3-e900-02
-python -m uv run python tools\review_voting_pilot.py --preflight --root C:\bv3-e900-02
-# Only under the existing explicit paid authorization:
-python -m uv run python tools\review_voting_pilot.py --execute --root C:\bv3-e900-02
-```
-
-Continuation preparation makes **zero inference calls**. It rejects any previous
-baseline/verifier/judge artifacts, reserves one successor, and independently
-compares every source path/blob to the pinned Git tree plus dataset patch using
-an isolated index/object directory. Nonempty `project_paths` are unsupported and
-fail closed. Knowledge is compared to a fresh local checkout filtered by the
-same pinned engine: only the generated filter-report root and skill-index
-timestamp are excluded from the generated JSON comparison, not from the frozen
-snapshot hash. Old incomplete digests remain historical invalid readiness;
-corrected manifests, implementation identity and copy receipts live in the new
-preparation revision. No source commits, prompts, models, global Windows settings
-or cumulative invocation limits change. An incomplete continuation is not a
-license to reset a marker or retry inference.
-
-Git inventories also honor the pinned `.gitattributes` and native checkout
-line endings: raw blob mismatches must match Git's exact checkout-produced
-hashes. External filters and working-tree encodings fail closed. No converted
-content is logged or supplied as citation evidence. If the reserved successor
-stopped during source verification, before selection/inputs/preflight were
-written, `--finish-continuation --root C:\bv3-e900-02` explicitly creates an
-`r2` validation revision. It retains the earlier records and reuses a completed
-copy only after its entire inventory matches exactly; partial or changed copies
-fail. This offline action neither resets execution markers nor permits inference
-retries.
-
-`tools\review_voting_pilot.py` is an isolated, one-shot experiment, not a full
-evaluation workflow. Its checked-in `tools\review_voting_config.json` freezes six
-sample IDs, the immutable deterministic-leaf engine SHA and its transitive
-BCQuality SHA. It supplies a clean checkout through the existing `engine_path`
-interface; it does not change the workflow's default pin or use BCQUALITY
-overrides. No PR, push, leaderboard, Braintrust or Kusto publication is involved.
-
-This revision uses **live read-only verification**, not the earlier external
-capture-ID protocol. Each voter gets isolated context/output and read access
-to the same prepared source, knowledge, frozen candidates and changed-path
-metadata, without gold labels or other votes. Only `view`, `rg` and `glob` are available; source text is not
-injected into prompts. Citations must match successful finite `view` ranges in
-that invocation's JSONL tool results, including source and knowledge evidence.
-Unrecognized output formats, missing references, masking and unavailable
-context are non-countable exclusions, never refutations. Matching a permitted
-tool view proves neither equivalence to hidden disk text nor semantic correctness.
-Do not recover hidden text through alternate tools or log fields.
-
-The frozen engine supports CLI **1.0.88** (its workflow default), not the
-globally installed 1.0.99-2 or BC-Bench's workflow pin 1.0.82. Use an
-experiment-local installation; do not update the global CLI or relax engine
-compatibility policy. On Windows x64, from a clean committed experiment branch:
-
-```powershell
-$cliRoot = Join-Path $PWD '.bcbench\voting-cli'
-npm install --prefix $cliRoot --no-audit --no-fund @github/copilot@1.0.88
-$cli = Join-Path $cliRoot 'node_modules\@github\copilot-win32-x64\copilot.exe'
-$root = Join-Path $PWD '.bcbench\voting-v3'
-uv run python tools\review_voting_pilot.py --prepare --root $root --cli $cli
-uv run python tools\review_voting_pilot.py --preflight --root $root
-```
-
-Preparation fetches the pinned engine/knowledge and each distinct target base, applies the
-six dataset patches using the existing pipeline, and freezes snapshot hashes.
-It requires Git access, PowerShell 7 with `powershell-yaml` and `Test-Json`, and
-the supported CLI. `--preflight` verifies local executable version/hash, CLI
-flags, engine cleanliness/compatibility policy, pins, input hashes and files.
-Neither action runs inference. Source visibility, authentication/model access,
-live JSONL shape and engine telemetry remain unproven until paid execution.
-Credentials are checked for presence only; no credentials are stored in reports.
-
-**Only after separate paid approval:**
-
-```powershell
-# Supply GH_TOKEN or COPILOT_GITHUB_TOKEN in this shell without logging its value.
-uv run python tools\review_voting_pilot.py --execute --root $root
-```
-
-`--root` alone never starts a run. Preparation requires a fresh root, and
-execution cannot resume or overwrite partial/historical runs. Maximum work is
-six production baseline reviews, eighteen verifier invocations (zero for empty
-candidate sets), and six fixed-judge batches over frozen candidate/gold pairs.
-There are no retries. Baseline roots use `gpt-5.6-sol`, deterministic leaves use
-`gpt-5.6-luna` serially, verifiers use `gpt-5.6-sol`, and the fixed semantic judge
-uses `gpt-5.3-codex`. Baseline reviews contain multiple leaf/root model calls;
-these invocation limits are not a model-request or credit ceiling.
-
-A is the frozen baseline, B is always voter 1's supported subset, and C needs
-two explicit supported votes. Every voter requires complete valid evidence for
-paired inclusion; failures do not stop other independent planned voters.
-`results.json` separates full scored baseline coverage from complete-case paired
-micro metrics and lists exclusions/denominators. Candidate labels, raw outputs,
-per-voter decisions and usage remain in case folders. Missing/incomplete usage
-is unknown. An empty clean baseline cannot demonstrate false-positive rejection.
-Mocks validate the dataflow, not runtime model behavior; this is a feasibility
-pilot, not statistically convincing evidence or CI-exact reproduction.
+Per-entry safe artifacts and the artifact-only aggregate are retained for
+30 days, including failures, raw votes/permitted views, invocation configuration,
+engine manifests, judge edges and usage. Auth homes, checkout trees and arbitrary
+logs are not uploaded. Summary runs even after matrix failures and reports
+selected/missing, baseline complete/scored and complete-paired populations,
+micro/macro scores and unknown usage. No leaderboard, Braintrust or Kusto
+publication occurs. Missing evidence remains a limitation of the experiment,
+not a reason to change votes or labels after observing outcomes.
 
 ### 1. Land your changes
 
