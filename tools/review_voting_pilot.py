@@ -94,7 +94,7 @@ def command(args: list[str], cwd: Path | None = None) -> str:
 def start_once(folder: Path) -> float:
     folder.mkdir(parents=True, exist_ok=True)
     with (folder / "started.json").open("x", encoding="utf-8") as stream:
-        json.dump({"started_unix": time.time(), "policy": "one attempt, never retry"}, stream)
+        json.dump({"started_unix": time.time(), "pid": os.getpid(), "policy": "one attempt, never retry"}, stream)
     return time.monotonic()
 
 
@@ -579,12 +579,94 @@ def case_arms(case: Path, source: Path, knowledge: Path, entry: CodeReviewEntry,
         return {"A": [c["id"] for c in candidates]}, str(exc)
 
 
-def run(root: Path, benchmark: Path) -> None:
-    if (root / "execution").exists() or any((root / f"case-{n:02}").exists() for n in range(1, 7)):
+def resume_guards(root: Path, benchmark: Path, checkpoint: dict[str, Any]) -> dict[str, Any]:
+    if not (root / "execution" / "started.json").is_file() or (root / "execution-continuation").exists() or (root / "results.json").exists():
+        raise ValueError("Resume requires an interrupted execution and no previous continuation/results")
+    interruption = json.loads((root / "execution-interruption-observed-20261021T1019Z.json").read_text())
+    if interruption["status"] != "interrupted_without_exit_receipt" or interruption["process_evidence"]["driver_pid_39200_present"]:
+        raise ValueError("Missing confirmed interruption observation")
+    identity = implementation_identity(benchmark)
+    previous = checkpoint["execution_identity"]
+    for key, value in previous.items():
+        if key not in ("benchmark_commit", "adapter_sha256") and identity.get(key) != value:
+            raise ValueError(f"Resume changed frozen implementation/configuration: {key}")
+    for relative, expected in checkpoint["artifact_sha256"].items():
+        if sha(root / relative) != expected:
+            raise ValueError(f"Checkpoint artifact changed: {relative}")
+    selection = json.loads((root / "selection.json").read_text())
+    if selection["config"] != load_config():
+        raise ValueError("Resume frozen configuration changed")
+    entries = selected_entries(benchmark, selection["config"])
+    inventories, knowledge = checkpoint_manifests(root, entries)
+    inputs = json.loads((root / "inputs.json").read_text())
+    if inputs != {"source_sha256": [inventory_digest(item) for item in inventories], "knowledge_sha256": inventory_digest(knowledge)}:
+        raise ValueError("Incomplete checkpoint inputs")
+    states = []
+    artifacts = {}
+    for n, entry in enumerate(entries, 1):
+        case = root / f"case-{n:02}"
+        if any((case / name).exists() for name in ("context", "judge", "arms.json", "scores.json", "paired-exclusion.json", "voter-1", "voter-2", "voter-3")):
+            raise ValueError("Resume refuses any already-started verification/scoring or partial context")
+        baseline = case / "baseline"
+        if not (baseline / "started.json").exists():
+            if case.exists():
+                raise ValueError("Unstarted baseline has unexplained partial outputs")
+            source = root / "prepared" / case.name / "source"
+            if command(["git", "rev-parse", "HEAD"], source) != entry.base_commit:
+                raise ValueError("Unstarted baseline base changed")
+            for line in entry.patch.splitlines():
+                if line.startswith("+++ b/"):
+                    filesystem_path(source / line[6:].strip()).stat()
+            states.append("unstarted")
+            continue
+        if json.loads((case / "gold-private.json").read_text()) != entry.model_dump(mode="json"):
+            raise ValueError("Completed/interrupted baseline sample changed")
+        required = ["frozen-review.json", "candidates.json", "baseline/metrics.json", "baseline/elapsed.json"]
+        if all((case / name).is_file() for name in required):
+            if (baseline / "failure.json").exists():
+                raise ValueError("Failed baseline cannot be reused as complete")
+            raw = json.loads((case / "frozen-review.json").read_text())
+            expected = [Candidate(id=f"F{i:03}", comment=ReviewComment.model_validate(comment).model_dump(mode="json")) for i, comment in enumerate(raw, 1)]
+            if json.loads((case / "candidates.json").read_text()) != expected:
+                raise ValueError("Frozen candidate set changed")
+            states.append("complete")
+        elif entry.instance_id in interruption["baseline"]["interrupted"] and not any((case / name).exists() for name in required):
+            states.append("interrupted")
+        else:
+            raise ValueError("Started unfinished baseline must not be invoked again")
+        for name in ["gold-private.json", "baseline/started.json", *required]:
+            if (case / name).is_file():
+                artifacts[str((case / name).relative_to(root))] = sha(case / name)
+    if states != ["complete", "complete", "complete", "complete", "interrupted", "unstarted"]:
+        raise ValueError("Resume does not match the observed four-complete/one-interrupted/one-unstarted execution")
+    return {
+        "status": "never_started_work_only",
+        "states": states,
+        "source_sha256": inputs["source_sha256"],
+        "credentials_present": bool(os.environ.get("GH_TOKEN") or os.environ.get("COPILOT_GITHUB_TOKEN")),
+        "cli": runtime_guards(root, selection),
+        "execution_identity": identity,
+        "previous_execution_identity": previous,
+        "frozen_output_sha256": artifacts,
+        "interruption_sha256": sha(root / "execution-interruption-observed-20261021T1019Z.json"),
+        "checkpoint_sha256": sha(root / "checkpoint.json"),
+        "fresh_content_verification": False,
+        "interval_change_risk": checkpoint["interval_change_risk"],
+        "remaining_limits": {"baseline": 1, "verifier": 15, "judge_batches": 5, "retries": 0},
+    }
+
+
+def run(root: Path, benchmark: Path, *, resume_unstarted: bool = False) -> None:
+    if not resume_unstarted and ((root / "execution").exists() or any((root / f"case-{n:02}").exists() for n in range(1, 7))):
         raise FileExistsError("One-shot execution requires fresh outputs; historical/partial runs cannot be retried")
     checkpoint_path = root / "checkpoint.json"
     checkpoint = json.loads(checkpoint_path.read_text()) if checkpoint_path.exists() else None
-    checks = checkpoint_guards(root, benchmark, checkpoint) if checkpoint else preflight(root, benchmark)
+    if resume_unstarted:
+        if checkpoint is None:
+            raise ValueError("Resume requires the original completed checkpoint")
+        checks = resume_guards(root, benchmark, checkpoint)
+    else:
+        checks = checkpoint_guards(root, benchmark, checkpoint) if checkpoint else preflight(root, benchmark)
     if not checks["credentials_present"]:
         raise RuntimeError("Set GH_TOKEN or COPILOT_GITHUB_TOKEN before --execute; credentials were not probed by inference")
     selection = json.loads((root / "selection.json").read_text(encoding="utf-8"))
@@ -592,9 +674,11 @@ def run(root: Path, benchmark: Path) -> None:
     entries = selected_entries(benchmark, config)
     inventories, knowledge_inventory = checkpoint_manifests(root, entries) if checkpoint else ([], {})
     origin = Path(json.loads((root / "zero-inference-proof.json").read_text())["origin"]) if checkpoint else root
-    start = start_once(root / "execution")
+    start = start_once(root / ("execution-continuation" if resume_unstarted else "execution"))
+    if resume_unstarted:
+        save(root / "execution-continuation" / "plan.json", checks)
     save(
-        root / "metadata.json",
+        root / ("continuation-metadata.json" if resume_unstarted else "metadata.json"),
         {
             "selection": selection,
             "preflight": checks,
@@ -613,6 +697,13 @@ def run(root: Path, benchmark: Path) -> None:
         for index, entry in enumerate(entries, 1):
             case = root / f"case-{index:02}"
             source = root / "prepared" / f"case-{index:02}" / "source" if checkpoint else case / "source"
+            if resume_unstarted and checks["states"][index - 1] != "unstarted":
+                if checks["states"][index - 1] == "complete":
+                    candidates = json.loads((case / "candidates.json").read_text())
+                    completed.append((entry, case, source, candidates))
+                else:
+                    exclusions.append({"instance_id": entry.instance_id, "stage": "baseline", "reason": "Interrupted; cause unknown; no retry or consolidated candidates"})
+                continue
             if checkpoint is None:
                 copy_tree(root / "prepared" / f"case-{index:02}" / "source", source)
                 check_snapshot(source, checks["source_sha256"][index - 1])
@@ -700,12 +791,13 @@ def run(root: Path, benchmark: Path) -> None:
                 "exclusions": exclusions,
                 "denominators": {"selected": 6, "baseline_completed": len(completed), "baseline_scored": len(results), "paired_scored": sum(1 for r in results if r["paired"])},
                 "total_wall_seconds": time.monotonic() - start,
+                "wall_time_scope": "continuation only" if resume_unstarted else "original execution",
                 "usage": "Per-stage metrics/usage files; missing or incomplete usage is unknown, never zero.",
                 "summary": summarize_scores(results),
             },
         )
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
-        failure(root / "halted.json", exc)
+        failure(root / ("continuation-halted.json" if resume_unstarted else "halted.json"), exc)
         raise
     finally:
         os.environ.clear()
@@ -719,6 +811,7 @@ def main(argv: list[str] | None = None) -> None:
     modes.add_argument("--prepare", action="store_true", help="Prepare fixed source/engine/knowledge; no inference")
     modes.add_argument("--preflight", action="store_true", help="Offline runtime checks only; no inference")
     modes.add_argument("--execute", action="store_true", help="Explicit paid execution; requires separate approval")
+    modes.add_argument("--resume-unstarted", action="store_true", help="One explicit continuation after the recorded interruption; never retry a started stage")
     modes.add_argument("--prepare-continuation", type=Path, metavar="FAILED_ROOT", help="Revalidate and copy a proven pre-inference failure to fresh --root; no inference")
     modes.add_argument("--finish-continuation", action="store_true", help="Finish the preserved pre-readiness recovery with checkout-aware inventories; no inference")
     modes.add_argument("--adopt-checkpoint", action="store_true", help="Explicitly reuse completed content validation with interval-change risk; metadata/runtime guards only")
@@ -745,6 +838,8 @@ def main(argv: list[str] | None = None) -> None:
         adopt_checkpoint(root, benchmark)
     elif arguments.preflight:
         print(json.dumps(preflight(root, benchmark), indent=2))
+    elif arguments.resume_unstarted:
+        run(root, benchmark, resume_unstarted=True)
     else:
         run(root, benchmark)
 

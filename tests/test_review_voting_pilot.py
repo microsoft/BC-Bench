@@ -695,3 +695,81 @@ def test_baseline_mutation_excludes_case_without_overwriting_voter_source(comple
     report = json.loads((root / "results.json").read_text())
     assert report["denominators"]["baseline_completed"] == 5
     assert "metadata changed" in report["exclusions"][0]["reason"]
+
+
+@pytest.fixture
+def interrupted_execution(completed_checkpoint, monkeypatch):
+    root, benchmark, entries, _, _ = completed_checkpoint
+    pilot.adopt_checkpoint(root, benchmark)
+    pilot.start_once(root / "execution")
+    for n, entry in enumerate(entries[:5], 1):
+        case = root / f"case-{n:02}"
+        pilot.start_once(case / "baseline")
+        pilot.save(case / "gold-private.json", entry.model_dump(mode="json"))
+        if n < 5:
+            comment = pilot.ReviewComment(file="helper.al", line_start=2, line_end=3, body="fixture", severity="high").model_dump(mode="json")
+            pilot.save(case / "frozen-review.json", [comment])
+            pilot.save(case / "candidates.json", [{"id": "F001", "comment": comment}])
+            pilot.save(case / "baseline" / "metrics.json", {})
+            pilot.save(case / "baseline" / "elapsed.json", {"seconds": 1})
+    pilot.save(
+        root / "execution-interruption-observed-20261021T1019Z.json",
+        {"status": "interrupted_without_exit_receipt", "process_evidence": {"driver_pid_39200_present": False}, "baseline": {"interrupted": [entries[4].instance_id]}},
+    )
+    forbid_expensive_preparation(monkeypatch)
+    return root, benchmark, entries
+
+
+def test_resume_only_never_started_work_preserves_baselines(interrupted_execution, monkeypatch):
+    root, benchmark, entries = interrupted_execution
+    history = {p: pilot.sha(p) for case in list(root.glob("case-*")) for p in case.rglob("*.json")}
+    history[root / "execution" / "started.json"] = pilot.sha(root / "execution" / "started.json")
+    calls = fake_cli(monkeypatch)
+    baselines = []
+
+    def baseline(entry, model, category, source, folder, **kwargs):
+        baselines.append(entry.instance_id)
+        pilot.save(source / "review.json", [{"file": "helper.al", "line_start": 2, "line_end": 3, "body": "fixture", "severity": "high"}])
+        return SimpleNamespace(model_dump=lambda **k: {}), None
+
+    monkeypatch.setattr(pilot, "run_pr_review_agent", baseline)
+    monkeypatch.setattr(pilot, "judge_verdicts", lambda pairs, *a, **k: [True] * len(pairs))
+    pilot.run(root, benchmark, resume_unstarted=True)
+    assert baselines == [entries[5].instance_id]
+    assert len(calls) == 15
+    assert all(pilot.sha(path) == digest for path, digest in history.items())
+    results = json.loads((root / "results.json").read_text())
+    assert results["denominators"] == {"selected": 6, "baseline_completed": 5, "baseline_scored": 5, "paired_scored": 5}
+    assert results["exclusions"][0]["instance_id"] == entries[4].instance_id
+    assert not (root / "case-05" / "candidates.json").exists()
+    with pytest.raises(ValueError, match="no previous continuation"):
+        pilot.run(root, benchmark, resume_unstarted=True)
+
+
+@pytest.mark.parametrize("change", ["voter", "judge", "case6-started", "candidate", "sample", "config", "missing-checkpoint", "prior-continuation"])
+def test_resume_rejects_unsafe_state_before_paid_calls(interrupted_execution, monkeypatch, change):
+    root, benchmark, _ = interrupted_execution
+    monkeypatch.setattr(pilot, "run_pr_review_agent", lambda *a, **k: pytest.fail("Unsafe resume launched baseline"))
+    if change in ("voter", "judge"):
+        pilot.start_once(root / "case-01" / ("voter-1" if change == "voter" else "judge"))
+    elif change == "case6-started":
+        pilot.start_once(root / "case-06" / "baseline")
+    elif change == "candidate":
+        pilot.save(root / "case-01" / "candidates.json", [])
+    elif change == "sample":
+        pilot.save(root / "case-01" / "gold-private.json", {})
+    elif change == "config":
+        pilot.save(root / "selection.json", {})
+    elif change == "missing-checkpoint":
+        (root / "checkpoint.json").unlink()
+    else:
+        pilot.start_once(root / "execution-continuation")
+    with pytest.raises((ValueError, FileNotFoundError)):
+        pilot.run(root, benchmark, resume_unstarted=True)
+
+
+def test_resume_cli_is_explicit(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(pilot, "run", lambda *a, **k: calls.append(k))
+    pilot.main(["--resume-unstarted", "--root", str(tmp_path)])
+    assert calls == [{"resume_unstarted": True}]

@@ -100,6 +100,19 @@ Articulate what you expect to see before triggering anything. A short hypothesis
 
 ### Bounded local review-verification pilot
 
+**Recorded mid-run interruption:** `--resume-unstarted --root C:\bv3-e900-02`
+is a separate, one-shot continuation for the observed four completed baselines,
+one interrupted baseline and one never-started baseline. It refuses any previous
+verifier/judge/context output or previous continuation, validates the frozen
+candidate reports and checkpoint/configuration artifacts, and reuses cases01-04
+without baseline calls. Case05 remains interrupted, excluded and never retried;
+only case06 may start a baseline. At most 15 verifiers and 5 judge batches remain
+applicable to the five possible complete cases. Original execution markers,
+metadata and partial telemetry are preserved; the new identity and plan are in
+`execution-continuation`. This is not a general retry/resume facility. Launch
+under an observed host with a persisted PID/heartbeat and finite timeout; a
+stale manifest saying `running` is not proof of a live process.
+
 **Completed-checkpoint recovery:** after the six short-path prepared workspaces
 have already passed independent content/copy validation and `inputs.json` was
 persisted, the explicitly approved checkpoint-reuse path is:
