@@ -97,7 +97,7 @@ def plan(dataset: Path, phase: Phase) -> dict[str, Any]:
         "budgets": {"reviews": len(selected), "verifiers": len(selected) * 3, "judge_batches": 106 if phase == "full" else 2},
         "success_criteria": [
             "Valid completed baseline with exact observed engine, knowledge, CLI, root and leaf models",
-            "Smoke has nonempty frozen candidates in BOTH cases so all six voter invocations are exercised",
+            "At least one smoke case exercises all three voters; zero-candidate cases need no voters",
             "Every applicable voter returns all IDs, resolved source and knowledge evidence, and the pinned observed model",
             "Every required judge pair has one strict Boolean verdict, no missing or duplicate pairs",
             "A/B/C scores and artifacts exist; no desired reduction or clean-case silence requirement",
@@ -509,7 +509,7 @@ def summarize(selection: dict[str, Any], artifacts: Path) -> dict[str, Any]:
     paired = [r for r in rows if r["paired"] and r["baseline_scored"]]
     baseline = [r for r in rows if r["baseline_scored"]]
     complete = len(rows) == len(selection["selected"]) and all(r["operational_success"] for r in rows)
-    exercised = complete and all(r["candidates"] > 0 for r in rows)
+    exercised = complete and any(r["candidates"] > 0 for r in rows)
     costs: list[dict[str, Any]] = []
     for path in artifacts.rglob("metrics.json"):
         if path.parent.name == "baseline":

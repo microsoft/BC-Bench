@@ -171,6 +171,23 @@ micro/macro scores and unknown usage. No leaderboard, Braintrust or Kusto
 publication occurs. Missing evidence remains a limitation of the experiment,
 not a reason to change votes or labels after observing outcomes.
 
+#### Explicit gate revision after the original smoke
+
+On 2026-10-21 the user explicitly authorized one full run using a revised
+engineering gate: clean zero-candidate results are valid and need no voters;
+at least one nonempty case must exercise all three voters. Both smoke cases
+must still have valid baselines, scoring and all applicable evidence/model
+checks. No FP-reduction or desired-output criterion is introduced.
+
+Original run `39611471920` at `3ebaaad89884d29fc5d4ad8212aa0434bab988dd`
+remains **failed under its original gate**. The full-run plan creates a separate
+`voting-revised-gate-assessment` artifact binding the original summary/archive
+digests, code identities, unchanged inference configuration and revised commit.
+This exception accepts only that exact original run and its immediate gate-only
+successor commit. It rejects other runtime changes and duplicate dispatches.
+It spends no additional smoke calls; the existing full budget remains
+145 reviews / 435 verifiers / 106 judge batches, one round without retries.
+
 ### 1. Land your changes
 
 Edit [`config.yaml`](src/bcbench/agent/shared/config.yaml) and add any instruction/agent/skill files, or — for a harness-version experiment — update the pin in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml). Then open a draft PR using the [template](#experiment-pr-template) below. The PR will not be merged, only serve as an entry point so people can see what exactly is being evaluated.

@@ -13,7 +13,7 @@ on:
         type: string
         required: true
       smoke-run:
-        description: Successful smoke run ID at the same revision (required for full)
+        description: Same-revision successful smoke, or explicitly authorized preserved run 39611471920
         type: string
         default: ""
 
@@ -34,6 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: $/.github/actions/setup-python-uv
       - name: Validate immutable phase and reject retries or duplicate dispatch
         env:
@@ -52,6 +53,18 @@ jobs:
           # At most one initial smoke and one full invocation at this commit.
           if [ "$PHASE" = smoke ]; then
             test "$(jq '[.workflow_runs[] | select(.event=="workflow_dispatch")] | length' runs.json)" -eq 1
+          elif [ "$SMOKE_RUN" = 39611471920 ]; then
+            # Explicit user authorization: one gate-only successor, one full run,
+            # preserving the original failed smoke and its immutable evidence.
+            test "$(jq '[.workflow_runs[] | select(.event=="workflow_dispatch")] | length' runs.json)" -eq 1
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SMOKE_RUN" > smoke-run.json
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SMOKE_RUN/artifacts" > smoke-artifacts.json
+            gh run download "$SMOKE_RUN" --repo "$GITHUB_REPOSITORY" --name voting-summary-smoke --dir smoke-proof
+            gh run download "$SMOKE_RUN" --repo "$GITHUB_REPOSITORY" --pattern 'voting-entry-*' --dir smoke-entries
+            uv run python -m bcbench.evaluate.review_voting_gate \
+              --summary smoke-proof/summary.json --entries smoke-entries \
+              --run-metadata smoke-run.json --artifact-metadata smoke-artifacts.json \
+              --revision "$REVISION" --output revised-gate-assessment.json
           else
             test "$(jq '[.workflow_runs[] | select(.event=="workflow_dispatch")] | length' runs.json)" -eq 2
             [[ "$SMOKE_RUN" =~ ^[0-9]+$ ]]
@@ -62,6 +75,14 @@ jobs:
             uv run bcbench evaluate pr-review-voting-plan --phase smoke > expected-smoke.json
             jq -e --slurpfile expected expected-smoke.json '.selection == $expected[0]' smoke-proof/summary.json
           fi
+      - name: Preserve separately versioned gate assessment
+        if: ${{ always() && inputs.phase == 'full' && inputs.smoke-run == '39611471920' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: voting-revised-gate-assessment
+          path: revised-gate-assessment.json
+          if-no-files-found: warn
+          retention-days: 30
       - name: Freeze selection
         id: plan
         env:
