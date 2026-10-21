@@ -112,6 +112,14 @@ the old run. Each invocation has a 30-minute timeout, and the phase starts no ne
 call after three hours. The smoke tests engineering feasibility, not semantic
 accuracy, clean-case silence, or the value of increasing voter count.
 
+The separately authorized two-slot continuation uses `--prepare-remaining
+<prior-smoke> --corrected-analysis <offline-v6-root> --root <fresh-phase>`,
+then `--execute --root <fresh-phase>`. It binds the four retained raw/corrected
+votes and original configuration, permits only case06 voters2/3, checks each
+slot has never started, and stops after two calls or the first failed gate.
+No old execution marker is reset. Report this as mixed acquisition, not six
+new calls or semantic adjudication.
+
 **Offline correction, no inference:** `tools\review_voting_reanalyze.py --root
 <historical-root> --output <new-analysis-directory> --historical-hashes
 <artifact-manifest.json>` re-resolves existing permitted `result.content` only

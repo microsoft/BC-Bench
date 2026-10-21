@@ -17,9 +17,52 @@ from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from tools import review_voting_pilot as pilot
 from tools.review_voting_evidence import RESOLVER_VERSION, SHARED_ROOTS_PROMPT_VERSION, ResolvedDecision, digest_json, evidence_prompt
 from tools.review_voting_paths import filesystem_path
+from tools.review_voting_reanalyze import verify_history
 
 CASES = ((3, "synthetic__errh-tryfunction-swallowed-01", 1), (6, "synthetic__get-clean-01", 0))
 VERSION = "copy-free-engineering-smoke-v5"
+
+
+def remaining_slot_guard(previous: Path, output: Path, voter: int) -> None:
+    if voter not in (2, 3) or any((root / "case-06" / f"voter-{voter}").exists() for root in (previous, output)):
+        raise FileExistsError("Remaining slot already started or not authorized; never retry")
+
+
+def continuation_binding(previous: Path, corrected: Path) -> dict[str, Any]:
+    verify_history(previous, read(corrected / "historical-smoke-hashes.json"))
+    outcome = read(previous / "outcome.json")
+    if (outcome["status"], outcome["stage"], outcome["verifier_starts"], outcome["returned_calls"]) != ("halted", "case-06/voter-1", 4, 4):
+        raise ValueError("Continuation requires exactly the historical four-call halted smoke")
+    hashes = {str(path): pilot.sha(path) for path in (previous / "manifest.json", previous / "outcome.json", corrected / "historical-smoke-hashes.json", corrected / "analysis/results.json")}
+    for case, voter in (("case-03", 1), ("case-03", 2), ("case-03", 3), ("case-06", 1)):
+        folder = previous / case / f"voter-{voter}"
+        current_path = corrected / "analysis" / case / f"voter-{voter}" / "decisions.json"
+        current = [ResolvedDecision.model_validate_json(json.dumps(d)) for d in read(current_path)]
+        raw = read(folder / "final.txt")
+        if [d.decision.model_dump(mode="json") for d in current] != raw or any(d.evidence_resolution != "tool_view_matched" or d.resolver_version != RESOLVER_VERSION for d in current):
+            raise ValueError("Retained corrected votes do not match raw decisions/current resolver")
+        for path in (current_path, folder / "final.txt", folder / "decisions.json", folder / "invocation.json", folder / "stdout.jsonl", folder / "usage.json"):
+            hashes[str(path)] = pilot.sha(path)
+    return {"previous": str(previous), "corrected": str(corrected), "sha256": hashes}
+
+
+def prepare_remaining(previous: Path, corrected: Path, output: Path) -> None:
+    for voter in (2, 3):
+        remaining_slot_guard(previous, output, voter)
+    binding = continuation_binding(previous, corrected)
+    old = read(previous / "manifest.json")
+    prepare(Path(old["historical_root"]), output)
+    manifest = read(output / "manifest.json")
+    if digest_json(manifest["guards"]) != digest_json(old["guards"]) or manifest["prompt_sha256"] != old["prompt_sha256"]:
+        raise ValueError("Continuation changed frozen inference inputs or prompt")
+    manifest.update(
+        version="copy-free-remaining-two-v7",
+        continuation=binding,
+        budget={"baseline": 0, "verifier": 2, "judge": 0, "retries": 0},
+        acquisition="Mixed sequence: four retained calls from original smoke, two newly authorized calls; unchanged inference inputs, corrected resolver.",
+    )
+    pilot.save(output / "manifest.json", manifest)
+    pilot.save(output / "prepared.json", {"manifest_sha256": pilot.sha(output / "manifest.json"), "paid_calls": 0})
 
 
 def read(path: Path) -> Any:  # noqa: ANN401 - Historical JSON artifacts have distinct object and array schemas.
@@ -121,6 +164,12 @@ def execution_guards(output: Path) -> dict[str, Any]:
     manifest = read(output / "manifest.json")
     if pilot.sha(output / "manifest.json") != read(output / "prepared.json")["manifest_sha256"]:
         raise ValueError("Smoke manifest changed")
+    if "continuation" in manifest:
+        binding = manifest["continuation"]
+        if continuation_binding(Path(binding["previous"]), Path(binding["corrected"])) != binding:
+            raise ValueError("Retained votes or correction artifacts changed")
+        for voter in (2, 3):
+            remaining_slot_guard(Path(binding["previous"]), output, voter)
     if manifest["driver_sha256"] != pilot.sha(Path(__file__)) or manifest["implementation"] != pilot.implementation_identity(Path(__file__).resolve().parents[1]):
         raise ValueError("Smoke implementation changed")
     if digest_json(historical_guards(Path(manifest["historical_root"]))) != digest_json(manifest["guards"]):
@@ -164,7 +213,12 @@ def execute(output: Path) -> None:
     results = []
     try:
         for case in manifest["guards"]["cases"]:
-            for voter in (1, 2, 3):
+            continuation = manifest.get("continuation")
+            if continuation and case["case"] != "case-06":
+                continue
+            for voter in (2, 3) if continuation else (1, 2, 3):
+                if continuation:
+                    remaining_slot_guard(Path(continuation["previous"]), output, voter)
                 if time.monotonic() - start > 3 * 3600:
                     raise TimeoutError("Phase deadline reached; no next invocation")  # noqa: TRY301 - Persist terminal status before re-raising.
                 if digest_json(pilot.shared_root_guards(Path(case["source"]), Path(case["knowledge"]), case["context"])) != digest_json(case["guards"]):
@@ -207,10 +261,16 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--prepare", action="store_true")
     mode.add_argument("--execute", action="store_true")
+    mode.add_argument("--prepare-remaining", type=Path, metavar="PRIOR_SMOKE")
+    parser.add_argument("--corrected-analysis", type=Path)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--historical-root", type=Path, default=Path(r"C:\bv3-e900-02"))
     args = parser.parse_args()
-    if args.prepare:
+    if args.prepare_remaining:
+        if args.corrected_analysis is None:
+            parser.error("--prepare-remaining requires --corrected-analysis")
+        prepare_remaining(args.prepare_remaining.resolve(), args.corrected_analysis.resolve(), args.root.resolve())
+    elif args.prepare:
         prepare(args.historical_root.resolve(), args.root.resolve())
     else:
         execute(args.root.resolve())

@@ -69,6 +69,45 @@ def test_prior_voter_rejected(tmp_path):
         smoke.execution_guards(tmp_path)
 
 
+def test_remaining_plan_dispatches_only_two_never_started_slots(prepared, monkeypatch):
+    manifest = smoke.execution_guards(prepared)
+    previous = prepared / "prior"
+    manifest["continuation"] = {"previous": str(previous)}
+    calls = []
+
+    def invoke(folder, *args):
+        folder.mkdir(parents=True)
+        calls.append(folder)
+        return []
+
+    monkeypatch.setattr(smoke.pilot, "run_verifier", invoke)
+    monkeypatch.setattr(smoke, "assess_call", lambda *a: {"gate_passed": True})
+    smoke.execute(prepared)
+    assert [p.parent.name + "/" + p.name for p in calls] == ["case-06/voter-2", "case-06/voter-3"]
+    with pytest.raises(FileExistsError):
+        smoke.remaining_slot_guard(previous, prepared, 2)
+
+
+def test_remaining_first_invalid_call_blocks_second(prepared, monkeypatch):
+    smoke.execution_guards(prepared)["continuation"] = {"previous": str(prepared / "prior")}
+    calls = []
+    monkeypatch.setattr(smoke.pilot, "run_verifier", lambda folder, *a: calls.append(folder) or [])
+    monkeypatch.setattr(smoke, "assess_call", lambda *a: {"gate_passed": False})
+    with pytest.raises(ValueError, match="gate failed"):
+        smoke.execute(prepared)
+    assert len(calls) == 1
+    assert calls[0].name == "voter-2"
+
+
+def test_historical_started_remaining_slot_blocks_dispatch(prepared, monkeypatch):
+    previous = prepared / "prior"
+    (previous / "case-06/voter-2").mkdir(parents=True)
+    smoke.execution_guards(prepared)["continuation"] = {"previous": str(previous)}
+    monkeypatch.setattr(smoke.pilot, "run_verifier", lambda *a: pytest.fail("Cannot retry"))
+    with pytest.raises(FileExistsError):
+        smoke.execute(prepared)
+
+
 @pytest.mark.parametrize(("tool", "valid", "passed"), [("view", True, True), ("powershell", True, False), ("view", False, False)])
 def test_live_gate_requires_valid_evidence_and_only_read_tools(tmp_path, tool, valid, passed):
     event = {"type": "tool.execution_start", "data": {"toolName": tool}}
