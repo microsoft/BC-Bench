@@ -142,6 +142,19 @@ The row tags include the dataset, reviewed version, single-turn mode, evaluation
 
 Do not pool different dataset hashes or BCAL package variants as if they were the same population. Rows without package provenance are older/unclassified results, not automatically official or master.
 
+## Compilation evidence in NL2AL scoring
+
+BCal scenario runs persist two separate forms of execution evidence:
+
+- the raw BCal evidence contract remains in each result and is exported unchanged as bc-eval `context`
+- a compact `execution_facts` object records only harness-derived scenario, compilation, failure, and execution-identity facts
+
+The stored result `output` remains the exact workspace git diff. For BCal NL2AL rows with normalized execution facts, the bc-eval export wraps that diff in a JSON string containing `authoritative_execution_facts` and `artifact`. This scorer-only envelope makes compilation status visible to the checklist judge without treating BCal's final response or claims inside generated AL as authoritative. Non-BCal rows and older rows without usable evidence keep their existing output unchanged.
+
+Compilation success is taken from the scenario step's `compileSucceeded` value when present. Evidence-only legacy results may use the latest structured `compilation_outcome` event only when the trace is valid and not truncated. BC-Bench never infers compilation success from step completion, completion assessment, stdout/stderr, error text, the agent response, or the generated diff. Missing, malformed, or truncated evidence remains unknown rather than becoming a success or failure claim.
+
+The normalized facts and exported scalar metadata are additive and nullable, so older result JSONL remains loadable and existing non-BCal Kusto rows retain their shape. Raw results produced with scenario evidence can be re-exported and scored under a new run ID; do not overwrite historical Kusto/Braintrust scores. Results created before scenario evidence was recorded cannot be backfilled with compilation facts.
+
 ## Complete-panel safety
 
 The BCAL workflow passes the exact selected matrix entry IDs to result summarization. Before any bc-eval export, summarization compares those IDs with the result artifacts and rejects:
