@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "status": "partial",
+  "final_index_basis": "_review-report.json#/findings;zero-based;before-engine-filtering",
+  "disposition_status": "provided",
+  "truncated": false,
+  "candidates": [
+    {
+      "candidate_id": "l1-f0",
+      "leaf_id": "al-security-review",
+      "leaf_ordinal": 1,
+      "finding_index": 0,
+      "report_sha256": null,
+      "admission": "accepted",
+      "article_refs": ["microsoft/knowledge/security/secrettext-for-credentials.md"],
+      "location": {"file": "src/Example.al", "line": 12, "end_line": null},
+      "severity": "major",
+      "normalizations": [],
+      "body": "The credential is embedded in source; load it from protected storage.",
+      "body_status": "retained"
+    }
+  ],
+  "final_findings": [
+    {
+      "final_index": 0,
+      "article_refs": ["microsoft/knowledge/security/secrettext-for-credentials.md"],
+      "location": {"file": "src/Example.al", "line": 12, "end_line": null},
+      "severity": "minor"
+    }
+  ],
+  "root_dispositions": [
+    {
+      "candidate_id": "l1-f0",
+      "disposition": "downgraded",
+      "final_indices": [0],
+      "basis": "model_declared",
+      "reason_code": "severity_reassessment",
+      "article_refs": null
+    }
+  ],
+  "diagnostics": [
+    {
+      "role": "root",
+      "ordinal": 20,
+      "stage": "report-outcome",
+      "code": "report_partial",
+      "process_status": "completed",
+      "report_outcome": "partial",
+      "exit_code": 0
+    }
+  ]
+}

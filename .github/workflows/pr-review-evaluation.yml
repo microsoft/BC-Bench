@@ -210,6 +210,7 @@ jobs:
             ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/evidence-status.json
             ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/_run-manifest.json
             ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/_run-metrics.json
+            ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/_review-trace.json
           if-no-files-found: error
           retention-days: 30
 
