@@ -145,9 +145,12 @@ def test_dual_scope_survives_summary_export_and_leaderboard_roundtrip(tmp_path):
     markdown = summary.render_github_metrics_markdown()
     assert "Unscoped (all-severity review findings)" in markdown
     assert "Scoring scope: gold >= medium" in markdown
+    assert "optional findings, below-scope severity, or mechanical diagnostics" in markdown
     console = Console(record=True, width=200)
     console.print(summary.render_console_metrics())
-    assert "all-severity review findings" in console.export_text()
+    console_text = console.export_text()
+    assert "all-severity review findings" in console_text
+    assert "matched gold treated as neutral" in console_text
     assert result.export_metadata["scoring_scope"] == "gold>=medium"
     assert result.category_metrics["unscoped_recall"] == 0.5
     assert result.category_metrics["out_of_scope_matched_comment_count"] == 1
