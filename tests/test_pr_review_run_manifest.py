@@ -1,10 +1,11 @@
 import json
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from bcbench.agent.pr_review.run_manifest import load_run_manifest, validate_run_manifest
+from bcbench.agent.pr_review.run_manifest import RunManifest, load_run_manifest, validate_run_manifest
 from bcbench.exceptions import AgentError
 
 ENGINE_COMMIT = "e" * 40
@@ -12,7 +13,7 @@ BCQUALITY_COMMIT = "b" * 40
 CLI_VERSION = "1.0.83"
 
 
-def _metrics(model: str) -> dict:
+def _metrics(model: str) -> dict[str, Any]:
     return {
         "cli_version": CLI_VERSION,
         "models": [model],
@@ -22,7 +23,7 @@ def _metrics(model: str) -> dict:
     }
 
 
-def _process(role: str, ordinal: int, skill_id: str, model: str) -> dict:
+def _process(role: str, ordinal: int, skill_id: str, model: str) -> dict[str, Any]:
     return {
         "role": role,
         "ordinal": ordinal,
@@ -40,7 +41,7 @@ def _process(role: str, ordinal: int, skill_id: str, model: str) -> dict:
     }
 
 
-def valid_manifest() -> dict:
+def valid_manifest() -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "completed",
@@ -80,13 +81,13 @@ def valid_manifest() -> dict:
     }
 
 
-def _load(tmp_path: Path, payload: dict):
+def _load(tmp_path: Path, payload: dict[str, Any]):
     path = tmp_path / "_run-manifest.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return load_run_manifest(path)
 
 
-def _validate(manifest) -> None:
+def _validate(manifest: RunManifest) -> None:
     validate_run_manifest(
         manifest,
         engine_commit=ENGINE_COMMIT,

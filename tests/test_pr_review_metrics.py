@@ -1,7 +1,5 @@
 import json
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -49,17 +47,53 @@ def _manifest(
     root_model: str = "gpt-5.6-sol",
     leaf_model: str = "gpt-5.4-mini",
 ) -> RunManifest:
-    configuration = SimpleNamespace(
-        copilot_cli_version=cli_version,
-        root_model=root_model,
-        leaf_model=leaf_model,
-        leaf_execution="serial",
-        max_leaf_concurrency=4,
-    )
-    provenance = SimpleNamespace(commit=None, source_snapshot=None)
-    return cast(
-        RunManifest,
-        SimpleNamespace(configuration=configuration, bcquality=provenance, processes=[object()]),
+    return RunManifest.model_validate(
+        {
+            "schema_version": 1,
+            "status": "completed",
+            "started_at": "2026-09-14T12:00:00Z",
+            "completed_at": "2026-09-14T12:00:01Z",
+            "failure_reason": None,
+            "engine": {
+                "repository": "microsoft/BC-ALAgents",
+                "commit": "e" * 40,
+                "agent_version": "1.6.6",
+            },
+            "bcquality": {"commit": None, "source_snapshot": None},
+            "configuration": {
+                "copilot_cli_version": cli_version,
+                "root_model": root_model,
+                "leaf_model": leaf_model,
+                "leaf_execution": "serial",
+                "max_leaf_concurrency": 4,
+                "cli_timeout_minutes": 30,
+                "minimum_severity": "Medium",
+                "agent_minimum_severity": "Medium",
+                "review_source": "local",
+            },
+            "plan": {
+                "skill_id": "al-code-review",
+                "leaf_count": 1,
+                "leaf_ids": ["al-performance-review"],
+            },
+            "processes": [
+                {
+                    "role": "leaf",
+                    "ordinal": 1,
+                    "skill_id": "al-performance-review",
+                    "requested_model": leaf_model,
+                    "observed_models": [leaf_model],
+                    "status": "completed",
+                    "started_at": "2026-09-14T12:00:00Z",
+                    "completed_at": "2026-09-14T12:00:01Z",
+                    "duration_seconds": 1.0,
+                    "exit_code": 0,
+                    "report_path": "leaf-results/1/_review-report.json",
+                    "failure_reason": None,
+                    "metrics": None,
+                }
+            ],
+        }
     )
 
 
