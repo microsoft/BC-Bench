@@ -5,7 +5,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -18,7 +18,13 @@ from bcbench.cli_options import (
     CopilotModel,
     EvaluationCategoryOption,
     OutputDir,
+    PRReviewCliTimeoutMinutes,
+    PRReviewCliVersion,
     PRReviewEnginePath,
+    PRReviewLeafExecution,
+    PRReviewLeafModel,
+    PRReviewMaxLeafConcurrency,
+    PRReviewModel,
     RepoPath,
     resolve_agent_runtime,
 )
@@ -137,11 +143,16 @@ def run_claude(
 @run_app.command("pr-review")
 def run_pr_review(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    model: CopilotModel = "gpt-5.6-luna",
+    model: PRReviewModel = "gpt-5.6-sol",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     engine_path: PRReviewEnginePath = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
+    cli_version: PRReviewCliVersion = None,
+    leaf_model: PRReviewLeafModel = "gpt-5.6-luna",
+    leaf_execution: PRReviewLeafExecution = "serial",
+    max_leaf_concurrency: PRReviewMaxLeafConcurrency = 4,
+    cli_timeout_minutes: PRReviewCliTimeoutMinutes = 30,
 ) -> None:
     """
     Run BC PR Review on a single code-review entry.
@@ -166,8 +177,14 @@ def run_pr_review(
         repo_path=repo_path,
         category=category,
         output_dir=output_dir,
+        agent_version=get_pr_review_version(engine_path, require_clean=False),
         engine_path=engine_path,
         min_severity=min_severity,
+        cli_version=cli_version,
+        leaf_model=leaf_model,
+        leaf_execution=leaf_execution,
+        max_leaf_concurrency=max_leaf_concurrency,
+        cli_timeout_minutes=cli_timeout_minutes,
     )
 
 

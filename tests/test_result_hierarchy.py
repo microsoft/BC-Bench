@@ -378,8 +378,8 @@ class TestSummaryFromJson:
 @pytest.mark.parametrize(
     ("result_factory", "agent_name", "agent_version"),
     [
-        pytest.param(create_bugfix_result, "GitHub Copilot", "1.0.82", id="copilot-version"),
-        pytest.param(create_testgen_result, "Claude Code", "2.1.221", id="claude-version"),
+        pytest.param(create_bugfix_result, "GitHub Copilot", "1.0.88", id="copilot-version"),
+        pytest.param(create_testgen_result, "Claude Code", "2.1.281", id="claude-version"),
         pytest.param(create_codereview_result, "BC PR Review", "a" * 40, id="pr-review-sha"),
         pytest.param(create_codereview_result, "BC PR Review", None, id="pr-review-unrecorded"),
     ],
