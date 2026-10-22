@@ -12,7 +12,7 @@ from bcbench.agent.pr_review.run_manifest import RunManifest
 from bcbench.exceptions import AgentError
 
 
-def _baseline_manifest_payload() -> dict:
+def _baseline_manifest_payload() -> dict[str, object]:
     return {
         "schema_version": 1,
         "status": "completed",
