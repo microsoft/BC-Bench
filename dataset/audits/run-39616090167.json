@@ -3,7 +3,7 @@
   "run_url": "https://github.com/microsoft/BC-Bench/actions/runs/39616090167",
   "dataset_commit": "7c98b750c200d88ed0a81daaea5e71184a3af01b",
   "dataset_before_sha256": "43bcddc685e3f81cb655fc0efe33f7c47763fe64864ecf62ab69220a231e513c",
-  "dataset_after_sha256": "1495700a9b4089851f6648754cc199cb1a410cb241e3f27ba51757d01204116f",
+  "dataset_after_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
   "audit_input_sha256": "d407a4523229b28c49a6f1c7d008bdb30af19061f2ffacd252112f11dbccafb3",
   "historical_runtime": {
     "workflow_commit": "c20fc1b9dc352c27e11dc74d4179b9e16ccf8afe",
@@ -72,7 +72,7 @@
       "file": "src/CustomerNotification.Codeunit.al",
       "line_start": 7,
       "baseline_candidate": "F001",
-      "reason": "The complete body performs no send but reports delivery; distinct from cosmetic commented-out-code gold.",
+      "reason": "Functional no-send/false-success semantics now clarify original G05; the later duplicate gold is retired.",
       "baseline_assignment": {
         "status": "matched",
         "gold_row_id": "synthetic__style-012:G05",
@@ -84,7 +84,7 @@
         "evidence": "Frozen audit/gold-rows.json G05 assigned_candidate_id=F001; audit/entries.json score.matched_ids contains F001."
       },
       "credit_limit": "This addition distinguishes a functional failure from the old commented-code style claim. It does not recover an original FP: F001 already earned one TP through an overbroad historical judge match. Both the old gold and candidate are Medium, so this assignment is outside the Low-neutral exclusion set. Preserve the old assignment in scope-only sensitivity; any reassignment requires a new semantic decision.",
-      "granularity_status": "Pending the complete 322-comment audit: determine whether G05 and the functional addition require independent fixes or duplicate the same underlying issue. Prefer clarifying the existing gold if they share one cause/fix; do not create an additional mandatory one-to-one match solely by splitting an already credited finding. Both records remain unchanged until this adjudication."
+      "granularity_status": "Resolved: one cause/fix. Original G05 is clarified in place and the duplicate functional addition retired. No extra required one-to-one match, no original FP recovery, no Low exclusion."
     },
     {
       "instance_id": "synthetic__style-013",
@@ -1167,7 +1167,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-010:G02",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-010",
+        "snapshot_row_id": "synthetic__style-010:G02",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ServiceMgtSetup.Page.al",
+          "line_start": 172,
+          "line_end": 172,
+          "body": "Hardcoded text string in Confirm() call: 'Are you sure you want to reset all settings to their default values?' should use a Label variable with Qst suffix (CodeCop AA0217).",
+          "severity": "medium",
+          "domain": "style",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ServiceMgtSetup.Page.al",
+          "line_start": 172,
+          "line_end": 172,
+          "body": "Hardcoded text string in Confirm() call: 'Are you sure you want to reset all settings to their default values?' should use a Label variable with Qst suffix (CodeCop AA0216).",
+          "severity": "medium",
+          "domain": "style",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-012:G01",
@@ -1395,7 +1427,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G01",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G01",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/CloudMigReplicateDataMgt.Codeunit.al",
+          "line_start": 16,
+          "line_end": 16,
+          "domain": "style",
+          "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Replication enabled for %1 of %2 tables' should use a Label with Msg suffix.",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/CloudMigReplicateDataMgt.Codeunit.al",
+          "line_start": 16,
+          "line_end": 16,
+          "domain": "style",
+          "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Replication enabled for %1 of %2 tables' should use a Label with Msg suffix.",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G03",
@@ -1458,7 +1522,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G03",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G03",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 54,
+          "line_end": 54,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Maximum amount cannot be negative' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 54,
+          "line_end": 54,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Maximum amount cannot be negative' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G05",
@@ -1500,7 +1596,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G04",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G04",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 123,
+          "line_end": 123,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Cannot delete expense category %1 because it is used in expense lines' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 123,
+          "line_end": 123,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Cannot delete expense category %1 because it is used in expense lines' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G06",
@@ -1542,7 +1670,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G05",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G05",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 134,
+          "line_end": 134,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'G/L Account %1 does not exist' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 134,
+          "line_end": 134,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'G/L Account %1 does not exist' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G07",
@@ -1584,7 +1744,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G06",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G06",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 137,
+          "line_end": 137,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'G/L Account %1 must be a posting account' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 137,
+          "line_end": 137,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'G/L Account %1 must be a posting account' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G08",
@@ -1626,7 +1818,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G07",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G07",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 140,
+          "line_end": 140,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'G/L Account %1 is blocked' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 140,
+          "line_end": 140,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'G/L Account %1 is blocked' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G10",
@@ -1668,7 +1892,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G09",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G09",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 149,
+          "line_end": 149,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Description must be specified' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 149,
+          "line_end": 149,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Description must be specified' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G11",
@@ -1710,7 +1966,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G10",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G10",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 153,
+          "line_end": 153,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Expiration date cannot be before effective date' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseCategory.Table.al",
+          "line_start": 153,
+          "line_end": 153,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Expiration date cannot be before effective date' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G12",
@@ -1752,7 +2040,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G11",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G11",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ItemCategoryAttributes.Page.al",
+          "line_start": 69,
+          "line_end": 69,
+          "domain": "style",
+          "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Attributes imported successfully.' should use a Label with Msg suffix.",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ItemCategoryAttributes.Page.al",
+          "line_start": 69,
+          "line_end": 69,
+          "domain": "style",
+          "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Attributes imported successfully.' should use a Label with Msg suffix.",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G13",
@@ -1794,7 +2114,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G12",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G12",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ItemCategoryAttributes.Page.al",
+          "line_start": 71,
+          "line_end": 71,
+          "domain": "style",
+          "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Import completed with errors. Please review the results.' should use a Label with Msg suffix.",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ItemCategoryAttributes.Page.al",
+          "line_start": 71,
+          "line_end": 71,
+          "domain": "style",
+          "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Import completed with errors. Please review the results.' should use a Label with Msg suffix.",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G14",
@@ -1836,7 +2188,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G13",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G13",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ItemCategoryAttributes.Page.al",
+          "line_start": 83,
+          "line_end": 83,
+          "domain": "style",
+          "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Item attributes feature is not enabled. Please contact your system administrator.' should use a Label with Msg suffix.",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ItemCategoryAttributes.Page.al",
+          "line_start": 83,
+          "line_end": 83,
+          "domain": "style",
+          "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Item attributes feature is not enabled. Please contact your system administrator.' should use a Label with Msg suffix.",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G15",
@@ -1899,7 +2283,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G15",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G15",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/CustStPDFDocHandler.Codeunit.al",
+          "line_start": 21,
+          "line_end": 21,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Unable to create customer statement record for customer %1' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/CustStPDFDocHandler.Codeunit.al",
+          "line_start": 21,
+          "line_end": 21,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Unable to create customer statement record for customer %1' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G17",
@@ -1941,7 +2357,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G16",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G16",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/CustStPDFDocHandler.Codeunit.al",
+          "line_start": 51,
+          "line_end": 51,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Customer %1 does not exist' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/CustStPDFDocHandler.Codeunit.al",
+          "line_start": 51,
+          "line_end": 51,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Customer %1 does not exist' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-013:G18",
@@ -1983,7 +2431,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-013:G17",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-013",
+        "snapshot_row_id": "synthetic__style-013:G17",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/CustStPDFDocHandler.Codeunit.al",
+          "line_start": 56,
+          "line_end": 56,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Statement date cannot be in the future' (CodeCop AA0217).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/CustStPDFDocHandler.Codeunit.al",
+          "line_start": 56,
+          "line_end": 56,
+          "domain": "style",
+          "body": "Hardcoded error message string in Error() call: 'Statement date cannot be in the future' (CodeCop AA0216).",
+          "severity": "medium",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-015:G01",
@@ -2096,7 +2576,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-017:G02",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-017",
+        "snapshot_row_id": "synthetic__style-017:G02",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseTeams.Page.al",
+          "line_start": 89,
+          "line_end": 89,
+          "body": "Hardcoded string in Message() call: 'No members found for team %1' should use a Label variable with Msg suffix (CodeCop AA0217).",
+          "severity": "medium",
+          "domain": "style",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseTeams.Page.al",
+          "line_start": 89,
+          "line_end": 89,
+          "body": "Hardcoded string in Message() call: 'No members found for team %1' should use a Label variable with Msg suffix (CodeCop AA0216).",
+          "severity": "medium",
+          "domain": "style",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-017:G03",
@@ -2140,7 +2652,39 @@
         }
       ],
       "mechanical_inventory_row": "synthetic__style-017:G03",
-      "diagnostic_id": "AA0216"
+      "diagnostic_id": "AA0216",
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-017",
+        "snapshot_row_id": "synthetic__style-017:G03",
+        "status": "reworded_or_reclassified",
+        "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+        "before": {
+          "file": "src/ExpenseTeams.Page.al",
+          "line_start": 152,
+          "line_end": 152,
+          "body": "Hardcoded string in Message() call: '%1 default expense teams have been created.' should use a Label variable with Msg suffix (CodeCop AA0217).",
+          "severity": "medium",
+          "domain": "style",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        },
+        "after": {
+          "file": "src/ExpenseTeams.Page.al",
+          "line_start": 152,
+          "line_end": 152,
+          "body": "Hardcoded string in Message() call: '%1 default expense teams have been created.' should use a Label variable with Msg suffix (CodeCop AA0216).",
+          "severity": "medium",
+          "domain": "style",
+          "articles": [
+            "style/error-passes-parameters-directly-not-strsubstno"
+          ],
+          "kind": "analyzer_diagnostic",
+          "diagnostic_id": "AA0216"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-017:G04",
@@ -2162,7 +2706,29 @@
       "relevant_candidate_ids": [
         "F008"
       ],
-      "historical_assignment_tie": false
+      "historical_assignment_tie": false,
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-017",
+        "snapshot_row_id": "synthetic__style-017:G04",
+        "status": "reworded_or_reclassified",
+        "reason": "Remove the wrong AA0217 attribution; cross-statement Text-to-Error translation/template concern stays semantic, not mechanically proven.",
+        "before": {
+          "file": "src/ExpenseTeams.Page.al",
+          "line_start": 163,
+          "line_end": 163,
+          "body": "Hardcoded string 'Team Leader must be specified.' in error path should use a Label variable with Err suffix (CodeCop AA0217).",
+          "severity": "medium",
+          "domain": "style"
+        },
+        "after": {
+          "file": "src/ExpenseTeams.Page.al",
+          "line_start": 163,
+          "line_end": 163,
+          "body": "Hardcoded string 'Team Leader must be specified.' in error path should use a Label variable with Err suffix.",
+          "severity": "medium",
+          "domain": "style"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-017:G05",
@@ -2184,7 +2750,29 @@
       "relevant_candidate_ids": [
         "F008"
       ],
-      "historical_assignment_tie": false
+      "historical_assignment_tie": false,
+      "integration_reassessment": {
+        "instance_id": "synthetic__style-017",
+        "snapshot_row_id": "synthetic__style-017:G05",
+        "status": "reworded_or_reclassified",
+        "reason": "Remove the wrong AA0217 attribution; cross-statement Text-to-Error translation/template concern stays semantic, not mechanically proven.",
+        "before": {
+          "file": "src/ExpenseTeams.Page.al",
+          "line_start": 168,
+          "line_end": 168,
+          "body": "Hardcoded string 'Default Approver must be specified.' in error path should use a Label variable with Err suffix (CodeCop AA0217).",
+          "severity": "medium",
+          "domain": "style"
+        },
+        "after": {
+          "file": "src/ExpenseTeams.Page.al",
+          "line_start": 168,
+          "line_end": 168,
+          "body": "Hardcoded string 'Default Approver must be specified.' in error path should use a Label variable with Err suffix.",
+          "severity": "medium",
+          "domain": "style"
+        }
+      }
     },
     {
       "row_id": "synthetic__style-field-repurpose-indent-01:G01",
@@ -2713,21 +3301,18 @@
     "additional_originally_unmatched_outputs_with_accepted_neutral_edges": 0,
     "precision": 0.20689655172413793,
     "recall": 0.5562913907284768,
-    "exclusions": "Does not incorporate removed/reworded/new gold, new semantic judgments, or changed assignment. The new semantic gold has no old judge edges. No assumption that unmatched outputs are correct."
+    "exclusions": "Does not incorporate removed/reworded/new gold, new semantic judgments, or changed assignment. The new semantic gold has no old judge edges. No assumption that unmatched outputs are correct.",
+    "classification_stage": "Initial 45-neutral snapshot only, before the 322-comment/effective-v2 integration; old outputs and old assignments. Not a projection of the current repaired dataset."
   },
   "comparison_arms": {
-    "status": "prepared_not_dispatched_pending_unmatched_comment_audit",
+    "status": "prepared_not_dispatched_pending_coordinator_authorization",
     "shared_engine_orchestration": "9607dea1c84fcf660983a5e3791dece1fb2f1623",
     "shared_engine_environment_fix": "10086e6d19f37d4e9d419480cc38aa1615ef8954",
     "baseline": {
       "engine": "38180ca61e4b7ad34bec1889f3c16d7d1c113a82",
       "bcquality": "a4593a1b1585a0fa663efbf39ff02c60f846d851"
     },
-    "candidate": {
-      "engine": "ceaaeaa5b6139662e60fd610c7bbb6184a020149",
-      "bcquality": "ab2cd0a62b7fbdf43e064b2a942690e4aabde9f5"
-    },
-    "dataset_sha256": "1495700a9b4089851f6648754cc199cb1a410cb241e3f27ba51757d01204116f",
+    "dataset_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
     "root_model": "gpt-5.6-sol",
     "leaf_model": "gpt-5.6-luna",
     "leaf_execution": "serial",
@@ -2740,8 +3325,8 @@
     "entry_jobs": 290,
     "review_leaf_processes_per_entry": 19,
     "planned_review_processes": 5800,
-    "judge_processes_upper_bound": 208,
-    "call_volume_limit": "145 entries per arm, once each: 290 root and 5510 serial leaf CLI processes if every plan completes, plus at most 208 entry-level judge processes. CLI processes are not API calls: tool turns, retries and repairs can increase actual model requests. No automatic repeat is authorized.",
+    "judge_processes_upper_bound": 228,
+    "call_volume_limit": "145 entries per arm once: 290 root and 5510 serial leaf CLI processes, plus at most 228 entry-level judge processes. These are not API request counts. No automatic repeat or dispatch is authorized.",
     "dispatch_guard": "Wait for coordinator authorization. Dispatch each immutable BC-Bench arm commit with model=gpt-5.6-sol, test-run=false, modified-only=false, repeat=1, and engine-sha equal to that commit's checked-in pin.",
     "publication_guard": "A nonempty engine-sha activates the existing summarize-results mock gate, disabling Braintrust/Kusto/leaderboard publication. It must equal the checked-in engine pin; BCQuality stays transitively pinned.",
     "version_guard": "Install exact npm CLI 1.0.88 under RUNNER_TEMP, resolve its native platform executable, verify its banner with --no-auto-update, and prepend only that native directory to the job PATH. Export COPILOT_AUTO_UPDATE=false to the job and explicitly to evaluation. Both new engine pins forward this optional variable through their cleared child environment. Runtime freezing relies on explicit false plus the isolated native executable, not CI=true and not a wrapper. The engine rejects startup/observed CLI and model identity mismatches.",
@@ -2750,11 +3335,61 @@
       "engine_script_sha256": "80f3ee3d0ee990f5c09979ef69c2232c76f8a6448208768e5f00095921580427",
       "existing_cached_version": "1.0.102-1",
       "ci_true_setting_unset": "1.0.102-1",
-      "ci_true_setting_false": ["1.0.88", "1.0.88", "1.0.88"],
+      "ci_true_setting_false": [
+        "1.0.88",
+        "1.0.88",
+        "1.0.88"
+      ],
       "procedure": "Real New-CopilotChildEnvironment, cleared ProcessStartInfo environment, isolated native --version only (no flag); cache left intact. Real startup initialization accepts 1.0.88 and rejects intentional expected version 1.0.83. Actual BC-Bench installer also verified from a path containing spaces.",
       "model_calls": 0,
       "engine_test_limit": "New environment tests pass. Full orchestrator: 303 passed, 3 failed; the same 3 schema-message assertion failures reproduce on the prior unchanged HEAD."
     },
-    "attribution_limit": "BCQuality baseline a4593a1 differs from historical b74967bc. Historical scope sensitivity and current baseline-versus-candidate knowledge comparison are separate analyses."
+    "attribution_limit": "BCQuality baseline a4593a1 differs from historical b74967bc. Historical scope sensitivity and current baseline-versus-candidate knowledge comparison are separate analyses.",
+    "superseded_candidate": {
+      "engine": "ceaaeaa5b6139662e60fd610c7bbb6184a020149",
+      "bcquality": "ab2cd0a62b7fbdf43e064b2a942690e4aabde9f5"
+    },
+    "candidate": {
+      "engine": "4b5c5ce6ccf759ffde24c4558c113601c873c75c",
+      "bcquality": "45cbe369527bbe6d4cad0b2a877bd1d61a617cdb"
+    },
+    "candidate_knowledge_scope": "Nine existing articles / 28 files; includes the initial repairs plus six factual correction groups. No measured model improvement is asserted."
+  },
+  "unmatched_audit_integration": {
+    "ledger": "dataset/audits/run-39616090167-unmatched.json",
+    "effective_version": "2.0",
+    "all_original_comments": 322,
+    "affected_entries": 103,
+    "decision_counts": {
+      "concrete_additions": {
+        "accepted": 37,
+        "deferred": 3,
+        "already_covered": 1
+      },
+      "gold_corrections_and_matching": {
+        "accepted": 5,
+        "deferred": 1
+      },
+      "mechanical_candidates": {
+        "accepted_neutral": 19,
+        "already_covered": 1,
+        "reclassified_existing": 1
+      },
+      "other_missing_gold_candidates": {
+        "accepted": 6,
+        "deferred": 25
+      },
+      "policy_additions": {
+        "deferred": 8
+      },
+      "whole_dataset_consistency": {
+        "accepted": 7
+      }
+    },
+    "current_kind_counts": {
+      "review_finding": 235,
+      "analyzer_diagnostic": 56,
+      "compiler_diagnostic": 9
+    }
   }
 }

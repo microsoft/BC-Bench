@@ -10265,5 +10265,3963 @@
     "AA0216": 28,
     "AA0137": 6,
     "AL-syntax": 5
-  }
+  },
+  "current_dataset_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
+  "current_gold_records": [
+    {
+      "instance_id": "synthetic__security-001",
+      "gold_index": 1,
+      "gold_sha256": "0a1c6d4f944e329674305d872795d7ffbd036ccc5ee4f7cff35df28f158db328",
+      "snapshot_row_id": "synthetic__security-001:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-001",
+      "gold_index": 2,
+      "gold_sha256": "9a413e120b66c288878e8b0f44251cf25a8a4d69f62ede45bfafba6a8b325156",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-001:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-002",
+      "gold_index": 1,
+      "gold_sha256": "d7f2a9fc2b8fa03b49631f35d8e592006b959412f9d2d60decb97e9f6ca867da",
+      "snapshot_row_id": "synthetic__security-002:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-002",
+      "gold_index": 2,
+      "gold_sha256": "e826a5bdbcb5443ebb6ea2907b62b4b89d1ddb4f8382a14d7f6b0ccb652c1c27",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-002:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-003",
+      "gold_index": 1,
+      "gold_sha256": "7134e839ac4deeb1f01672502de738f9323331667b6fae674cf6f5b648ae3cb7",
+      "snapshot_row_id": "synthetic__security-003:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-003",
+      "gold_index": 2,
+      "gold_sha256": "c0d91e19b0e4ea6dcb9b59bc43d7c42c0f02eba8ffb6413cd19ccd03b27e8fe5",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-003:HTTP-11"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-004",
+      "gold_index": 1,
+      "gold_sha256": "c48f505419150d1cd1b60916987647ecfe601898681db737f716c732c84fa839",
+      "snapshot_row_id": "synthetic__security-004:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-004",
+      "gold_index": 2,
+      "gold_sha256": "bc36558471624ddc85d951e8dc5dbd0ea7f7f5b9fb87508c4c8946d781d5028f",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-004:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-005",
+      "gold_index": 1,
+      "gold_sha256": "8511cd1bfd71898f88607adf1c3b864bdbd4e7499a0e0438725c61270849a85c",
+      "snapshot_row_id": "synthetic__security-005:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-005",
+      "gold_index": 2,
+      "gold_sha256": "b1ef81405bf0a0d89d5cacd90ccf230961a44df2c658a346f22155610c2002ef",
+      "snapshot_row_id": "synthetic__security-005:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-006",
+      "gold_index": 1,
+      "gold_sha256": "a7656a6b7351fb847eb1e66e1608989856ca126dd16a76052470fb791b5f80b3",
+      "snapshot_row_id": "synthetic__security-006:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-007",
+      "gold_index": 1,
+      "gold_sha256": "effb001d4af85a572b851f5aacddd4082c509e49ad403f994ea7a5b8692c27cc",
+      "snapshot_row_id": "synthetic__security-007:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-007",
+      "gold_index": 2,
+      "gold_sha256": "32747721d4ad644ce226ca28d890605ccc18cf73585f42519abae001db5b299a",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-007:HTTP-10"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-008",
+      "gold_index": 1,
+      "gold_sha256": "9b49b7e97da44f1c8043282ce4d4ea25cb5df3492e817036a4ecfe19e5c65f77",
+      "snapshot_row_id": "synthetic__security-008:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-009",
+      "gold_index": 1,
+      "gold_sha256": "aacf5906055256bead3b56d3bb8561a69fd434c33d4593fed1102fad9d69fe03",
+      "snapshot_row_id": "synthetic__security-009:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-009",
+      "gold_index": 2,
+      "gold_sha256": "87002bf073faf652abbdbd07e38b183da5a431ebd31a5775187afdf836cbc849",
+      "snapshot_row_id": "synthetic__security-009:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-009",
+      "gold_index": 3,
+      "gold_sha256": "f366f123a7ba319baa926e79a5c08ef2f39ef1b8c9d5c7b5bd3737c8f2b37e45",
+      "snapshot_row_id": "synthetic__security-009:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-009",
+      "gold_index": 4,
+      "gold_sha256": "07ce64185579c787f96533b7da05b6f068e728c57985b4435f73f4bf60812011",
+      "snapshot_row_id": "synthetic__security-009:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-009",
+      "gold_index": 5,
+      "gold_sha256": "1f446e105da64c215896680ae3255d8e5a82f45367c17cb1f3262b8cbf28810a",
+      "snapshot_row_id": "synthetic__security-009:G05",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-011",
+      "gold_index": 1,
+      "gold_sha256": "e0228d762647d041ab6b207d9665c8b8bfeaad5ad9d236281b6a4d4d88a04562",
+      "snapshot_row_id": "synthetic__security-011:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-011",
+      "gold_index": 2,
+      "gold_sha256": "4a2b31f2b2fbeae63db031f8977c796d3dfa7037ecdebde6651f72110f7ddf52",
+      "snapshot_row_id": "synthetic__security-011:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-011",
+      "gold_index": 3,
+      "gold_sha256": "b41f3e2a8b3742354894438a18c61fda01b55dd51e86ad602bfac9a50eae93bc",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-011:HTTP-14"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-012",
+      "gold_index": 1,
+      "gold_sha256": "b0f6a8ac9c48d6abd0af6db7ee79ab116eabc2e5281c37cafa6d095f38edc579",
+      "snapshot_row_id": "synthetic__security-012:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-013",
+      "gold_index": 1,
+      "gold_sha256": "7416543060ea4f21a7a2239734b25fc72a343cfdb6f31766b204d17bb6741d6b",
+      "snapshot_row_id": "synthetic__security-013:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-013",
+      "gold_index": 2,
+      "gold_sha256": "9161bea49d400924b5adbd34e703babb2a725c12ce80edbccbf3ef9575f42f05",
+      "snapshot_row_id": "synthetic__security-013:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-013",
+      "gold_index": 3,
+      "gold_sha256": "61f380a18f241e79abfae7837f64322b75465630b020bb8c5428ed783644ad39",
+      "snapshot_row_id": "synthetic__security-013:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-013",
+      "gold_index": 4,
+      "gold_sha256": "1e2f75f89f7536dd414212c58380a4c5352ce6eed975981712aefc1d7c205cbc",
+      "snapshot_row_id": "synthetic__security-013:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-015",
+      "gold_index": 1,
+      "gold_sha256": "c50d2e4fd5eb7d242359daa4d6d7cb9767b7ddd5bd3360b90aaeb28a7ec64da6",
+      "snapshot_row_id": "synthetic__security-015:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-015",
+      "gold_index": 2,
+      "gold_sha256": "df8a062f6c37ef3780dbb4bdeee733799d209dbe106b1b54f5646aea2007fc8e",
+      "snapshot_row_id": "synthetic__security-015:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-015",
+      "gold_index": 3,
+      "gold_sha256": "61347cba960431ecf2127c2722fd607b36861619d3cab7218fdfe16e51b168ca",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-015:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-016",
+      "gold_index": 1,
+      "gold_sha256": "e360a22d824e3241196f7bc8c0aecebeba13f3859ce7f8ab4c86190b372b8eb0",
+      "snapshot_row_id": "synthetic__security-016:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-001",
+      "gold_index": 1,
+      "gold_sha256": "d5dceb4dca6d4fdcbd734527b167bb41ebfe5fcb8c37b1bdddb52b8810b085a8",
+      "snapshot_row_id": "synthetic__performance-001:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-001",
+      "gold_index": 2,
+      "gold_sha256": "319bcdd13f65079d4c816547c26a3fc897d2a56744db95af439e00a902882738",
+      "snapshot_row_id": "synthetic__performance-001:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-002",
+      "gold_index": 1,
+      "gold_sha256": "22004d61e0d1781c78b911e80bb2bc7bf481e27325191673554b4b17274db1bc",
+      "snapshot_row_id": "synthetic__performance-002:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-002",
+      "gold_index": 2,
+      "gold_sha256": "bc1b9e5925cc619d9b2c2e0fd61456991a86fabcfbcaa96adae4ac56e99d7502",
+      "snapshot_row_id": "synthetic__performance-002:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-003",
+      "gold_index": 1,
+      "gold_sha256": "df6956146b4b095adab5dafe809106bf85820b1b057f01847bc5c23691e41f2d",
+      "snapshot_row_id": "synthetic__performance-003:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-003",
+      "gold_index": 2,
+      "gold_sha256": "47e499be00c80c83b816a662be635eb3af88ec1e08beeb8ebdec5306396c1ca7",
+      "snapshot_row_id": "synthetic__performance-003:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-003",
+      "gold_index": 3,
+      "gold_sha256": "7e24a1901162d75fe867efd4cde48de75fe3a5cdcbcb2adfb95c2aca9ddb70b9",
+      "snapshot_row_id": "synthetic__performance-003:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-004",
+      "gold_index": 1,
+      "gold_sha256": "bd0f5b38e2830b102b1fec454633b8c31b824816226c8de7f52ffb3deb5c0038",
+      "snapshot_row_id": "synthetic__performance-004:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-005",
+      "gold_index": 1,
+      "gold_sha256": "050b3c8d951b94df87ace215e7a949ff0e6704a5f358de5e73e7404f006fc5fd",
+      "snapshot_row_id": "synthetic__performance-005:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-005",
+      "gold_index": 2,
+      "gold_sha256": "adede34250d1d98003b7c1e511e2119a03931f2d8ed37013cad4ddf64c9064ef",
+      "snapshot_row_id": "synthetic__performance-005:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-005",
+      "gold_index": 3,
+      "gold_sha256": "8d186d57ec7e3b96cba4e2dfa9d18b187322677440fad9bfa11957c49df36b0c",
+      "snapshot_row_id": "synthetic__performance-005:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-006",
+      "gold_index": 1,
+      "gold_sha256": "f51affbd96cde240571781a4d69fc2620074f32477ceb09b249955e86f51573a",
+      "snapshot_row_id": "synthetic__performance-006:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-006",
+      "gold_index": 2,
+      "gold_sha256": "76e89a3282e0c98062358377e6f8c9fb93d2cc4dfdff9caa5acf15ab859dc417",
+      "snapshot_row_id": "synthetic__performance-006:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-006",
+      "gold_index": 3,
+      "gold_sha256": "88cd594421b7c567a3b339ffdbbbb2759bed8ab99d0a9df72a809aef64068207",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-006:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-007",
+      "gold_index": 1,
+      "gold_sha256": "3811efb058615fe7a505fcd82170b184ae7b4c49670a7851c08eb94daddac3cc",
+      "snapshot_row_id": "synthetic__performance-007:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-008",
+      "gold_index": 1,
+      "gold_sha256": "5cca5477342c269de9e6f6ef7283ec658123f7e7aaa9510033ac8d3a46a9f43e",
+      "snapshot_row_id": "synthetic__performance-008:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-008",
+      "gold_index": 2,
+      "gold_sha256": "a903108d24f30d5b9b5eed047befa076a8115c86e88c7e87af00eb6acee70971",
+      "snapshot_row_id": "synthetic__performance-008:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-008",
+      "gold_index": 3,
+      "gold_sha256": "8ebe6e7a95b0756089272a225e6e5c60c3932aa5b6c66c025c56e4d54bea0cab",
+      "snapshot_row_id": "synthetic__performance-008:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-010",
+      "gold_index": 1,
+      "gold_sha256": "d90ad9a56ea9ea1bf710ab99f3b4e6343e288af917126080d35e3a8a214ded93",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-010:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-011",
+      "gold_index": 1,
+      "gold_sha256": "348fb7fee4efc44d4710e908e7775087865edd58b97ac19ec968fd13fe1dbf8a",
+      "snapshot_row_id": "synthetic__performance-011:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-011",
+      "gold_index": 2,
+      "gold_sha256": "982491ecc8438022116576fdc9d7f7d85bf4ef1e5e7dba0b27405d933d3546a6",
+      "snapshot_row_id": "synthetic__performance-011:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-011",
+      "gold_index": 3,
+      "gold_sha256": "e877ec32d2917ab5227b86ca9bf057a75241212f01f6669a509faf4ccf05c16f",
+      "snapshot_row_id": "synthetic__performance-011:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-011",
+      "gold_index": 4,
+      "gold_sha256": "0f3e0335c4aeebdca5cb7987e60c287c940c63441a762cec033ee901d47c23aa",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-011:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-012",
+      "gold_index": 1,
+      "gold_sha256": "e45f4a9ce41632810ca5abafe9578d05517b3ad021e71430765166762aefd53e",
+      "snapshot_row_id": "synthetic__performance-012:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-012",
+      "gold_index": 2,
+      "gold_sha256": "e75103390b8dc6065db302f9d50ef9194ad80a14eaf3d48d20cbf3754da9f792",
+      "snapshot_row_id": "synthetic__performance-012:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-013",
+      "gold_index": 1,
+      "gold_sha256": "35371248456c3cd78b5873bafe87d12a0968b80a8fd4267e2474cf114e11812b",
+      "snapshot_row_id": "synthetic__performance-013:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-013",
+      "gold_index": 2,
+      "gold_sha256": "e0ee226b817794c2f187ed7978407251e434ec97311b9beacbb1bf56cc772304",
+      "snapshot_row_id": "synthetic__performance-013:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-013",
+      "gold_index": 3,
+      "gold_sha256": "24cdccdffa4c036fb3097dc38a3e033a48ec42eccf22b937f01f78a6e1aa778e",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-013:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-014",
+      "gold_index": 1,
+      "gold_sha256": "cf31ed117b44e34c76aacd8ea012a9ed622456eb0ce1515d4cee95f406c4d9e8",
+      "snapshot_row_id": "synthetic__performance-014:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-014",
+      "gold_index": 2,
+      "gold_sha256": "4fa86bce09686ce96c818526ef9f237a4621801ef4e1d24c5d3f27fc5af56008",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-014:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-015",
+      "gold_index": 1,
+      "gold_sha256": "d7205ee9bb946064a9a2a0c9a60c90faf707fd058784e0c9d759603d07ca18aa",
+      "snapshot_row_id": "synthetic__performance-015:G01",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0175"
+    },
+    {
+      "instance_id": "synthetic__performance-015",
+      "gold_index": 2,
+      "gold_sha256": "60d95241a35ffc2404a1277b9ef6ab39e506b8d2255146e9c8f894be06d07e75",
+      "snapshot_row_id": "synthetic__performance-015:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-015",
+      "gold_index": 3,
+      "gold_sha256": "d11cbcbf52eb5ffe0ea25c177f02ec5e2f87f42673e2f99fea867d3fc2d53003",
+      "snapshot_row_id": "synthetic__performance-015:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-015",
+      "gold_index": 4,
+      "gold_sha256": "e6c1f52d7b453a4d125e58b75dc11227e2213e47b1baebea2a9415ae71d229de",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-015:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-016",
+      "gold_index": 1,
+      "gold_sha256": "a564b240696b3a0098565649e8f2edfafc1e2790d476aa549f9a00fd2268c5f7",
+      "snapshot_row_id": "synthetic__performance-016:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-017",
+      "gold_index": 1,
+      "gold_sha256": "4e5df1c2aa181aaa25e2fbcd1b5f80cf7da0d6c9d05080326654c31e6ebaffdd",
+      "snapshot_row_id": "synthetic__performance-017:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-017",
+      "gold_index": 2,
+      "gold_sha256": "e69a8f36a030856719fc722f52bf6e2e2cf0fa5b0408b33b30ab63fe3aab8a37",
+      "snapshot_row_id": "synthetic__performance-017:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-018",
+      "gold_index": 1,
+      "gold_sha256": "5456e4e8fe5c549b475cc6f7a4649242856f14f14ba515095daf08e03d98926e",
+      "snapshot_row_id": "synthetic__performance-018:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-018",
+      "gold_index": 2,
+      "gold_sha256": "10e736e18d62cbbb680811b88f12c87f9a9c94aec2fee82df1aaf0f7e1d44a71",
+      "snapshot_row_id": "synthetic__performance-018:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-018",
+      "gold_index": 3,
+      "gold_sha256": "1ac38db02cf21c4bf4c0942e0385b543fb6565d0544e681fdf9edc389f6cb7d7",
+      "snapshot_row_id": "synthetic__performance-018:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-018",
+      "gold_index": 4,
+      "gold_sha256": "9a29c36a577cf4dd185c67a1ebc4d9b393ec2e562bbd5203a9d35f0aa00fb785",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-018:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-018",
+      "gold_index": 5,
+      "gold_sha256": "d8098420f1316dc62f3965d940e9c182088d3c065e9783081833080ce72a2ec0",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-018:F006"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-019",
+      "gold_index": 1,
+      "gold_sha256": "b80eab6dc125ff1976c70455dc5cb14abb057ebefd5dd636e508815b00248a25",
+      "snapshot_row_id": "synthetic__performance-019:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-019",
+      "gold_index": 2,
+      "gold_sha256": "71bae0467d79e2d743bf474e58c8b98c82a0b3cdedd733b9f15f38f3f6c482a3",
+      "snapshot_row_id": "synthetic__performance-019:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-020",
+      "gold_index": 1,
+      "gold_sha256": "9efaa78bee905293b8b5c7f8850ebf333b0fbbe6995ef37aa5263abb2e2c386a",
+      "snapshot_row_id": "synthetic__performance-020:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-020",
+      "gold_index": 2,
+      "gold_sha256": "aedc24a4124a5909c066a6a88eafe10adc1568291aa6707c443b54d7d2157b71",
+      "snapshot_row_id": "synthetic__performance-020:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-020",
+      "gold_index": 3,
+      "gold_sha256": "1a9a4a90d94367813f0fc14d493ad495d4b13cab6e789f91e2bda0b0a8b3bf72",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-020:F003"
+      ],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-021",
+      "gold_index": 1,
+      "gold_sha256": "b7ed467d362160670b7fc0687e49367b2e3c99a4e449011bea8b50b6320a02ed",
+      "snapshot_row_id": "synthetic__performance-021:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-021",
+      "gold_index": 2,
+      "gold_sha256": "c64ecdd537980348f32d45da7cb6bd30cabebb10e76666792640c49626c3d910",
+      "snapshot_row_id": "synthetic__performance-021:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-022",
+      "gold_index": 1,
+      "gold_sha256": "02e23c76c9883c460c008ebaa7a73870b250b6b324228169d847b537425cd47e",
+      "snapshot_row_id": "synthetic__performance-022:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-022",
+      "gold_index": 2,
+      "gold_sha256": "0ff5c2ef1461d3d03c86064fa8eea5c785aaed82fca7eca8ddbb7da8793611b7",
+      "snapshot_row_id": "synthetic__performance-022:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-022",
+      "gold_index": 3,
+      "gold_sha256": "d9e309184c9bee1d0f570a3194655308c40f20e37ae581e90bafd9d75fa66b0a",
+      "snapshot_row_id": "synthetic__performance-022:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-022",
+      "gold_index": 4,
+      "gold_sha256": "27e4fafa01f5a64e7eda8ca32d9c2137e9280513a1d68ca8641b9826cb1f68ee",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-022:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-023",
+      "gold_index": 1,
+      "gold_sha256": "059bdc4180a9397174eac4607758c0906c4a466af9b7fa95372b9ca744255cfe",
+      "snapshot_row_id": "synthetic__performance-023:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-023",
+      "gold_index": 2,
+      "gold_sha256": "170a6e35e9dc4ea2a247eef9ebe7d443aecd7a9c02e2306ce26056406cf47fc6",
+      "snapshot_row_id": "synthetic__performance-023:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-023",
+      "gold_index": 3,
+      "gold_sha256": "89ee3d58a0566fe54845489efe9bcab0d105b2be52ea1dafab319ca0cb875a70",
+      "snapshot_row_id": "synthetic__performance-023:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-023",
+      "gold_index": 4,
+      "gold_sha256": "b6a5795419b36a20fad23f70a68a12124a34af203a901acd141ccc01df5ef141",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-023:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-024",
+      "gold_index": 1,
+      "gold_sha256": "06a7ab3deca43781eb89bcffc0f6f041dc90169d4d2d1453cc58cf3b6aa1bd30",
+      "snapshot_row_id": "synthetic__performance-024:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-024",
+      "gold_index": 2,
+      "gold_sha256": "08097bb21ec60429170496dcbbcd3ffb2b48f8bf53e5806e447fc6eb3e18b6ea",
+      "snapshot_row_id": "synthetic__performance-024:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-001",
+      "gold_index": 1,
+      "gold_sha256": "86e1734576f87464e90fc7be6c99b9b00333e3b2f9406ec00f37d5229a43462b",
+      "snapshot_row_id": "synthetic__privacy-001:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-001",
+      "gold_index": 2,
+      "gold_sha256": "f6c9da3badea1ac5ce1c7cf5ce892cd8b7f759bc45702a59089d6bdc5012727b",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-001:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-002",
+      "gold_index": 1,
+      "gold_sha256": "cec0bbac99787257b61bc1a5b68babbc4311518ca69862c2438a97b08d815ec7",
+      "snapshot_row_id": "synthetic__privacy-002:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-003",
+      "gold_index": 1,
+      "gold_sha256": "0e1ab9129917a08fb0981250d0ec4ae5ed6f13e26b16b2683489ba07b902416b",
+      "snapshot_row_id": "synthetic__privacy-003:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-004",
+      "gold_index": 1,
+      "gold_sha256": "6bf81d1a6def7d9fd2c4a9bb679b800d0f589d55c4913400a07f66537359b0e3",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-004:F004"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-005",
+      "gold_index": 1,
+      "gold_sha256": "749f4e09738f3d02c94cd8080f345e855468f07d87850617df9d473965db02a8",
+      "snapshot_row_id": "synthetic__privacy-005:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-006",
+      "gold_index": 1,
+      "gold_sha256": "f18c7bd23212a291db93eb4922e7d0656f8fe4c59110f62cdddd35ebe871c257",
+      "snapshot_row_id": "synthetic__privacy-006:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-007",
+      "gold_index": 1,
+      "gold_sha256": "6f070ea60e2fcf70a876534d9ff595af4aaaf682fe3336fdb2210022f86c896b",
+      "snapshot_row_id": "synthetic__privacy-007:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-008",
+      "gold_index": 1,
+      "gold_sha256": "1011e976809b2e2fadd9400be808537f2c49b06fb1bbfb8eb6f900a92308f43d",
+      "snapshot_row_id": "synthetic__privacy-008:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-008",
+      "gold_index": 2,
+      "gold_sha256": "cf965efafe339b41224911a198901c7f19ce9174bf0ec092f291e3c278a88c52",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-008:HTTP-10"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-009",
+      "gold_index": 1,
+      "gold_sha256": "3085c8b9a8d72c5fa62969716c27f524c2ff8026e9dc97115ca46950c3883980",
+      "snapshot_row_id": "synthetic__privacy-009:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-010",
+      "gold_index": 1,
+      "gold_sha256": "2d5e0f68830d59a9427e07bbb6b623468b955a0e2d7516c4ec53e32735816203",
+      "snapshot_row_id": "synthetic__privacy-010:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-010",
+      "gold_index": 2,
+      "gold_sha256": "0ea7100f6d0729147617b1d7494d8cf0e458b55e3691462b945b7853649188fb",
+      "snapshot_row_id": "synthetic__privacy-010:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-010",
+      "gold_index": 3,
+      "gold_sha256": "b0b9fca1241e7ff49eb3f0d71272f1c7778c71ec192397441256cda98ac3c952",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-010:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-010",
+      "gold_index": 4,
+      "gold_sha256": "8d5a7f97b01350df8b243081b09cb9631f0b022d80d788a9d2ab2c9801222617",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-010:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-010",
+      "gold_index": 5,
+      "gold_sha256": "43db63dc27d9fbbd1c96ba36b8ad738767b2cc5bda439377f08681a7aa0c79b0",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-010:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-010",
+      "gold_index": 6,
+      "gold_sha256": "7773e50be15aa677ad43681f66638dc5c7aac77b8dc40042d6faef187fe2a0b9",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-010:F005"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-010",
+      "gold_index": 7,
+      "gold_sha256": "76776ebf0575cdf360649385dfcadbe9108cbdd1bc423f1b9fe27a85aa34a729",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-010:F009"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__privacy-011",
+      "gold_index": 1,
+      "gold_sha256": "291aa548872e9750207bf689935c533a2427548e3890f46e1ebff828378a8105",
+      "snapshot_row_id": "synthetic__privacy-011:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-012",
+      "gold_index": 1,
+      "gold_sha256": "665fa649200ae1661ed5d56d7a6e4794dd70fabc2e581b7d894d80fe006e9acf",
+      "snapshot_row_id": "synthetic__privacy-012:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-012",
+      "gold_index": 2,
+      "gold_sha256": "8c1641043daa462a8b6c94bb680ecf2d6b9d9af45b98d279fe128921bcc37f91",
+      "snapshot_row_id": "synthetic__privacy-012:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-012",
+      "gold_index": 3,
+      "gold_sha256": "83c7c99db85272f5991244b97a8c4e4988f3e4c1675d115aeafeb1fd5b54f3b6",
+      "snapshot_row_id": "synthetic__privacy-012:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-013",
+      "gold_index": 1,
+      "gold_sha256": "fdc7f0dbae1a889f4c0d43b56e2450bd932e581557358c5ca732cc27f868e43b",
+      "snapshot_row_id": "synthetic__privacy-013:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-013",
+      "gold_index": 2,
+      "gold_sha256": "65c5ae9097f6c089ac8c752723c62d1f0f2fabf7b7823feb3b34512aba04aa46",
+      "snapshot_row_id": "synthetic__privacy-013:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-013",
+      "gold_index": 3,
+      "gold_sha256": "84596a8d48a2a1b1bf3ef464fbec563e5e0be0f13276e4c59a07f8f1f4db98ba",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-013:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-014",
+      "gold_index": 1,
+      "gold_sha256": "f9729a44dfdfb2abf3d7c2a97a03cfb4b3e941235086cf40e8276c0a338b4b2a",
+      "snapshot_row_id": "synthetic__privacy-014:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-014",
+      "gold_index": 2,
+      "gold_sha256": "e97b1f2c22a1585bd84e066373e5bb13b73b9c153b79dff3dd2fdf933a65653b",
+      "snapshot_row_id": "synthetic__privacy-014:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-014",
+      "gold_index": 3,
+      "gold_sha256": "355aa09eb7fb315398904665387c7fca7e6dd9375bb58a3236d39248b3e55c48",
+      "snapshot_row_id": "synthetic__privacy-014:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-014",
+      "gold_index": 4,
+      "gold_sha256": "0518e00cdb7c0e212ff6a387e2102a041e93d7ab093b46f862300724f428e044",
+      "snapshot_row_id": "synthetic__privacy-014:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-014",
+      "gold_index": 5,
+      "gold_sha256": "2dad30a7b17b0f50c67cab93f7d6a00505a7518ac458a0e6e6b8b00324b9c8e6",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-014:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-014",
+      "gold_index": 6,
+      "gold_sha256": "f30b32187870ef7ca35e71bcc2fcef8819095628b2eb901059898efcae60edcb",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-014:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-014",
+      "gold_index": 7,
+      "gold_sha256": "bca5c4b9a4d0a1383afb449c0b691129785838c0beaccc4fc399ffceee165043",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-014:F008"
+      ],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-015",
+      "gold_index": 1,
+      "gold_sha256": "aa8b565444faa4839da974973af2a9c504ecde46352cdcff1684771102203125",
+      "snapshot_row_id": "synthetic__privacy-015:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-015",
+      "gold_index": 2,
+      "gold_sha256": "411e88c3ec0bff7c7357e7dd2063e47b54eadd5fe8cf0b07f2295d81adba9ab7",
+      "snapshot_row_id": "synthetic__privacy-015:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-015",
+      "gold_index": 3,
+      "gold_sha256": "9fe2b5a77cd9f0561ae6f7e83bf5d3b350c44312e5ec485a685b1c1b59fd7e22",
+      "snapshot_row_id": "synthetic__privacy-015:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-015",
+      "gold_index": 4,
+      "gold_sha256": "59909d09c041ec2c248f8166259dad8cf9b0e4d0260ab4c3b0f9be2d62bd49f4",
+      "snapshot_row_id": "synthetic__privacy-015:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-015",
+      "gold_index": 5,
+      "gold_sha256": "350c20cf04c795b4d328644080e2ad1bb5b3ad2f0e455c5dce2287409818d450",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-015:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-015",
+      "gold_index": 6,
+      "gold_sha256": "571b827b9fda515b122d891e46d82a4d0295638d8e833af900b59c54bac59893",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-015:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-015",
+      "gold_index": 7,
+      "gold_sha256": "7d6a53a6b15f0893082dd9833f67584a774e2621eef00f8be4e07fb6d8f48706",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-015:F004"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__privacy-015",
+      "gold_index": 8,
+      "gold_sha256": "beff0a16867b53b09f501ee13a0c5df054932c437c8cf9995fbc7c54b5e29cea",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__privacy-015:HTTP-21"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-001",
+      "gold_index": 1,
+      "gold_sha256": "880f5eb214d99892e0755159a0de7ecace4071bfc387005d4ef5c51a98e0d231",
+      "snapshot_row_id": "synthetic__style-001:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-002",
+      "gold_index": 1,
+      "gold_sha256": "f9ff57a98a841d3450636b5b548c6a0880f9d321347cd366cc4ff0ba3369ff67",
+      "snapshot_row_id": "synthetic__style-002:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-002",
+      "gold_index": 2,
+      "gold_sha256": "7d5e98e983f924d5e7d50ff9dcb52e56c1c657bf425b6ed6e75e41d35a894793",
+      "snapshot_row_id": "synthetic__style-002:G02",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0248"
+    },
+    {
+      "instance_id": "synthetic__style-003",
+      "gold_index": 1,
+      "gold_sha256": "bd321684123b9b04df4c629923410d2e7bf63c43df7e4276f35b7b2bb36cbfe8",
+      "snapshot_row_id": "synthetic__style-003:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-004",
+      "gold_index": 1,
+      "gold_sha256": "a383494710e70fd7dfe0bc7079b37fe55241db739bf5832cbbfcbb95ea834b4b",
+      "snapshot_row_id": "synthetic__style-004:G01",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0215"
+    },
+    {
+      "instance_id": "synthetic__style-005",
+      "gold_index": 1,
+      "gold_sha256": "7297fa4018c154d5324f8963568dbf829f934f098bda518d62be00e5166b1552",
+      "snapshot_row_id": "synthetic__style-005:G01",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0018"
+    },
+    {
+      "instance_id": "synthetic__style-006",
+      "gold_index": 1,
+      "gold_sha256": "97dcf5fe3934471beb443b43dfb30ffedddb7ce831398f2f4d19df7ef0bd5ee0",
+      "snapshot_row_id": "synthetic__style-006:G01",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0013"
+    },
+    {
+      "instance_id": "synthetic__style-007",
+      "gold_index": 1,
+      "gold_sha256": "8099977c61aedf9b00af52b6ac2f68bf1c3840cce3923cd2902a6578ac32227f",
+      "snapshot_row_id": "synthetic__style-007:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-008",
+      "gold_index": 1,
+      "gold_sha256": "a772b1f9bb4bcafa2283383406c5986b9ad2587d36a735ff006d781e97c7ddcc",
+      "snapshot_row_id": "synthetic__style-008:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-009",
+      "gold_index": 1,
+      "gold_sha256": "ce3f9e2182e7353f2ee91bd68337b311a3be493e224d1f646a95d83fca6af2fd",
+      "snapshot_row_id": "synthetic__style-009:G01",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0001"
+    },
+    {
+      "instance_id": "synthetic__style-010",
+      "gold_index": 1,
+      "gold_sha256": "c237681036f200e91c1a858c57773d2e5e22830e98708865d7361ba0c1ddb4b5",
+      "snapshot_row_id": "synthetic__style-010:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-010",
+      "gold_index": 2,
+      "gold_sha256": "021deb30e3e9170a420e269fff8679cd3214f1def7971cd3f802f4e85267dd51",
+      "snapshot_row_id": "synthetic__style-010:G02",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 1,
+      "gold_sha256": "9ae3208bc2095348cc4891ed9633cd01455b46c5e65b287815b1d8d58a31dd81",
+      "snapshot_row_id": "synthetic__style-011:G01",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0137"
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 2,
+      "gold_sha256": "139160e2f1069e0f877bed21acfae0e97900036c9bfc9716c0ad779a97ff73aa",
+      "snapshot_row_id": "synthetic__style-011:G02",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0137"
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 3,
+      "gold_sha256": "c86173afc879ec290f8fd9bc11501a4c706bd2a150f1af80fc3f4fc5af4f3d82",
+      "snapshot_row_id": "synthetic__style-011:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 4,
+      "gold_sha256": "f76360c721035fffc771dfd195e487a92efff0c2092d237e6671c3ae82ef5719",
+      "snapshot_row_id": "synthetic__style-011:G04",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0137"
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 5,
+      "gold_sha256": "7c53b46e74211a21ea43fc4272fec6166731c8392e44b9f4dc90271702e514e8",
+      "snapshot_row_id": "synthetic__style-011:G05",
+      "decision_ids": [],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 6,
+      "gold_sha256": "a1157ef1ff7c4a25fa2874a83ebd3cb8b0ff14be6f2587248de54ccc26bda155",
+      "snapshot_row_id": "synthetic__style-011:G06",
+      "decision_ids": [],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 7,
+      "gold_sha256": "a154e9f8c163756d52e63523b1da4201e1804d6031b87bf573b569255816b327",
+      "snapshot_row_id": "synthetic__style-011:G07",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 8,
+      "gold_sha256": "ef5347e101e89d11c2864ab0d53a3acc74e8245ef986195e7fdbee846ee1fe4f",
+      "snapshot_row_id": "synthetic__style-011:G08",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 9,
+      "gold_sha256": "dbf0bc9afd81d4e99347ecb295fae614f7eb950ca7b1f4b40831f6a90f32a4ae",
+      "snapshot_row_id": "synthetic__style-011:G09",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 10,
+      "gold_sha256": "d6214698231dd2b58c4e661ce6a4979d5cd54879eae4ab90664af3269ad6349b",
+      "snapshot_row_id": "synthetic__style-011:G10",
+      "decision_ids": [],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 11,
+      "gold_sha256": "507070a096638fdb27e21b6342a5f66b0a0a92eed369dec957ebdfdaa7c0ab5e",
+      "snapshot_row_id": "synthetic__style-011:G11",
+      "decision_ids": [],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 12,
+      "gold_sha256": "04d1759fa01d615d61b2c4899cf81e873c411f2b0ad4879bba68c37bf53e2738",
+      "snapshot_row_id": "synthetic__style-011:G12",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 13,
+      "gold_sha256": "b652d2b67cafa3550238c3f1f74792da55ee28bec3b88cc07c2aa34ff32fa2d5",
+      "snapshot_row_id": "synthetic__style-011:G13",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 14,
+      "gold_sha256": "30693b967e3245b7ccadb9b8e126704939e3daa0cb26e3aa66810dd665c7bf98",
+      "snapshot_row_id": "synthetic__style-011:G14",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0137"
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 15,
+      "gold_sha256": "ba6e641fcee942bf6e26db3d27edc9955b99939233fbdb476bdc5790ab09458b",
+      "snapshot_row_id": "synthetic__style-011:G15",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 16,
+      "gold_sha256": "c2bf9ad7a6e47d3313e182b68743a082bba1df50ce0c695bda84c073e1669a7a",
+      "snapshot_row_id": "synthetic__style-011:G16",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-011",
+      "gold_index": 17,
+      "gold_sha256": "df7d624f079589d2fe5faecc1dd4b97257864948008301bcd96f1ce8d730e12b",
+      "snapshot_row_id": "synthetic__style-011:G17",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 1,
+      "gold_sha256": "020c9fe9a7a8ea57e0d05a643a19ad235200369363a6f072f7f8293a9b343568",
+      "snapshot_row_id": "synthetic__style-012:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 2,
+      "gold_sha256": "6f984b6174e2f08ecc6e74bd97b85ab49b839f6a6c5c18656ca6d6c7b3f768ac",
+      "snapshot_row_id": "synthetic__style-012:G02",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0137"
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 3,
+      "gold_sha256": "01be23ac527c2953083c419e7fae09394fac944d0ce2a9549a307684d902bd5f",
+      "snapshot_row_id": "synthetic__style-012:G03",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 4,
+      "gold_sha256": "ab9b2a7ac4065d16e1350db082b20e3ba4adf50850c110c81ceb8af0eaa75bfe",
+      "snapshot_row_id": "synthetic__style-012:G04",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 5,
+      "gold_sha256": "118b2493874cfd13f55c3745913d687f2981c189b4cd7389968dcd29027b1199",
+      "snapshot_row_id": "synthetic__style-012:G05",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 6,
+      "gold_sha256": "e155503a063ef8e26985a39dc6a64d45f0b5de00469aa2deba3fa4d3e06f9e0f",
+      "snapshot_row_id": "synthetic__style-012:G06",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 7,
+      "gold_sha256": "f7075f56c7675f463f83277a87e1e29f88563b28fdb9ec2251de24cab9283270",
+      "snapshot_row_id": "synthetic__style-012:G07",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 8,
+      "gold_sha256": "bbd0dfb387e9470984ff2284958b49d2e0bcf1b4f58c6362d9c1d40e38e74084",
+      "snapshot_row_id": "synthetic__style-012:G08",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 9,
+      "gold_sha256": "627187c37ba5b33f1bf27ada0a06d7bd0aec36be78435e442e27ccdcfc7f060d",
+      "snapshot_row_id": "synthetic__style-012:G09",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 10,
+      "gold_sha256": "8d89a23351e4929fe0ca7aaaf80089d866b22f856660a5f04f6781f97c3a1c6c",
+      "snapshot_row_id": "synthetic__style-012:G10",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 11,
+      "gold_sha256": "936f12cca10cf35fc8c033aaf3d3d6be731634b57522f0f05cdd8e0ca6ac7f2c",
+      "snapshot_row_id": "synthetic__style-012:G11",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 12,
+      "gold_sha256": "c0d5a13c172b8e3860a086cca76d4fc86a640fc99ff65655145a1e9a1084062a",
+      "snapshot_row_id": "synthetic__style-012:G12",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 13,
+      "gold_sha256": "3d4be970ed73e80de8d3ead5d20997914a234cc7515c4e5483b0237f2f6e2b7e",
+      "snapshot_row_id": "synthetic__style-012:G13",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 14,
+      "gold_sha256": "54956aa9297589d9a49d65c2f82b3acce287648578dc73a021feaa24963bace7",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-012:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 15,
+      "gold_sha256": "0404269d646a70044d9b6443ab1298fa7cf0398bdebf43278f74b3bda482d73f",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-012:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 16,
+      "gold_sha256": "3c1e5e5d32f3291df20e3219bd9fff0802669135fd2271540628d942e9d60e68",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-012:F004"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 17,
+      "gold_sha256": "2a7a6e46c37e6f8d440d9311a8190cee2c1e76790638187f3a27eb70275a0850",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-012:F012"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "gold_index": 18,
+      "gold_sha256": "c2f69eeabad55ea2ca614d1e28a950b1d7a7af0c3d1491cd4b5a6f9d18191696",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-012:F016"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 1,
+      "gold_sha256": "23dbeab2f6111bfe5fbea1e15977378dcb6f94e48eacbc347615afad08d0014b",
+      "snapshot_row_id": "synthetic__style-013:G01",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 2,
+      "gold_sha256": "a97498f55e7fbf221171850a6e7b0fc89ac4d35dd58258815c256b1c0719d507",
+      "snapshot_row_id": "synthetic__style-013:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 3,
+      "gold_sha256": "b6366686e3ccda9c09ad24e95f8521ec107a3a4648f7b5126124f475d896bda7",
+      "snapshot_row_id": "synthetic__style-013:G03",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 4,
+      "gold_sha256": "2041d4f73a55e74becdabf0582ac721ca8a6536b155cc96e20f22b5b515730ac",
+      "snapshot_row_id": "synthetic__style-013:G04",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 5,
+      "gold_sha256": "c4feb1641e2dce1408b4d54951b4446d9fbf2de92707ab1fd8a81d5fb918e16b",
+      "snapshot_row_id": "synthetic__style-013:G05",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 6,
+      "gold_sha256": "18d2023d7cc9336ce69ae729baa99c91b85913e97a219d54f28afd63325aae0b",
+      "snapshot_row_id": "synthetic__style-013:G06",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 7,
+      "gold_sha256": "745a86d280e635aafe82dee8e8fb0a337a0b1ce4e46abf2a6d77abc11aa0a7f2",
+      "snapshot_row_id": "synthetic__style-013:G07",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 8,
+      "gold_sha256": "69a4ceaca19b7f5e659188efdf825e31f35929ebb9024ef25e4902d1ac52c076",
+      "snapshot_row_id": "synthetic__style-013:G08",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 9,
+      "gold_sha256": "bab97fb23f9bf0c099df1979d9fdfd34511d041df68f73c5803c96f3fe354392",
+      "snapshot_row_id": "synthetic__style-013:G09",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 10,
+      "gold_sha256": "3f56d1b0ce3b8d7e5c03629205c4efcb572bf27fa5b2c8dfa7a57defd95c2e78",
+      "snapshot_row_id": "synthetic__style-013:G10",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 11,
+      "gold_sha256": "733c440fd802005672dc625fed8466360fec86d8c26052ad04bbd7e8f27b1e59",
+      "snapshot_row_id": "synthetic__style-013:G11",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 12,
+      "gold_sha256": "ac7f340979023cdea8d18b53cb0661cd4fed9eec03f1d580f00a34fe16ec358e",
+      "snapshot_row_id": "synthetic__style-013:G12",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 13,
+      "gold_sha256": "51244d30976430b56a655a3682084fb9fd21293ddb328a3ee15a90d019e4e6e4",
+      "snapshot_row_id": "synthetic__style-013:G13",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 14,
+      "gold_sha256": "9478d8b64ca53da69d2b6b7347b280711dd8e8841d7ae18a268ab8c16436746f",
+      "snapshot_row_id": "synthetic__style-013:G14",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 15,
+      "gold_sha256": "56b8d7972d11ad64b56d2502c15453f70cccab61a184d6bd2e34546d8538677d",
+      "snapshot_row_id": "synthetic__style-013:G15",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 16,
+      "gold_sha256": "324d007532ae9f3391cdaca089aec7edbaa6de06e3c662a2ae46a83686ef2853",
+      "snapshot_row_id": "synthetic__style-013:G16",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 17,
+      "gold_sha256": "03ae93db78e9c9cc1cba7cc0b302e2a3f7d1582b68c3e7de49a741662348ba9a",
+      "snapshot_row_id": "synthetic__style-013:G17",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 18,
+      "gold_sha256": "68d420b75b822cbcaf653d01d1bb1ef1d12abaffdf671cc10d02110e30c2ecf3",
+      "snapshot_row_id": "synthetic__style-013:G18",
+      "decision_ids": [
+        "synthetic__style-013:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "gold_index": 19,
+      "gold_sha256": "b8039f64531f9cb24cfff39dbc05204a58b521cfe36e0275ee9caf90b78344cf",
+      "snapshot_row_id": "synthetic__style-013:G19",
+      "decision_ids": [
+        "synthetic__style-013:F003"
+      ],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "gold_index": 1,
+      "gold_sha256": "4bd930146168f986e2152225a86678e8b53acd4aab0bb32c462634e9cc04b471",
+      "snapshot_row_id": "synthetic__style-014:G01",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "gold_index": 2,
+      "gold_sha256": "29d24f64473641f280e14a59ab3274143ad9ce702510445d14b879a44432a7c2",
+      "snapshot_row_id": "synthetic__style-014:G02",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "gold_index": 3,
+      "gold_sha256": "9548597a9ba4fa1bcf44053e8543f7470e0d04c2254cd6f43fea9dbff4b1f62b",
+      "snapshot_row_id": "synthetic__style-014:G03",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "gold_index": 4,
+      "gold_sha256": "bf324938a145d4c96ea69355cdc85642e6e993828df35ba1f8148bcc7fe85384",
+      "snapshot_row_id": "synthetic__style-014:G04",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "gold_index": 5,
+      "gold_sha256": "6403933bf2b453c7bd4af81f3c7c2b77a8d34e9d5b16bb2eeedd1a34b3284171",
+      "snapshot_row_id": "synthetic__style-014:G05",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-015",
+      "gold_index": 1,
+      "gold_sha256": "d9220b05107eff97f3c5b16a85651c02a630b75e86ada539e6d46d383fd1b4a6",
+      "snapshot_row_id": "synthetic__style-015:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-015",
+      "gold_index": 2,
+      "gold_sha256": "ea08d50207c1f809f7b0f8e32b03809244baacad7d271d88ba055aa8ed6e402a",
+      "snapshot_row_id": "synthetic__style-015:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-015",
+      "gold_index": 3,
+      "gold_sha256": "b2254304bee9dbf7e79faa26d122eab9df446bb3cc174217cedb03180718ca95",
+      "snapshot_row_id": "synthetic__style-015:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-015",
+      "gold_index": 4,
+      "gold_sha256": "13e687ce388e03921839951a7ffaa5c28d416882c9e41b0159407c23f1fe338f",
+      "snapshot_row_id": "synthetic__style-015:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-016",
+      "gold_index": 1,
+      "gold_sha256": "65838fc1928de0851054d22335bde1927b16ffb13219ff6f151fff44f3ec4cf7",
+      "snapshot_row_id": "synthetic__style-016:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-016",
+      "gold_index": 2,
+      "gold_sha256": "e8637be28755af3067ca809a0ca201680b56ed707646abdc590c398b3ce7fcfe",
+      "snapshot_row_id": "synthetic__style-016:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-016",
+      "gold_index": 3,
+      "gold_sha256": "684ba01f8bd531c6b0dc23cf6bc6488899e75db51d4e643d283cfeafe5f35d5a",
+      "snapshot_row_id": "synthetic__style-016:G03",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-016",
+      "gold_index": 4,
+      "gold_sha256": "b5c01fe82094f9e8b4545a79c1d0f75aadb52b43fd22b2e1f7c55674d3a879af",
+      "snapshot_row_id": "synthetic__style-016:G04",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0137"
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "gold_index": 1,
+      "gold_sha256": "cb0ad5d7f069e2d55cd982cd5a089cd89b3c8a02f77e17ca0e9236666b62102f",
+      "snapshot_row_id": "synthetic__style-017:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "gold_index": 2,
+      "gold_sha256": "b27b677fcfb7b61449515d92bbe04a6c2099b52d9bbc27c4f093e85916d5a348",
+      "snapshot_row_id": "synthetic__style-017:G02",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "gold_index": 3,
+      "gold_sha256": "eba0cff29706237cd204d1425c1c5e8e27761e3bf49882c6a32edb7f80206707",
+      "snapshot_row_id": "synthetic__style-017:G03",
+      "decision_ids": [],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "gold_index": 4,
+      "gold_sha256": "b58142af6e610efc2f0c6dab2ba166e3ee8ff105bb57b1b45d463a3a395711b7",
+      "snapshot_row_id": "synthetic__style-017:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "gold_index": 5,
+      "gold_sha256": "c088a2d7bd41359031766619daa8fca284bf6164955af41e00f9f9c8320e7631",
+      "snapshot_row_id": "synthetic__style-017:G05",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "gold_index": 6,
+      "gold_sha256": "267562f3e0e003669b57bf9a642ccd014b1abbc5da6ae4df7f366c6855daa617",
+      "snapshot_row_id": "synthetic__style-017:G06",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "gold_index": 7,
+      "gold_sha256": "2ce9f93d84c550c32c8281170dc47b409ea9b715c620460bd949af2226252b4a",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-017:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "gold_index": 8,
+      "gold_sha256": "10d767c9e95d03daa402aaeb2885ad2423e380bcacfa1539c3b549fd5e919acc",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-017:F004"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-001",
+      "gold_index": 1,
+      "gold_sha256": "eb1f83d6c2594f1288cc96663c7e92cc31636ad459fee2b431755606f842718d",
+      "snapshot_row_id": "synthetic__upgrade-001:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-001",
+      "gold_index": 2,
+      "gold_sha256": "282b4e255941dcec4750268e9d58ebeff83cb5b75b7284765ba0035c40837f64",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__upgrade-001:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-002",
+      "gold_index": 1,
+      "gold_sha256": "9acdd4b131da61c336683f2fccdaac38f3d289f7137d896516021adffbd9cf77",
+      "snapshot_row_id": "synthetic__upgrade-002:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-003",
+      "gold_index": 1,
+      "gold_sha256": "98e3cfd3b432bd1a83997e8e69f49bd17fd7279eaaf9c459c65dbfec67bd01b1",
+      "snapshot_row_id": "synthetic__upgrade-003:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-004",
+      "gold_index": 1,
+      "gold_sha256": "7258f71d4a13cc42975d170e2e4af55b7569724eca838e8ce3622484fde2f183",
+      "snapshot_row_id": "synthetic__upgrade-004:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-005",
+      "gold_index": 1,
+      "gold_sha256": "3fcc4763518c1cd14bfc87d9bac32cc9d3c7ebef7256bf32e24fd045919d4fad",
+      "snapshot_row_id": "synthetic__upgrade-005:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-005",
+      "gold_index": 2,
+      "gold_sha256": "667f8ebea9721dd36650415c8918b34a84ddd3e074b35b6294c10786f44fb14f",
+      "snapshot_row_id": "synthetic__upgrade-005:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-006",
+      "gold_index": 1,
+      "gold_sha256": "2c785ea9c56b51742be25318b0a623c52592dce2f7b81c280f30a93460b1021d",
+      "snapshot_row_id": "synthetic__upgrade-006:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-006",
+      "gold_index": 2,
+      "gold_sha256": "f22e9685e96dfc576094fecc6f4ae2b76898c4daf2eba45b3b65b4107c6d1c23",
+      "snapshot_row_id": "synthetic__upgrade-006:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-006",
+      "gold_index": 3,
+      "gold_sha256": "47f2f4b9f71161f2e7ab96faa41cd755cdcd43453fd61b9860561cb197dff726",
+      "snapshot_row_id": "synthetic__upgrade-006:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-006",
+      "gold_index": 4,
+      "gold_sha256": "5765e6a9e96432b1e9559d762a5f63812465a63df4bb5afdc551227b82ca6a06",
+      "snapshot_row_id": "synthetic__upgrade-006:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-006",
+      "gold_index": 5,
+      "gold_sha256": "48c6564226605135484d9b5c6015bc8a390f012c910ef1c68868efdd9d15b057",
+      "snapshot_row_id": "synthetic__upgrade-006:G05",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-006",
+      "gold_index": 6,
+      "gold_sha256": "79aaa87e1c88b09569026328c5c2647cee2cb81b215a64f1e583c5dc94ee6a8b",
+      "snapshot_row_id": "synthetic__upgrade-006:G06",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-007",
+      "gold_index": 1,
+      "gold_sha256": "d9d944a029cc3b603fc9f46b93ed6dabffc55323b03164a2fa553630ef7189c2",
+      "snapshot_row_id": "synthetic__upgrade-007:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-008",
+      "gold_index": 1,
+      "gold_sha256": "da1f70663c036bd62640a1f62c4a6b8ea09886baf764d35a43e6a6038b998077",
+      "snapshot_row_id": "synthetic__upgrade-008:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-008",
+      "gold_index": 2,
+      "gold_sha256": "5c84a43ba395fc6c7234efafc34057af1f8165eb9cfaddd5c4b0169d8fcd1aca",
+      "snapshot_row_id": "synthetic__upgrade-008:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-008",
+      "gold_index": 3,
+      "gold_sha256": "1118a3b7774d447f2f50a3fea0e8f8b4b65ed25d6329203d64a94b27978aa575",
+      "snapshot_row_id": "synthetic__upgrade-008:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-008",
+      "gold_index": 4,
+      "gold_sha256": "410ada588641a0e56eb17f94093cd18ef70cd8131b471d00b946baf8ba39488a",
+      "snapshot_row_id": "synthetic__upgrade-008:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-008",
+      "gold_index": 5,
+      "gold_sha256": "a33b8de670decbd7bbe68419dc49f1d578a51e3e61cb3347520ca883b8647d5c",
+      "snapshot_row_id": "synthetic__upgrade-008:G05",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 1,
+      "gold_sha256": "afe1ec9f83d6ae878f4ff4a7732084683036a06f30ed9bd1d9575c73c53cd885",
+      "snapshot_row_id": "synthetic__upgrade-009:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 2,
+      "gold_sha256": "d2cf3a1427cfe32340a261643c3ded78155293b9dc169c5c874ad56738fe4a45",
+      "snapshot_row_id": "synthetic__upgrade-009:G02",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 3,
+      "gold_sha256": "28d890f791c04e99feff01d29e1b8872e78c0c3f7702512be04ab9dd491646ff",
+      "snapshot_row_id": "synthetic__upgrade-009:G03",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 4,
+      "gold_sha256": "cd22dcc77ed8f5e7adb381a9d0672425ddd02e3a61e7f7ed10b4109a5d14b6c2",
+      "snapshot_row_id": "synthetic__upgrade-009:G04",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 5,
+      "gold_sha256": "a7ad56039af65540876df5eb735e833f7d489b7aba7d045e42ab1bcb8ebd9417",
+      "snapshot_row_id": "synthetic__upgrade-009:G05",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 6,
+      "gold_sha256": "d9ef42a5a57d5f0457f504166e85a511fbff4a3923c0422e6cd917531689f513",
+      "snapshot_row_id": "synthetic__upgrade-009:G06",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 7,
+      "gold_sha256": "06d2808dcad5c677a909da898c7560d37157cdadcb751779082b1c726b8e87f0",
+      "snapshot_row_id": "synthetic__upgrade-009:G07",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 8,
+      "gold_sha256": "8efe8ac089e070eaf272dde5f201fdf793637c217e127fa7495962d7a29c1135",
+      "snapshot_row_id": "synthetic__upgrade-009:G08",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 9,
+      "gold_sha256": "8d5be54651368495daaf15531af9579e6288fb74ef11e157495aa4dea8a76a11",
+      "snapshot_row_id": "synthetic__upgrade-009:G09",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-009",
+      "gold_index": 10,
+      "gold_sha256": "6653a3477fb49c855b9162eff9f6431cc2827ab92c558bc1f8aac35586d07ae2",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__upgrade-009:F003"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-clean-02",
+      "gold_index": 1,
+      "gold_sha256": "e826a5bdbcb5443ebb6ea2907b62b4b89d1ddb4f8382a14d7f6b0ccb652c1c27",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-clean-02:HTTP-11"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-clean-03",
+      "gold_index": 1,
+      "gold_sha256": "7ec7dae24f102944450e376f7d80002867a185d0619637a539c6604e8ab148a0",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-clean-03:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-clean-03",
+      "gold_index": 2,
+      "gold_sha256": "c0d91e19b0e4ea6dcb9b59bc43d7c42c0f02eba8ffb6413cd19ccd03b27e8fe5",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-clean-03:HTTP-11"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__security-clean-04",
+      "gold_index": 1,
+      "gold_sha256": "2cd4c94b9c21874b671c39a1641011620c597a3f0c9393e04d19d2656b253317",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__security-clean-04:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__performance-clean-03",
+      "gold_index": 1,
+      "gold_sha256": "76c15370060686070645a35ed1776fa3a9da865c7eed326167b3f7d8eec6f46d",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-clean-03:F003"
+      ],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": "AL0485"
+    },
+    {
+      "instance_id": "synthetic__performance-clean-03",
+      "gold_index": 2,
+      "gold_sha256": "e098a178a1f4465d2c5ef81b542972d56c2f3f23c69a152aedfb8f05a7117b9c",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__performance-clean-03:F006"
+      ],
+      "kind": "compiler_diagnostic",
+      "diagnostic_id": "AL0485"
+    },
+    {
+      "instance_id": "synthetic__upgrade-clean-01",
+      "gold_index": 1,
+      "gold_sha256": "b946e1ee20d10391f48325029cc5c2b6bde8d22449e0d83b0a4e78c5579868db",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__upgrade-clean-01:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-018",
+      "gold_index": 1,
+      "gold_sha256": "8b7ff560760c86de173ec8fd17e30b664519b902f333f24f45002b16285cbfa7",
+      "snapshot_row_id": "synthetic__style-018:G01",
+      "decision_ids": [
+        "synthetic__style-018:F002"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__perf-clean-01",
+      "gold_index": 1,
+      "gold_sha256": "8e1ba282533b8dae1708e770c391da13eb28dd3afe60e08e9b434f113a5599bd",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__perf-clean-01:F001"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__perf-clean-01",
+      "gold_index": 2,
+      "gold_sha256": "fe557032e7ad3991ac4151537a4390d318851c9d6bd5092806ff1529bbe94317",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__perf-clean-01:F002"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__perf-clean-01",
+      "gold_index": 3,
+      "gold_sha256": "d9cf06bb737a715b86ab6dafe4e15d4f42d547e32b0b8d5e48be7ae469538626",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__perf-clean-01:F003"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__error-clean-01",
+      "gold_index": 1,
+      "gold_sha256": "a6fcd17a262666e6d14657bf2a71e89ae76fc48d22dd8abc16c4c76f90351b5c",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-clean-01:F002"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__error-clean-01",
+      "gold_index": 2,
+      "gold_sha256": "aa0ceafd46e4f35b7586d8a9b78bbbf6a781ab2efff5c756521837cfcc588c8c",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-clean-01:F003"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__error-clean-01",
+      "gold_index": 3,
+      "gold_sha256": "0878652ad04bd88990757936eead5a6e93e0a3db5362dd4ade345834b539199c",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-clean-01:F004"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__upgrade-obsolete-caption-01",
+      "gold_index": 1,
+      "gold_sha256": "b9a6f0f6e03b9678992b165c8b825deb65f46e80b16e4a7d8c92958ce8fba6f0",
+      "snapshot_row_id": "synthetic__upgrade-obsolete-caption-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__error-testfield-enabled-01",
+      "gold_index": 1,
+      "gold_sha256": "6aed056ec63bbef31d2ec5737b3d26c6a22d1abbd3de711fedcbc8c0d532a287",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-testfield-enabled-01:F006"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__error-testfield-enabled-01",
+      "gold_index": 2,
+      "gold_sha256": "1dcf5c649781a58515f44533a585ff0ae21a41893443799cf15279929e9a397d",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-testfield-enabled-01:F001"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__error-testfield-enabled-01",
+      "gold_index": 3,
+      "gold_sha256": "47f7c64b228b0bb1c88ea12b66777bf5b4b6222027536789320e6a50cc5dcb16",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-testfield-enabled-01:F002"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__privacy-sibling-override-01",
+      "gold_index": 1,
+      "gold_sha256": "7eef94e2389422fe28cddeb0e93e8c4f2e6589135c49e47571fffd1fc6f3e55a",
+      "snapshot_row_id": "synthetic__privacy-sibling-override-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-tooltip-mismatch-01",
+      "gold_index": 1,
+      "gold_sha256": "bb0936174b2f12e4cf8b9109a0c83678ad3e68a055516ce786a5b8fe0d8c9bd8",
+      "snapshot_row_id": "synthetic__style-tooltip-mismatch-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-tooltip-mismatch-01",
+      "gold_index": 2,
+      "gold_sha256": "490d780141ee9439ed23a5eaab4d96fe2f795dbbfc37d94dba3630db01b93f32",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-tooltip-mismatch-01:F001"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__error-handling-fieldno-swap-01",
+      "gold_index": 1,
+      "gold_sha256": "e3562cb73c7c836328bef324bb8c9655ac5bd25e139b6636cb9a5092bd684c08",
+      "snapshot_row_id": "synthetic__error-handling-fieldno-swap-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__error-handling-guiallowed-01",
+      "gold_index": 1,
+      "gold_sha256": "dca9172a3f6ca87c55f5332718b3a2f391299d0e58ce2f9a69dfe507e0f89681",
+      "snapshot_row_id": "synthetic__error-handling-guiallowed-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__error-handling-guiallowed-01",
+      "gold_index": 2,
+      "gold_sha256": "df153d81132f80dad8a27926561d41ef8f6b68ec28f05ee83979eb021ccd51b1",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-handling-guiallowed-01:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__error-handling-guiallowed-01",
+      "gold_index": 3,
+      "gold_sha256": "69c9f78e1e125850a059e1062aded85d40c8d2c4a6dfe7e35cca53faf6cfdbfd",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-handling-guiallowed-01:F003"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0216"
+    },
+    {
+      "instance_id": "synthetic__errh-tryfunction-swallowed-01",
+      "gold_index": 1,
+      "gold_sha256": "c19585eeeccc8e7221d3c3b5fe5f1175f476c0c0552def2a22ab6344eaf6a4d6",
+      "snapshot_row_id": "synthetic__errh-tryfunction-swallowed-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__errh-errortype-internal-01",
+      "gold_index": 1,
+      "gold_sha256": "15b82f22660fdf0688ac35d1b8b1eaf15d4aba6a883e8da8a38c68588c1ed207",
+      "snapshot_row_id": "synthetic__errh-errortype-internal-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__sec-internal-not-boundary-01",
+      "gold_index": 1,
+      "gold_sha256": "872d620217e9b150d104247e838bc9bc9beac8ac1038c7d4abd6438337d6c6c6",
+      "snapshot_row_id": "synthetic__sec-internal-not-boundary-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__breaking-access-modifier-01",
+      "gold_index": 1,
+      "gold_sha256": "9060a03ced7a846358d9411660e887267326d0647b0ca7d62f68eed38175fe18",
+      "snapshot_row_id": "synthetic__breaking-access-modifier-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__breaking-notification-callback-01",
+      "gold_index": 1,
+      "gold_sha256": "2af027a18457033c380b16e864f64b4a811250827516e7519da300c08028cb7a",
+      "snapshot_row_id": "synthetic__breaking-notification-callback-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__breaking-notification-callback-01",
+      "gold_index": 2,
+      "gold_sha256": "374f4fc69fffdd57657d43a719337cc6031a8deaad6f6fb8638b15edbd4b33b4",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__breaking-notification-callback-01:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-transferfields-field-collision-01",
+      "gold_index": 1,
+      "gold_sha256": "21e9cf8fef48fb7ba69df2c602dcb5ee08e084dd5e6b2d65fd9cd803d42195a1",
+      "snapshot_row_id": "synthetic__upgrade-transferfields-field-collision-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__data-modeling-excluded-from-calculation-01",
+      "gold_index": 1,
+      "gold_sha256": "8e62a8166b97f87aa293b3be044dcf2da06e53cf6ff946b84518e5baf88edbf2",
+      "snapshot_row_id": "synthetic__data-modeling-excluded-from-calculation-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__data-modeling-blocked-validation-skip-01",
+      "gold_index": 1,
+      "gold_sha256": "444027d64c1e9bac7636ef5d4e3a5fd2a0ad4f76339c1ee43c4271b4f44377a2",
+      "snapshot_row_id": "synthetic__data-modeling-blocked-validation-skip-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__data-modeling-blocked-validation-skip-01",
+      "gold_index": 2,
+      "gold_sha256": "3895dca36009838cdf3f6e11cf61aff6e73901b7eee8a35cd021c477a91b6d07",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__data-modeling-blocked-validation-skip-01:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__error-handling-silent-skip-01",
+      "gold_index": 1,
+      "gold_sha256": "cc1ab56896d1dff660e8adbcbaab45447ce4ebf8af479710414c2a9c3a4b14b6",
+      "snapshot_row_id": "synthetic__error-handling-silent-skip-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__error-handling-silent-skip-01",
+      "gold_index": 2,
+      "gold_sha256": "b411df355c816b23bd2164ba0173622fef951792f796e546c73f0e2f7f3c1b80",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__error-handling-silent-skip-01:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-broken-hook-copyrows-01",
+      "gold_index": 1,
+      "gold_sha256": "027d1cb2ee66926fefaa9baec9facd717d41e60caadff261d37af715592c90e8",
+      "snapshot_row_id": "synthetic__upgrade-broken-hook-copyrows-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-broken-hook-copyrows-01",
+      "gold_index": 2,
+      "gold_sha256": "e434b52811cbb2c7ba643cc4b35cd1b32c89943baa1b25950defd9547c30365a",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__upgrade-broken-hook-copyrows-01:F001"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__events-ishandled-reset-boundary-01",
+      "gold_index": 1,
+      "gold_sha256": "3ba178a606e795c0b6f0484068f55d8e7dbed6d1d46a32f6aa696b7c08cdd594",
+      "snapshot_row_id": "synthetic__events-ishandled-reset-boundary-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__accessibility-setselectionfilter-scope-01",
+      "gold_index": 1,
+      "gold_sha256": "76e72b664ad8518ec904fcbf4b2eb42d1ec982f68dabe197e79e35fae6223afa",
+      "snapshot_row_id": "synthetic__accessibility-setselectionfilter-scope-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__accessibility-setselectionfilter-scope-01",
+      "gold_index": 2,
+      "gold_sha256": "fc17029d79b3753e9859fe1b806b2480dd20f516104294945584af57b7c4d670",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__accessibility-setselectionfilter-scope-01:F002"
+      ],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__breaking-protected-var-field-01",
+      "gold_index": 1,
+      "gold_sha256": "c72a3a8bde0ee432844b2a061626f22d67eca87e6f028a08b5465870bd59fbcb",
+      "snapshot_row_id": "synthetic__breaking-protected-var-field-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__data-modeling-tablerelation-restriction-mismatch-01",
+      "gold_index": 1,
+      "gold_sha256": "df5abf321378ec4502ef95a3f14c222aca81500de7c1bc2b54c88290c1b929f1",
+      "snapshot_row_id": "synthetic__data-modeling-tablerelation-restriction-mismatch-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__error-handling-assistedit-cancel-01",
+      "gold_index": 1,
+      "gold_sha256": "502be51154e5ccf1ca175f79c9b3bb006d0ae0569f0b548ed0697c2690d4aea3",
+      "snapshot_row_id": "synthetic__error-handling-assistedit-cancel-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__breaking-event-subscriber-suppress-01",
+      "gold_index": 1,
+      "gold_sha256": "fd3c21216e3ef59412e8e1bb9aa78080467394ca8eb67e70c8ba99fab7c7d43c",
+      "snapshot_row_id": "synthetic__breaking-event-subscriber-suppress-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-field-repurpose-indent-01",
+      "gold_index": 1,
+      "gold_sha256": "9eede3aa12f60c8c01b714e9b12c032085676ebab29a4716465a6c9ab1c56c7c",
+      "snapshot_row_id": "synthetic__style-field-repurpose-indent-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__style-field-repurpose-indent-01",
+      "gold_index": 2,
+      "gold_sha256": "4c52e6987bbad1e79cc74fcf252bdc2bbe2373fd6919ff33ea57c654411e2a4c",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__style-field-repurpose-indent-01:F002"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AS0016"
+    },
+    {
+      "instance_id": "synthetic__error-handling-drilldown-position-01",
+      "gold_index": 1,
+      "gold_sha256": "6177939ae4fcd05ea3847c92e6c1f72a690642271bc1efa0422dc0143e9c9ffe",
+      "snapshot_row_id": "synthetic__error-handling-drilldown-position-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__testing-ui-handler-assert-after-run-01",
+      "gold_index": 1,
+      "gold_sha256": "9c5236001b3333916b43998bbe155f03be296d48bce3127b90d32668fe4433c6",
+      "snapshot_row_id": "synthetic__testing-ui-handler-assert-after-run-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__testing-ui-handler-assert-after-run-01",
+      "gold_index": 2,
+      "gold_sha256": "187b95981240d638a4fef129aac0e0a3c169a7a8c22cb466202bd1775626044e",
+      "snapshot_row_id": null,
+      "decision_ids": [
+        "synthetic__testing-ui-handler-assert-after-run-01:F001"
+      ],
+      "kind": "analyzer_diagnostic",
+      "diagnostic_id": "AA0218"
+    },
+    {
+      "instance_id": "synthetic__error-handling-errorinfo-actionable-boundary-01",
+      "gold_index": 1,
+      "gold_sha256": "5ab4898d38993d4ad4d30a35d49c24250e4bc3dce961dd36af428e2eedb32149",
+      "snapshot_row_id": "synthetic__error-handling-errorinfo-actionable-boundary-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__breaking-scope-creep-unrelated-api-01",
+      "gold_index": 1,
+      "gold_sha256": "c96841fa02b86fb0d532cbd43f2c7c17d6efa8526c17bc0064c418404a1964ae",
+      "snapshot_row_id": "synthetic__breaking-scope-creep-unrelated-api-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    },
+    {
+      "instance_id": "synthetic__events-ishandled-added-to-shipped-event-01",
+      "gold_index": 1,
+      "gold_sha256": "420668d7d59c1e67d0a0a332d669e9eac4387c06c9b240b3b49c046c747ff2aa",
+      "snapshot_row_id": "synthetic__events-ishandled-added-to-shipped-event-01:G01",
+      "decision_ids": [],
+      "kind": "review_finding",
+      "diagnostic_id": null
+    }
+  ],
+  "integration_changes": [
+    {
+      "instance_id": "synthetic__style-012",
+      "snapshot_row_id": "synthetic__style-012:G05",
+      "status": "reworded_or_reclassified",
+      "reason": "Clarify original G05 to the actual no-send/false-success defect; original F001 was already a Medium TP. One root cause/fix, not two required reports.",
+      "before": {
+        "file": "src/CustomerNotification.Codeunit.al",
+        "line_start": 7,
+        "line_end": 7,
+        "body": "Commented-out code '// SendEmail(Customer);' should be removed (clean code).",
+        "severity": "medium",
+        "domain": "style"
+      },
+      "after": {
+        "file": "src/CustomerNotification.Codeunit.al",
+        "line_start": 7,
+        "line_end": 8,
+        "body": "SendOverdueNotice reports successful delivery unconditionally, although its only email-send operation is commented out. Send the notice and confirm that the send succeeded before displaying the success message; merely deleting the commented line does not fix the false success report.",
+        "severity": "medium",
+        "domain": "error-handling"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "snapshot_row_id": "synthetic__style-012:G14",
+      "status": "retired",
+      "reason": "Retire the duplicate functional addition after consolidating it into original G05.",
+      "before": {
+        "file": "src/CustomerNotification.Codeunit.al",
+        "line_start": 7,
+        "line_end": 8,
+        "severity": "medium",
+        "domain": "error-handling",
+        "body": "SendOverdueNotice reports successful delivery unconditionally, although its only email-send operation is commented out. Send the notice and confirm that the send succeeded before displaying the success message; merely deleting the commented line does not fix the false success report."
+      },
+      "after": null
+    },
+    {
+      "instance_id": "synthetic__upgrade-005",
+      "snapshot_row_id": "synthetic__upgrade-005:G01",
+      "status": "retired",
+      "reason": "At the fixture's actual a29ca6a base, O365 Contact is TableType=Temporary and Pending under CLEAN29. Physical persistent-table migration is not required. No replacement caller/lifecycle defect is invented.",
+      "before": {
+        "file": "src/Layers/W1/BaseApp/CRM/Outlook/O365Contact.Table.al",
+        "line_start": 111,
+        "line_end": 111,
+        "body": "The clustered primary key was changed from \"Contact ID\" to \"Email Address\", which reorders the physical table and can break code and data relying on the old key; this needs a data upgrade/validation step.",
+        "severity": "medium",
+        "domain": "upgrade",
+        "articles": [
+          "upgrade/breaking-changes-only-on-tables-without-data"
+        ]
+      },
+      "after": null
+    },
+    {
+      "instance_id": "synthetic__performance-006",
+      "snapshot_row_id": "synthetic__performance-006:G01",
+      "status": "reworded_or_reclassified",
+      "reason": "Separate the required type guard from optional projection advice and unsupported workload/SQL claims.",
+      "before": {
+        "file": "src/SalesLineQuantitySubscriber.Codeunit.al",
+        "line_start": 8,
+        "line_end": 8,
+        "body": "Item.Get(Rec.\"No.\") fires on every Quantity validation in Sales Line with no cheap guard. The subscriber runs even for Type::\"G/L Account\", Type::Resource, etc., issuing a DB lookup against Item (800k rows) that is then discarded. — Guard with the cheap typed check first: `if Rec.Type <> Rec.Type::Item then exit;` before Item.Get, and consider `Item.SetLoadFields(\"Inventory Posting Group\")` since only one field is read.",
+        "severity": "high",
+        "domain": "performance",
+        "articles": [
+          "performance/guard-event-subscribers-before-db-call"
+        ]
+      },
+      "after": {
+        "file": "src/SalesLineQuantitySubscriber.Codeunit.al",
+        "line_start": 8,
+        "line_end": 8,
+        "body": "The Quantity subscriber calls Item.Get(Rec.\"No.\") without first checking Sales Line Type. Non-item lines can attempt an unrelated or missing Item lookup. Exit when Rec.Type is not Rec.Type::Item before accessing Item. Optional SetLoadFields tuning is not a separate requirement of this finding.",
+        "severity": "high",
+        "domain": "performance",
+        "articles": [
+          "performance/guard-event-subscribers-before-db-call"
+        ]
+      }
+    },
+    {
+      "instance_id": "synthetic__performance-006",
+      "snapshot_row_id": "synthetic__performance-006:G02",
+      "status": "reworded_or_reclassified",
+      "reason": "Separate the required type guard from optional projection advice and unsupported workload/SQL claims.",
+      "before": {
+        "file": "src/SalesLineQuantitySubscriber.Codeunit.al",
+        "line_start": 18,
+        "line_end": 18,
+        "body": "Same N+1/no-guard pattern in the Unit Price subscriber: Item.Get on every Unit Price validation, regardless of Sales Line Type. Unit Price validation is one of the most frequently fired events on Sales Line, multiplying the cost. — Guard with `if Rec.Type <> Rec.Type::Item then exit;` first, and use `Item.SetLoadFields(\"Price Includes VAT\")` since only one field is read.",
+        "severity": "high",
+        "domain": "performance",
+        "articles": [
+          "performance/guard-event-subscribers-before-db-call"
+        ]
+      },
+      "after": {
+        "file": "src/SalesLineQuantitySubscriber.Codeunit.al",
+        "line_start": 18,
+        "line_end": 18,
+        "body": "The Unit Price subscriber calls Item.Get(Rec.\"No.\") without first checking Sales Line Type. Non-item lines can attempt an unrelated or missing Item lookup. Exit when Rec.Type is not Rec.Type::Item before accessing Item. Optional SetLoadFields tuning is not a separate requirement of this finding.",
+        "severity": "high",
+        "domain": "performance",
+        "articles": [
+          "performance/guard-event-subscribers-before-db-call"
+        ]
+      }
+    },
+    {
+      "instance_id": "synthetic__style-010",
+      "snapshot_row_id": "synthetic__style-010:G02",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ServiceMgtSetup.Page.al",
+        "line_start": 172,
+        "line_end": 172,
+        "body": "Hardcoded text string in Confirm() call: 'Are you sure you want to reset all settings to their default values?' should use a Label variable with Qst suffix (CodeCop AA0217).",
+        "severity": "medium",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ServiceMgtSetup.Page.al",
+        "line_start": 172,
+        "line_end": 172,
+        "body": "Hardcoded text string in Confirm() call: 'Are you sure you want to reset all settings to their default values?' should use a Label variable with Qst suffix (CodeCop AA0216).",
+        "severity": "medium",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "snapshot_row_id": "synthetic__style-012:G03",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/InventoryHelper.Codeunit.al",
+        "line_start": 23,
+        "line_end": 23,
+        "body": "Hardcoded text string in Error() call (CodeCop AA0217): 'Quantity must not be zero.' should use a Label variable.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/InventoryHelper.Codeunit.al",
+        "line_start": 23,
+        "line_end": 23,
+        "body": "Hardcoded text string in Error() call (CodeCop AA0216): 'Quantity must not be zero.' should use a Label variable.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "snapshot_row_id": "synthetic__style-012:G04",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/InventoryHelper.Codeunit.al",
+        "line_start": 25,
+        "line_end": 25,
+        "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Adjustment posted for item ' should use a Label variable.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/InventoryHelper.Codeunit.al",
+        "line_start": 25,
+        "line_end": 25,
+        "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Adjustment posted for item ' should use a Label variable.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "snapshot_row_id": "synthetic__style-012:G06",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/CustomerNotification.Codeunit.al",
+        "line_start": 8,
+        "line_end": 8,
+        "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'An overdue notice has been sent to the customer.' should use a Label variable.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/CustomerNotification.Codeunit.al",
+        "line_start": 8,
+        "line_end": 8,
+        "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'An overdue notice has been sent to the customer.' should use a Label variable.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "snapshot_row_id": "synthetic__style-012:G07",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/CustomerNotification.Codeunit.al",
+        "line_start": 14,
+        "line_end": 14,
+        "body": "Hardcoded text string in Confirm() call (CodeCop AA0217): 'Are you sure you want to mark entry as notified?' should use a Label variable with Qst suffix.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/CustomerNotification.Codeunit.al",
+        "line_start": 14,
+        "line_end": 14,
+        "body": "Hardcoded text string in Confirm() call (CodeCop AA0216): 'Are you sure you want to mark entry as notified?' should use a Label variable with Qst suffix.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-012",
+      "snapshot_row_id": "synthetic__style-012:G08",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/PurchaseValidator.Codeunit.al",
+        "line_start": 8,
+        "line_end": 8,
+        "body": "Hardcoded text string in Error() call (CodeCop AA0217): 'Vendor must be specified.' should use a Label variable with Err suffix.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/PurchaseValidator.Codeunit.al",
+        "line_start": 8,
+        "line_end": 8,
+        "body": "Hardcoded text string in Error() call (CodeCop AA0216): 'Vendor must be specified.' should use a Label variable with Err suffix.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G01",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/CloudMigReplicateDataMgt.Codeunit.al",
+        "line_start": 16,
+        "line_end": 16,
+        "domain": "style",
+        "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Replication enabled for %1 of %2 tables' should use a Label with Msg suffix.",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/CloudMigReplicateDataMgt.Codeunit.al",
+        "line_start": 16,
+        "line_end": 16,
+        "domain": "style",
+        "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Replication enabled for %1 of %2 tables' should use a Label with Msg suffix.",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G03",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 54,
+        "line_end": 54,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Maximum amount cannot be negative' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 54,
+        "line_end": 54,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Maximum amount cannot be negative' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G04",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 123,
+        "line_end": 123,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Cannot delete expense category %1 because it is used in expense lines' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 123,
+        "line_end": 123,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Cannot delete expense category %1 because it is used in expense lines' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G05",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 134,
+        "line_end": 134,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'G/L Account %1 does not exist' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 134,
+        "line_end": 134,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'G/L Account %1 does not exist' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G06",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 137,
+        "line_end": 137,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'G/L Account %1 must be a posting account' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 137,
+        "line_end": 137,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'G/L Account %1 must be a posting account' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G07",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 140,
+        "line_end": 140,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'G/L Account %1 is blocked' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 140,
+        "line_end": 140,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'G/L Account %1 is blocked' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G09",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 149,
+        "line_end": 149,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Description must be specified' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 149,
+        "line_end": 149,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Description must be specified' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G10",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 153,
+        "line_end": 153,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Expiration date cannot be before effective date' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseCategory.Table.al",
+        "line_start": 153,
+        "line_end": 153,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Expiration date cannot be before effective date' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G11",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ItemCategoryAttributes.Page.al",
+        "line_start": 69,
+        "line_end": 69,
+        "domain": "style",
+        "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Attributes imported successfully.' should use a Label with Msg suffix.",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ItemCategoryAttributes.Page.al",
+        "line_start": 69,
+        "line_end": 69,
+        "domain": "style",
+        "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Attributes imported successfully.' should use a Label with Msg suffix.",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G12",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ItemCategoryAttributes.Page.al",
+        "line_start": 71,
+        "line_end": 71,
+        "domain": "style",
+        "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Import completed with errors. Please review the results.' should use a Label with Msg suffix.",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ItemCategoryAttributes.Page.al",
+        "line_start": 71,
+        "line_end": 71,
+        "domain": "style",
+        "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Import completed with errors. Please review the results.' should use a Label with Msg suffix.",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G13",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ItemCategoryAttributes.Page.al",
+        "line_start": 83,
+        "line_end": 83,
+        "domain": "style",
+        "body": "Hardcoded text string in Message() call (CodeCop AA0217): 'Item attributes feature is not enabled. Please contact your system administrator.' should use a Label with Msg suffix.",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ItemCategoryAttributes.Page.al",
+        "line_start": 83,
+        "line_end": 83,
+        "domain": "style",
+        "body": "Hardcoded text string in Message() call (CodeCop AA0216): 'Item attributes feature is not enabled. Please contact your system administrator.' should use a Label with Msg suffix.",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G15",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/CustStPDFDocHandler.Codeunit.al",
+        "line_start": 21,
+        "line_end": 21,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Unable to create customer statement record for customer %1' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/CustStPDFDocHandler.Codeunit.al",
+        "line_start": 21,
+        "line_end": 21,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Unable to create customer statement record for customer %1' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G16",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/CustStPDFDocHandler.Codeunit.al",
+        "line_start": 51,
+        "line_end": 51,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Customer %1 does not exist' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/CustStPDFDocHandler.Codeunit.al",
+        "line_start": 51,
+        "line_end": 51,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Customer %1 does not exist' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-013",
+      "snapshot_row_id": "synthetic__style-013:G17",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/CustStPDFDocHandler.Codeunit.al",
+        "line_start": 56,
+        "line_end": 56,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Statement date cannot be in the future' (CodeCop AA0217).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/CustStPDFDocHandler.Codeunit.al",
+        "line_start": 56,
+        "line_end": 56,
+        "domain": "style",
+        "body": "Hardcoded error message string in Error() call: 'Statement date cannot be in the future' (CodeCop AA0216).",
+        "severity": "medium",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "snapshot_row_id": "synthetic__style-014:G01",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 10,
+        "line_end": 10,
+        "body": "Hardcoded error string 'No customers found for processing.' in Error() call instead of using a Label variable with Err suffix (CodeCop AA0217).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 10,
+        "line_end": 10,
+        "body": "Hardcoded error string 'No customers found for processing.' in Error() call instead of using a Label variable with Err suffix (CodeCop AA0216).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "snapshot_row_id": "synthetic__style-014:G02",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 15,
+        "line_end": 15,
+        "body": "Hardcoded error string 'Customer %1 is blocked and cannot be processed.' in Error() call instead of using a Label variable with Err suffix (CodeCop AA0217).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 15,
+        "line_end": 15,
+        "body": "Hardcoded error string 'Customer %1 is blocked and cannot be processed.' in Error() call instead of using a Label variable with Err suffix (CodeCop AA0216).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "snapshot_row_id": "synthetic__style-014:G03",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 18,
+        "line_end": 18,
+        "body": "Hardcoded confirm string 'Do you want to see the processing summary?' in Confirm() call instead of using a Label variable with Qst suffix (CodeCop AA0217).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 18,
+        "line_end": 18,
+        "body": "Hardcoded confirm string 'Do you want to see the processing summary?' in Confirm() call instead of using a Label variable with Qst suffix (CodeCop AA0216).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "snapshot_row_id": "synthetic__style-014:G04",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 19,
+        "line_end": 19,
+        "body": "Hardcoded message string 'Successfully processed %1 customers.' in Message() call instead of using a Label variable with Msg suffix (CodeCop AA0217).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 19,
+        "line_end": 19,
+        "body": "Hardcoded message string 'Successfully processed %1 customers.' in Message() call instead of using a Label variable with Msg suffix (CodeCop AA0216).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-014",
+      "snapshot_row_id": "synthetic__style-014:G05",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 27,
+        "line_end": 27,
+        "body": "Hardcoded error string 'Service Management Setup has not been configured.' in Error() call instead of using a Label variable with Err suffix (CodeCop AA0217).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ReportFormatting.Codeunit.al",
+        "line_start": 27,
+        "line_end": 27,
+        "body": "Hardcoded error string 'Service Management Setup has not been configured.' in Error() call instead of using a Label variable with Err suffix (CodeCop AA0216).",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-016",
+      "snapshot_row_id": "synthetic__style-016:G03",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/WHTPstdPurchTaxCrMemos.Page.al",
+        "line_start": 144,
+        "line_end": 144,
+        "body": "Error message uses hardcoded string instead of a label variable (CodeCop AA0216, AA0217). The Error() call uses inline text 'This page has been marked as obsolete for the Withholding Tax app and is no longer supported.' instead of a properly declared Label with an 'Err' suffix.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/WHTPstdPurchTaxCrMemos.Page.al",
+        "line_start": 144,
+        "line_end": 144,
+        "body": "Error message uses hardcoded string instead of a label variable (CodeCop AA0216, AA0216). The Error() call uses inline text 'This page has been marked as obsolete for the Withholding Tax app and is no longer supported.' instead of a properly declared Label with an 'Err' suffix.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "snapshot_row_id": "synthetic__style-017:G02",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 89,
+        "line_end": 89,
+        "body": "Hardcoded string in Message() call: 'No members found for team %1' should use a Label variable with Msg suffix (CodeCop AA0217).",
+        "severity": "medium",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 89,
+        "line_end": 89,
+        "body": "Hardcoded string in Message() call: 'No members found for team %1' should use a Label variable with Msg suffix (CodeCop AA0216).",
+        "severity": "medium",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "snapshot_row_id": "synthetic__style-017:G03",
+      "status": "reworded_or_reclassified",
+      "reason": "Direct Error/Message/Confirm literals use AA0216, not AA0217.",
+      "before": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 152,
+        "line_end": 152,
+        "body": "Hardcoded string in Message() call: '%1 default expense teams have been created.' should use a Label variable with Msg suffix (CodeCop AA0217).",
+        "severity": "medium",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 152,
+        "line_end": 152,
+        "body": "Hardcoded string in Message() call: '%1 default expense teams have been created.' should use a Label variable with Msg suffix (CodeCop AA0216).",
+        "severity": "medium",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "snapshot_row_id": "synthetic__style-017:G04",
+      "status": "reworded_or_reclassified",
+      "reason": "Remove the wrong AA0217 attribution; cross-statement Text-to-Error translation/template concern stays semantic, not mechanically proven.",
+      "before": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 163,
+        "line_end": 163,
+        "body": "Hardcoded string 'Team Leader must be specified.' in error path should use a Label variable with Err suffix (CodeCop AA0217).",
+        "severity": "medium",
+        "domain": "style"
+      },
+      "after": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 163,
+        "line_end": 163,
+        "body": "Hardcoded string 'Team Leader must be specified.' in error path should use a Label variable with Err suffix.",
+        "severity": "medium",
+        "domain": "style"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "snapshot_row_id": "synthetic__style-017:G05",
+      "status": "reworded_or_reclassified",
+      "reason": "Remove the wrong AA0217 attribution; cross-statement Text-to-Error translation/template concern stays semantic, not mechanically proven.",
+      "before": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 168,
+        "line_end": 168,
+        "body": "Hardcoded string 'Default Approver must be specified.' in error path should use a Label variable with Err suffix (CodeCop AA0217).",
+        "severity": "medium",
+        "domain": "style"
+      },
+      "after": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 168,
+        "line_end": 168,
+        "body": "Hardcoded string 'Default Approver must be specified.' in error path should use a Label variable with Err suffix.",
+        "severity": "medium",
+        "domain": "style"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-017",
+      "snapshot_row_id": "synthetic__style-017:G06",
+      "status": "reworded_or_reclassified",
+      "reason": "Remove the wrong AA0217 attribution; cross-statement Text-to-Error translation/template concern stays semantic, not mechanically proven.",
+      "before": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 173,
+        "line_end": 173,
+        "body": "Hardcoded string 'Max Approval Amount must be greater than zero.' in error path should use a Label variable with Err suffix (CodeCop AA0217).",
+        "severity": "medium",
+        "domain": "style"
+      },
+      "after": {
+        "file": "src/ExpenseTeams.Page.al",
+        "line_start": 173,
+        "line_end": 173,
+        "body": "Hardcoded string 'Max Approval Amount must be greater than zero.' in error path should use a Label variable with Err suffix.",
+        "severity": "medium",
+        "domain": "style"
+      }
+    },
+    {
+      "instance_id": "synthetic__style-018",
+      "snapshot_row_id": "synthetic__style-018:G01",
+      "status": "reworded_or_reclassified",
+      "reason": "Apply effective-v2 capability-based AA0218 scope consistently; actual ruleset enablement is not a prerequisite. F002 duplicates historical F001/G01.",
+      "before": {
+        "file": "src/SampleVendorList.Page.al",
+        "line_start": 23,
+        "line_end": 23,
+        "severity": "medium",
+        "domain": "ui",
+        "body": "This page field is bound to \"Sample Note\", a table field that itself declares no ToolTip, so there is no tooltip to inherit and the control ships with an empty hover/screen-reader text. Add a ToolTip here (or on the source field). Do not rely on AA0218 to catch it: its severity is set per app in the ruleset and is often downgraded or disabled. The bound fields \"No.\" and \"Name\" inherit their source-field tooltips and are correctly not flagged.",
+        "articles": [
+          "ui/bound-page-field-inherits-source-field-tooltip"
+        ]
+      },
+      "after": {
+        "file": "src/SampleVendorList.Page.al",
+        "line_start": 23,
+        "line_end": 23,
+        "severity": "medium",
+        "domain": "ui",
+        "body": "This page field is bound to \"Sample Note\", whose table field and page control both lack ToolTip text (AA0218). Add a ToolTip here or on the source field. The other bound fields inherit their source tooltips and are not this finding.",
+        "articles": [
+          "ui/bound-page-field-inherits-source-field-tooltip"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0218"
+      }
+    }
+  ],
+  "current_kind_counts": {
+    "review_finding": 235,
+    "analyzer_diagnostic": 56,
+    "compiler_diagnostic": 9
+  },
+  "snapshot_limitation": "Original rows/counts and classified_dataset_sha256 remain the immutable 233-record, 45-neutral stage. Current records explicitly map retained, reworded, reclassified and added gold; retirements retain their before records. Do not apply snapshot indexes to the current dataset."
 }
