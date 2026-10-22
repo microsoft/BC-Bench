@@ -123,6 +123,7 @@ jobs:
           engine-sha: ${{ inputs.engine-sha }}
 
       - name: Run BC PR Review for entry ${{ matrix.entry }}
+        id: evaluate-review
         timeout-minutes: 120
         shell: pwsh
         env:
@@ -140,7 +141,40 @@ jobs:
             --model "${{ inputs.model }}" `
             --engine-path "${{ steps.install-harnesses.outputs.bc-alagents-path }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --run-id "${{ github.run_id }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+
+      - name: Preserve bounded runtime evidence
+        if: always()
+        shell: pwsh
+        env:
+          ENTRY_ID: ${{ matrix.entry }}
+          EVALUATION_OUTCOME: ${{ steps.evaluate-review.outcome }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python (Join-Path 'tools' 'collect_pr_review_evidence.py') `
+            --source-dir (Join-Path $env:EVALUATION_RESULTS_DIR $env:WORKFLOW_RUN_ID) `
+            --output-dir (Join-Path (Join-Path $env:EVALUATION_RESULTS_DIR 'runtime-evidence') $env:ENTRY_ID) `
+            --entry-id "$env:ENTRY_ID" `
+            --evaluation-outcome "$env:EVALUATION_OUTCOME" `
+            --workflow-sha "$env:WORKFLOW_SHA" `
+            --run-id "$env:WORKFLOW_RUN_ID" `
+            --run-attempt "$env:WORKFLOW_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runtime-evidence-${{ github.run_id }}-${{ matrix.entry }}
+          path: |
+            ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/evidence-status.json
+            ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/_run-manifest.json
+            ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/_run-metrics.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
