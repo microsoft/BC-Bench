@@ -278,7 +278,7 @@ def test_ineligible_usage_preserves_quality_but_not_cost_comparisons(tmp_path: P
         malformed_records=malformed_records,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
 
     for name in ("prompt_tokens", "cached_tokens", "cache_creation_tokens", "completion_tokens", "reasoning_tokens", "total_tokens", "ai_credits"):
         assert getattr(metrics, name) is None
@@ -295,7 +295,7 @@ def test_ineligible_usage_preserves_quality_but_not_cost_comparisons(tmp_path: P
     complete_result = create_codereview_result(
         instance_id="proj__review-2",
         agent_name=AgentHarness.PR_REVIEW,
-        metrics=PRReviewMetrics(prompt_tokens=100, completion_tokens=10, total_tokens=110, ai_credits=0.5),
+        metrics=metrics.model_copy(update={"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110, "ai_credits": 0.5, "usage_complete": True, "malformed_records": 0}),
     )
     mixed_summary = CodeReviewResultSummary.from_results([result, complete_result], run_id="mixed")
     complete_summary = CodeReviewResultSummary.from_results([complete_result], run_id="complete")
@@ -305,6 +305,10 @@ def test_ineligible_usage_preserves_quality_but_not_cost_comparisons(tmp_path: P
         assert summary.average_completion_tokens == 10
         assert summary.average_total_tokens == 110
         assert summary.average_ai_credits == 0.5
+        assert summary.metric_counts["total_tokens"] == 1
+        assert summary.metric_counts["ai_credits"] == 1
+        assert summary.token_coverage_rate == 0.5
+        assert summary.credit_coverage_rate == 0.5
     unavailable_aggregate = CodeReviewLeaderboardAggregate.from_runs([incomplete_summary])
     for name in ("average_prompt_tokens", "average_completion_tokens", "average_total_tokens", "average_ai_credits"):
         assert getattr(unavailable_aggregate, name) is None

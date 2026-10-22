@@ -229,12 +229,7 @@ def build_pr_review_metrics(
 
     expected_models = list(dict.fromkeys([manifest.configuration.leaf_model, manifest.configuration.root_model])) if manifest else run.models
     if manifest:
-        if (
-            run.cli_version != manifest.configuration.copilot_cli_version
-            or not run.models
-            or len(run.models) != len(set(run.models))
-            or set(run.models) != set(expected_models)
-        ):
+        if run.cli_version != manifest.configuration.copilot_cli_version or not run.models or len(run.models) != len(set(run.models)) or set(run.models) != set(expected_models):
             raise AgentError("Engine aggregate metrics do not match the validated run manifest.")
         if manifest.bcquality.commit is None:
             raise AgentError("Validated run manifest is missing the BCQuality commit.")
