@@ -12,7 +12,7 @@ from pydantic import BaseModel, field_validator
 
 from bcbench.dataset.codereview import Severity
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import CodeReviewScoringMode, EvaluationCategory, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +141,9 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     minimum_severity: Severity | None = None
     mechanical_diagnostics_neutral: bool = False
     unscoped_aggregate: "CodeReviewLeaderboardAggregate | None" = None
+    legacy_aggregate: "CodeReviewLeaderboardAggregate | None" = None
+    scoring_mode: CodeReviewScoringMode = CodeReviewScoringMode.LEGACY
+    judge_protocol: str = "same-issue-v1"
     f1_ci_low: float | None = None
     f1_ci_high: float | None = None
     f_beta_05: float = 0.0
@@ -172,6 +175,10 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
 
         cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
         n = len(cr_runs)
+        legacy_runs = [run.legacy_summary for run in cr_runs if run.legacy_summary is not None]
+        if legacy_runs and len(legacy_runs) != n:
+            raise ValueError("Legacy comparison must be present for every run or none")
+        legacy_aggregate = cls.from_runs(legacy_runs) if legacy_runs else None
         scopes = {(run.minimum_severity, run.mechanical_diagnostics_neutral) for run in cr_runs}
         if len(scopes) > 1:
             raise ValueError("Cannot aggregate code-review runs with different severity scopes or mechanical policies")
@@ -201,6 +208,9 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
         return base.model_copy(
             update={
                 "minimum_severity": minimum_severity,
+                "scoring_mode": cr_runs[0].scoring_mode,
+                "judge_protocol": cr_runs[0].judge_protocol,
+                "legacy_aggregate": legacy_aggregate,
                 "mechanical_diagnostics_neutral": mechanical_neutral,
                 "unscoped_aggregate": unscoped_aggregate,
                 "f1": round(f1_ci["mean"], 3) if f1_ci["mean"] is not None else 0.0,

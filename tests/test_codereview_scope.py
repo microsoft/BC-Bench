@@ -9,9 +9,9 @@ from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment, ReviewCommentKind, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary
+from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, JudgeVerdict
 from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, Leaderboard
-from bcbench.types import EvaluationCategory
+from bcbench.types import CodeReviewScoringMode, EvaluationCategory
 from tests.conftest import create_codereview_entry, create_evaluation_context
 
 
@@ -24,8 +24,14 @@ def _evaluate(tmp_path, expected, generated, ignored=None, all_edges=False):
     context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
     context.repo_path.mkdir()
     (context.repo_path / "review.json").write_text(json.dumps([comment.model_dump(mode="json") for comment in generated]), encoding="utf-8")
-    pipeline = CodeReviewPipeline()
-    with patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [all_edges or gold.body == output.body for gold, output in pairs]) as judge:
+    pipeline = CodeReviewPipeline(CodeReviewScoringMode.LEGACY)
+
+    def verdicts(pairs, *_args, **kwargs):
+        values = [all_edges or gold.body == output.body for gold, output in pairs]
+        kwargs["decisions"].extend(JudgeVerdict(pair=index + 1, match=value, reasoning="Test fixture") for index, value in enumerate(values))
+        return values
+
+    with patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=verdicts) as judge:
         pipeline.evaluate(context)
     judge.assert_called_once()
     assert len(judge.call_args.args[0]) == (len(expected) + len(ignored or [])) * len(generated)

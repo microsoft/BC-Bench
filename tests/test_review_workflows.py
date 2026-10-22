@@ -10,7 +10,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "4b5c5ce6ccf759ffde24c4558c113601c873c75c"
+DEFAULT_ENGINE_SHA = "25817a39a67b9e883f1a8ea9624283ab2b41af9b"
 PWSH = shutil.which("pwsh")
 
 
@@ -51,7 +51,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "install-agent-harnesses" in workflow
     assert "install-eval-clis" not in workflow
     assert "copilot-requests: write" in workflow
-    assert 'agent: "BC PR Review"' in workflow
+    assert "'BC PR Review'" in workflow
     assert '"mai-code-1.1-flash"' in workflow
     assert "mai-code-1-flash-picker" not in workflow
     assert '"gemini-3.7-flash"' in workflow
@@ -90,7 +90,7 @@ def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
     summarize = workflow["jobs"]["summarize-results"]["with"]
 
-    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}"
+    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.review-integration == 'none' }}"
     # Repeats stay available so an override can be measured over several runs.
     assert "inputs.engine-sha" not in workflow["jobs"]["requeue"]["if"]
 

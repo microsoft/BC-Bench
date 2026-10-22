@@ -229,7 +229,7 @@ def test_workflow_preserves_per_entry_evidence_after_failures_without_broad_uplo
     assert "Join-Path $env:EVALUATION_RESULTS_DIR $env:WORKFLOW_RUN_ID" in collect["run"]
     assert collect["env"]["WORKFLOW_RUN_ID"] == "${{ github.run_id }}"
     assert collect["env"]["EVALUATION_OUTCOME"] == "${{ steps.evaluate-review.outcome }}"
-    assert collect["if"] == upload["if"] == "always()"
+    assert collect["if"] == upload["if"] == "always() && inputs.review-integration != 'none'"
     assert not review.get("continue-on-error")
     assert not collect.get("continue-on-error")
     assert upload["with"]["name"] == "runtime-evidence-${{ github.run_id }}-${{ matrix.entry }}"
@@ -240,4 +240,4 @@ def test_workflow_preserves_per_entry_evidence_after_failures_without_broad_uplo
     assert "--verbose" not in review["run"]
     summary = yaml.safe_load((ROOT / ".github" / "workflows" / "summarize-results.yml").read_text())
     download = next(step for step in summary["jobs"]["summarize-results"]["steps"] if "download-artifact@" in step.get("uses", ""))
-    assert download["with"]["pattern"] == "${{ (inputs.dataset != '' || inputs.agent == 'BC PR Review') && 'evaluation-results-*' || '*' }}"
+    assert download["with"]["pattern"] == "${{ (inputs.dataset != '' || inputs.category == 'code-review') && 'evaluation-results-*' || '*' }}"

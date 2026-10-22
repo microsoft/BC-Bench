@@ -37,6 +37,7 @@ def invoke_copilot(
     custom_instructions: bool = False,
     extra_args: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
+    log_transcript: bool = True,
 ) -> tuple[AgentMetrics | None, str]:
     """Run one non-interactive Copilot CLI prompt.
 
@@ -60,7 +61,8 @@ def invoke_copilot(
         *extra_args,
         f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
     ]
-    logger.debug("Copilot command args: %s", cmd_args)
+    if log_transcript:
+        logger.debug("Copilot command args: %s", cmd_args)
 
     result = subprocess.run(
         cmd_args,
@@ -74,9 +76,9 @@ def invoke_copilot(
         check=True,
     )
 
-    if result.stderr:
+    if result.stderr and log_transcript:
         sys.stderr.write(result.stderr)
         sys.stderr.flush()
 
-    metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True)
+    metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=log_transcript)
     return metrics, final_response or ""

@@ -30,6 +30,7 @@ def run_copilot_agent(
     repo_path: Path,
     output_dir: Path,
     runtime: AgentRuntimeConfig | None = None,
+    isolated_review: bool = False,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
@@ -38,6 +39,12 @@ def run_copilot_agent(
     """
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
     copilot_config = AgentConfig.from_file(config_file)
+    if isolated_review:
+        from bcbench.agent.copilot.isolated_review import run_isolated_review
+
+        if category != EvaluationCategory.CODE_REVIEW or runtime is not None:
+            raise AgentError("Isolated plain review is code-review only and cannot enable MCP/LSP runtime")
+        return run_isolated_review(entry, model, repo_path, output_dir, copilot_config)
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
