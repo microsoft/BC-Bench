@@ -383,6 +383,7 @@ def test_unmatched_audit_covers_frozen_population_without_converting_adjudicatio
     addition_ids = [decision["row_id"] for decision in decisions if decision["group"] in {"concrete_additions", "other_missing_gold_candidates", "policy_additions"}]
     assert len(addition_ids) == len(set(addition_ids)) == 80
     assert set(addition_ids) == {row["row_id"] for row in rows if row["primary_disposition"] == "missing_gold"}
+    assert Counter(decision["status"] for decision in decisions if decision["row_id"] in addition_ids) == {"accepted": 43, "already_covered": 1, "deferred": 36}
     assert ledger["decision_counts"] == {
         "concrete_additions": {"accepted": 37, "deferred": 3, "already_covered": 1},
         "gold_corrections_and_matching": {"accepted": 5, "deferred": 1},
@@ -450,3 +451,59 @@ def test_temporary_table_repair_uses_actual_base_and_does_not_invent_replacement
     assert retired["after"] is None
     assert "physical table" in retired["before"]["body"]
     assert "a29ca6a" in retired["reason"]
+
+
+def test_dataset_alignment_keeps_mechanical_misses_and_changes_only_three_gold_bodies():
+    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    inventory = json.loads((dataset.parent / "audits" / "mechanical-gold-scope.json").read_text(encoding="utf-8"))
+    misses = json.loads((dataset.parent / "audits" / "run-39616090167.json").read_text(encoding="utf-8"))
+    alignment = inventory["alignment_review"]
+    assert alignment["after_dataset_sha256"] == sha256(dataset.read_bytes()).hexdigest()
+    assert alignment["before_dataset_sha256"] == "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4"
+    assert alignment["knowledge_commit"] == "45cbe369527bbe6d4cad0b2a877bd1d61a617cdb"
+    assert len(alignment["reviewed_articles"]) == 9
+    assert alignment["missing_gold_dispositions"] == {"accepted": 43, "already_covered": 1, "deferred": 36}
+    changes = [change for change in inventory["integration_changes"] if change.get("alignment_review") == alignment["id"]]
+    assert {change["snapshot_row_id"] for change in changes} == {"synthetic__performance-007:G01", "synthetic__performance-015:G02", "synthetic__style-016:G03"}
+    for change in changes:
+        before = ReviewComment.model_validate(change["before"])
+        after = ReviewComment.model_validate(change["after"])
+        assert before.model_dump(exclude={"body"}) == after.model_dump(exclude={"body"})
+        assert before.body != after.body
+        assert change["sources"]
+    neutral_misses = [row for row in misses["rows"] if row["status"] == "mechanical_neutral"]
+    assert len(neutral_misses) == 22
+    records = {row["snapshot_row_id"]: row for row in inventory["current_gold_records"] if row["snapshot_row_id"]}
+    assert all(records[row["mechanical_inventory_row"]]["kind"] == "analyzer_diagnostic" for row in neutral_misses)
+    assert Counter(records[row["mechanical_inventory_row"]]["diagnostic_id"] for row in neutral_misses) == {
+        "AA0216": 17,
+        "AA0248": 1,
+        "AA0018": 1,
+        "AA0013": 1,
+        "AA0001": 1,
+        "AA0137": 1,
+    }
+    arms = misses["comparison_arms"]
+    assert arms["status"] == "paused_dataset_revised_no_new_pair"
+    assert arms["superseded_bench_pair"]["dataset_sha256"] == alignment["before_dataset_sha256"]
+    assert arms["superseded_bench_pair"]["baseline_results_rewritten"] is False
+    assert arms["superseded_bench_pair"]["candidate_dispatched"] is False
+
+
+def test_findset_gold_describes_update_intent_without_inventing_blocking_or_round_trips():
+    entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path)}
+    reader = entries["synthetic__performance-007"]
+    writer = entries["synthetic__performance-015"]
+    assert "Customer.FindSet(true)" in reader.patch
+    assert 'Result.Append(Customer."No.")' in reader.patch
+    assert "Customer.Modify" not in reader.patch
+    assert "VATEntry.FindSet()" in writer.patch
+    assert "VATEntry.Modify(false)" in writer.patch
+    assert "VATEntry.LockTable" not in writer.patch
+    assert "VATEntry.ReadIsolation" not in writer.patch
+    assert "they do not block every reader" in reader.expected_comments[0].body
+    assert "unless a separate consistency requirement" in reader.expected_comments[0].body
+    assert "FindSet(false) still permits Modify" in writer.expected_comments[1].body
+    assert "Consider FindSet(true)" in writer.expected_comments[1].body
+    assert "does not establish a separate network round-trip per row" in writer.expected_comments[1].body
+    assert "AA0216, AA0216" not in entries["synthetic__style-016"].expected_comments[2].body

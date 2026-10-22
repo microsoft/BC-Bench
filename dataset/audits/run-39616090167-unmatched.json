@@ -199,7 +199,7 @@
   },
   "source_validation_sha256": "51995f90fe59815892a1e3ca35c074774cbe44a56c58913746e36f65b1391b4d",
   "dataset_before_sha256": "1495700a9b4089851f6648754cc199cb1a410cb241e3f27ba51757d01204116f",
-  "dataset_after_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
+  "dataset_after_sha256": "42178a85e9e8ce023f32ef030a95f2c2829f76268d47cac47c8beafd577a8a30",
   "historical_coverage": {
     "original_population": 322,
     "reviewed_comments": 322,
@@ -9303,7 +9303,7 @@
     ],
     "limit": "Bounded consistency checks are not an exhaustive independent correctness audit of every source construct or of all historical TP."
   },
-  "scoring_limit": "No model, judge or evaluation ran. Accepted gold is not retrospective credit. New/reworded gold lacks frozen matching decisions; original one-to-one scores and the initial 45-neutral scope-only sensitivity remain historical. The 81 unresolved dispositions remain unresolved.",
+  "scoring_limit": "No model, judge or evaluation ran as part of this static gold integration. Accepted gold is not retrospective credit. New/reworded gold lacks frozen matching decisions; original one-to-one scores and the initial 45-neutral scope-only sensitivity remain historical. The 81 unresolved dispositions remain unresolved.",
   "knowledge_boundary": "The coordinator owns BCQuality factual corrections and model-only misread distinctions. Dataset decisions do not turn false source claims into correct findings or substitute gold for knowledge changes.",
   "integration_sources": [
     {

@@ -10266,7 +10266,7 @@
     "AA0137": 6,
     "AL-syntax": 5
   },
-  "current_dataset_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
+  "current_dataset_sha256": "42178a85e9e8ce023f32ef030a95f2c2829f76268d47cac47c8beafd577a8a30",
   "current_gold_records": [
     {
       "instance_id": "synthetic__security-001",
@@ -10692,7 +10692,7 @@
     {
       "instance_id": "synthetic__performance-007",
       "gold_index": 1,
-      "gold_sha256": "3811efb058615fe7a505fcd82170b184ae7b4c49670a7851c08eb94daddac3cc",
+      "gold_sha256": "d2cfc0872fc599447f8fcb99ac1bb8a34b56ab3e7366ca52515382d21c902ca5",
       "snapshot_row_id": "synthetic__performance-007:G01",
       "decision_ids": [],
       "kind": "review_finding",
@@ -10853,7 +10853,7 @@
     {
       "instance_id": "synthetic__performance-015",
       "gold_index": 2,
-      "gold_sha256": "60d95241a35ffc2404a1277b9ef6ab39e506b8d2255146e9c8f894be06d07e75",
+      "gold_sha256": "13a92b48d9c5927c16ca0c39698a01f7b7f260c94fd65bd875c37b6781cd0b4c",
       "snapshot_row_id": "synthetic__performance-015:G02",
       "decision_ids": [],
       "kind": "review_finding",
@@ -12216,7 +12216,7 @@
     {
       "instance_id": "synthetic__style-016",
       "gold_index": 3,
-      "gold_sha256": "684ba01f8bd531c6b0dc23cf6bc6488899e75db51d4e643d283cfeafe5f35d5a",
+      "gold_sha256": "34f91197dfcb8abaca250c6c32114178c25c8d66d7ae419acd3889731a8b06b5",
       "snapshot_row_id": "synthetic__style-016:G03",
       "decision_ids": [],
       "kind": "analyzer_diagnostic",
@@ -14216,6 +14216,110 @@
         "kind": "analyzer_diagnostic",
         "diagnostic_id": "AA0218"
       }
+    },
+    {
+      "instance_id": "synthetic__performance-007",
+      "snapshot_row_id": "synthetic__performance-007:G01",
+      "status": "reworded_or_reclassified",
+      "reason": "The source proves a read-only loop, not universal blocking. Official isolation documentation permits nonlocking reads and describes UpdLock as excluding competing update intent. Keep the unnecessary-update-lock concern conditional; no runtime contention measurement is claimed.",
+      "before": {
+        "file": "src/CustomerReportReader.Codeunit.al",
+        "line_start": 9,
+        "line_end": 9,
+        "body": "FindSet(true) requests UpdLock on Customer rows for an iteration that only reads (\"No.\") and never modifies the records. This blocks other transactions reading or writing Customer for no benefit. — Use `Customer.FindSet()` (or `FindSet(false)`) for read-only iterations; reserve FindSet(true) for loops that actually call Modify.",
+        "severity": "medium",
+        "domain": "performance",
+        "articles": [
+          "performance/findset-true-applies-updlock-on-read"
+        ]
+      },
+      "after": {
+        "file": "src/CustomerReportReader.Codeunit.al",
+        "line_start": 9,
+        "line_end": 9,
+        "body": "ExportActiveCustomerNumbers requests UpdLock with Customer.FindSet(true), but the visible loop only reads customer numbers and builds text. Use FindSet() or FindSet(false) for this read-only path unless a separate consistency requirement justifies update locks. Unnecessary update locks can contend with other update/write operations; they do not block every reader, and actual impact depends on the transaction and workload.",
+        "severity": "medium",
+        "domain": "performance",
+        "articles": [
+          "performance/findset-true-applies-updlock-on-read"
+        ]
+      },
+      "alignment_review": "candidate-45cbe369-dataset-first",
+      "sources": [
+        "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/ad47532b59fa9acf932bae61920683796cb9dcf3/dev-itpro/developer/methods-auto/record/record-findset-boolean-method.md",
+        "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/7d96ce7e1cb1c73ae885c4ff8b5e97961a121f20/dev-itpro/developer/devenv-read-isolation.md",
+        "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/ed26eb05fe55088783c0042d76643e73660fb4c3/dev-itpro/developer/devenv-tri-state-locking.md"
+      ]
+    },
+    {
+      "instance_id": "synthetic__performance-015",
+      "snapshot_row_id": "synthetic__performance-015:G02",
+      "status": "reworded_or_reclassified",
+      "reason": "Official FindSet documentation explicitly allows modification after FindSet(false). The complete visible routine updates each row without its own LockTable/ReadIsolation override, supporting an update-intent recommendation but not a fixed SQL/network cost. Caller transaction state and lock ordering remain conditions.",
+      "before": {
+        "file": "src/InstallAppCZL.Codeunit.al",
+        "line_start": 18,
+        "line_end": 18,
+        "body": "FindSet() opens a read-only cursor but the loop calls Modify(); use FindSet(true) so the records are fetched for update instead of forcing a separate lock round-trip per Modify.",
+        "severity": "medium",
+        "domain": "performance",
+        "articles": [
+          "performance/findset-true-applies-updlock-on-read"
+        ]
+      },
+      "after": {
+        "file": "src/InstallAppCZL.Codeunit.al",
+        "line_start": 18,
+        "line_end": 18,
+        "body": "MigrateVATEntries uses FindSet() and then modifies every fetched VATEntry. The visible routine does not establish update intent with LockTable or ReadIsolation. Consider FindSet(true) to read this update set with UpdLock when appropriate for the surrounding transaction. FindSet(false) still permits Modify; this does not establish a separate network round-trip per row, a necessary shared-lock conversion, or a measured speedup. Existing transaction isolation and lock ordering must be considered.",
+        "severity": "medium",
+        "domain": "performance",
+        "articles": [
+          "performance/findset-true-applies-updlock-on-read"
+        ]
+      },
+      "alignment_review": "candidate-45cbe369-dataset-first",
+      "sources": [
+        "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/ad47532b59fa9acf932bae61920683796cb9dcf3/dev-itpro/developer/methods-auto/record/record-findset-boolean-method.md",
+        "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/7d96ce7e1cb1c73ae885c4ff8b5e97961a121f20/dev-itpro/developer/devenv-read-isolation.md",
+        "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/ed26eb05fe55088783c0042d76643e73660fb4c3/dev-itpro/developer/devenv-tri-state-locking.md"
+      ]
+    },
+    {
+      "instance_id": "synthetic__style-016",
+      "snapshot_row_id": "synthetic__style-016:G03",
+      "status": "reworded_or_reclassified",
+      "reason": "Remove the duplicated AA0216 citation introduced by the earlier AA0217-to-AA0216 correction. The diagnostic, gold claim and classification are unchanged.",
+      "before": {
+        "file": "src/WHTPstdPurchTaxCrMemos.Page.al",
+        "line_start": 144,
+        "line_end": 144,
+        "body": "Error message uses hardcoded string instead of a label variable (CodeCop AA0216, AA0216). The Error() call uses inline text 'This page has been marked as obsolete for the Withholding Tax app and is no longer supported.' instead of a properly declared Label with an 'Err' suffix.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "after": {
+        "file": "src/WHTPstdPurchTaxCrMemos.Page.al",
+        "line_start": 144,
+        "line_end": 144,
+        "body": "Error message uses hardcoded string instead of a label variable (CodeCop AA0216). The Error() call uses inline text 'This page has been marked as obsolete for the Withholding Tax app and is no longer supported.' instead of a properly declared Label with an 'Err' suffix.",
+        "severity": "high",
+        "domain": "style",
+        "articles": [
+          "style/error-passes-parameters-directly-not-strsubstno"
+        ],
+        "kind": "analyzer_diagnostic",
+        "diagnostic_id": "AA0216"
+      },
+      "alignment_review": "candidate-45cbe369-dataset-first",
+      "sources": [
+        "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/ad47532b59fa9acf932bae61920683796cb9dcf3/dev-itpro/developer/analyzers/codecop-aa0216.md"
+      ]
     }
   ],
   "current_kind_counts": {
@@ -14223,5 +14327,65 @@
     "analyzer_diagnostic": 56,
     "compiler_diagnostic": 9
   },
-  "snapshot_limitation": "Original rows/counts and classified_dataset_sha256 remain the immutable 233-record, 45-neutral stage. Current records explicitly map retained, reworded, reclassified and added gold; retirements retain their before records. Do not apply snapshot indexes to the current dataset."
+  "snapshot_limitation": "Original rows/counts and classified_dataset_sha256 remain the immutable 233-record, 45-neutral stage. Current records explicitly map retained, reworded, reclassified and added gold; retirements retain their before records. Do not apply snapshot indexes to the current dataset.",
+  "alignment_review": {
+    "id": "candidate-45cbe369-dataset-first",
+    "knowledge_commit": "45cbe369527bbe6d4cad0b2a877bd1d61a617cdb",
+    "before_dataset_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
+    "after_dataset_sha256": "42178a85e9e8ce023f32ef030a95f2c2829f76268d47cac47c8beafd577a8a30",
+    "changed_gold": [
+      "synthetic__performance-007:G01",
+      "synthetic__performance-015:G02",
+      "synthetic__style-016:G03"
+    ],
+    "scope": "Three body-only repairs. All 145 entries, 300 records, kinds, severities, locations, article annotations and source patches are unchanged. Existing audit decisions and original snapshots are preserved. No scorer, judge, engine, workflow or pin change.",
+    "missing_gold_dispositions": {
+      "accepted": 43,
+      "already_covered": 1,
+      "deferred": 36
+    },
+    "mechanical_original_misses": {
+      "analyzer_diagnostic": 22,
+      "compiler_diagnostic": 0
+    },
+    "reviewed_articles": [
+      {
+        "article": "breaking-changes/choose-access-modifiers-deliberately",
+        "conclusion": "No new missing-gold addition alleges that an unmodified member on an internal codeunit is an external API. Retained visibility fixtures concern a public object, an explicitly single-object helper, a protected field or a deliberate widening; no implicit authorization claim is added."
+      },
+      {
+        "article": "breaking-changes/do-not-expose-sensitive-data-through-public-api",
+        "conclusion": "No added gold treats a caller-owned SecretText conversion as a leak. Broad consent proposals remain deferred; credential-source and HTTP-status repairs do not require exposure to an unauthorized caller."
+      },
+      {
+        "article": "performance/findset-true-applies-updlock-on-read",
+        "conclusion": "Two retained original golds required the body-only corrections recorded here. Added IsEmpty/FindSet and filter-before-fetch gold does not assert guaranteed shared locks, per-row lock round-trips or deadlock elimination."
+      },
+      {
+        "article": "security/indirect-permissions-for-elevated-access",
+        "conclusion": "No added gold requires uppercase object Permissions to mediate an indirect user grant. Existing permission-set grant concerns are not object-property casing claims."
+      },
+      {
+        "article": "security/isolatedstorage-access-must-be-local-or-internal",
+        "conclusion": "No added gold requires redundant member modifiers on an already internal object. The original security-014 public RecordRef allegation was separately corrected; public wrappers and runtime authorization are not inferred from a modifier."
+      },
+      {
+        "article": "security/protect-sensitive-data-in-temporary-tables",
+        "conclusion": "No added gold calls an ordinary permission-enforced read into local temporary storage a bypass. performance-014's partial-record copy concern concerns JIT field loading, not permission bypass or required temporary-buffer cleanup."
+      },
+      {
+        "article": "security/secrettext-for-credentials",
+        "conclusion": "Retained credential gold traces fixed values used on authentication paths or unprotected Text transit; it does not claim that SecretText rejects a Text helper or proves a live leaked credential requiring rotation. security-001 F002 remains deferred to avoid duplicating the retrieval repair."
+      },
+      {
+        "article": "style/error-passes-parameters-directly-not-strsubstno",
+        "conclusion": "Direct diagnostic patterns remain neutral; privacy-003/004 follow cross-statement Error message construction. No gold claims label removal from XLIFF or adds substitution arguments to StrMenu. One duplicate AA0216 citation is corrected without reclassification."
+      },
+      {
+        "article": "web-services/expose-systemid-as-the-api-key",
+        "conclusion": "No added gold mandates ephemeral SystemId for a recreated temporary API resource. Existing upgrade-005 physical-migration gold was retired on its exact Temporary/Pending/CLEAN29 source, with no speculative replacement."
+      }
+    ],
+    "evidence_priority": "Exact AL source and first-party API/isolation documentation take precedence over knowledge wording. This is bounded alignment of actual related gold, not a new exhaustive correctness audit or measured model evaluation."
+  }
 }

@@ -3,7 +3,7 @@
   "run_url": "https://github.com/microsoft/BC-Bench/actions/runs/39616090167",
   "dataset_commit": "7c98b750c200d88ed0a81daaea5e71184a3af01b",
   "dataset_before_sha256": "43bcddc685e3f81cb655fc0efe33f7c47763fe64864ecf62ab69220a231e513c",
-  "dataset_after_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
+  "dataset_after_sha256": "42178a85e9e8ce023f32ef030a95f2c2829f76268d47cac47c8beafd577a8a30",
   "audit_input_sha256": "d407a4523229b28c49a6f1c7d008bdb30af19061f2ffacd252112f11dbccafb3",
   "historical_runtime": {
     "workflow_commit": "c20fc1b9dc352c27e11dc74d4179b9e16ccf8afe",
@@ -49,7 +49,7 @@
     "severity_scope": "User-approved Medium-aligned primary view: Low review_finding gold is excluded from recall and moved to the one-to-one neutral bucket. Preserve an all-severity review-finding result/summary/aggregate using the same semantic verdicts. Unknown-severity review gold stays required; generated severity/kind never filters output. Both views exclude mechanical diagnostics. Historical scores remain immutable and are not the new unscoped score.",
     "unknown_severity": "Keep generated comments with unknown severity; do not hide findings according to their self-reported severity.",
     "comparison": "Both reviewer arms must use identical corrected dataset, scorer, root/leaf/judge models, CLI and Medium thresholds. Separate measurement changes from reviewer improvements.",
-    "publication": "No evaluation dispatched and no Braintrust, Kusto or leaderboard publication.",
+    "publication": "No Braintrust, Kusto or leaderboard publication. Baseline run 39773340119 used the previous dataset; its results remain unchanged. All new evaluations and reruns are paused.",
     "analyzer_scope": "User explicitly chose neutral treatment and clarified that gold records must be retained with compiler/analyzer types. Correctly matched mechanical outputs receive no TP/FP and mechanical gold receives no FN, including duplicate matching outputs. Root-origin pure syntax is covered by this explicit decision, not an inferred global style-leaf ban. Positive, ordinary ignored, and severity-only matching remain one-to-one."
   },
   "already_fixed_on_base": [
@@ -408,7 +408,37 @@
         "F003",
         "F010"
       ],
-      "historical_assignment_tie": false
+      "historical_assignment_tie": false,
+      "integration_reassessment": {
+        "before": {
+          "file": "src/InstallAppCZL.Codeunit.al",
+          "line_start": 18,
+          "line_end": 18,
+          "body": "FindSet() opens a read-only cursor but the loop calls Modify(); use FindSet(true) so the records are fetched for update instead of forcing a separate lock round-trip per Modify.",
+          "severity": "medium",
+          "domain": "performance",
+          "articles": [
+            "performance/findset-true-applies-updlock-on-read"
+          ]
+        },
+        "after": {
+          "file": "src/InstallAppCZL.Codeunit.al",
+          "line_start": 18,
+          "line_end": 18,
+          "body": "MigrateVATEntries uses FindSet() and then modifies every fetched VATEntry. The visible routine does not establish update intent with LockTable or ReadIsolation. Consider FindSet(true) to read this update set with UpdLock when appropriate for the surrounding transaction. FindSet(false) still permits Modify; this does not establish a separate network round-trip per row, a necessary shared-lock conversion, or a measured speedup. Existing transaction isolation and lock ordering must be considered.",
+          "severity": "medium",
+          "domain": "performance",
+          "articles": [
+            "performance/findset-true-applies-updlock-on-read"
+          ]
+        },
+        "reason": "Official FindSet documentation explicitly allows modification after FindSet(false). The complete visible routine updates each row without its own LockTable/ReadIsolation override, supporting an update-intent recommendation but not a fixed SQL/network cost. Caller transaction state and lock ordering remain conditions.",
+        "sources": [
+          "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/ad47532b59fa9acf932bae61920683796cb9dcf3/dev-itpro/developer/methods-auto/record/record-findset-boolean-method.md",
+          "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/7d96ce7e1cb1c73ae885c4ff8b5e97961a121f20/dev-itpro/developer/devenv-read-isolation.md",
+          "https://github.com/MicrosoftDocs/dynamics365smb-devitpro/blob/ed26eb05fe55088783c0042d76643e73660fb4c3/dev-itpro/developer/devenv-tri-state-locking.md"
+        ]
+      }
     },
     {
       "row_id": "synthetic__performance-016:G01",
@@ -3305,14 +3335,14 @@
     "classification_stage": "Initial 45-neutral snapshot only, before the 322-comment/effective-v2 integration; old outputs and old assignments. Not a projection of the current repaired dataset."
   },
   "comparison_arms": {
-    "status": "prepared_not_dispatched_pending_coordinator_authorization",
+    "status": "paused_dataset_revised_no_new_pair",
     "shared_engine_orchestration": "9607dea1c84fcf660983a5e3791dece1fb2f1623",
     "shared_engine_environment_fix": "10086e6d19f37d4e9d419480cc38aa1615ef8954",
     "baseline": {
       "engine": "38180ca61e4b7ad34bec1889f3c16d7d1c113a82",
       "bcquality": "a4593a1b1585a0fa663efbf39ff02c60f846d851"
     },
-    "dataset_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
+    "dataset_sha256": "42178a85e9e8ce023f32ef030a95f2c2829f76268d47cac47c8beafd577a8a30",
     "root_model": "gpt-5.6-sol",
     "leaf_model": "gpt-5.6-luna",
     "leaf_execution": "serial",
@@ -3353,7 +3383,16 @@
       "engine": "4b5c5ce6ccf759ffde24c4558c113601c873c75c",
       "bcquality": "45cbe369527bbe6d4cad0b2a877bd1d61a617cdb"
     },
-    "candidate_knowledge_scope": "Nine existing articles / 28 files; includes the initial repairs plus six factual correction groups. No measured model improvement is asserted."
+    "candidate_knowledge_scope": "Nine existing articles / 28 files; includes the initial repairs plus six factual correction groups. No measured model improvement is asserted.",
+    "superseded_bench_pair": {
+      "baseline": "93069371a78fbe9612fa02640b2543b6f56ddd42",
+      "candidate": "fbac2753c0d139268d973c6ad3439449664bfd40",
+      "dataset_sha256": "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4",
+      "baseline_run": "https://github.com/microsoft/BC-Bench/actions/runs/39773340119",
+      "baseline_results_rewritten": false,
+      "candidate_dispatched": false,
+      "reason": "The three dataset-only wording repairs are absent from these immutable commits. They remain valid provenance for the earlier data, not a prepared pair for the revised dataset. No replacement pair or evaluation is authorized."
+    }
   },
   "unmatched_audit_integration": {
     "ledger": "dataset/audits/run-39616090167-unmatched.json",
