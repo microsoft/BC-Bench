@@ -9,7 +9,7 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
 
-from bcbench.agent import BCalBackendConfig, get_bcal_version, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, BCalScenarioError, get_bcal_version, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -42,11 +42,17 @@ evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
 
 
 def _run_bcal_for_evaluation(context: EvaluationContext[NL2ALEntry], backend_config: BCalBackendConfig) -> tuple[AgentMetrics, ExperimentConfiguration]:
-    run_result = run_bcal_agent(
-        entry=context.entry,
-        repo_path=context.repo_path,
-        backend_config=backend_config,
-    )
+    try:
+        run_result = run_bcal_agent(
+            entry=context.entry,
+            repo_path=context.repo_path,
+            backend_config=backend_config,
+        )
+    except BCalScenarioError as exc:
+        if exc.scenario_result is not None:
+            context.execution_identity = exc.scenario_result.execution_identity
+            context.evidence = exc.scenario_result.evidence
+        raise
     context.execution_identity = run_result.execution_identity
     context.evidence = run_result.evidence
     return run_result.metrics, run_result.experiment
