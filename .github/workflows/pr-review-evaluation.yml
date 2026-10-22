@@ -6,10 +6,18 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      review-integration:
+        description: "Experiment arm: BCQuality engine or isolated plain Copilot (no knowledge)"
+        required: false
+        default: "bcquality"
+        type: choice
+        options:
+          - "bcquality"
+          - "none"
       model:
         description: "Copilot model used internally by BC PR Review"
         required: false
-        default: "gpt-5.6-luna"
+        default: "gpt-5.6-sol"
         type: choice
         options:
           - "claude-sonnet-5"
@@ -123,11 +131,18 @@ jobs:
           engine-sha: ${{ inputs.engine-sha }}
 
       - name: Run BC PR Review for entry ${{ matrix.entry }}
+        id: evaluate-review
+        if: inputs.review-integration != 'none'
         timeout-minutes: 120
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          COPILOT_AUTO_UPDATE: "false"
+          COPILOT_REVIEW_CLI_VERSION: "1.0.88"
+          COPILOT_REVIEW_LEAF_MODEL: "gpt-5.6-luna"
+          COPILOT_REVIEW_LEAF_EXECUTION: "serial"
+          MINIMUM_SEVERITY: "Medium"
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -135,7 +150,69 @@ jobs:
             --model "${{ inputs.model }}" `
             --engine-path "${{ steps.install-harnesses.outputs.bc-alagents-path }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --run-id "${{ github.run_id }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+
+      - name: Run isolated plain review for entry ${{ matrix.entry }}
+        id: evaluate-plain
+        if: inputs.review-integration == 'none'
+        timeout-minutes: 120
+        shell: pwsh
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          COPILOT_AUTO_UPDATE: "false"
+        run: |
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
+          if ("${{ inputs.repeat }}" -ne "1") { throw "Isolated comparison permits repeat=1 only." }
+          uv run bcbench evaluate copilot "${{ matrix.entry }}" `
+            --category code-review --isolated-review `
+            --model "${{ inputs.model }}" `
+            --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --run-id "${{ github.run_id }}" `
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+
+      - name: Upload isolated plain review evidence
+        if: always() && inputs.review-integration == 'none'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plain-evidence-${{ github.run_id }}-${{ matrix.entry }}
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/${{ github.run_id }}/_plain-review-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve bounded runtime evidence
+        if: always() && inputs.review-integration != 'none'
+        shell: pwsh
+        env:
+          ENTRY_ID: ${{ matrix.entry }}
+          EVALUATION_OUTCOME: ${{ steps.evaluate-review.outcome }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python (Join-Path 'tools' 'collect_pr_review_evidence.py') `
+            --source-dir (Join-Path $env:EVALUATION_RESULTS_DIR $env:WORKFLOW_RUN_ID) `
+            --output-dir (Join-Path (Join-Path $env:EVALUATION_RESULTS_DIR 'runtime-evidence') $env:ENTRY_ID) `
+            --entry-id "$env:ENTRY_ID" `
+            --evaluation-outcome "$env:EVALUATION_OUTCOME" `
+            --workflow-sha "$env:WORKFLOW_SHA" `
+            --run-id "$env:WORKFLOW_RUN_ID" `
+            --run-attempt "$env:WORKFLOW_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload runtime evidence
+        if: always() && inputs.review-integration != 'none'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runtime-evidence-${{ github.run_id }}-${{ matrix.entry }}
+          path: |
+            ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/evidence-status.json
+            ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/_run-manifest.json
+            ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/_run-metrics.json
+            ${{ env.EVALUATION_RESULTS_DIR }}/runtime-evidence/${{ matrix.entry }}/_review-trace.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -154,17 +231,17 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-pr-review.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: "BC PR Review"
+      agent: ${{ inputs.review-integration == 'none' && 'GitHub Copilot CLI' || 'BC PR Review' }}
       # Scores only the modified entries, so publishing it to Braintrust/Kusto or the
       # leaderboard would record a partial corpus as a benchmark result.
-      mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}
+      mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.review-integration == 'none' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !failure() && !inputs.test-run && !inputs.modified-only }}
+    if: ${{ !cancelled() && !failure() && !inputs.test-run && !inputs.modified-only && inputs.review-integration != 'none' }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write

@@ -68,12 +68,15 @@ def evaluate_copilot(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
+    isolated_review: Annotated[bool, typer.Option("--isolated-review", help="Experiment-only plain code review with isolated configuration and no BCQuality")] = False,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
+    if isolated_review and (category != EvaluationCategory.CODE_REVIEW or al_mcp or al_lsp or bc_mcp):
+        raise typer.BadParameter("--isolated-review requires code-review without MCP/LSP")
     runtime = resolve_evaluation_runtime(
         category=category,
         container_name=container_name,
@@ -113,6 +116,7 @@ def evaluate_copilot(
             model=ctx.model,
             output_dir=ctx.result_dir,
             runtime=runtime,
+            **({"isolated_review": True} if isolated_review else {}),
         ),
     )
 

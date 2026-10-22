@@ -15,7 +15,7 @@ from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_result
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.exceptions import AgentError
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
+from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, JudgeVerdict, _score_counts, assign_comment_matches, candidate_comment_pairs
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
@@ -538,6 +538,8 @@ class TestCodeReviewResult:
         assert result.display_row == {
             "Generated": "2",
             "Matched": "1",
+            "Covered gold": "1",
+            "Scoring": "one-to-one",
             "Expected": "2",
             "Precision": "0.50",
             "Recall": "0.50",
@@ -1013,7 +1015,12 @@ class TestCodeReviewPipeline:
         (context.repo_path / "review.json").write_text(json.dumps([c.model_dump(mode="json") for c in generated]), encoding="utf-8")
         pipeline = CodeReviewPipeline()
 
-        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge:
+        def verdicts(pairs, *_args, **kwargs):
+            values = [e.body == g.body for e, g in pairs]
+            kwargs["decisions"].extend(JudgeVerdict(pair=i + 1, match=value) for i, value in enumerate(values))
+            return values
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=verdicts) as judge:
             pipeline.evaluate(context)
 
         result = BaseEvaluationResult.from_json(json.loads(next(context.result_dir.glob("*.jsonl")).read_text(encoding="utf-8")))
@@ -1046,8 +1053,13 @@ class TestCodeReviewPipeline:
         (context.repo_path / "review.json").write_text(json.dumps([c.model_dump(mode="json") for c in generated]), encoding="utf-8")
         pipeline = CodeReviewPipeline()
 
+        def verdicts(pairs, *_args, **kwargs):
+            values = [e.body == g.body for e, g in pairs]
+            kwargs["decisions"].extend(JudgeVerdict(pair=i + 1, match=value) for i, value in enumerate(values))
+            return values
+
         with (
-            patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge,
+            patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=verdicts) as judge,
             patch.object(pipeline, "save_result") as save,
         ):
             pipeline.evaluate(context)
@@ -1109,7 +1121,8 @@ class TestCodeReviewPipeline:
             else:
                 pipeline.evaluate(context)
                 result = save.call_args.args[1]
-                assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (0, 2, 1)
+                assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (0, 1, 1)
+                assert result.unscoped_result.missed_comment_count == 2
         invoke.assert_called_once()
 
     def test_judge_subprocess_failure_propagates_without_saving_score(self, tmp_path):
@@ -1155,11 +1168,12 @@ class TestJudge:
         with pytest.raises(LLMJudgeError, match="must be a JSON list"):
             _parse_judge_results(result_path, num_pairs=1)
 
-    def test_parse_missing_pair_counts_as_not_confirmed(self, tmp_path):
+    def test_parse_missing_pair_fails_instead_of_silently_recording_false(self, tmp_path):
         result_path = tmp_path / _config.judge.result_file
         result_path.write_text('[{"pair": 1, "match": true}]', encoding="utf-8")
 
-        assert _parse_judge_results(result_path, num_pairs=2) == [True, False]
+        with pytest.raises(LLMJudgeError, match="exactly one verdict"):
+            _parse_judge_results(result_path, num_pairs=2)
 
     def test_parse_falls_back_to_stdout_when_file_missing(self, tmp_path):
         result_path = tmp_path / _config.judge.result_file

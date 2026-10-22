@@ -143,18 +143,20 @@ def view_entry(
             console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
     elif isinstance(entry, CodeReviewEntry):
-        console.print("\n[bold cyan]Expected Review Comments:[/bold cyan]")
+        console.print("\n[bold cyan]Review Gold Records (mechanical diagnostics are neutral):[/bold cyan]")
         if entry.expected_comments:
             comment_table = Table()
             comment_table.add_column("File", style="magenta")
             comment_table.add_column("Lines", style="yellow")
             comment_table.add_column("Severity", style="red")
+            comment_table.add_column("Kind", style="cyan")
+            comment_table.add_column("Diagnostic", style="yellow")
             comment_table.add_column("Comment", style="white")
             for comment in entry.expected_comments:
                 lines = str(comment.line_start)
                 if comment.line_end and comment.line_end != comment.line_start:
                     lines += f"-{comment.line_end}"
-                comment_table.add_row(comment.file, lines, comment.severity_label, comment.body)
+                comment_table.add_row(comment.file, lines, comment.severity_label, comment.kind.value, comment.diagnostic_id or "-", comment.body)
             console.print(comment_table)
         else:
             console.print("[dim]No expected comments[/dim]")

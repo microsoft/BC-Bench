@@ -68,6 +68,12 @@ type ExpectedOutput = str | Checklist
 # Reproducible only when fetchable from the recorded remote
 type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
+
+class CodeReviewScoringMode(StrEnum):
+    LEGACY = "one-to-one"
+    ANY_MATCH = "any-match"
+
+
 # A GitHub repository in "owner/repo" form
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
 
@@ -192,6 +198,7 @@ class ExperimentConfiguration(BaseModel):
 
     # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
+    review_integration: Literal["none", "bcquality"] | None = None
 
     def is_empty(self) -> bool:
         """Check if this configuration has all default/empty values.
@@ -199,7 +206,15 @@ class ExperimentConfiguration(BaseModel):
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+        return (
+            self.mcp_servers is None
+            and self.al_lsp_enabled is False
+            and self.custom_instructions is False
+            and self.skills_enabled is False
+            and self.custom_agent is None
+            and self.plugins is None
+            and self.review_integration is None
+        )
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
