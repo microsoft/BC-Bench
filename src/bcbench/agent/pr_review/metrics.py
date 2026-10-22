@@ -227,8 +227,8 @@ def build_pr_review_metrics(
     engine = _load_engine_diagnostics(output_dir / FINDINGS_FILE_NAME)
     bcquality_identity = _load_bcquality_identity(engine_root, bcquality_root) if engine_root is not None else None
 
+    expected_models = list(dict.fromkeys([manifest.configuration.leaf_model, manifest.configuration.root_model])) if manifest else run.models
     if manifest:
-        expected_models = list(dict.fromkeys([manifest.configuration.leaf_model, manifest.configuration.root_model]))
         if (
             run.cli_version != manifest.configuration.copilot_cli_version
             or not run.models
@@ -254,7 +254,7 @@ def build_pr_review_metrics(
         failed_api_calls=run.failed_api_calls,
         usage_api_calls=run.usage_api_calls,
         ai_credits=run.ai_credits if usage_values_available else None,
-        models=expected_models if manifest else run.models,
+        models=expected_models,
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
         knowledge_files=_count_available_knowledge(bcquality_root.resolve()),
