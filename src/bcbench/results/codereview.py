@@ -86,19 +86,25 @@ def candidate_comment_pairs(
 def assign_comment_matches(
     expected_pairs: list[tuple[ReviewComment, ReviewComment]],
     ignored_pairs: list[tuple[ReviewComment, ReviewComment]],
+    *,
+    repeatable_ignored_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
 ) -> tuple[list[tuple[ReviewComment, ReviewComment]], list[tuple[ReviewComment, ReviewComment]]]:
-    """Assign eligible edges by expected count, then ignored count, then total line distance."""
-    pairs = expected_pairs + ignored_pairs
+    """Prioritize one-to-one positives, then neutral outputs, then line distance."""
+    repeatable = repeatable_ignored_pairs or []
+    pairs = expected_pairs + ignored_pairs + repeatable
     if not pairs:
         return [], []
 
     # Identity, not value equality: identical-looking findings are still separate comments.
-    gold_ids = dict.fromkeys(id(gold) for gold, _ in pairs)
+    # Mechanical diagnostics have independent capacity per output, never per positive.
+    keyed_pairs: list[tuple[tuple[int, int | None], ReviewComment, ReviewComment]] = [((id(gold), None), gold, generated) for gold, generated in expected_pairs + ignored_pairs]
+    keyed_pairs += [((id(gold), id(generated)), gold, generated) for gold, generated in repeatable]
+    gold_ids = dict.fromkeys(key for key, _, _ in keyed_pairs)
     generated_ids = dict.fromkeys(id(generated) for _, generated in pairs)
     rows = {key: index for index, key in enumerate(gold_ids)}
     columns = {key: index for index, key in enumerate(generated_ids)}
-    edges = {(rows[id(gold)], columns[id(generated)]): (gold, generated) for gold, generated in pairs}
-    expected_edges = {(rows[id(gold)], columns[id(generated)]) for gold, generated in expected_pairs}
+    edges = {(rows[key], columns[id(generated)]): (gold, generated) for key, gold, generated in keyed_pairs}
+    expected_edges = {(rows[(id(gold), None)], columns[id(generated)]) for gold, generated in expected_pairs}
     distances = {key: _line_distance(generated.line_start, gold.line_start, gold.line_end) for key, (gold, generated) in edges.items()}
     num_gold, num_generated = len(rows), len(columns)
 
@@ -170,6 +176,9 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
     minimum_severity: Severity | None = None
     out_of_scope_comments: list[ReviewComment] = Field(default_factory=list)
     out_of_scope_matched_comment_count: int = Field(default=0, ge=0)
+    mechanical_diagnostics_neutral: bool = False
+    mechanical_comments: list[ReviewComment] = Field(default_factory=list)
+    mechanical_matched_comment_count: int = Field(default=0, ge=0)
     unscoped_result: "CodeReviewResult | None" = None
 
     matched_comment_count: int = Field(default=0, ge=0)
@@ -254,6 +263,9 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
             "f_beta_2": round(self.f_beta_2, 3),
             "severity_mae": round(self.severity_mae, 3),
             "valid_review_output": self.valid_review_output,
+            "mechanical_diagnostics_neutral": self.mechanical_diagnostics_neutral,
+            "mechanical_comment_count": len(self.mechanical_comments),
+            "mechanical_matched_comment_count": self.mechanical_matched_comment_count,
             **(
                 {
                     "minimum_severity_level": self.minimum_severity.level,
@@ -269,7 +281,11 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
     @property
     @override
     def export_metadata(self) -> dict[str, str | int | float | bool | None]:
-        return {**super().export_metadata, "scoring_scope": f"gold>={self.minimum_severity.value}" if self.minimum_severity is not None else "all-gold"}
+        return {
+            **super().export_metadata,
+            "scoring_scope": f"gold>={self.minimum_severity.value}" if self.minimum_severity is not None else "all-severity",
+            "mechanical_diagnostics_neutral": self.mechanical_diagnostics_neutral,
+        }
 
     @property
     @override
@@ -281,6 +297,7 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
             "Precision": f"{self.precision:.2f}",
             "Recall": f"{self.recall:.2f}",
             "F1": f"{self.f1:.2f}",
+            **({"Mechanical gold": str(len(self.mechanical_comments)), "Mechanical neutral": str(self.mechanical_matched_comment_count)} if self.mechanical_diagnostics_neutral else {}),
             **(
                 {
                     "Gold scope": f">={self.minimum_severity}",
@@ -307,6 +324,9 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     minimum_severity: Severity | None = None
     out_of_scope_comment_count: int = Field(default=0, ge=0)
     out_of_scope_matched_comment_count: int = Field(default=0, ge=0)
+    mechanical_diagnostics_neutral: bool = False
+    mechanical_comment_count: int = Field(default=0, ge=0)
+    mechanical_matched_comment_count: int = Field(default=0, ge=0)
     unscoped_summary: "CodeReviewResultSummary | None" = None
 
     generated_comment_count: int = Field(default=0, ge=0)
@@ -370,10 +390,12 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             scope_markdown = (
                 f"## Scoring scope: gold >= {self.minimum_severity}\n\n"
                 f"Excluded gold: {self.out_of_scope_comment_count}; generated comments neutralized by scope: {self.out_of_scope_matched_comment_count}. "
-                "The metrics below are scope-aligned. Generated comments are not filtered by their own severity. Both views use the same judge verdicts and one-to-one assignment.\n\n"
+                "The metrics below are scope-aligned. Generated comments are not filtered by their own severity or kind. Both views use the same judge verdicts and one-to-one positive assignment.\n\n"
+                f"Mechanical diagnostics are neutral in both views: {self.mechanical_comment_count} gold records, {self.mechanical_matched_comment_count} matched outputs. "
+                "Every semantically confirmed mechanical output is neutral, including duplicates; ordinary ignored and Low-only matches remain one-to-one.\n\n"
                 "| View | Expected | Matched | Incorrect | Ignored | Micro P | Micro R | Micro F1 |\n"
                 "|------|---------:|--------:|----------:|--------:|--------:|--------:|---------:|\n"
-                f"| Unscoped (all gold) | {original.expected_comment_count} | {original.matched_comment_count} | {original.incorrect_comment_count} | {original.ignored_matched_comment_count} | "
+                f"| Unscoped (all-severity review findings) | {original.expected_comment_count} | {original.matched_comment_count} | {original.incorrect_comment_count} | {original.ignored_matched_comment_count} | "
                 f"{original.precision:.1%} | {original.recall:.1%} | {original.f1:.1%} |\n"
                 f"| Gold >= {self.minimum_severity} | {self.expected_comment_count} | {self.matched_comment_count} | {self.incorrect_comment_count} | {self.ignored_matched_comment_count} | "
                 f"{self.precision:.1%} | {self.recall:.1%} | {self.f1:.1%} |\n\n"
@@ -416,11 +438,19 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             original = self.unscoped_summary
             scope_tables = [
                 _build_console_table(
-                    f"Gold scope >= {self.minimum_severity} (following tables); original all-gold view",
+                    f"Gold scope >= {self.minimum_severity} (following tables); all-severity review findings",
                     ["Unscoped P", "Unscoped R", "Unscoped F1", "Excluded gold", "Scope neutral"],
                     [f"{original.precision:.1%}", f"{original.recall:.1%}", f"{original.f1:.1%}", str(self.out_of_scope_comment_count), str(self.out_of_scope_matched_comment_count)],
                 )
             ]
+        if self.mechanical_diagnostics_neutral:
+            scope_tables.append(
+                _build_console_table(
+                    "Mechanical diagnostics (neutral in both views; duplicate matches also neutral)",
+                    ["Gold records", "Matched outputs"],
+                    [str(self.mechanical_comment_count), str(self.mechanical_matched_comment_count)],
+                )
+            )
         return Group(
             *scope_tables,
             _build_console_table(
@@ -490,10 +520,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
 
         code_review_results: list[CodeReviewResult] = [r for r in results if isinstance(r, CodeReviewResult)]
         total_results: int = len(code_review_results)
-        scopes = {r.minimum_severity for r in code_review_results if not r.timeout}
+        scopes = {(r.minimum_severity, r.mechanical_diagnostics_neutral) for r in code_review_results if not r.timeout}
         if len(scopes) > 1:
-            raise ValueError("Cannot summarize code-review results with different severity scopes")
-        minimum_severity = next(iter(scopes), None)
+            raise ValueError("Cannot summarize code-review results with different severity scopes or mechanical policies")
+        minimum_severity, mechanical_neutral = next(iter(scopes), (None, False))
         unscoped_summary = None
         if minimum_severity is not None:
             if any(r.unscoped_result is None and not r.timeout for r in code_review_results):
@@ -549,6 +579,9 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
         return summary.model_copy(
             update={
                 "minimum_severity": minimum_severity,
+                "mechanical_diagnostics_neutral": mechanical_neutral,
+                "mechanical_comment_count": sum(len(r.mechanical_comments) for r in code_review_results),
+                "mechanical_matched_comment_count": sum(r.mechanical_matched_comment_count for r in code_review_results),
                 "unscoped_summary": unscoped_summary,
                 "out_of_scope_comment_count": sum(len(r.out_of_scope_comments) for r in code_review_results),
                 "out_of_scope_matched_comment_count": sum(r.out_of_scope_matched_comment_count for r in code_review_results),

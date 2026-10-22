@@ -6,7 +6,7 @@ import yaml
 from rich.console import Console
 
 from bcbench.config import get_config
-from bcbench.dataset.codereview import ReviewComment, Severity
+from bcbench.dataset.codereview import ReviewComment, ReviewCommentKind, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary
@@ -143,11 +143,11 @@ def test_dual_scope_survives_summary_export_and_leaderboard_roundtrip(tmp_path):
     assert summary.unscoped_summary.recall == 0.5
     assert summary.unscoped_summary.unscoped_summary is None
     markdown = summary.render_github_metrics_markdown()
-    assert "Unscoped (all gold)" in markdown
+    assert "Unscoped (all-severity review findings)" in markdown
     assert "Scoring scope: gold >= medium" in markdown
     console = Console(record=True, width=200)
     console.print(summary.render_console_metrics())
-    assert "original all-gold view" in console.export_text()
+    assert "all-severity review findings" in console.export_text()
     assert result.export_metadata["scoring_scope"] == "gold>=medium"
     assert result.category_metrics["unscoped_recall"] == 0.5
     assert result.category_metrics["out_of_scope_matched_comment_count"] == 1
@@ -170,3 +170,95 @@ def test_mixed_scope_aggregation_fails_loudly(tmp_path):
     original = CodeReviewResultSummary.from_results([result.unscoped_result], "original")
     with pytest.raises(ValueError, match="different severity scopes"):
         CodeReviewLeaderboardAggregate.from_runs([scoped, original])
+
+
+@pytest.mark.parametrize("kind", [ReviewCommentKind.COMPILER_DIAGNOSTIC, ReviewCommentKind.ANALYZER_DIAGNOSTIC])
+@pytest.mark.parametrize("severity", [Severity.HIGH, Severity.LOW, None])
+def test_mechanical_gold_retains_kind_and_neutralizes_duplicate_outputs_in_both_views(tmp_path, kind, severity):
+    gold = _comment("mechanical", severity).model_copy(update={"kind": kind, "diagnostic_id": "AA0137" if kind == ReviewCommentKind.ANALYZER_DIAGNOSTIC else None})
+    result = _evaluate(tmp_path, [gold, _comment("real issue", Severity.MEDIUM)], [_comment("mechanical"), _comment("mechanical"), _comment("unrelated", Severity.LOW)])
+    for view in (result, result.unscoped_result):
+        assert view is not None
+        assert view.mechanical_diagnostics_neutral
+        assert view.mechanical_comments == [gold]
+        assert view.mechanical_matched_comment_count == view.ignored_matched_comment_count == 2
+        assert view.matched_comment_count == 0
+        assert view.missed_comment_count == view.incorrect_comment_count == 1
+        assert len(view.expected_comments) == 1
+        assert view.severity_mae == 0
+    assert result.out_of_scope_comments == []
+    summary = CodeReviewResultSummary.from_results([result], "mechanical")
+    assert summary.mechanical_comment_count == 1
+    assert summary.mechanical_matched_comment_count == 2
+    assert summary.unscoped_summary is not None
+    assert summary.unscoped_summary.mechanical_diagnostics_neutral
+    assert "including duplicates" in summary.render_github_metrics_markdown()
+    assert result.export_metadata["mechanical_diagnostics_neutral"]
+    assert result.category_metrics["unscoped_mechanical_matched_comment_count"] == 2
+    aggregate = CodeReviewLeaderboardAggregate.from_runs([summary])
+    restored = Leaderboard.model_validate(Leaderboard(runs=[summary], aggregate=[aggregate]).to_dict())
+    restored_aggregate = restored.aggregate[0]
+    assert isinstance(restored_aggregate, CodeReviewLeaderboardAggregate)
+    assert restored_aggregate.mechanical_diagnostics_neutral
+    assert restored_aggregate.unscoped_aggregate is not None
+    assert restored_aggregate.unscoped_aggregate.mechanical_diagnostics_neutral
+
+
+def test_generated_kind_never_exempts_an_unmatched_output(tmp_path):
+    self_declared = _comment("unrelated", Severity.LOW).model_copy(update={"kind": ReviewCommentKind.COMPILER_DIAGNOSTIC})
+    result = _evaluate(tmp_path, [_comment("required", Severity.MEDIUM)], [self_declared])
+    assert result.incorrect_comment_count == result.missed_comment_count == 1
+    assert result.mechanical_matched_comment_count == 0
+    assert result.mechanical_comments == []
+
+
+def test_positive_one_to_one_credit_takes_precedence_over_repeatable_mechanical_neutrality(tmp_path):
+    gold = _comment("mechanical", Severity.HIGH).model_copy(update={"kind": ReviewCommentKind.COMPILER_DIAGNOSTIC})
+    result = _evaluate(tmp_path, [gold, _comment("semantic", Severity.MEDIUM, 100)], [_comment("combined", line=1), _comment("combined", line=2), _comment("combined", line=3)], all_edges=True)
+    assert result.matched_comment_count == 1
+    assert result.mechanical_matched_comment_count == 2
+    assert result.incorrect_comment_count == result.missed_comment_count == 0
+    assert result.unscoped_result.matched_comment_count == 1
+
+
+def test_duplicate_mechanical_gold_does_not_double_neutralize_a_single_output(tmp_path):
+    gold = _comment("mechanical").model_copy(update={"kind": ReviewCommentKind.COMPILER_DIAGNOSTIC})
+    result = _evaluate(tmp_path, [gold, gold.model_copy()], [_comment("mechanical"), _comment("unrelated")])
+    assert len(result.mechanical_comments) == 2
+    assert result.mechanical_matched_comment_count == 1
+    assert result.incorrect_comment_count == 1
+
+
+def test_mechanical_kind_is_respected_in_declared_ignored_gold_too(tmp_path):
+    gold = _comment("mechanical").model_copy(update={"kind": ReviewCommentKind.COMPILER_DIAGNOSTIC})
+    result = _evaluate(tmp_path, [], [_comment("mechanical"), _comment("mechanical")], ignored=[gold])
+    assert result.mechanical_matched_comment_count == 2
+    assert result.incorrect_comment_count == 0
+
+
+def test_invalid_output_with_only_mechanical_gold_is_not_correct_silence(tmp_path):
+    gold = _comment("mechanical").model_copy(update={"kind": ReviewCommentKind.COMPILER_DIAGNOSTIC})
+    entry = create_codereview_entry(expected_comments=[gold])
+    context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
+    context.repo_path.mkdir()
+    (context.repo_path / "review.json").write_text("invalid", encoding="utf-8")
+    pipeline = CodeReviewPipeline()
+    with patch("bcbench.evaluate.codereview_judge.judge_verdicts") as judge, patch.object(pipeline, "save_result") as save:
+        pipeline.evaluate(context)
+    judge.assert_not_called()
+    result = save.call_args.args[1]
+    assert result.mechanical_comments == [gold]
+    assert result.expected_comments == []
+    assert result.mechanical_matched_comment_count == 0
+    assert result.f1 == result.unscoped_result.f1 == 0
+
+
+def test_mechanical_policy_mismatch_cannot_be_aggregated(tmp_path):
+    result = _evaluate(tmp_path, [_comment("required")], [])
+    legacy = result.model_copy(update={"mechanical_diagnostics_neutral": False})
+    with pytest.raises(ValueError, match="mechanical policies"):
+        CodeReviewResultSummary.from_results([result, legacy], "mixed")
+    summary = CodeReviewResultSummary.from_results([result], "new")
+    legacy_summary = summary.model_copy(update={"mechanical_diagnostics_neutral": False})
+    with pytest.raises(ValueError, match="mechanical policies"):
+        CodeReviewLeaderboardAggregate.from_runs([summary, legacy_summary])

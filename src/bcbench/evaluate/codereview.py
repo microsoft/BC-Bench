@@ -5,7 +5,7 @@ from typing import override
 
 from bcbench_core.git import apply_patch, fetch_commit_if_missing
 
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
+from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, ReviewCommentKind, Severity
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge import judge_comment_edges
 from bcbench.evaluate.review_parsing import parse_review_output
@@ -71,14 +71,19 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         output: str = review_output_file.read_text(encoding="utf-8")
 
         generated_comments: list[ReviewComment] | None = parse_review_output(output)
-        out_of_scope = [comment for comment in context.entry.expected_comments if comment.severity is not None and comment.severity.level < self.minimum_severity.level]
+        mechanical = [comment for comment in context.entry.expected_comments + context.entry.ignored_comments if comment.kind != ReviewCommentKind.REVIEW_FINDING]
+        mechanical_ids = {id(comment) for comment in mechanical}
+        review_expected = [comment for comment in context.entry.expected_comments if id(comment) not in mechanical_ids]
+        original_ignored_comments = [comment for comment in context.entry.ignored_comments if id(comment) not in mechanical_ids] + mechanical
+        out_of_scope = [comment for comment in review_expected if comment.severity is not None and comment.severity.level < self.minimum_severity.level]
         excluded_ids = {id(comment) for comment in out_of_scope}
-        scoped_expected = [comment for comment in context.entry.expected_comments if id(comment) not in excluded_ids]
-        scoped_ignored = context.entry.ignored_comments + out_of_scope
+        scoped_expected = [comment for comment in review_expected if id(comment) not in excluded_ids]
+        scoped_ignored = original_ignored_comments + out_of_scope
 
         if generated_comments is None:
             logger.warning(f"Invalid review output for {context.entry.instance_id}")
-            original = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
+            original = CodeReviewResult.create_invalid(context, output, review_expected)
+            original.ignored_comments = original_ignored_comments
             result = CodeReviewResult.create_invalid(context, output, scoped_expected)
             result.ignored_comments = scoped_ignored
         else:
@@ -89,21 +94,25 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 ignored_candidates,
                 work_dir=context.repo_path,
             )
-            original_matches, original_ignored = assign_comment_matches(expected_edges, ignored_edges)
+            mechanical_edges = [pair for pair in expected_edges + ignored_edges if id(pair[0]) in mechanical_ids]
+            review_edges = [pair for pair in expected_edges if id(pair[0]) not in mechanical_ids]
+            ignored_edges = [pair for pair in ignored_edges if id(pair[0]) not in mechanical_ids]
+            original_matches, original_ignored = assign_comment_matches(review_edges, ignored_edges, repeatable_ignored_pairs=mechanical_edges)
             original = CodeReviewResult.create(
                 context,
                 output=output,
-                expected_comments=context.entry.expected_comments,
+                expected_comments=review_expected,
                 generated_comments=generated_comments,
                 matched_pairs=original_matches,
-                ignored_comments=context.entry.ignored_comments,
+                ignored_comments=original_ignored_comments,
                 ignored_matched_pairs=original_ignored,
             )
             # Reassign the SAME semantic verdicts, prioritizing in-scope gold before
             # neutral gold. Never drop a generated comment based on its own severity.
             matched, neutral = assign_comment_matches(
-                [pair for pair in expected_edges if id(pair[0]) not in excluded_ids],
-                ignored_edges + [pair for pair in expected_edges if id(pair[0]) in excluded_ids],
+                [pair for pair in review_edges if id(pair[0]) not in excluded_ids],
+                ignored_edges + [pair for pair in review_edges if id(pair[0]) in excluded_ids],
+                repeatable_ignored_pairs=mechanical_edges,
             )
             result = CodeReviewResult.create(
                 context,
@@ -115,6 +124,11 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 ignored_matched_pairs=neutral,
             )
             result.out_of_scope_matched_comment_count = sum(id(gold) in excluded_ids for gold, _ in neutral)
+            result.mechanical_matched_comment_count = sum(id(gold) in mechanical_ids for gold, _ in neutral)
+            original.mechanical_matched_comment_count = sum(id(gold) in mechanical_ids for gold, _ in original_ignored)
+        for view in (result, original):
+            view.mechanical_diagnostics_neutral = True
+            view.mechanical_comments = mechanical
         result.minimum_severity = self.minimum_severity
         result.out_of_scope_comments = out_of_scope
         result.unscoped_result = original
@@ -122,6 +136,7 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         logger.info(
             f"Gold scope >= {self.minimum_severity}: excluded_gold={len(out_of_scope)}, "
             f"neutralized_by_scope={result.out_of_scope_matched_comment_count}; "
+            f"mechanical_gold={len(mechanical)}, mechanical_neutral={result.mechanical_matched_comment_count}; "
             f"unscoped matched={original.matched_comment_count}, expected={len(original.expected_comments)}, "
             f"precision={original.precision:.3f}, recall={original.recall:.3f}"
         )

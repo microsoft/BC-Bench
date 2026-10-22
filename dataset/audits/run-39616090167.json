@@ -3,7 +3,7 @@
   "run_url": "https://github.com/microsoft/BC-Bench/actions/runs/39616090167",
   "dataset_commit": "7c98b750c200d88ed0a81daaea5e71184a3af01b",
   "dataset_before_sha256": "43bcddc685e3f81cb655fc0efe33f7c47763fe64864ecf62ab69220a231e513c",
-  "dataset_after_sha256": "a25a075f1bcc58c11bcb99fc5e3d39a86a8275f6a314e972ba0bc52fc7ada6ea",
+  "dataset_after_sha256": "1495700a9b4089851f6648754cc199cb1a410cb241e3f27ba51757d01204116f",
   "audit_input_sha256": "d407a4523229b28c49a6f1c7d008bdb30af19061f2ffacd252112f11dbccafb3",
   "historical_runtime": {
     "workflow_commit": "c20fc1b9dc352c27e11dc74d4179b9e16ccf8afe",
@@ -46,11 +46,11 @@
   },
   "scoring_contract": {
     "official_assignment": "one-to-one",
-    "severity_scope": "User-approved Medium-aligned primary view: Low gold is excluded from recall and moved to the neutral assignment bucket. Preserve an unscoped all-gold result, summary and aggregate using the identical semantic judge verdicts; rerun one-to-one assignment for each view. Unknown-severity gold stays in scope; generated severity never filters output. Unknown-severity outputs remain eligible. Do not confuse the new unscoped score over corrected gold with the immutable historical run score.",
+    "severity_scope": "User-approved Medium-aligned primary view: Low review_finding gold is excluded from recall and moved to the one-to-one neutral bucket. Preserve an all-severity review-finding result/summary/aggregate using the same semantic verdicts. Unknown-severity review gold stays required; generated severity/kind never filters output. Both views exclude mechanical diagnostics. Historical scores remain immutable and are not the new unscoped score.",
     "unknown_severity": "Keep generated comments with unknown severity; do not hide findings according to their self-reported severity.",
     "comparison": "Both reviewer arms must use identical corrected dataset, scorer, root/leaf/judge models, CLI and Medium thresholds. Separate measurement changes from reviewer improvements.",
     "publication": "No evaluation dispatched and no Braintrust, Kusto or leaderboard publication.",
-    "analyzer_scope": "Separate global compiler/standard-analyzer neutrality decision pending; not implemented by severity alignment."
+    "analyzer_scope": "User explicitly chose neutral treatment and clarified that gold records must be retained with compiler/analyzer types. Correctly matched mechanical outputs receive no TP/FP and mechanical gold receives no FN, including duplicate matching outputs. Root-origin pure syntax is covered by this explicit decision, not an inferred global style-leaf ban. Positive, ordinary ignored, and severity-only matching remain one-to-one."
   },
   "already_fixed_on_base": [
     {
@@ -86,15 +86,15 @@
       "file": "src/CustStPDFDocHandler.Codeunit.al",
       "line_start": 32,
       "baseline_candidate": "F003",
-      "reason": "Malformed try/except block and procedure endings; fixture intentionally retains this positive defect.",
-      "scope_status": "Pending separate global compiler/analyzer policy; source defect is established but root-versus-style-leaf review scope is not settled by the style-leaf exclusion alone."
+      "reason": "Malformed try/except and procedure endings are retained as a compiler diagnostic, not a business-semantic positive.",
+      "scope_status": "User-approved compiler_diagnostic neutrality; record and exact source retained, not a required positive."
     }
   ],
   "limitations": [
     "All 97 audited original gold rows match the starting dataset; none was already repaired on this base.",
     "Investigator categories are not automatically accepted new truth; unresolved gold remains unchanged.",
     "No full independent correctness audit of all 427 generated findings or the 105 historical credits.",
-    "Three source-supported positive additions are not validation of every unmatched finding and do not produce a corrected precision estimate.",
+    "The two semantic positive additions and one retained neutral compiler diagnostic are not validation of every unmatched finding and do not produce a corrected precision estimate.",
     "No AL compilation or runtime reproduction; tests check patch fidelity, source witnesses and gold contracts.",
     "The original Production BOM Line relation is verified at the source PR head, not an independently compiled BC 27 dependency package.",
     "performance-023 F002 names BuildCsvExport only; its accepted judge edge does not restore credit for BuildVendorReport.",
@@ -102,9 +102,10 @@
   ],
   "disposition_counts": {
     "reviewer_follow_up": 17,
-    "unresolved": 63,
+    "unresolved": 46,
     "fixed": 4,
-    "scope_aligned": 13
+    "scope_aligned": 8,
+    "mechanical_neutral": 22
   },
   "rows": [
     {
@@ -290,7 +291,7 @@
         "file": "src/SalesInvoiceFilter.Codeunit.al",
         "line_start": 20,
         "line_end": 20,
-        "body": "FindSet over Sales Invoice Line (3M rows, ~80 fields) loads every field for every row but the loop only reads `Quantity`. \u2014 Add `SalesInvoiceLine.SetLoadFields(Quantity);` before SetRange so SQL returns only the Quantity column (plus key fields). Even better, replace the loop with `SalesInvoiceLine.CalcSums(Quantity)` since Quantity is a SumIndexField on this table.",
+        "body": "FindSet over Sales Invoice Line (3M rows, ~80 fields) loads every field for every row but the loop only reads `Quantity`. — Add `SalesInvoiceLine.SetLoadFields(Quantity);` before SetRange so SQL returns only the Quantity column (plus key fields). Even better, replace the loop with `SalesInvoiceLine.CalcSums(Quantity)` since Quantity is a SumIndexField on this table.",
         "severity": "medium",
         "domain": "performance",
         "articles": [
@@ -316,7 +317,7 @@
         "file": "src/PaymentToleranceMgt.Codeunit.al",
         "line_start": 19,
         "line_end": 19,
-        "body": "Loop + Validate + Modify(true) issues a separate SQL UPDATE per Sales Line to set one field; if the \"Unit Price\" OnValidate side effects aren't required, replace the loop with a set-based ModifyAll(\"Unit Price\", NewPrice) \u2014 but note ModifyAll bypasses Validate/OnValidate, so keep the loop when that logic is needed.",
+        "body": "Loop + Validate + Modify(true) issues a separate SQL UPDATE per Sales Line to set one field; if the \"Unit Price\" OnValidate side effects aren't required, replace the loop with a set-based ModifyAll(\"Unit Price\", NewPrice) — but note ModifyAll bypasses Validate/OnValidate, so keep the loop when that logic is needed.",
         "severity": "medium",
         "domain": "performance",
         "articles": [
@@ -544,7 +545,7 @@
         "file": "src/ConfigurationHelper.Codeunit.al",
         "line_start": 9,
         "line_end": 9,
-        "body": "LockTable() in GetOrCreate pattern where most callers only read. The Insert path is rarely hit after initial setup, but every caller pays the lock cost. \u2014 Use ReadIsolation := IsolationLevel::ReadCommitted for the initial Get(), then only escalate to LockTable if the record does not exist and an Insert is needed.",
+        "body": "LockTable() in GetOrCreate pattern where most callers only read. The Insert path is rarely hit after initial setup, but every caller pays the lock cost. — Use ReadIsolation := IsolationLevel::ReadCommitted for the initial Get(), then only escalate to LockTable if the record does not exist and an Insert is needed.",
         "severity": "medium",
         "domain": "performance",
         "articles": [
@@ -587,7 +588,7 @@
         "file": "src/ReportBuilder.Codeunit.al",
         "line_start": 34,
         "line_end": 34,
-        "body": "String concatenation with += inside a repeat..until loop building the vendor report body text. Each concatenation copies the entire accumulated string, degrading performance as the string grows. \u2014 Use TextBuilder to construct the HTML body. Replace HtmlBody += with TextBuilder.Append() calls for efficient string building in loops.",
+        "body": "String concatenation with += inside a repeat..until loop building the vendor report body text. Each concatenation copies the entire accumulated string, degrading performance as the string grows. — Use TextBuilder to construct the HTML body. Replace HtmlBody += with TextBuilder.Append() calls for efficient string building in loops.",
         "severity": "medium",
         "domain": "performance",
         "articles": [
@@ -661,7 +662,7 @@
         "line_end": 12,
         "domain": "privacy",
         "severity": "medium",
-        "body": "Hardcoded personal email addresses embedded in the reviewer list. Personal data must not be hardcoded in source \u2014 move to a configuration table or setup record."
+        "body": "Hardcoded personal email addresses embedded in the reviewer list. Personal data must not be hardcoded in source — move to a configuration table or setup record."
       },
       "audit_category": "insufficient_context_or_debatable_gold",
       "status": "unresolved",
@@ -1012,12 +1013,20 @@
         "articles": []
       },
       "audit_category": "below_configured_gold_scope",
-      "status": "scope_aligned",
+      "status": "mechanical_neutral",
       "owner": "BC-Bench",
-      "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision.",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0248); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "Gold is Low while both frozen output thresholds are Medium. Absence is not clean evidence of failure to discover an in-scope issue. This does not establish whether the gold itself is correct.",
       "relevant_candidate_ids": [],
-      "historical_assignment_tie": false
+      "historical_assignment_tie": false,
+      "reassessment_history": [
+        {
+          "status": "scope_aligned",
+          "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-002:G02",
+      "diagnostic_id": "AA0248"
     },
     {
       "row_id": "synthetic__style-005:G01",
@@ -1033,12 +1042,20 @@
         "articles": []
       },
       "audit_category": "below_configured_gold_scope",
-      "status": "scope_aligned",
+      "status": "mechanical_neutral",
       "owner": "BC-Bench",
-      "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision.",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0018); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "Gold is Low while both frozen output thresholds are Medium. Absence is not clean evidence of failure to discover an in-scope issue. This does not establish whether the gold itself is correct.",
       "relevant_candidate_ids": [],
-      "historical_assignment_tie": false
+      "historical_assignment_tie": false,
+      "reassessment_history": [
+        {
+          "status": "scope_aligned",
+          "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-005:G01",
+      "diagnostic_id": "AA0018"
     },
     {
       "row_id": "synthetic__style-006:G01",
@@ -1054,12 +1071,20 @@
         "articles": []
       },
       "audit_category": "below_configured_gold_scope",
-      "status": "scope_aligned",
+      "status": "mechanical_neutral",
       "owner": "BC-Bench",
-      "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision.",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0013); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "Gold is Low while both frozen output thresholds are Medium. Absence is not clean evidence of failure to discover an in-scope issue. This does not establish whether the gold itself is correct.",
       "relevant_candidate_ids": [],
-      "historical_assignment_tie": false
+      "historical_assignment_tie": false,
+      "reassessment_history": [
+        {
+          "status": "scope_aligned",
+          "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-006:G01",
+      "diagnostic_id": "AA0013"
     },
     {
       "row_id": "synthetic__style-009:G01",
@@ -1075,12 +1100,20 @@
         "articles": []
       },
       "audit_category": "below_configured_gold_scope",
-      "status": "scope_aligned",
+      "status": "mechanical_neutral",
       "owner": "BC-Bench",
-      "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision.",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0001); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "Gold is Low while both frozen output thresholds are Medium. Absence is not clean evidence of failure to discover an in-scope issue. This does not establish whether the gold itself is correct.",
       "relevant_candidate_ids": [],
-      "historical_assignment_tie": false
+      "historical_assignment_tie": false,
+      "reassessment_history": [
+        {
+          "status": "scope_aligned",
+          "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-009:G01",
+      "diagnostic_id": "AA0001"
     },
     {
       "row_id": "synthetic__style-010:G02",
@@ -1098,9 +1131,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The reset action uses a literal Confirm prompt. No candidate identifies the missing Label; caption capitalization and incorrect field binding are different concerns.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1114,7 +1147,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-010:G02",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-012:G01",
@@ -1152,12 +1193,20 @@
         "domain": "style"
       },
       "audit_category": "below_configured_gold_scope",
-      "status": "scope_aligned",
+      "status": "mechanical_neutral",
       "owner": "BC-Bench",
-      "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision.",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0137); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "Gold is Low while both frozen output thresholds are Medium. Absence is not clean evidence of failure to discover an in-scope issue. This does not establish whether the gold itself is correct.",
       "relevant_candidate_ids": [],
-      "historical_assignment_tie": false
+      "historical_assignment_tie": false,
+      "reassessment_history": [
+        {
+          "status": "scope_aligned",
+          "decision": "Original Low gold retained in the dataset and unscoped score. The approved Medium-aligned view excludes ALL Low gold from recall and neutralizes only their one-to-one semantic matches, including historically matched Low gold. Other unmatched outputs still count against precision."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-012:G02",
+      "diagnostic_id": "AA0137"
     },
     {
       "row_id": "synthetic__style-012:G09",
@@ -1310,9 +1359,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1326,7 +1375,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G01",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G03",
@@ -1365,9 +1422,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1381,7 +1438,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G03",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G05",
@@ -1399,9 +1464,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1415,7 +1480,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G04",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G06",
@@ -1433,9 +1506,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1449,7 +1522,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G05",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G07",
@@ -1467,9 +1548,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1483,7 +1564,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G06",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G08",
@@ -1501,9 +1590,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1517,7 +1606,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G07",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G10",
@@ -1535,9 +1632,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1551,7 +1648,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G09",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G11",
@@ -1569,9 +1674,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1585,7 +1690,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G10",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G12",
@@ -1603,9 +1716,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1619,7 +1732,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G11",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G13",
@@ -1637,9 +1758,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1653,7 +1774,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G12",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G14",
@@ -1671,9 +1800,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1687,7 +1816,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G13",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G15",
@@ -1726,9 +1863,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1742,7 +1879,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G15",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G17",
@@ -1760,9 +1905,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1776,7 +1921,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G16",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-013:G18",
@@ -1794,9 +1947,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "The exact Error/Message call contains literal user-facing text with no Label. The style leaf transcript reads error-passes-parameters-directly-not-strsubstno.md and the changed files, but outputs only Temp-prefix and no-else findings; no matching localization finding is present. The same rule produces localization findings in style-012. This is an output/application gap, not proof of absent knowledge retrieval.",
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false,
@@ -1810,7 +1963,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-013:G17",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-015:G01",
@@ -1897,9 +2058,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "This Message call contains a literal user-facing string. F008 is confined to the different ValidateTeamSetup Error-message path and does not cover these Message calls.",
       "relevant_candidate_ids": [
         "F008"
@@ -1915,7 +2076,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-017:G02",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-017:G03",
@@ -1933,9 +2102,9 @@
         ]
       },
       "audit_category": "supported_output_omission",
-      "status": "unresolved",
-      "owner": "BC-Bench/BCQuality",
-      "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then.",
+      "status": "mechanical_neutral",
+      "owner": "BC-Bench",
+      "decision": "Preserve the gold as analyzer_diagnostic (AA0216); user-approved mechanical neutrality excludes it from TP/FN and semantically matched outputs from TP/FP, including duplicate matches. No generated self-classification exemption. See the full-dataset inventory for source and diagnostic evidence.",
       "evidence": "This Message call contains a literal user-facing string. F008 is confined to the different ValidateTeamSetup Error-message path and does not cover these Message calls.",
       "relevant_candidate_ids": [
         "F008"
@@ -1951,7 +2120,15 @@
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0216",
           "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/analyzers/codecop-aa0231"
         ]
-      }
+      },
+      "reassessment_history": [
+        {
+          "status": "unresolved",
+          "decision": "Do not call this a confirmed reviewer omission. Frozen policy excludes mechanical compiler/standard-analyzer diagnoses from the style leaf, while the root can emit other agent findings. Await the separate global analyzer-scope decision; retain gold and original scoring until then."
+        }
+      ],
+      "mechanical_inventory_row": "synthetic__style-017:G03",
+      "diagnostic_id": "AA0216"
     },
     {
       "row_id": "synthetic__style-017:G04",
@@ -2487,5 +2664,85 @@
       "relevant_candidate_ids": [],
       "historical_assignment_tie": false
     }
-  ]
+  ],
+  "mechanical_inventory": "mechanical-gold-scope.json",
+  "mechanical_counts": {
+    "analyzer_diagnostic": 40,
+    "compiler_diagnostic": 5
+  },
+  "scope_union_sensitivity": {
+    "label": "Old outputs, old one-to-one assignments, scope changes only. Not a corrected-dataset rescore, complete-fix result, or model-improvement estimate.",
+    "gold_rows_sha256": "510215e420f519807d3d16b7fab2bb0971b8702faf71ad7eb70cc0fbd9704c3d",
+    "populations": {
+      "mechanical": {
+        "matched": 12,
+        "missed": 22
+      },
+      "low": {
+        "matched": 10,
+        "missed": 13
+      },
+      "intersection": {
+        "missed": 5,
+        "matched": 1
+      },
+      "union": {
+        "matched": 21,
+        "missed": 30
+      }
+    },
+    "retained_matched": 84,
+    "retained_missed": 67,
+    "retained_gold": 151,
+    "generated": 427,
+    "neutralized_original_matches": 21,
+    "scorable_generated": 406,
+    "incorrect_by_gold_matching": 322,
+    "additional_originally_unmatched_outputs_with_accepted_neutral_edges": 0,
+    "precision": 0.20689655172413793,
+    "recall": 0.5562913907284768,
+    "exclusions": "Does not incorporate removed/reworded/new gold, new semantic judgments, or changed assignment. The new semantic gold has no old judge edges. No assumption that unmatched outputs are correct."
+  },
+  "comparison_arms": {
+    "status": "prepared_not_dispatched_pending_unmatched_comment_audit",
+    "shared_engine_orchestration": "9607dea1c84fcf660983a5e3791dece1fb2f1623",
+    "shared_engine_environment_fix": "10086e6d19f37d4e9d419480cc38aa1615ef8954",
+    "baseline": {
+      "engine": "38180ca61e4b7ad34bec1889f3c16d7d1c113a82",
+      "bcquality": "a4593a1b1585a0fa663efbf39ff02c60f846d851"
+    },
+    "candidate": {
+      "engine": "ceaaeaa5b6139662e60fd610c7bbb6184a020149",
+      "bcquality": "ab2cd0a62b7fbdf43e064b2a942690e4aabde9f5"
+    },
+    "dataset_sha256": "1495700a9b4089851f6648754cc199cb1a410cb241e3f27ba51757d01204116f",
+    "root_model": "gpt-5.6-sol",
+    "leaf_model": "gpt-5.6-luna",
+    "leaf_execution": "serial",
+    "judge_model": "gpt-5.3-codex",
+    "copilot_cli": "1.0.88",
+    "minimum_severity": "Medium",
+    "agent_minimum_severity": "Medium",
+    "repeat": 1,
+    "entries_per_arm": 145,
+    "entry_jobs": 290,
+    "review_leaf_processes_per_entry": 19,
+    "planned_review_processes": 5800,
+    "judge_processes_upper_bound": 208,
+    "call_volume_limit": "145 entries per arm, once each: 290 root and 5510 serial leaf CLI processes if every plan completes, plus at most 208 entry-level judge processes. CLI processes are not API calls: tool turns, retries and repairs can increase actual model requests. No automatic repeat is authorized.",
+    "dispatch_guard": "Wait for coordinator authorization. Dispatch each immutable BC-Bench arm commit with model=gpt-5.6-sol, test-run=false, modified-only=false, repeat=1, and engine-sha equal to that commit's checked-in pin.",
+    "publication_guard": "A nonempty engine-sha activates the existing summarize-results mock gate, disabling Braintrust/Kusto/leaderboard publication. It must equal the checked-in engine pin; BCQuality stays transitively pinned.",
+    "version_guard": "Install exact npm CLI 1.0.88 under RUNNER_TEMP, resolve its native platform executable, verify its banner with --no-auto-update, and prepend only that native directory to the job PATH. Export COPILOT_AUTO_UPDATE=false to the job and explicitly to evaluation. Both new engine pins forward this optional variable through their cleared child environment. Runtime freezing relies on explicit false plus the isolated native executable, not CI=true and not a wrapper. The engine rejects startup/observed CLI and model identity mismatches.",
+    "version_probe": {
+      "native_windows_x64_sha256": "e2160809894ba95055cd770852422097bfd8c9637db64a35568ed66a1676b58b",
+      "engine_script_sha256": "80f3ee3d0ee990f5c09979ef69c2232c76f8a6448208768e5f00095921580427",
+      "existing_cached_version": "1.0.102-1",
+      "ci_true_setting_unset": "1.0.102-1",
+      "ci_true_setting_false": ["1.0.88", "1.0.88", "1.0.88"],
+      "procedure": "Real New-CopilotChildEnvironment, cleared ProcessStartInfo environment, isolated native --version only (no flag); cache left intact. Real startup initialization accepts 1.0.88 and rejects intentional expected version 1.0.83. Actual BC-Bench installer also verified from a path containing spaces.",
+      "model_calls": 0,
+      "engine_test_limit": "New environment tests pass. Full orchestrator: 303 passed, 3 failed; the same 3 schema-message assertion failures reproduce on the prior unchanged HEAD."
+    },
+    "attribution_limit": "BCQuality baseline a4593a1 differs from historical b74967bc. Historical scope sensitivity and current baseline-versus-candidate knowledge comparison are separate analyses."
+  }
 }

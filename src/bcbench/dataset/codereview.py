@@ -52,6 +52,12 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
 }
 
 
+class ReviewCommentKind(StrEnum):
+    REVIEW_FINDING = "review_finding"
+    COMPILER_DIAGNOSTIC = "compiler_diagnostic"
+    ANALYZER_DIAGNOSTIC = "analyzer_diagnostic"
+
+
 class ReviewComment(BaseModel):
     # Reject unknown keys so a superseded annotation (e.g. the singular `article` this
     # model used before) fails loudly instead of being dropped into invisible coverage loss.
@@ -63,6 +69,8 @@ class ReviewComment(BaseModel):
     domain: str | None = None
     body: Annotated[str, Field(min_length=1)]
     severity: Severity | None = None
+    kind: ReviewCommentKind = ReviewCommentKind.REVIEW_FINDING
+    diagnostic_id: Annotated[str, Field(pattern=r"^[A-Z]{2}\d{4}$")] | None = None
     # BCQuality knowledge articles this finding derives from, as `<domain>/<slug>`
     # (e.g. `security/hardcoded-secret`). A single finding can exercise several articles,
     # most commonly when it pairs a positive requirement with an explicit false-positive
@@ -86,7 +94,8 @@ class ReviewComment(BaseModel):
         loc = f"{self.file}:{self.line_start}"
         if self.line_end and self.line_end != self.line_start:
             loc += f"-{self.line_end}"
-        return f"[{self.severity_label}] {loc}: {self.body}"
+        kind = f" [{self.kind.value}{': ' + self.diagnostic_id if self.diagnostic_id else ''}; neutral]" if self.kind != ReviewCommentKind.REVIEW_FINDING else ""
+        return f"[{self.severity_label}]{kind} {loc}: {self.body}"
 
 
 class CodeReviewEntryMetadata(EntryMetadata):
@@ -103,6 +112,8 @@ class CodeReviewEntry(RepoGroundedEntry):
 
     metadata: CodeReviewEntryMetadata = Field(default_factory=CodeReviewEntryMetadata)
 
+    # Retain all gold records and their locations; mechanical kinds are neutralized
+    # by the scorer, not deleted or made required by this legacy collection name.
     expected_comments: list[ReviewComment] = Field(default_factory=list)
     # Comments that are acceptable but not required. If the agent raises a matching
     # comment it is neither rewarded (recall) nor penalized (precision) -- it is dropped

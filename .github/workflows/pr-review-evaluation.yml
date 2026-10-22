@@ -9,7 +9,7 @@ on:
       model:
         description: "Copilot model used internally by BC PR Review"
         required: false
-        default: "gpt-5.6-luna"
+        default: "gpt-5.6-sol"
         type: choice
         options:
           - "claude-sonnet-5"
@@ -128,6 +128,11 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          COPILOT_AUTO_UPDATE: "false"
+          COPILOT_REVIEW_CLI_VERSION: "1.0.88"
+          COPILOT_REVIEW_LEAF_MODEL: "gpt-5.6-luna"
+          COPILOT_REVIEW_LEAF_EXECUTION: "serial"
+          MINIMUM_SEVERITY: "Medium"
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 

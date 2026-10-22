@@ -10,7 +10,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "ecf8e31759d6ddd6d78e3a0b7836b40134368009"
+DEFAULT_ENGINE_SHA = "38180ca61e4b7ad34bec1889f3c16d7d1c113a82"
 PWSH = shutil.which("pwsh")
 
 
@@ -72,6 +72,19 @@ def test_pr_review_workflow_passes_optional_engine_sha_to_harness_action() -> No
     assert DEFAULT_ENGINE_SHA not in _workflow("pr-review-evaluation.yml")
 
 
+def test_experiment_workflow_freezes_root_leaf_cli_and_both_severity_floors() -> None:
+    workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
+    config = yaml.safe_load(AGENT_CONFIG.read_text(encoding="utf-8"))
+    step = next(step for step in workflow["jobs"]["evaluate-with-pr-review"]["steps"] if "bcbench evaluate pr-review" in step.get("run", ""))
+    assert workflow[True]["workflow_dispatch"]["inputs"]["model"]["default"] == "gpt-5.6-sol"
+    assert step["env"]["COPILOT_REVIEW_CLI_VERSION"] == "1.0.88"
+    assert step["env"]["COPILOT_AUTO_UPDATE"] == "false"
+    assert step["env"]["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.6-luna"
+    assert step["env"]["COPILOT_REVIEW_LEAF_EXECUTION"] == "serial"
+    assert step["env"]["MINIMUM_SEVERITY"] == config["pr_review"]["min_severity"] == "Medium"
+    assert config["judges"]["code-review"]["model"] == "gpt-5.3-codex"
+
+
 def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
     """An override runs a revision other than the reviewed default pin, so it must stay off the dashboards."""
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
@@ -128,7 +141,45 @@ def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.82" in action
+    assert "@github/copilot@1.0.88" in action
+    assert "npm install --prefix" in action
+    assert "localRequire.resolve" in action
+    assert "--no-auto-update --version" in action
+    assert "'COPILOT_AUTO_UPDATE=false' >> $env:GITHUB_ENV" in action
+    assert "(Split-Path -Parent $native) >> $env:GITHUB_PATH" in action
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is required to test the composite action script")
+@pytest.mark.parametrize("failure", [None, "npm", "node", "version", "banner"])
+def test_pinned_cli_installation_exports_only_a_verified_native_runtime(tmp_path: Path, failure: str | None) -> None:
+    assert PWSH is not None
+    action = yaml.safe_load((ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8"))
+    install = next(step for step in action["runs"]["steps"] if step["name"] == "Install GitHub Copilot CLI")
+    runtime = tmp_path / "native runtime with spaces"
+    runtime.mkdir()
+    native = runtime / "copilot.ps1"
+    version = "1.0.102-1" if failure == "banner" else "1.0.88"
+    native.write_text(
+        f"if (($args -join '|') -cne '--no-auto-update|--version') {{ exit 19 }}\n'GitHub Copilot CLI {version}.'\nexit {23 if failure == 'version' else 0}\n",
+        encoding="utf-8",
+    )
+    path_file, env_file = tmp_path / "github-path", tmp_path / "github-env"
+    stubs = f"function npm {{ $global:LASTEXITCODE = {23 if failure == 'npm' else 0} }}\nfunction node {{ $global:LASTEXITCODE = {23 if failure == 'node' else 0}; $env:TEST_NATIVE }}\n"
+    result = subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", stubs + install["run"]],
+        env={**os.environ, "RUNNER_TEMP": str(tmp_path), "GITHUB_PATH": str(path_file), "GITHUB_ENV": str(env_file), "TEST_NATIVE": str(native)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if failure is None:
+        assert result.returncode == 0, result.stderr
+        assert path_file.read_text(encoding="utf-8").strip() == str(runtime)
+        assert env_file.read_text(encoding="utf-8") == "COPILOT_AUTO_UPDATE=false\n"
+    else:
+        assert result.returncode != 0
+        assert not path_file.exists()
+        assert not env_file.exists()
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:

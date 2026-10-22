@@ -7,7 +7,7 @@ import pytest
 from bcbench_core.git import apply_patch, init_repo
 from unidiff import PatchSet
 
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
+from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, ReviewCommentKind, Severity
 from bcbench.types import EvaluationCategory
 
 _SCAN = "synthetic__performance-014"
@@ -35,7 +35,7 @@ def materialized_entries(tmp_path_factory):
     for entry_id in _ENTRY_IDS:
         raw = json.loads(raw_entries[entry_id], object_pairs_hook=_unique_object)
         entry = entries[entry_id]
-        assert raw["expect_findings"] is bool(entry.expected_comments)
+        assert raw["expect_findings"] is any(gold.kind == ReviewCommentKind.REVIEW_FINDING for gold in entry.expected_comments)
         repo = tmp_path_factory.mktemp(entry_id)
         init_repo(repo)
         subprocess.run(["git", "apply", "--check", "-"], cwd=repo, input=entry.patch, text=True, encoding="utf-8", capture_output=True, check=True)
@@ -235,7 +235,7 @@ def test_false_delivery_success_is_separate_from_commented_out_code_style(materi
     assert any("merely deleting the commented line does not fix" in gold.body for gold in findings)
 
 
-def test_statement_functional_and_syntax_defects_have_positive_gold(materialized_entries):
+def test_statement_semantic_finding_and_compiler_diagnostic_are_distinguished(materialized_entries):
     entry, files = materialized_entries[_STATEMENT]
     source = files["src/CustStPDFDocHandler.Codeunit.al"]
     processing = source.split("procedure ProcessCustomerStatement", 1)[1].split("    end;", 1)[0]
@@ -248,6 +248,7 @@ def test_statement_functional_and_syntax_defects_have_positive_gold(materialized
     assert "    end;\n\n        exit(GenerationSuccess);\n    end;" in source
     golds = [gold for gold in entry.expected_comments if gold.file == "src/CustStPDFDocHandler.Codeunit.al" and gold.domain == "error-handling"]
     assert [(gold.line_start, gold.line_end, gold.severity) for gold in golds] == [(14, 21, Severity.MEDIUM), (32, 40, Severity.HIGH)]
+    assert [gold.kind for gold in golds] == [ReviewCommentKind.REVIEW_FINDING, ReviewCommentKind.COMPILER_DIAGNOSTIC]
 
 
 def test_audit_dispositions_cover_every_original_miss_without_relabeling_uncertainty():
@@ -271,6 +272,36 @@ def test_audit_dispositions_cover_every_original_miss_without_relabeling_uncerta
         assert row["row_id"] == f"{row['instance_id']}:G{row['original_gold_index']:02}"
         if row["status"] != "fixed":
             original = ReviewComment.model_validate(row["original_gold"])
-            assert original in entries[row["instance_id"]].expected_comments
+            current = entries[row["instance_id"]].expected_comments
+            assert any(gold.model_dump(exclude={"kind", "diagnostic_id"}) == original.model_dump(exclude={"kind", "diagnostic_id"}) for gold in current)
     for addition in audit["positive_gold_additions"]:
         assert any(gold.file == addition["file"] and gold.line_start == addition["line_start"] for gold in entries[addition["instance_id"]].expected_comments)
+
+
+def test_mechanical_inventory_preserves_all_records_sources_and_symmetric_historical_scope():
+    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    inventory = json.loads((dataset.parent / "audits" / "mechanical-gold-scope.json").read_text(encoding="utf-8"))
+    entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
+    assert inventory["status"] == "approved_classification_applied"
+    assert inventory["classified_dataset_sha256"] == sha256(dataset.read_bytes()).hexdigest()
+    assert len(entries) == len(inventory["entry_expected_counts"]) == 145
+    assert sum(inventory["entry_expected_counts"].values()) == len(inventory["rows"]) == 233
+    assert inventory["disposition_counts"] == {"retain": 188, "mechanical_neutral": 45}
+    assert inventory["mechanical_kind_counts"] == {"analyzer_diagnostic": 40, "compiler_diagnostic": 5}
+    assert inventory["mechanical_historical_counts"] == {"matched": 12, "missed": 22, "excluded_case": 10, "new_or_repaired_gold": 1}
+    for entry_id, entry in entries.items():
+        assert len(entry.expected_comments) == inventory["entry_expected_counts"][entry_id]
+        assert sha256(entry.patch.encode()).hexdigest() == inventory["source_patch_sha256"][entry_id]
+    for row in inventory["rows"]:
+        gold = entries[row["instance_id"]].expected_comments[row["snapshot_gold_index"] - 1]
+        original = ReviewComment.model_validate(row["gold"])
+        assert gold.model_dump(exclude={"kind", "diagnostic_id"}) == original.model_dump(exclude={"kind", "diagnostic_id"})
+        assert gold.kind == row["classification"]["kind"]
+        assert row["reason"]
+        assert row["source_excerpt"]
+        if gold.kind == ReviewCommentKind.ANALYZER_DIAGNOSTIC:
+            assert gold.diagnostic_id == row["rule"]
+        elif gold.kind == ReviewCommentKind.COMPILER_DIAGNOSTIC:
+            assert gold.diagnostic_id is None  # Do not invent an unobserved compiler diagnostic ID.
+    for index in [1, 9, 10, 11, 12, 13]:
+        assert entries[_NOTICE].expected_comments[index - 1].kind == ReviewCommentKind.REVIEW_FINDING
