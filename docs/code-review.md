@@ -59,6 +59,10 @@ Generic Copilot evaluations use the action's default CLI pin. PR Review delibera
 
 BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. The validated manifest also records the leaf model, scheduling mode, maximum concurrency, BCQuality revision and source snapshot, and process count on every result. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata remain in the raw artifacts rather than being promoted into leaderboard schemas.
 
+Aggregate telemetry must identify the expected CLI version and root/leaf model set. Reviews with incomplete usage or malformed usage records remain eligible for quality scoring, but all token and credit fields are `null` and are excluded from cost comparisons. Code-review summaries and leaderboard averages skip these unavailable values rather than treating them as zero; the raw engine artifacts retain the observations for diagnostics.
+
+Version `0.16.0` separates these PR Review routing and usage-eligibility changes from earlier benchmark results. Its default harness pins are Copilot CLI `1.0.88` (PR Review uses the telemetry-compatible `1.0.83`), Claude Code `2.1.281`, and BC-ALAgents `03239afe611a3eff490002eba0e4098b48099ba3`. The `run pr-review` and `evaluate pr-review` commands default to a Sol root and Luna leaves, matching the workflow.
+
 Unavailable AI credits remain `null` in bceval exports; observed zero remains zero. The pinned bc-eval 0.6.1 consumer requires numeric prompt/completion tokens, so its existing zero fallbacks for missing tokens remain unchanged. Use the original per-entry result metrics, not bceval token fields, to distinguish unknown usage from measured zero.
 
 ## Baseline Leaderboard

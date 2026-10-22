@@ -33,12 +33,25 @@ PRReviewCliVersion = Annotated[
     ),
 ]
 
+PRReviewModelName = Literal[
+    "gpt-5.4",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.3-codex",
+    "mai-code-1.1-flash",
+]
+
+PRReviewModel = Annotated[PRReviewModelName, typer.Option(help="Copilot model requested for PR Review root consolidation")]
+
+PRReviewLeafModelName = Literal["gpt-5.4", "gpt-5.6-luna", "mai-code-1.1-flash"]
+
 PRReviewLeafModel = Annotated[
-    str | None,
+    PRReviewLeafModelName,
     typer.Option(
         "--leaf-model",
         envvar="COPILOT_REVIEW_LEAF_MODEL",
-        help="Copilot model requested for PR Review domain leaf agents; defaults to the root model",
+        help="Copilot model requested for PR Review domain leaf agents",
     ),
 ]
 

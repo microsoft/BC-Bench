@@ -82,11 +82,9 @@ def build_pr_review_metrics(output_dir: Path, execution_time: float, manifest: R
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
     expected_models = {manifest.configuration.root_model, manifest.configuration.leaf_model}
-    if (run.cli_version is not None and run.cli_version != manifest.configuration.copilot_cli_version) or (
-        run.models and (len(run.models) != len(set(run.models)) or set(run.models) != expected_models)
-    ):
+    if run.cli_version != manifest.configuration.copilot_cli_version or not run.models or len(run.models) != len(set(run.models)) or set(run.models) != expected_models:
         raise AgentError("Engine aggregate metrics do not match the validated run manifest.")
-    usage_values_available = run.malformed_records == 0
+    usage_values_available = run.usage_complete and run.malformed_records == 0
     return PRReviewMetrics(
         execution_time=execution_time,
         prompt_tokens=run.prompt_tokens if usage_values_available else None,
