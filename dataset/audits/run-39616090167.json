@@ -72,7 +72,19 @@
       "file": "src/CustomerNotification.Codeunit.al",
       "line_start": 7,
       "baseline_candidate": "F001",
-      "reason": "The complete body performs no send but reports delivery; distinct from cosmetic commented-out-code gold."
+      "reason": "The complete body performs no send but reports delivery; distinct from cosmetic commented-out-code gold.",
+      "baseline_assignment": {
+        "status": "matched",
+        "gold_row_id": "synthetic__style-012:G05",
+        "gold_severity": "medium",
+        "generated_severity": "medium",
+        "assignment_ambiguous": false,
+        "in_original_322_unmatched_population": false,
+        "judge_reasoning": "Both point to the commented-out SendEmail line as the core problem in SendOverdueNotice (commented-out operational code).",
+        "evidence": "Frozen audit/gold-rows.json G05 assigned_candidate_id=F001; audit/entries.json score.matched_ids contains F001."
+      },
+      "credit_limit": "This addition distinguishes a functional failure from the old commented-code style claim. It does not recover an original FP: F001 already earned one TP through an overbroad historical judge match. Both the old gold and candidate are Medium, so this assignment is outside the Low-neutral exclusion set. Preserve the old assignment in scope-only sensitivity; any reassignment requires a new semantic decision.",
+      "granularity_status": "Pending the complete 322-comment audit: determine whether G05 and the functional addition require independent fixes or duplicate the same underlying issue. Prefer clarifying the existing gold if they share one cause/fix; do not create an additional mandatory one-to-one match solely by splitting an already credited finding. Both records remain unchanged until this adjudication."
     },
     {
       "instance_id": "synthetic__style-013",

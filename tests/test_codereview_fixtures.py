@@ -222,7 +222,7 @@ def test_error_label_usage_is_not_rejected_for_including_remediation(materialize
     assert not any("TablesCannotBeEnabledForReplicationErr" in gold.body for gold in entry.expected_comments)
 
 
-def test_false_delivery_success_is_separate_from_commented_out_code_style(materialized_entries):
+def test_delivery_gold_preserves_source_witnesses_pending_granularity_audit(materialized_entries):
     entry, files = materialized_entries[_NOTICE]
     source = files["src/CustomerNotification.Codeunit.al"]
     body = source.split("procedure SendOverdueNotice", 1)[1].split("    end;", 1)[0]
@@ -305,3 +305,18 @@ def test_mechanical_inventory_preserves_all_records_sources_and_symmetric_histor
             assert gold.diagnostic_id is None  # Do not invent an unobserved compiler diagnostic ID.
     for index in [1, 9, 10, 11, 12, 13]:
         assert entries[_NOTICE].expected_comments[index - 1].kind == ReviewCommentKind.REVIEW_FINDING
+
+
+def test_false_delivery_addition_does_not_claim_recovery_of_an_original_false_positive():
+    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    audit = json.loads((dataset.parent / "audits" / "run-39616090167.json").read_text(encoding="utf-8"))
+    addition = next(row for row in audit["positive_gold_additions"] if row["instance_id"] == _NOTICE)
+    assignment = addition["baseline_assignment"]
+    assert addition["baseline_candidate"] == "F001"
+    assert assignment["status"] == "matched"
+    assert assignment["gold_row_id"] == f"{_NOTICE}:G05"
+    assert assignment["in_original_322_unmatched_population"] is False
+    assert assignment["assignment_ambiguous"] is False
+    entry = next(entry for entry in CodeReviewEntry.load(dataset) if entry.instance_id == _NOTICE)
+    assert assignment["gold_severity"] == assignment["generated_severity"] == entry.expected_comments[4].severity == Severity.MEDIUM
+    assert audit["scope_union_sensitivity"]["incorrect_by_gold_matching"] == 322
