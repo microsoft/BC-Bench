@@ -26,6 +26,7 @@ __all__ = [
     "AgentHarness",
     "AgentMetricsContract",
     "AnyAgentMetrics",
+    "BCalExecutionIdentity",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
@@ -68,6 +69,16 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
+
+
+class BCalExecutionIdentity(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    product_version: str = Field(alias="productVersion")
+    source_commit_sha: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{7,64}$")] | None = Field(alias="sourceCommitSha")
+    build_configuration: str = Field(alias="buildConfiguration")
+    scenario_contract_version: Literal["1.0"] = Field(alias="scenarioContractVersion")
+    evidence_contract_version: Literal["1.0"] = Field(alias="evidenceContractVersion")
 
 
 class PRReviewMetrics(AgentMetrics):
@@ -687,6 +698,8 @@ class EvaluationContext[E: BaseDatasetEntry]:
     container: ContainerConfig | None = None
 
     agent_version: str | None = None
+    execution_identity: BCalExecutionIdentity | None = None
+    evidence: dict[str, Any] | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None
