@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -20,7 +21,7 @@ def _workflow(name: str) -> str:
     return text
 
 
-def _workflow_dispatch_inputs(workflow: dict) -> dict:
+def _workflow_dispatch_inputs(workflow: dict[str, Any]) -> dict[str, Any]:
     trigger = workflow.get("on", workflow.get(True))
     assert isinstance(trigger, dict)
     dispatch = trigger.get("workflow_dispatch")

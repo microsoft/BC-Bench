@@ -111,7 +111,8 @@ class RunManifest(BaseModel):
         elif self.status == "partial":
             if self.completed_at is None:
                 raise ValueError("partial manifest requires completed_at")
-        elif self.status == "failed":
+        else:
+            assert self.status == "failed"
             if self.completed_at is None:
                 raise ValueError("failed manifest requires completed_at")
             if not self.failure_reason:

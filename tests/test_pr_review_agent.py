@@ -1,6 +1,7 @@
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -24,7 +25,7 @@ def _write_output(output_dir: Path, text: str) -> None:
 
 
 def _write_run_manifest(output_dir: Path, *, root_model: str, leaf_model: str) -> None:
-    def process(role: str, ordinal: int, skill_id: str, model: str) -> dict:
+    def process(role: str, ordinal: int, skill_id: str, model: str) -> dict[str, Any]:
         metrics = {
             "cli_version": "1.0.83",
             "models": [model],
