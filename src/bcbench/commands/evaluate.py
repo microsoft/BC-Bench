@@ -50,6 +50,17 @@ _config = get_config()
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
 
 
+def _run_bcal_for_evaluation(context: EvaluationContext[NL2ALEntry], backend_config: BCalBackendConfig) -> tuple[AgentMetrics, ExperimentConfiguration]:
+    run_result = run_bcal_agent(
+        entry=context.entry,
+        repo_path=context.repo_path,
+        backend_config=backend_config,
+    )
+    context.execution_identity = run_result.execution_identity
+    context.evidence = run_result.evidence
+    return run_result.metrics, run_result.experiment
+
+
 @evaluate_app.command("copilot")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
@@ -302,11 +313,7 @@ def evaluate_bcal(
         verify_bcal_version(context.agent_version, bcal_version)
         category.pipeline.execute(
             context,
-            lambda ctx: run_bcal_agent(
-                entry=cast(NL2ALEntry, ctx.entry),
-                repo_path=ctx.repo_path,
-                backend_config=backend_config,
-            ),
+            lambda ctx: _run_bcal_for_evaluation(cast(EvaluationContext[NL2ALEntry], ctx), backend_config),
         )
     except AgentError as exc:
         result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))

@@ -4,7 +4,7 @@ import pytest
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, AgentMetrics, BCalPackageProvenance, BCalPackageSource, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import AgentHarness, AgentMetrics, BCalExecutionIdentity, BCalPackageProvenance, BCalPackageSource, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
@@ -194,6 +194,29 @@ class TestCategorySerialization:
 
         assert payload["bcal_package"] == {"source": "experiment", "branch": "private/user/change"}
         assert loaded.bcal_package == sample_result_bug_fix.bcal_package
+
+    def test_bcal_evidence_and_execution_identity_round_trip(self, tmp_path, sample_result_bug_fix):
+        identity = BCalExecutionIdentity(
+            productVersion="1.2.3",
+            sourceCommitSha="050e84b25a0890d532a52433a3256c4183e81c7e",
+            buildConfiguration="Release",
+            scenarioContractVersion="1.0",
+            evidenceContractVersion="1.0",
+        )
+        evidence = {
+            "contractVersion": "1.0",
+            "executionIdentity": identity.model_dump(mode="json", by_alias=True),
+            "trace": {"events": []},
+        }
+        sample_result_bug_fix.execution_identity = identity
+        sample_result_bug_fix.evidence = evidence
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.execution_identity == identity
+        assert loaded.evidence == evidence
 
     def test_tool_usage_saves_as_dict(self, tmp_path):
         tool_usage = {"bash": 5, "view": 3, "search": 2}

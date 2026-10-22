@@ -152,7 +152,7 @@ def write_bceval_results(
                 "input": task_input,
                 "expected": expected,
                 "output": result.output,
-                "context": "",
+                "context": result.evidence if result.evidence is not None else "",
                 "metadata": metadata,
                 "tags": tags,
             }

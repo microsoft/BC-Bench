@@ -1,18 +1,22 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+import json
 import logging
 import shutil
 import subprocess
+import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Literal
 
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.types import AgentMetrics, ExperimentConfiguration
+from bcbench.types import AgentMetrics, BCalExecutionIdentity, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -43,6 +47,32 @@ class BCalBackendConfig(BaseModel):
         if self.model:
             args.append(f"--deployment={self.model}")
         return args
+
+
+class _BCalScenarioStepResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    type: Literal["user"]
+    status: Literal["succeeded", "failed"]
+
+
+class _BCalScenarioResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    schema_version: Literal["1.0"] = Field(alias="schemaVersion")
+    execution_identity: BCalExecutionIdentity = Field(alias="executionIdentity")
+    evidence: dict[str, Any] | None = None
+    completed: bool
+    steps: list[_BCalScenarioStepResult] = Field(min_length=1)
+
+
+@dataclass(frozen=True)
+class BCalRunResult:
+    metrics: AgentMetrics
+    experiment: ExperimentConfiguration
+    execution_identity: BCalExecutionIdentity
+    evidence: dict[str, Any] | None
 
 
 def _resolve_bcal_executable() -> str:
@@ -98,28 +128,63 @@ def _trim_prompt_echo(stdout: str, query: str) -> str:
     return f"{stdout[:start]}{stdout[end:]}".strip()
 
 
-def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig) -> list[str]:
-    """Build the bcal argv shared by the nl2al agent run and the red-team single-prompt run.
-
-    Only the prompt and the paths differ between the two, so keeping one builder stops the flag
-    set from drifting when bcal's CLI changes.
-    """
+def _bcal_cli_args(entry: NL2ALEntry, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig) -> list[str]:
     return [
         _resolve_bcal_executable(),
         f"--packagecachepath={package_cache_path}",
         *backend_config.cli_args(),
         f"--audience={entry.audience}",
         f"--page={entry.page}",
-        f"--prompt={prompt}",
         f"--exportfolder={export_folder}",
     ]
+
+
+def _bcal_prompt_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig) -> list[str]:
+    return [
+        *_bcal_cli_args(entry, package_cache_path, export_folder, backend_config),
+        f"--prompt={prompt}",
+    ]
+
+
+def _write_scenario(path: Path, prompt: str) -> None:
+    scenario = {
+        "schemaVersion": "1.0",
+        "steps": [
+            {
+                "id": "benchmark-prompt",
+                "type": "user",
+                "text": prompt,
+            }
+        ],
+    }
+    path.write_text(f"{json.dumps(scenario, indent=2)}\n", encoding="utf-8")
+
+
+def _parse_scenario_result(path: Path) -> _BCalScenarioResult:
+    if not path.exists():
+        raise AgentError(f"BCal did not create the scenario result file: {path}")
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise AgentError(f"BCal scenario result is not valid UTF-8 JSON: {path}: {exc}") from exc
+
+    try:
+        result = _BCalScenarioResult.model_validate(payload)
+    except ValidationError as exc:
+        raise AgentError(f"BCal scenario result is incompatible with contract 1.0: {exc}") from exc
+
+    matching_steps = [step for step in result.steps if step.id == "benchmark-prompt"]
+    if len(matching_steps) != 1:
+        raise AgentError("BCal scenario result must contain exactly one 'benchmark-prompt' step")
+    return result
 
 
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
     backend_config: BCalBackendConfig,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
+) -> BCalRunResult:
     logger.info(f"Running bcal CLI on: {entry.instance_id}")
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
@@ -129,24 +194,40 @@ def run_bcal_agent(
         raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 
     export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
-    cmd_args = _bcal_cmd_args(entry, entry.get_task(), package_cache_path, export_folder, backend_config)
 
     logger.info(f"Export folder: {export_folder}")
     logger.debug(f"Package cache path: {package_cache_path}")
     logger.debug(f"Using prompt:\n{entry.get_task()}")
-    logger.debug(f"bcal CLI command: {cmd_args}")
 
     try:
-        start = time.monotonic()
-        subprocess.run(
-            cmd_args,
-            timeout=_config.timeout.bcal_execution,
-            check=True,
-        )
+        with tempfile.TemporaryDirectory(prefix="bcbench-bcal-") as temp_dir:
+            scenario_path = Path(temp_dir) / "scenario.json"
+            result_path = Path(temp_dir) / "result.json"
+            _write_scenario(scenario_path, entry.get_task())
+            cmd_args = [
+                *_bcal_cli_args(entry, package_cache_path, export_folder, backend_config),
+                f"--scenario={scenario_path}",
+                f"--result={result_path}",
+                "--include-evidence",
+            ]
+            logger.debug(f"bcal CLI command: {cmd_args}")
+
+            start = time.monotonic()
+            subprocess.run(
+                cmd_args,
+                timeout=_config.timeout.bcal_execution,
+                check=True,
+            )
+            scenario_result = _parse_scenario_result(result_path)
         execution_time = time.monotonic() - start
 
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
-        return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
+        return BCalRunResult(
+            metrics=AgentMetrics(execution_time=execution_time),
+            experiment=ExperimentConfiguration(),
+            execution_identity=scenario_result.execution_identity,
+            evidence=scenario_result.evidence,
+        )
     except subprocess.TimeoutExpired:
         logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
@@ -154,6 +235,8 @@ def run_bcal_agent(
     except subprocess.CalledProcessError as e:
         logger.exception(f"bcal CLI execution failed: {e.stderr}")
         raise AgentError(f"bcal CLI execution failed: {e}") from None
+    except AgentError:
+        raise
     except Exception:
         logger.exception("Unexpected error running bcal CLI")
         raise
@@ -177,7 +260,7 @@ def run_bcal_prompt(
     Assumes symbols are already present under ``package_cache_path``.
     """
     export_folder.mkdir(parents=True, exist_ok=True)
-    cmd_args = _bcal_cmd_args(entry, query, package_cache_path, export_folder, backend_config)
+    cmd_args = _bcal_prompt_cmd_args(entry, query, package_cache_path, export_folder, backend_config)
 
     try:
         result = subprocess.run(
