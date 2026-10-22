@@ -1,17 +1,24 @@
 import json
 import subprocess
+from collections import Counter
+from hashlib import sha256
 
 import pytest
 from bcbench_core.git import apply_patch, init_repo
 from unidiff import PatchSet
 
-from bcbench.dataset.codereview import CodeReviewEntry, Severity
+from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.types import EvaluationCategory
 
 _SCAN = "synthetic__performance-014"
 _API = "synthetic__performance-009"
 _GROUPS = "synthetic__error-handling-drilldown-position-01"
-_ENTRY_IDS = (_SCAN, _API, _GROUPS)
+_BULK = "synthetic__performance-010"
+_INTERNAL = "synthetic__security-014"
+_RELATION = "synthetic__data-modeling-tablerelation-restriction-mismatch-01"
+_NOTICE = "synthetic__style-012"
+_STATEMENT = "synthetic__style-013"
+_ENTRY_IDS = (_SCAN, _API, _GROUPS, _BULK, _INTERNAL, _RELATION, _NOTICE, _STATEMENT)
 
 
 def _unique_object(pairs):
@@ -170,3 +177,100 @@ def test_regenerated_header_ids_lose_position_but_business_keys_restore_it(mater
             restored_id = next(key for key, code in rows.items() if code == selected_code)
             assert restored_id != old_id
             assert rows[restored_id] == selected_code
+
+
+def test_validate_and_modify_triggers_are_not_required_bulk_replacement_gold(materialized_entries):
+    entry, files = materialized_entries[_BULK]
+    source = files["src/PaymentToleranceMgt.Codeunit.al"]
+    assert 'SalesLine.Validate("Unit Price", NewPrice);' in source
+    assert "SalesLine.Modify(true);" in source
+    assert entry.expected_comments == []
+    assert entry.ignored_comments == []
+    assert entry.metadata.articles == ["performance/prefer-modifyall-over-per-row-modify"]
+
+
+def test_internal_recordref_helper_is_not_a_public_confused_deputy(materialized_entries):
+    entry, files = materialized_entries[_INTERNAL]
+    source = files["src/SecureOperationHelper.Codeunit.al"]
+    assert "Access = Internal;" in source
+    assert "internal procedure DeleteAllRecords(TableNo: Integer)" in source
+    assert "RecRef.Open(TableNo);" in source
+    assert "Permissions" not in source
+    assert entry.expected_comments == []
+    assert entry.ignored_comments == []
+    assert entry.metadata.articles == ["security/recordref-open-with-caller-table-must-not-be-public"]
+
+
+def test_setup_relation_gold_describes_rejection_not_invalid_persistence(materialized_entries):
+    entry, files = materialized_entries[_RELATION]
+    setup = files["src/SyntheticMfgSetupExt.TableExt.al"]
+    seeder = files["src/SyntheticBOMSeeder.Codeunit.al"]
+    gold = entry.expected_comments[0]
+    assert setup.splitlines()[gold.line_start - 1].strip() == "TableRelation = Item;"
+    assert "ProductionBOMLine.Validate(Type, ProductionBOMLine.Type::Item);" in seeder
+    assert 'ProductionBOMLine.Validate("No.", ManufacturingSetup."Synth Default Comp. Item No.");' in seeder
+    assert "Insert(" not in seeder
+    assert "rejected when the default is applied" in gold.body
+    assert "does not silently persist" in gold.body
+
+
+def test_error_label_usage_is_not_rejected_for_including_remediation(materialized_entries):
+    entry, files = materialized_entries[_STATEMENT]
+    source = files["src/CloudMigReplicateDataMgt.Codeunit.al"]
+    assert "TablesCannotBeEnabledForReplicationErr: Label" in source
+    assert "Error(TablesCannotBeEnabledForReplicationErr, RestrictedTableNames);" in source
+    assert not any("TablesCannotBeEnabledForReplicationErr" in gold.body for gold in entry.expected_comments)
+
+
+def test_false_delivery_success_is_separate_from_commented_out_code_style(materialized_entries):
+    entry, files = materialized_entries[_NOTICE]
+    source = files["src/CustomerNotification.Codeunit.al"]
+    body = source.split("procedure SendOverdueNotice", 1)[1].split("    end;", 1)[0]
+    assert "// SendEmail(Customer);" in body
+    assert "Message('An overdue notice has been sent to the customer.');" in body
+    assert "SendEmail(" not in "\n".join(line for line in body.splitlines() if not line.strip().startswith("//"))
+    findings = [gold for gold in entry.expected_comments if gold.file == "src/CustomerNotification.Codeunit.al" and gold.line_start == 7]
+    assert len(findings) == 2
+    assert {gold.domain for gold in findings} == {"style", "error-handling"}
+    assert any("merely deleting the commented line does not fix" in gold.body for gold in findings)
+
+
+def test_statement_functional_and_syntax_defects_have_positive_gold(materialized_entries):
+    entry, files = materialized_entries[_STATEMENT]
+    source = files["src/CustStPDFDocHandler.Codeunit.al"]
+    processing = source.split("procedure ProcessCustomerStatement", 1)[1].split("    end;", 1)[0]
+    assert "StatementGuid: Guid;" in processing
+    assert "StatementGuid :=" not in processing
+    assert processing.count("Error(") == 2
+    assert "if IsNullGuid(StatementGuid) then" in processing
+    assert "        try\n" in source
+    assert "        except\n" in source
+    assert "    end;\n\n        exit(GenerationSuccess);\n    end;" in source
+    golds = [gold for gold in entry.expected_comments if gold.file == "src/CustStPDFDocHandler.Codeunit.al" and gold.domain == "error-handling"]
+    assert [(gold.line_start, gold.line_end, gold.severity) for gold in golds] == [(14, 21, Severity.MEDIUM), (32, 40, Severity.HIGH)]
+
+
+def test_audit_dispositions_cover_every_original_miss_without_relabeling_uncertainty():
+    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    audit = json.loads((dataset.parent / "audits" / "run-39616090167.json").read_text(encoding="utf-8"))
+    entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
+    rows = audit["rows"]
+    assert len(rows) == len({row["row_id"] for row in rows}) == 97
+    assert Counter(row["status"] for row in rows) == audit["disposition_counts"]
+    assert audit["dataset_after_sha256"] == sha256(dataset.read_bytes()).hexdigest()
+    assert audit["historical_metrics"]["matched"] == 105
+    assert audit["historical_metrics"]["expected"] == 202
+    assert audit["historical_metrics"]["incorrect_by_gold_matching"] == 322
+    assert audit["scope_only_sensitivity"]["matched"] == 95
+    assert audit["scope_only_sensitivity"]["expected"] == 179
+    assert audit["population"]["excluded_gold"] == 31
+    assert audit["scoring_contract"]["official_assignment"] == "one-to-one"
+    for row in rows:
+        assert row["decision"]
+        assert row["evidence"]
+        assert row["row_id"] == f"{row['instance_id']}:G{row['original_gold_index']:02}"
+        if row["status"] != "fixed":
+            original = ReviewComment.model_validate(row["original_gold"])
+            assert original in entries[row["instance_id"]].expected_comments
+    for addition in audit["positive_gold_additions"]:
+        assert any(gold.file == addition["file"] and gold.line_start == addition["line_start"] for gold in entries[addition["instance_id"]].expected_comments)

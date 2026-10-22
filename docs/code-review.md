@@ -31,6 +31,14 @@ The judge receives `sum((expected_in_file + ignored_in_file) * generated_in_file
 
 `CodeReviewResult.create` requires explicit expected and ignored match lists from the caller. It only computes metrics from those established matches; it never infers matches from comment locations or invokes the judge itself.
 
+### Audited gold corrections
+
+The [run 39616090167 audit dispositions](https://github.com/microsoft/BC-Bench/blob/gggdttt-benchmark-audit-repairs/dataset/audits/run-39616090167.json) preserve all 97 original missed-gold slots, their original labels, evidence, and individual repair or unresolved decisions. Four confirmed gold errors are corrected: an unsafe mandatory `ModifyAll` replacement, a public-API claim about an internal `RecordRef` helper, silent BOM persistence instead of downstream validation rejection, and an `Err` label already used by `Error`. Three source-supported functional/syntax findings are added without treating every unmatched output as correct. Source patches are unchanged.
+
+Uncertain gold remains in place pending missing context; raw XML-doc findings filtered at the output threshold remain a severity-calibration question. Official matching remains one-to-one, including consolidated and partial-overlap findings. The audit is not a corrected precision estimate: the historical 137 completed entries yielded 105 matches out of 202 gold and 427 generated comments, while eight excluded positive entries contained another 31 gold. Removing all 23 Low gold from the frozen assignments gives only a scope-sensitivity calculation of 95/179, not 105/189 and not a new official score. No severity-scope change is included yet.
+
+Any baseline/candidate rerun must use the same corrected dataset, scorer, root/leaf/judge models, CLI, and severity thresholds. Report measurement corrections separately from reviewer improvements, retain the historical scores, and do not publish this experiment to Braintrust, Kusto, or the leaderboard before review.
+
 ## Category and runners
 
 `code-review` is the evaluation contract: it owns the dataset, structured `review.json` output, scorer, result schema, and leaderboard schema. A runner is the system under test. The same entries can be evaluated through the generic GitHub Copilot CLI and Claude Code runners, allowing direct cross-system comparisons under one scorer.
