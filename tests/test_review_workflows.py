@@ -3,10 +3,12 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 import yaml
+
+from bcbench.cli_options import CopilotModelName, PRReviewLeafModelName, PRReviewModelName
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
@@ -127,6 +129,15 @@ def test_pr_review_workflow_passes_optional_engine_sha_to_harness_action() -> No
     assert engine_input["type"] == "string"
     assert install["with"]["engine-sha"] == "${{ inputs.engine-sha }}"
     assert DEFAULT_ENGINE_SHA not in _workflow("pr-review-evaluation.yml")
+
+
+def test_pr_review_model_types_match_workflow_choices() -> None:
+    workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
+    inputs = _workflow_dispatch_inputs(workflow)
+
+    assert list(get_args(PRReviewModelName)) == inputs["model"]["options"]
+    assert list(get_args(PRReviewLeafModelName)) == inputs["leaf-model"]["options"]
+    assert "gpt-6-astra" in get_args(CopilotModelName)
 
 
 def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:

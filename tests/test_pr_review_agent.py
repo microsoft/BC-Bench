@@ -373,7 +373,6 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
             agent_version="e" * 40,
             engine_path=engine_root,
             cli_version="1.0.83",
-            leaf_model="gpt-5.6-luna",
             leaf_execution="serial",
             max_leaf_concurrency=4,
             cli_timeout_minutes=30,

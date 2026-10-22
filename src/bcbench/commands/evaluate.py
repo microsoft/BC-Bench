@@ -28,6 +28,7 @@ from bcbench.cli_options import (
     PRReviewLeafExecution,
     PRReviewLeafModel,
     PRReviewMaxLeafConcurrency,
+    PRReviewModel,
     RepoPath,
     RunId,
     TierOption,
@@ -193,13 +194,13 @@ def evaluate_claude_code(
 @evaluate_app.command("pr-review")
 def evaluate_pr_review(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    model: CopilotModel = "gpt-5.6-luna",
+    model: PRReviewModel = "gpt-5.6-sol",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "pr_review_test_run",
     engine_path: PRReviewEnginePath = None,
     cli_version: PRReviewCliVersion = None,
-    leaf_model: PRReviewLeafModel = None,
+    leaf_model: PRReviewLeafModel = "gpt-5.6-luna",
     leaf_execution: PRReviewLeafExecution = "serial",
     max_leaf_concurrency: PRReviewMaxLeafConcurrency = 4,
     cli_timeout_minutes: PRReviewCliTimeoutMinutes = 30,

@@ -180,7 +180,7 @@ def run_pr_review_agent(
     engine_path: Path | None = None,
     min_severity: str | None = None,
     cli_version: str | None = None,
-    leaf_model: str | None = None,
+    leaf_model: str = "gpt-5.6-luna",
     leaf_execution: Literal["serial", "parallel"] = "serial",
     max_leaf_concurrency: int = 4,
     cli_timeout_minutes: int = 30,
@@ -213,7 +213,7 @@ def run_pr_review_agent(
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
     bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
     cli_version = _resolve_pr_review_cli_version(cli_version)
-    leaf_model = (leaf_model or model).strip()
+    leaf_model = leaf_model.strip()
     if not leaf_model:
         raise AgentError("PR Review leaf model must not be empty.")
     if leaf_execution not in {"serial", "parallel"}:
