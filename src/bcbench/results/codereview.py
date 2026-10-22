@@ -355,6 +355,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
 
+    @override
     def combination_key(self) -> tuple[Hashable, ...]:
         return (
             *super().combination_key(),
@@ -552,7 +553,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 logger.warning(f"Omitting inconsistent {name} from code-review summary")
                 return None
             value = next(iter(unique_values), None)
-            return list(value) if isinstance(value, tuple) else value
+            if isinstance(value, tuple):
+                return list(value)
+            assert value is None or isinstance(value, (str, int))
+            return value
 
         metric_counts = {name: sum(value is not None for value in metric_values(name)) for name in _PR_REVIEW_METRICS}
         metric_sums = {name: float(sum(value for value in metric_values(name) if value is not None)) for name in _PR_REVIEW_METRICS}
