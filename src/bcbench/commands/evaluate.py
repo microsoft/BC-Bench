@@ -61,9 +61,11 @@ def _run_bcal_for_evaluation(context: EvaluationContext[NL2ALEntry], backend_con
         if exc.scenario_result is not None:
             context.execution_identity = exc.scenario_result.execution_identity
             context.evidence = exc.scenario_result.evidence
+            context.execution_facts = exc.execution_facts
         raise
     context.execution_identity = run_result.execution_identity
     context.evidence = run_result.evidence
+    context.execution_facts = run_result.execution_facts
     return run_result.metrics, run_result.experiment
 
 
