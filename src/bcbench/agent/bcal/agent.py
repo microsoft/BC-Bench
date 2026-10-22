@@ -55,6 +55,28 @@ class _BCalScenarioStepResult(BaseModel):
     id: str
     type: Literal["user"]
     status: Literal["succeeded", "failed"]
+    failure: "_BCalFailure | None" = None
+
+
+class _BCalFailure(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    code: str
+    message: str
+    step_id: str | None = Field(default=None, alias="stepId")
+    retryable: bool | None = None
+
+
+class _BCalOutputStatus(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    attempted: bool
+    success: bool
+    path: str | None = None
+    file_name: str | None = Field(default=None, alias="fileName")
+    files_exported: int | None = Field(default=None, alias="filesExported")
+    entries_exported: int | None = Field(default=None, alias="entriesExported")
+    message: str | None = None
 
 
 class _BCalScenarioResult(BaseModel):
@@ -65,6 +87,15 @@ class _BCalScenarioResult(BaseModel):
     evidence: dict[str, Any] | None = None
     completed: bool
     steps: list[_BCalScenarioStepResult] = Field(min_length=1)
+    export: _BCalOutputStatus | None = None
+    session_archive: _BCalOutputStatus | None = Field(default=None, alias="sessionArchive")
+    failure: _BCalFailure | None = None
+
+
+class BCalScenarioError(AgentError):
+    def __init__(self, message: str, scenario_result: _BCalScenarioResult | None = None) -> None:
+        self.scenario_result = scenario_result
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -180,6 +211,70 @@ def _parse_scenario_result(path: Path) -> _BCalScenarioResult:
     return result
 
 
+def _format_failure(failure: _BCalFailure | None) -> str:
+    if failure is None:
+        return "none"
+    details = [f"code={failure.code}", f"message={failure.message}"]
+    if failure.step_id:
+        details.append(f"stepId={failure.step_id}")
+    if failure.retryable is not None:
+        details.append(f"retryable={str(failure.retryable).lower()}")
+    return ", ".join(details)
+
+
+def _format_output_status(status: _BCalOutputStatus | None) -> str:
+    if status is None:
+        return "not reported"
+    details = [f"attempted={str(status.attempted).lower()}", f"success={str(status.success).lower()}"]
+    if status.path:
+        details.append(f"path={status.path}")
+    if status.file_name:
+        details.append(f"fileName={status.file_name}")
+    if status.files_exported is not None:
+        details.append(f"filesExported={status.files_exported}")
+    if status.entries_exported is not None:
+        details.append(f"entriesExported={status.entries_exported}")
+    if status.message:
+        details.append(f"message={status.message}")
+    return ", ".join(details)
+
+
+def _scenario_failure_message(
+    exc: subprocess.CalledProcessError,
+    result_path: Path,
+) -> tuple[str, _BCalScenarioResult | None]:
+    sections = [f"BCal scenario exited with status {exc.returncode}"]
+    scenario_result: _BCalScenarioResult | None = None
+
+    if result_path.exists():
+        try:
+            scenario_result = _parse_scenario_result(result_path)
+        except AgentError as parse_error:
+            sections.append(f"Scenario result: {parse_error}")
+        else:
+            benchmark_steps = [step for step in scenario_result.steps if step.id == "benchmark-prompt"]
+            step_failure = benchmark_steps[0].failure if benchmark_steps else None
+            sections.extend(
+                [
+                    f"Completed: {str(scenario_result.completed).lower()}",
+                    f"Failure: {_format_failure(scenario_result.failure)}",
+                    f"Step failure: {_format_failure(step_failure)}",
+                    f"Export: {_format_output_status(scenario_result.export)}",
+                    f"Session archive: {_format_output_status(scenario_result.session_archive)}",
+                ]
+            )
+    else:
+        sections.append(f"Scenario result: not created at {result_path}")
+
+    stdout = _process_output(exc.stdout)
+    stderr = _process_output(exc.stderr)
+    if stdout:
+        sections.append(f"stdout:\n{stdout}")
+    if stderr:
+        sections.append(f"stderr:\n{stderr}")
+    return "\n".join(sections), scenario_result
+
+
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
@@ -213,11 +308,20 @@ def run_bcal_agent(
             logger.debug(f"bcal CLI command: {cmd_args}")
 
             start = time.monotonic()
-            subprocess.run(
-                cmd_args,
-                timeout=_config.timeout.bcal_execution,
-                check=True,
-            )
+            try:
+                subprocess.run(
+                    cmd_args,
+                    timeout=_config.timeout.bcal_execution,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                message, scenario_result = _scenario_failure_message(exc, result_path)
+                logger.exception(message)
+                raise BCalScenarioError(message, scenario_result=scenario_result) from None
             scenario_result = _parse_scenario_result(result_path)
         execution_time = time.monotonic() - start
 
@@ -232,9 +336,6 @@ def run_bcal_agent(
         logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
         raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"bcal CLI execution failed: {e.stderr}")
-        raise AgentError(f"bcal CLI execution failed: {e}") from None
     except AgentError:
         raise
     except Exception:

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bcbench.agent.bcal import BCalBackendConfig, BCalRunResult
+from bcbench.agent.bcal import BCalBackendConfig, BCalRunResult, BCalScenarioError
 from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.commands import evaluate
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -38,13 +38,38 @@ def workspace(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _write_result_from_args(args: list[str], *, evidence: dict[str, object] | None = EVIDENCE, schema_version: str = "1.0") -> None:
+def _write_result_from_args(
+    args: list[str],
+    *,
+    evidence: dict[str, object] | None = EVIDENCE,
+    schema_version: str = "1.0",
+    completed: bool = True,
+    step_status: str = "succeeded",
+    failure: dict[str, object] | None = None,
+    step_failure: dict[str, object] | None = None,
+) -> None:
     result_path = Path(next(arg.removeprefix("--result=") for arg in args if arg.startswith("--result=")))
     payload = {
         "schemaVersion": schema_version,
         "executionIdentity": EXECUTION_IDENTITY,
-        "completed": True,
-        "steps": [{"id": "benchmark-prompt", "type": "user", "status": "succeeded"}],
+        "completed": completed,
+        "steps": [{"id": "benchmark-prompt", "type": "user", "status": step_status, "failure": step_failure}],
+        "export": {
+            "attempted": True,
+            "success": False,
+            "path": "C:\\exports",
+            "filesExported": 0,
+            "message": "No files exported",
+        },
+        "sessionArchive": {
+            "attempted": True,
+            "success": False,
+            "path": "C:\\archive",
+            "fileName": "session.zip",
+            "entriesExported": 0,
+            "message": "Archive failed",
+        },
+        "failure": failure,
     }
     if evidence is not None:
         payload["evidence"] = evidence
@@ -252,6 +277,69 @@ class TestRunBcalAgent:
                 backend_config=BCalBackendConfig(command="python bridge.py"),
             )
 
+    def test_nonzero_exit_includes_structured_failure_and_process_output(self, workspace: Path):
+        top_failure: dict[str, object] = {"code": "scenario_failed", "message": "Scenario execution failed", "stepId": "benchmark-prompt"}
+        step_failure: dict[str, object] = {"code": "compile_failed", "message": "Generated AL did not compile", "retryable": False}
+
+        def fake_run(args: list[str], **_: object) -> None:
+            _write_result_from_args(
+                args,
+                completed=False,
+                step_status="failed",
+                failure=top_failure,
+                step_failure=step_failure,
+            )
+            raise subprocess.CalledProcessError(
+                returncode=1,
+                cmd=args,
+                output="scenario stdout",
+                stderr="scenario stderr",
+            )
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+            pytest.raises(BCalScenarioError) as exc_info,
+        ):
+            bcal_agent.run_bcal_agent(
+                entry=create_nl2al_entry(),
+                repo_path=workspace,
+                backend_config=BCalBackendConfig(command="python bridge.py"),
+            )
+
+        message = str(exc_info.value)
+        assert "BCal scenario exited with status 1" in message
+        assert "Failure: code=scenario_failed, message=Scenario execution failed, stepId=benchmark-prompt" in message
+        assert "Step failure: code=compile_failed, message=Generated AL did not compile, retryable=false" in message
+        assert "Export: attempted=true, success=false, path=C:\\exports, filesExported=0, message=No files exported" in message
+        assert "Session archive: attempted=true, success=false, path=C:\\archive, fileName=session.zip, entriesExported=0, message=Archive failed" in message
+        assert "stdout:\nscenario stdout" in message
+        assert "stderr:\nscenario stderr" in message
+        assert exc_info.value.scenario_result is not None
+        assert exc_info.value.scenario_result.evidence == EVIDENCE
+
+    def test_argument_parser_failure_includes_stdout_when_no_result_exists(self, workspace: Path):
+        failure = subprocess.CalledProcessError(
+            returncode=1,
+            cmd=["bcal"],
+            output="Unrecognized command or argument '--include-evidence'.",
+            stderr="",
+        )
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=failure),
+            pytest.raises(BCalScenarioError) as exc_info,
+        ):
+            bcal_agent.run_bcal_agent(
+                entry=create_nl2al_entry(),
+                repo_path=workspace,
+                backend_config=BCalBackendConfig(command="python bridge.py"),
+            )
+
+        assert "Scenario result: not created" in str(exc_info.value)
+        assert "Unrecognized command or argument '--include-evidence'." in str(exc_info.value)
+
     def test_evaluation_adapter_transfers_structured_context(self, workspace: Path, tmp_path: Path):
         entry = create_nl2al_entry()
         context = EvaluationContext(
@@ -275,6 +363,35 @@ class TestRunBcalAgent:
         assert metrics == run_result.metrics
         assert experiment == run_result.experiment
         assert context.execution_identity == run_result.execution_identity
+        assert context.evidence == EVIDENCE
+
+    def test_evaluation_adapter_preserves_context_from_nonzero_result(self, workspace: Path, tmp_path: Path):
+        entry = create_nl2al_entry()
+        context = EvaluationContext(
+            entry=entry,
+            repo_path=workspace,
+            result_dir=tmp_path,
+            agent_name=AgentHarness.BCAL,
+            model="external-command",
+            category=EvaluationCategory.NL2AL,
+        )
+        scenario_result = bcal_agent._BCalScenarioResult.model_validate(
+            {
+                "schemaVersion": "1.0",
+                "executionIdentity": EXECUTION_IDENTITY,
+                "evidence": EVIDENCE,
+                "completed": False,
+                "steps": [{"id": "benchmark-prompt", "type": "user", "status": "failed"}],
+            }
+        )
+
+        with (
+            patch.object(evaluate, "run_bcal_agent", side_effect=BCalScenarioError("failed", scenario_result)),
+            pytest.raises(BCalScenarioError, match="failed"),
+        ):
+            evaluate._run_bcal_for_evaluation(context, BCalBackendConfig(command="python bridge.py"))
+
+        assert context.execution_identity == scenario_result.execution_identity
         assert context.evidence == EVIDENCE
 
 
