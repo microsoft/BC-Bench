@@ -107,6 +107,12 @@ jobs:
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
+      copilot-cli-version: ${{ steps.install-harnesses.outputs.copilot-cli-version }}
+      bc-alagents-repository: ${{ steps.install-harnesses.outputs.bc-alagents-repository }}
+      bc-alagents-commit: ${{ steps.install-harnesses.outputs.bc-alagents-commit }}
+      bcquality-repository: ${{ steps.install-harnesses.outputs.bcquality-repository }}
+      bcquality-commit: ${{ steps.install-harnesses.outputs.bcquality-commit }}
+      bcquality-version: ${{ steps.install-harnesses.outputs.bcquality-version }}
     if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
@@ -192,6 +198,13 @@ jobs:
       mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.entries != '' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
+      benchmark-commit: ${{ github.sha }}
+      copilot-cli-version: ${{ needs.evaluate-with-pr-review.outputs.copilot-cli-version }}
+      bc-alagents-repository: ${{ needs.evaluate-with-pr-review.outputs.bc-alagents-repository }}
+      bc-alagents-commit: ${{ needs.evaluate-with-pr-review.outputs.bc-alagents-commit }}
+      bcquality-repository: ${{ needs.evaluate-with-pr-review.outputs.bcquality-repository }}
+      bcquality-commit: ${{ needs.evaluate-with-pr-review.outputs.bcquality-commit }}
+      bcquality-version: ${{ needs.evaluate-with-pr-review.outputs.bcquality-version }}
     secrets: inherit
 
   requeue:

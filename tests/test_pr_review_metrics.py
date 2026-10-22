@@ -1,10 +1,11 @@
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_review_metrics
+from bcbench.agent.pr_review.metrics import FILTER_REPORT_FILE_NAME, RUN_METRICS_FILE_NAME, _count_available_knowledge, _load_bcquality_identity, build_pr_review_metrics
 from bcbench.agent.pr_review.run_manifest import RunManifest
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError
@@ -41,6 +42,11 @@ def _run_metrics(**overrides: object) -> dict[str, object]:
 
 def _write_run_metrics(root: Path, **overrides: object) -> None:
     (root / RUN_METRICS_FILE_NAME).write_text(json.dumps(_run_metrics(**overrides)), encoding="utf-8")
+    (root / FILTER_REPORT_FILE_NAME).write_text(json.dumps({"removed": []}), encoding="utf-8")
+    (root / "al-code-review-findings.json").write_text(
+        json.dumps({"findings": [], "subResults": [], "skippedSubSkills": [], "suppressed": []}),
+        encoding="utf-8",
+    )
 
 
 def _manifest(
@@ -49,19 +55,37 @@ def _manifest(
     root_model: str = "gpt-5.6-sol",
     leaf_model: str = "gpt-5.4-mini",
 ) -> RunManifest:
+    def process(role: str, ordinal: int, skill_id: str, model: str) -> dict[str, object]:
+        return {
+            "role": role,
+            "ordinal": ordinal,
+            "skill_id": skill_id,
+            "requested_model": model,
+            "observed_models": [model],
+            "status": "completed",
+            "started_at": "2026-09-14T12:00:00Z",
+            "completed_at": "2026-09-14T12:00:01Z",
+            "duration_seconds": 1.0,
+            "exit_code": 0,
+            "report_path": f"{role}/{ordinal}/_review-report.json",
+            "failure_reason": None,
+            "metrics": {
+                "cli_version": cli_version,
+                "models": [model],
+                "usage_complete": True,
+                "malformed_records": 0,
+            },
+        }
+
     return RunManifest.model_validate(
         {
             "schema_version": 1,
             "status": "completed",
             "started_at": "2026-09-14T12:00:00Z",
-            "completed_at": "2026-09-14T12:00:01Z",
+            "completed_at": "2026-09-14T12:00:02Z",
             "failure_reason": None,
-            "engine": {
-                "repository": "microsoft/BC-ALAgents",
-                "commit": "e" * 40,
-                "agent_version": "1.6.6",
-            },
-            "bcquality": {"commit": None, "source_snapshot": None},
+            "engine": {"repository": "microsoft/BC-ALAgents", "commit": "e" * 40, "agent_version": "1.6.6"},
+            "bcquality": {"commit": "b" * 40, "source_snapshot": "a" * 64},
             "configuration": {
                 "copilot_cli_version": cli_version,
                 "root_model": root_model,
@@ -73,27 +97,10 @@ def _manifest(
                 "agent_minimum_severity": "Medium",
                 "review_source": "local",
             },
-            "plan": {
-                "skill_id": "al-code-review",
-                "leaf_count": 1,
-                "leaf_ids": ["al-performance-review"],
-            },
+            "plan": {"skill_id": "al-code-review", "leaf_count": 1, "leaf_ids": ["al-performance-review"]},
             "processes": [
-                {
-                    "role": "leaf",
-                    "ordinal": 1,
-                    "skill_id": "al-performance-review",
-                    "requested_model": leaf_model,
-                    "observed_models": [leaf_model],
-                    "status": "completed",
-                    "started_at": "2026-09-14T12:00:00Z",
-                    "completed_at": "2026-09-14T12:00:01Z",
-                    "duration_seconds": 1.0,
-                    "exit_code": 0,
-                    "report_path": "leaf-results/1/_review-report.json",
-                    "failure_reason": None,
-                    "metrics": None,
-                }
+                process("leaf", 1, "al-performance-review", leaf_model),
+                process("root", 2, "al-code-review", root_model),
             ],
         }
     )
@@ -102,7 +109,7 @@ def _manifest(
 def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> None:
     _write_run_metrics(tmp_path)
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=12.5, manifest=_manifest())
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=12.5)
 
     assert isinstance(metrics, PRReviewMetrics)
     assert metrics.kind == "pr-review"
@@ -120,6 +127,12 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
     assert metrics.models == ["gpt-5.4-mini", "gpt-5.6-sol"]
     assert metrics.usage_complete is True
     assert metrics.malformed_records == 0
+    assert metrics.knowledge_files == 0
+    assert metrics.knowledge_pruned == 0
+    assert metrics.knowledge_used == 0
+    assert metrics.knowledge_suppressed == 0
+    assert metrics.sub_skills_executed == 0
+    assert metrics.sub_skills_skipped == 0
     assert metrics.copilot_cli_version == "1.0.81-0"
 
 
@@ -135,10 +148,32 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
         models=["gpt-5.4-mini", "gpt-5.6-sol"],
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0)
 
     assert metrics.ai_credits is None
     assert metrics.total_tokens == 178
+
+
+def test_validated_manifest_promotes_deterministic_metrics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
+
+    assert metrics.models == ["gpt-5.4-mini", "gpt-5.6-sol"]
+    assert metrics.leaf_model == "gpt-5.4-mini"
+    assert metrics.leaf_execution == "serial"
+    assert metrics.max_leaf_concurrency == 4
+    assert metrics.bcquality_commit == "b" * 40
+    assert metrics.bcquality_source_snapshot == "a" * 64
+    assert metrics.review_process_count == 2
+
+
+def test_validated_manifest_normalizes_model_order(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, models=["gpt-5.6-sol", "gpt-5.4-mini"])
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
+
+    assert metrics.models == ["gpt-5.4-mini", "gpt-5.6-sol"]
 
 
 @pytest.mark.parametrize(
@@ -155,8 +190,9 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
 )
 def test_validated_manifest_rejects_mismatched_aggregate_metrics(tmp_path: Path, overrides: dict[str, object]) -> None:
     _write_run_metrics(tmp_path, **overrides)
+
     with pytest.raises(AgentError, match="aggregate metrics"):
-        build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
 
 
 @pytest.mark.parametrize("has_token_usage", [False, True], ids=["no-chat-spans", "chat-without-billing"])
@@ -179,7 +215,7 @@ def test_valid_engine_metrics_without_billing_preserve_unknown_credits_through_e
         malformed_records=0,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.5, manifest=_manifest())
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.5)
     assert metrics.ai_credits is None
     assert metrics.total_tokens == (178 if has_token_usage else None)
     result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
@@ -213,12 +249,15 @@ def test_malformed_records_suppress_all_usage_metrics(tmp_path: Path) -> None:
         malformed_records=3,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
 
     assert metrics.prompt_tokens is None
     assert metrics.completion_tokens is None
     assert metrics.total_tokens is None
     assert metrics.ai_credits is None
+    assert metrics.api_calls == 2
+    assert metrics.failed_api_calls == 1
+    assert metrics.usage_api_calls == 1
     assert metrics.usage_complete is False
     assert metrics.malformed_records == 3
 
@@ -239,7 +278,7 @@ def test_ineligible_usage_preserves_quality_but_not_cost_comparisons(tmp_path: P
         malformed_records=malformed_records,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
 
     for name in ("prompt_tokens", "cached_tokens", "cache_creation_tokens", "completion_tokens", "reasoning_tokens", "total_tokens", "ai_credits"):
         assert getattr(metrics, name) is None
@@ -256,7 +295,7 @@ def test_ineligible_usage_preserves_quality_but_not_cost_comparisons(tmp_path: P
     complete_result = create_codereview_result(
         instance_id="proj__review-2",
         agent_name=AgentHarness.PR_REVIEW,
-        metrics=PRReviewMetrics(prompt_tokens=100, completion_tokens=10, total_tokens=110, ai_credits=0.5),
+        metrics=metrics.model_copy(update={"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110, "ai_credits": 0.5, "usage_complete": True, "malformed_records": 0}),
     )
     mixed_summary = CodeReviewResultSummary.from_results([result, complete_result], run_id="mixed")
     complete_summary = CodeReviewResultSummary.from_results([complete_result], run_id="complete")
@@ -266,6 +305,10 @@ def test_ineligible_usage_preserves_quality_but_not_cost_comparisons(tmp_path: P
         assert summary.average_completion_tokens == 10
         assert summary.average_total_tokens == 110
         assert summary.average_ai_credits == 0.5
+        assert summary.metric_counts["total_tokens"] == 1
+        assert summary.metric_counts["ai_credits"] == 1
+        assert summary.token_coverage_rate == 0.5
+        assert summary.credit_coverage_rate == 0.5
     unavailable_aggregate = CodeReviewLeaderboardAggregate.from_runs([incomplete_summary])
     for name in ("average_prompt_tokens", "average_completion_tokens", "average_total_tokens", "average_ai_credits"):
         assert getattr(unavailable_aggregate, name) is None
@@ -274,7 +317,7 @@ def test_ineligible_usage_preserves_quality_but_not_cost_comparisons(tmp_path: P
 def test_complete_zero_usage_remains_available(tmp_path: Path) -> None:
     _write_run_metrics(tmp_path, prompt_tokens=0, completion_tokens=0, total_tokens=0, ai_credits=0.0)
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0, manifest=_manifest())
     summary = CodeReviewResultSummary.from_results([create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)], run_id="zero")
     aggregate = CodeReviewLeaderboardAggregate.from_runs([summary])
 
@@ -287,14 +330,79 @@ def test_complete_zero_usage_remains_available(tmp_path: Path) -> None:
 
 def test_missing_run_metrics_raises(tmp_path: Path) -> None:
     with pytest.raises(AgentError, match="run metrics artifact not found"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
+def test_missing_filter_report_preserves_other_diagnostics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / FILTER_REPORT_FILE_NAME).unlink()
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+    assert metrics.prompt_tokens == 150
+    assert metrics.knowledge_pruned is None
+
+
+def test_empty_engine_diagnostics_are_measured_zeros(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / "al-code-review-findings.json").write_text(
+        json.dumps({"findings": [], "subResults": [], "skippedSubSkills": [], "suppressed": []}),
+        encoding="utf-8",
+    )
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+    assert metrics.knowledge_used == 0
+    assert metrics.knowledge_suppressed == 0
+    assert metrics.sub_skills_executed == 0
+    assert metrics.sub_skills_skipped == 0
+
+
+def test_invalid_filter_report_still_raises(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / FILTER_REPORT_FILE_NAME).write_text("not json", encoding="utf-8")
+
+    with pytest.raises(AgentError, match="Could not read BCQuality filter report"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
+def test_missing_engine_findings_preserves_other_metrics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / "al-code-review-findings.json").unlink()
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+    assert metrics.prompt_tokens == 150
+    assert metrics.knowledge_used is None
+    assert metrics.knowledge_suppressed is None
+    assert metrics.sub_skills_executed is None
+    assert metrics.sub_skills_skipped is None
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"findings": {}, "subResults": [], "skippedSubSkills": [], "suppressed": []},
+        {"findings": [], "subResults": {}, "skippedSubSkills": [], "suppressed": []},
+        {"findings": [], "subResults": [], "skippedSubSkills": {}, "suppressed": []},
+        {"findings": [], "subResults": [], "skippedSubSkills": [], "suppressed": {}},
+        {"findings": [{"references": {}}], "subResults": [], "skippedSubSkills": [], "suppressed": []},
+    ],
+)
+def test_invalid_engine_diagnostics_raise(tmp_path: Path, payload: object) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / "al-code-review-findings.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(AgentError, match="invalid diagnostics shape"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
 def test_invalid_run_metrics_json_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text("not json", encoding="utf-8")
 
     with pytest.raises(AgentError, match="Could not read engine run metrics artifact"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
 @pytest.mark.parametrize(
@@ -315,7 +423,7 @@ def test_invalid_run_metrics_contract_raises(tmp_path: Path, overrides: dict[str
     _write_run_metrics(tmp_path, **overrides)
 
     with pytest.raises(AgentError, match="does not satisfy schema version 1"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
 def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
@@ -324,7 +432,7 @@ def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(AgentError, match="does not satisfy schema version 1"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
 def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
@@ -350,7 +458,7 @@ def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
     )
 
     with pytest.raises(AgentError, match="must contain AL changes"):
-        build_pr_review_metrics(tmp_path, execution_time=0.25, manifest=_manifest())
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=0.25)
 
 
 @pytest.mark.parametrize(
@@ -390,4 +498,144 @@ def test_not_applicable_rejects_noncanonical_shape(tmp_path: Path, field: str, v
     _write_run_metrics(tmp_path, **not_applicable)
 
     with pytest.raises(AgentError, match="not-applicable metrics have invalid fields"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
+def test_engine_diagnostics_count_knowledge_and_sub_skills(tmp_path: Path) -> None:
+    _count_available_knowledge.cache_clear()
+    _write_run_metrics(tmp_path)
+    (tmp_path / "microsoft" / "knowledge").mkdir(parents=True)
+    (tmp_path / "community" / "knowledge").mkdir(parents=True)
+    (tmp_path / "custom" / "skills").mkdir(parents=True)
+    (tmp_path / "microsoft" / "knowledge" / "one.md").write_text("one", encoding="utf-8")
+    (tmp_path / "community" / "knowledge" / "two.md").write_text("two", encoding="utf-8")
+    (tmp_path / "custom" / "skills" / "not-knowledge.md").write_text("skill", encoding="utf-8")
+    (tmp_path / FILTER_REPORT_FILE_NAME).write_text(
+        json.dumps({"removed": [{"kind": "knowledge"}, {"kind": "knowledge"}, {"kind": "knowledge-sample"}, {"kind": "skill"}]}),
+        encoding="utf-8",
+    )
+    (tmp_path / "al-code-review-findings.json").write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "references": [
+                            {"path": "microsoft/knowledge/one.md"},
+                            {"path": "C:/checkout/bcquality/microsoft/knowledge/one.md"},
+                            {"path": "microsoft/skills/not-knowledge.md"},
+                            {"path": "microsoft/knowledge/../skills/not-knowledge.md"},
+                            {"path": ""},
+                        ]
+                    }
+                ],
+                "subResults": [
+                    {
+                        "references": [
+                            {"path": "community/knowledge/two.md"},
+                            {"path": "MICROSOFT\\KNOWLEDGE\\ONE.MD"},
+                        ]
+                    }
+                ],
+                "skippedSubSkills": [{"name": "one"}, {"name": "two"}],
+                "suppressed": [{"path": "custom/knowledge/three.md"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+    assert metrics.knowledge_files == 2
+    assert metrics.knowledge_pruned == 2
+    assert metrics.knowledge_used == 2
+    assert metrics.knowledge_suppressed == 1
+    assert metrics.sub_skills_executed == 1
+    assert metrics.sub_skills_skipped == 2
+
+
+def test_available_knowledge_count_is_cached_per_checkout(tmp_path: Path) -> None:
+    _count_available_knowledge.cache_clear()
+    knowledge_root = tmp_path / "microsoft" / "knowledge"
+    knowledge_root.mkdir(parents=True)
+    (knowledge_root / "one.md").write_text("one", encoding="utf-8")
+
+    assert _count_available_knowledge(tmp_path.resolve()) == 1
+    (knowledge_root / "two.md").write_text("two", encoding="utf-8")
+    assert _count_available_knowledge(tmp_path.resolve()) == 1
+
+
+def test_runtime_provenance_is_derived_from_metrics_and_checkout(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, cli_version="1.0.82")
+    engine_root = tmp_path / "engine"
+    config = engine_root / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        "bcquality:\n  repo: https://github.com/microsoft/BCQuality.git\n  ref: " + "a" * 40 + '\n  version: "1.6"\n',
+        encoding="utf-8",
+    )
+
+    completed = subprocess.CompletedProcess(args=["git"], returncode=0, stdout="b" * 40 + "\n", stderr="")
+    with patch("bcbench.agent.pr_review.metrics.subprocess.run", return_value=completed):
+        metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=engine_root)
+
+    assert metrics.copilot_cli_version == "1.0.82"
+    assert metrics.bcquality_repository == "microsoft/BCQuality"
+    assert metrics.bcquality_commit == "b" * 40
+    assert metrics.bcquality_version == "1.6"
+
+
+def test_unavailable_runtime_provenance_fails_metrics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, cli_version="1.0.82")
+
+    with pytest.raises(AgentError, match="Could not read BCQuality provenance"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "missing-engine")
+
+
+def test_invalid_runtime_provenance_config_fails_metrics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, cli_version="1.0.82")
+    config = tmp_path / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('bcquality:\n  repo: "not a repo"\n  version: "1.6"\n', encoding="utf-8")
+
+    with pytest.raises(AgentError, match="contains invalid repository"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "engine")
+
+
+def test_runtime_provenance_allows_dotted_repository_names(tmp_path: Path) -> None:
+    config = tmp_path / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('bcquality:\n  repo: "microsoft/BC.Quality"\n  version: "1.6"\n', encoding="utf-8")
+    completed = subprocess.CompletedProcess(args=["git"], returncode=0, stdout="b" * 40 + "\n", stderr="")
+
+    with patch("bcbench.agent.pr_review.metrics.subprocess.run", return_value=completed):
+        assert _load_bcquality_identity(config.parents[2], tmp_path) == ("microsoft/BC.Quality", "b" * 40, "1.6")
+    assert PRReviewMetrics(bcquality_repository="microsoft/BC.Quality").bcquality_repository == "microsoft/BC.Quality"
+
+
+@pytest.mark.parametrize("repository", ["microsoft/..", "microsoft/BCQuality/extra", "microsoft/BC Quality"])
+def test_runtime_provenance_rejects_unsafe_repository_names(tmp_path: Path, repository: str) -> None:
+    config = tmp_path / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text(f'bcquality:\n  repo: "{repository}"\n  version: "1.6"\n', encoding="utf-8")
+
+    with pytest.raises(AgentError, match="contains invalid repository"):
+        _load_bcquality_identity(config.parents[2], tmp_path)
+
+
+@pytest.mark.parametrize("repository", ["microsoft/..", "microsoft/BCQuality/extra", "microsoft/BC Quality", "microsoft/.BCQuality", "microsoft/BCQuality."])
+def test_repository_slug_rejects_unsafe_names(repository: str) -> None:
+    with pytest.raises(ValueError, match="bcquality_repository"):
+        PRReviewMetrics(bcquality_repository=repository)
+
+
+def test_unresolvable_runtime_provenance_checkout_fails_metrics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, cli_version="1.0.82")
+    config = tmp_path / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('bcquality:\n  repo: "microsoft/BCQuality"\n  version: "1.6"\n', encoding="utf-8")
+
+    with (
+        patch("bcbench.agent.pr_review.metrics.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])),
+        pytest.raises(AgentError, match="Could not resolve BCQuality provenance"),
+    ):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "engine")
