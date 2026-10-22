@@ -1109,7 +1109,8 @@ class TestCodeReviewPipeline:
             else:
                 pipeline.evaluate(context)
                 result = save.call_args.args[1]
-                assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (0, 2, 1)
+                assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (0, 1, 1)
+                assert result.unscoped_result.missed_comment_count == 2
         invoke.assert_called_once()
 
     def test_judge_subprocess_failure_propagates_without_saving_score(self, tmp_path):

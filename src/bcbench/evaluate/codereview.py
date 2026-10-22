@@ -5,13 +5,13 @@ from typing import override
 
 from bcbench_core.git import apply_patch, fetch_commit_if_missing
 
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
+from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.evaluate.codereview_judge import judge_expected_and_ignored
+from bcbench.evaluate.codereview_judge import judge_comment_edges
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
 from bcbench.operations import setup_repo_prebuild
-from bcbench.results.codereview import CodeReviewResult, candidate_comment_pairs
+from bcbench.results.codereview import CodeReviewResult, assign_comment_matches, candidate_comment_pairs
 from bcbench.types import EvaluationContext
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,8 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     Code review does not require a BC container. We materialize the dataset patch
     as local git changes so the agent can review the branch diff directly.
     """
+
+    minimum_severity = Severity.MEDIUM
 
     @override
     def setup_workspace(self, entry: CodeReviewEntry, repo_path: Path) -> None:
@@ -69,28 +71,60 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         output: str = review_output_file.read_text(encoding="utf-8")
 
         generated_comments: list[ReviewComment] | None = parse_review_output(output)
+        out_of_scope = [comment for comment in context.entry.expected_comments if comment.severity is not None and comment.severity.level < self.minimum_severity.level]
+        excluded_ids = {id(comment) for comment in out_of_scope}
+        scoped_expected = [comment for comment in context.entry.expected_comments if id(comment) not in excluded_ids]
+        scoped_ignored = context.entry.ignored_comments + out_of_scope
 
         if generated_comments is None:
             logger.warning(f"Invalid review output for {context.entry.instance_id}")
-            result = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
+            original = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
+            result = CodeReviewResult.create_invalid(context, output, scoped_expected)
+            result.ignored_comments = scoped_ignored
         else:
             expected_candidates = candidate_comment_pairs(context.entry.expected_comments, generated_comments)
             ignored_candidates = candidate_comment_pairs(context.entry.ignored_comments, generated_comments)
-            validated_matches, ignored_matches = judge_expected_and_ignored(
+            expected_edges, ignored_edges = judge_comment_edges(
                 expected_candidates,
                 ignored_candidates,
                 work_dir=context.repo_path,
             )
-            result = CodeReviewResult.create(
+            original_matches, original_ignored = assign_comment_matches(expected_edges, ignored_edges)
+            original = CodeReviewResult.create(
                 context,
                 output=output,
                 expected_comments=context.entry.expected_comments,
                 generated_comments=generated_comments,
-                matched_pairs=validated_matches,
+                matched_pairs=original_matches,
                 ignored_comments=context.entry.ignored_comments,
-                ignored_matched_pairs=ignored_matches,
+                ignored_matched_pairs=original_ignored,
             )
+            # Reassign the SAME semantic verdicts, prioritizing in-scope gold before
+            # neutral gold. Never drop a generated comment based on its own severity.
+            matched, neutral = assign_comment_matches(
+                [pair for pair in expected_edges if id(pair[0]) not in excluded_ids],
+                ignored_edges + [pair for pair in expected_edges if id(pair[0]) in excluded_ids],
+            )
+            result = CodeReviewResult.create(
+                context,
+                output=output,
+                expected_comments=scoped_expected,
+                generated_comments=generated_comments,
+                matched_pairs=matched,
+                ignored_comments=scoped_ignored,
+                ignored_matched_pairs=neutral,
+            )
+            result.out_of_scope_matched_comment_count = sum(id(gold) in excluded_ids for gold, _ in neutral)
+        result.minimum_severity = self.minimum_severity
+        result.out_of_scope_comments = out_of_scope
+        result.unscoped_result = original
         logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
+        logger.info(
+            f"Gold scope >= {self.minimum_severity}: excluded_gold={len(out_of_scope)}, "
+            f"neutralized_by_scope={result.out_of_scope_matched_comment_count}; "
+            f"unscoped matched={original.matched_comment_count}, expected={len(original.expected_comments)}, "
+            f"precision={original.precision:.3f}, recall={original.recall:.3f}"
+        )
         logger.info(
             f"Code review metrics: matched={result.matched_comment_count}, "
             f"incorrect={result.incorrect_comment_count}, missed={result.missed_comment_count}, "

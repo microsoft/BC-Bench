@@ -10,6 +10,7 @@ from bcbench_core.scoring import pass_hat_k
 from bcbench_core.stats import bootstrap_ci
 from pydantic import BaseModel, field_validator
 
+from bcbench.dataset.codereview import Severity
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
@@ -137,6 +138,8 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     """Aggregate for the code-review category: mean F1 across runs with bootstrap CI."""
 
     f1: float = 0.0
+    minimum_severity: Severity | None = None
+    unscoped_aggregate: "CodeReviewLeaderboardAggregate | None" = None
     f1_ci_low: float | None = None
     f1_ci_high: float | None = None
     f_beta_05: float = 0.0
@@ -168,6 +171,16 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
 
         cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
         n = len(cr_runs)
+        scopes = {run.minimum_severity for run in cr_runs}
+        if len(scopes) > 1:
+            raise ValueError("Cannot aggregate code-review runs with different severity scopes")
+        minimum_severity = next(iter(scopes))
+        unscoped_aggregate = None
+        if minimum_severity is not None:
+            originals = [run.unscoped_summary for run in cr_runs if run.unscoped_summary is not None]
+            if len(originals) != n:
+                raise ValueError("Scoped code-review runs must preserve their unscoped summary")
+            unscoped_aggregate = cls.from_runs(originals)
 
         def mean_metric(values: Sequence[float | None]) -> float | None:
             available = [value for value in values if value is not None]
@@ -186,6 +199,8 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
 
         return base.model_copy(
             update={
+                "minimum_severity": minimum_severity,
+                "unscoped_aggregate": unscoped_aggregate,
                 "f1": round(f1_ci["mean"], 3) if f1_ci["mean"] is not None else 0.0,
                 "f1_ci_low": round(f1_ci["ci_low"], 3) if f1_ci["ci_low"] is not None else None,
                 "f1_ci_high": round(f1_ci["ci_high"], 3) if f1_ci["ci_high"] is not None else None,

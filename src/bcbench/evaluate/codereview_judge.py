@@ -113,11 +113,20 @@ def judge_expected_and_ignored(
     Raises:
         LLMJudgeError: If the judge cannot run or produce a usable verdict.
     """
+    return assign_comment_matches(*judge_comment_edges(expected_pairs, ignored_pairs, work_dir, model))
+
+
+def judge_comment_edges(
+    expected_pairs: list[tuple[ReviewComment, ReviewComment]],
+    ignored_pairs: list[tuple[ReviewComment, ReviewComment]],
+    work_dir: Path,
+    model: str = _config.judge.code_review_model,
+) -> tuple[list[tuple[ReviewComment, ReviewComment]], list[tuple[ReviewComment, ReviewComment]]]:
     split = len(expected_pairs)
     verdicts = judge_verdicts(expected_pairs + ignored_pairs, work_dir, model=model)
     validated_expected = [pair for pair, is_match in zip(expected_pairs, verdicts[:split], strict=True) if is_match]
     validated_ignored = [pair for pair, is_match in zip(ignored_pairs, verdicts[split:], strict=True) if is_match]
-    return assign_comment_matches(validated_expected, validated_ignored)
+    return validated_expected, validated_ignored
 
 
 def judge_verdicts(
