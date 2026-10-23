@@ -20,7 +20,11 @@ def _workflow(name: str):
 
 
 def _step(workflow: dict[Any, Any], job: str, name: str) -> dict[str, Any]:
-    return next(step for step in workflow["jobs"][job]["steps"] if step.get("name") == name)
+    return _step_named(workflow["jobs"][job]["steps"], name)
+
+
+def _step_named(steps: list[dict[str, Any]], name: str) -> dict[str, Any]:
+    return next(step for step in steps if step.get("name") == name)
 
 
 def test_bcal_tier_choices_match_dataset_tiers():
@@ -79,7 +83,6 @@ def test_bcal_package_selection_defaults_to_official_latest_and_derives_branch_p
     assert "pkgs.dev.azure.com" not in _workflow_text("bcal-evaluation.yml")
     assert 'channel="experiment"' in validation["run"]
     assert 'version_mode="pinned"' in validation["run"]
-    assert 'echo "version-mode=$version_mode" >> "$GITHUB_OUTPUT"' in validation["run"]
     assert 'feed="DynamicsSMBTest@Local"' in validation["run"]
     assert provenance["if"] == "${{ steps.resolve.outputs.source == 'experiment' }}"
     assert ".\\scripts\\Resolve-BCalPackageProvenance.ps1" in provenance["run"]
@@ -90,10 +93,16 @@ def test_bcal_package_selection_defaults_to_official_latest_and_derives_branch_p
 
 def test_bcal_installs_selected_package():
     workflow = _workflow_text("bcal-evaluation.yml")
+    install = _step(_workflow("bcal-evaluation.yml"), "evaluate-with-bcal", "Install bcal CLI from internal feed")
+    action = yaml.safe_load((WORKFLOWS.parent / "actions" / "install-bcal" / "action.yml").read_text(encoding="utf-8"))
+    action_install = _step_named(action["runs"]["steps"], "Install BCal package")
 
-    assert ".github/actions/install-bcal" in workflow
-    assert "bcal-package-selection" in workflow
+    assert install["uses"] == "$/.github/actions/install-bcal"
+    assert install["with"]["version"] == "${{ env.BCAL_REQUESTED_VERSION }}"
     assert "bcal-version-mode" not in workflow
+    assert '@("--version", $env:BCAL_REQUESTED_VERSION)' in action_install["run"]
+    assert '@("--prerelease")' in action_install["run"]
+    assert "${{ inputs." not in action_install["run"]
 
 
 def test_summary_receives_package_provenance():

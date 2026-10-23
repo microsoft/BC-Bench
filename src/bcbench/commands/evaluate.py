@@ -7,8 +7,7 @@ import typer
 from bcbench_core.filesystem import prepare_run_dir
 from pydantic import ValidationError
 
-from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
-from bcbench.agent.bcal.version import get_bcal_version, verify_bcal_version
+from bcbench.agent import BCalBackendConfig, get_bcal_version, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -256,7 +255,6 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
-    bcal_version: Annotated[str | None, typer.Option(envvar="BCAL_PACKAGE_VERSION", help="Expected installed BCAL NuGet version; verified against dotnet tool list")] = None,
     bcal_package_channel: Annotated[
         BCalPackageSource,
         typer.Option("--bcal-package-channel", envvar="BCAL_PACKAGE_CHANNEL", help="BCAL package channel: official baseline or experimental package"),
@@ -293,14 +291,13 @@ def evaluate_bcal(
         container=None,
         model=llm_model or "external-command",
         agent_name=AgentHarness.BCAL,
+        agent_version=get_bcal_version(),
         category=category,
         tier=tier,
         bcal_package=bcal_package,
     )
 
     try:
-        context.agent_version = get_bcal_version()
-        verify_bcal_version(context.agent_version, bcal_version)
         category.pipeline.execute(
             context,
             lambda ctx: run_bcal_agent(

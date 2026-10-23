@@ -69,7 +69,6 @@ jobs:
       source: ${{ steps.resolve.outputs.source }}
       branch: ${{ steps.provenance.outputs.branch || steps.resolve.outputs.branch }}
       feed: ${{ steps.resolve.outputs.feed }}
-      version-mode: ${{ steps.resolve.outputs.version-mode }}
     steps:
       - name: Validate and resolve BCal package selection
         id: resolve
@@ -145,7 +144,6 @@ jobs:
           echo "source=$channel" >> "$GITHUB_OUTPUT"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "feed=$feed" >> "$GITHUB_OUTPUT"
-          echo "version-mode=$version_mode" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository for experimental package provenance
         if: ${{ steps.resolve.outputs.source == 'experiment' }}
@@ -207,14 +205,12 @@ jobs:
         uses: $/.github/actions/setup-python-uv
 
       - name: Install bcal CLI from internal feed
-        id: install-bcal
         uses: $/.github/actions/install-bcal
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           package-id: ${{ secrets.BCAL_PACKAGE_ID }}
           feed-url: ${{ needs.validate-bcal-package.outputs.source == 'experiment' && secrets.BCAL_TEST_FEED_URL || secrets.BCAL_FEED_URL }}
-          version-mode: ${{ needs.validate-bcal-package.outputs.version-mode }}
           version: ${{ env.BCAL_REQUESTED_VERSION }}
 
       - name: Build bc-eval LLM API bridge venv
@@ -283,16 +279,12 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
-          BCAL_PACKAGE_VERSION: ${{ steps.install-bcal.outputs.version }}
           BCAL_PACKAGE_CHANNEL: ${{ needs.validate-bcal-package.outputs.source }}
           BCAL_PACKAGE_BRANCH: ${{ needs.validate-bcal-package.outputs.branch }}
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:BCAL_PACKAGE_VERSION)) {
-            throw "The installed BCal package version was not reported."
-          }
           $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
           if (-not (Test-Path $env:LLM_API_CERTIFICATE_FILE)) {
             throw "Expected LLM API client cert at $env:LLM_API_CERTIFICATE_FILE but it was not fetched from Key Vault."

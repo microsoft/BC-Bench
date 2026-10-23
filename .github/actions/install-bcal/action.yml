@@ -1,5 +1,5 @@
 name: Install BCal
-description: Install BCal from the internal feed and report its verified package version
+description: Install BCal from the internal feed, either the latest prerelease or an exact version
 
 inputs:
   client-id:
@@ -14,18 +14,10 @@ inputs:
   feed-url:
     description: BCal NuGet feed URL
     required: true
-  version-mode:
-    description: latest-prerelease or pinned
-    required: true
   version:
-    description: Exact NuGet version when mode is pinned
+    description: Exact NuGet version to install; empty installs the latest prerelease
     required: false
     default: ""
-
-outputs:
-  version:
-    description: Verified installed BCal package version
-    value: ${{ steps.install.outputs.version }}
 
 runs:
   using: composite
@@ -44,13 +36,11 @@ runs:
 
         echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
-    - name: Install and verify BCal package
-      id: install
+    - name: Install BCal package
       shell: pwsh
       env:
         BCAL_PACKAGE_ID: ${{ inputs.package-id }}
         BCAL_FEED_URL: ${{ inputs.feed-url }}
-        BCAL_VERSION_MODE: ${{ inputs.version-mode }}
         BCAL_REQUESTED_VERSION: ${{ inputs.version }}
       run: |
         $PSNativeCommandUseErrorActionPreference = $false
@@ -69,8 +59,13 @@ runs:
         } | ConvertTo-Json -Compress -Depth 5
         $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
 
-        .\scripts\Install-BCalTool.ps1 `
-          -PackageId "$env:BCAL_PACKAGE_ID" `
-          -FeedUrl "$env:BCAL_FEED_URL" `
-          -VersionMode "$env:BCAL_VERSION_MODE" `
-          -Version "$env:BCAL_REQUESTED_VERSION"
+        $versionArgs = if ($env:BCAL_REQUESTED_VERSION) { @("--version", $env:BCAL_REQUESTED_VERSION) } else { @("--prerelease") }
+
+        # The ADO Artifacts NuGet credential provider intermittently fails to load the service index; retry transient feed errors.
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+          dotnet tool install --global $env:BCAL_PACKAGE_ID @versionArgs --add-source $env:BCAL_FEED_URL
+          if ($LASTEXITCODE -eq 0) { break }
+          if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
+          Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
+          Start-Sleep -Seconds 20
+        }
