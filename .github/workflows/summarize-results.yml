@@ -73,6 +73,7 @@ jobs:
       EVALUATION_TIER: ${{ inputs.tier }}
       EVALUATION_AGENT: ${{ inputs.agent }}
       EVALUATION_MODEL: ${{ inputs.model }}
+      EVALUATION_GIT_REF: ${{ inputs.git-ref || github.ref_name }}
       BCAL_PACKAGE_CHANNEL: ${{ inputs.bcal-package-channel }}
       BCAL_PACKAGE_BRANCH: ${{ inputs.bcal-package-branch }}
       BCAL_PACKAGE_FEED: ${{ inputs.bcal-package-feed }}
@@ -90,7 +91,7 @@ jobs:
           merge-multiple: true
 
       - name: Summarize evaluation results
-        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "${{ inputs.git-ref || github.ref_name }}"
+        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "$EVALUATION_GIT_REF"
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -124,9 +125,9 @@ jobs:
           uv tool install bc-eval==0.6.1 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
           # Upload summary using bc-eval
-          MODEL_TAG="${{ inputs.model }}"
+          MODEL_TAG="$EVALUATION_MODEL"
           MODEL_TAG="${MODEL_TAG//./-}"
-          BRANCH_TAG="${{ inputs.git-ref || github.ref_name }}"
+          BRANCH_TAG="$EVALUATION_GIT_REF"
           BRANCH_TAG="${BRANCH_TAG//./-}"
           RUN_NAME="${EVALUATION_AGENT} (${EVALUATION_MODEL}) - #${GITHUB_RUN_ID}"
           RUN_TAGS="${EVALUATION_AGENT},${MODEL_TAG},${BRANCH_TAG},tier-${EVALUATION_TIER}"
