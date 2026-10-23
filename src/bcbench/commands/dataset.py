@@ -6,11 +6,11 @@ from typing import Annotated
 
 import typer
 
-from bcbench.cli_options import EvaluationCategoryOption
+from bcbench.cli_options import EvaluationCategoryOption, TierOption
 from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
-from bcbench.types import EvaluationCategory
+from bcbench.types import DatasetTier, EvaluationCategory
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,14 @@ dataset_app = typer.Typer(help="Query and analyze dataset")
 @dataset_app.command("list")
 def list_entries(
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
+    tier: TierOption = DatasetTier.GOLD,
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
 ) -> None:
     """List dataset entry IDs."""
     entry_cls = category.entry_class
-    resolved_path = category.dataset_path
+    resolved_path = category.dataset_path(tier)
 
     if modified_only:
         import subprocess
@@ -66,6 +67,7 @@ def list_entries(
 def view_entry(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to view")],
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
+    tier: TierOption = DatasetTier.GOLD,
     show_patch: Annotated[bool, typer.Option(help="Show patch in output")] = False,
 ) -> None:
     """View a specific dataset entry with rich formatting."""
@@ -73,7 +75,7 @@ def view_entry(
     from rich.panel import Panel
     from rich.table import Table
 
-    entry: BaseDatasetEntry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry: BaseDatasetEntry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     console = Console()
 
     info_table = Table(show_header=False, box=None)
@@ -173,10 +175,11 @@ def view_entry(
 def version(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to resolve the BC version for")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     github_output: Annotated[str | None, typer.Option(help="Write the version to GITHUB_OUTPUT with this key name")] = None,
 ) -> None:
     """Print an entry's environment_setup_version (the BC sandbox version)."""
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     print(entry.environment_setup_version)
     if github_output:
         write_step_outputs({github_output: entry.environment_setup_version})

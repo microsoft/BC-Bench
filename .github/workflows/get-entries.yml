@@ -20,6 +20,11 @@ on:
         required: true
         type: string
         default: "bug-fix"
+      tier:
+        description: Dataset tier to list (gold, or challenge for categories that define one)
+        required: false
+        type: string
+        default: "gold"
     outputs:
       entries:
         description: JSON array of dataset entries
@@ -58,7 +63,7 @@ jobs:
       - name: Get entries for matrix
         id: get-entries
         run: |
-          cmd="uv run bcbench dataset list --category ${{ inputs.category }} --github-output entries"
+          cmd="uv run bcbench dataset list --category ${{ inputs.category }} --tier ${{ inputs.tier }} --github-output entries"
 
           if [[ "${{ inputs.modified-only }}" == "true" ]]; then
             cmd="$cmd --modified-only"

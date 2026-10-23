@@ -19,7 +19,7 @@ def _experiment_metadata(experiment: ExperimentConfiguration | None, git_ref: st
     """Metadata identifying whether a run is a baseline or an experiment, and its configuration.
 
     bc-eval promotes the ``EvalRunType`` key to the Kusto ``EvalRunType``/``testJobType`` fields
-    when ``--eval-run-type`` is left at its default, so no extra CLI flag is needed.
+    unless the summarize workflow overrides it with ``--eval-run-type experiment``.
     """
     is_experiment: bool = experiment is not None and not experiment.is_empty()
     return {
@@ -39,8 +39,7 @@ def write_bceval_results(
     git_ref: str | None = None,
 ) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    entry_cls = category.entry_class
-    dataset_entries: list[BaseDatasetEntry] = entry_cls.load(category.dataset_path)
+    dataset_entries: list[BaseDatasetEntry] = category.entry_class.load(category.dataset_path(results[0].tier))
     benchmark_version = get_benchmark_version()
 
     output_file = out_dir / output_filename
@@ -58,6 +57,8 @@ def write_bceval_results(
 
             metadata: dict[str, Any] = {
                 "model": result.model,
+                "tier": result.tier,
+                **matched_entry.metadata.model_dump(mode="json"),
                 "agent_version": result.agent_version,
                 **result.export_metadata,
                 "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,

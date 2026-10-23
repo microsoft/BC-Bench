@@ -14,6 +14,7 @@ from bcbench_core.exceptions import AgentError
         ("GitHub Copilot CLI 1.0.82\nCommit: abc\n", "1.0.82"),
         ("2.1.221 (Claude Code)\n", "2.1.221"),
         ("1.2.3-preview.4+build.5\n", "1.2.3-preview.4+build.5"),
+        ("18.0.38.34155+a5d9d423a0e0860a51bcb535fdc31b2770b20863\n", "18.0.38.34155+a5d9d423a0e0860a51bcb535fdc31b2770b20863"),
     ],
 )
 def test_cli_version_parsing(output: str, expected: str) -> None:

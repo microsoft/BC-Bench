@@ -24,6 +24,16 @@ on:
         description: "Evaluation category"
         required: true
         type: string
+      tier:
+        description: "Dataset tier the run was evaluated on"
+        required: false
+        type: string
+        default: "gold"
+      experiment:
+        description: "Mark the run as an experiment rather than a baseline"
+        required: false
+        type: boolean
+        default: false
       skip-leaderboard:
         description: "Whether to skip updating the leaderboard"
         required: false
@@ -49,6 +59,11 @@ jobs:
       contents: write
       id-token: write
     runs-on: ubuntu-latest
+    env:
+      EVALUATION_TIER: ${{ inputs.tier }}
+      EVALUATION_AGENT: ${{ inputs.agent }}
+      EVALUATION_MODEL: ${{ inputs.model }}
+      EVALUATION_GIT_REF: ${{ inputs.git-ref || github.ref_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,7 +78,7 @@ jobs:
           merge-multiple: true
 
       - name: Summarize evaluation results
-        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "${{ inputs.git-ref || github.ref_name }}"
+        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "$EVALUATION_GIT_REF"
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -94,18 +109,24 @@ jobs:
           ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$ADO_TOKEN"
 
-          uv tool install bc-eval[capi]==0.3.14 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          uv tool install bc-eval==0.6.1 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
           # Upload summary using bc-eval
-          MODEL_TAG="${{ inputs.model }}"
+          MODEL_TAG="$EVALUATION_MODEL"
           MODEL_TAG="${MODEL_TAG//./-}"
-          BRANCH_TAG="${{ inputs.git-ref || github.ref_name }}"
+          BRANCH_TAG="$EVALUATION_GIT_REF"
           BRANCH_TAG="${BRANCH_TAG//./-}"
+          RUN_NAME="${EVALUATION_AGENT} (${EVALUATION_MODEL}) - #${GITHUB_RUN_ID}"
+          RUN_TAGS="${EVALUATION_AGENT},${MODEL_TAG},${BRANCH_TAG},tier-${EVALUATION_TIER}"
+          if [[ "$EVALUATION_TIER" != "gold" ]]; then
+            RUN_NAME="${RUN_NAME} [${EVALUATION_TIER}]"
+          fi
+
           bceval metrics calculate \
             --feature-name "BC-Bench" \
             --eval-suite-name "${{ inputs.category }}" \
-            --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \
-            --tags "${{ inputs.agent }},${MODEL_TAG},${BRANCH_TAG}" \
+            --eval-run-name "$RUN_NAME" \
+            --tags "$RUN_TAGS" \
             --source "${{ github.sha }}" \
             --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
@@ -113,7 +134,8 @@ jobs:
             --core-score "${{ steps.bceval.outputs.core_score }}" \
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
-            --use-capi ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
+            ${{ inputs.experiment && '--eval-run-type experiment' || '' }} \
+            ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
 
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock && !inputs.skip-leaderboard }}

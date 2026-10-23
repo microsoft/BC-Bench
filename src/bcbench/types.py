@@ -30,6 +30,7 @@ __all__ = [
     "ChecklistAssertion",
     "ChecklistLevel",
     "CommitSha",
+    "DatasetTier",
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
@@ -246,6 +247,12 @@ class AgentHarness(StrEnum):
                 raise ValueError(f"{self.value} does not support repository setup")
 
 
+class DatasetTier(StrEnum):
+    # Every category has a gold dataset; a category may optionally define a harder held-out challenge dataset.
+    GOLD = "gold"
+    CHALLENGE = "challenge"
+
+
 class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
@@ -259,9 +266,14 @@ class EvaluationCategory(StrEnum):
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
-    @property
-    def dataset_path(self) -> Path:
+    def dataset_path(self, tier: DatasetTier = DatasetTier.GOLD) -> Path:
         from bcbench.config import get_config
+
+        match self, tier:
+            case EvaluationCategory.NL2AL, DatasetTier.CHALLENGE:
+                return get_config().paths.dataset_dir / "nl2al_challenge.jsonl"
+            case _, DatasetTier.CHALLENGE:
+                raise ValueError(f"{self.value} has no {tier.value} dataset")
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -669,6 +681,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # Evaluation category
     category: EvaluationCategory
+    tier: DatasetTier = DatasetTier.GOLD
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None

@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.agent.version import get_cli_version
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -52,6 +53,10 @@ def _resolve_bcal_executable() -> str:
     if not resolved:
         raise AgentError(f"'{_BCAL_TOOL}' executable not found on PATH.")
     return resolved
+
+
+def get_bcal_version() -> str:
+    return get_cli_version(shutil.which(_BCAL_TOOL), "BCal")
 
 
 def _process_output(output: str | bytes | None) -> str:

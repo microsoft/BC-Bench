@@ -66,7 +66,7 @@ def build_bcal_target(package_cache_path: Path, export_base: Path, backend_confi
 
     category = EvaluationCategory.NL2AL
     # bcal always requires --page/--audience, but red teaming has no dataset entry of its own at the moment.
-    entry = category.entry_class.load(category.dataset_path)[0]
+    entry = category.entry_class.load(category.dataset_path())[0]
     _ensure_package_cache(package_cache_path, entry.environment_setup_version)
 
     # Azure's simple string callback converts exceptions into assistant responses. Its full

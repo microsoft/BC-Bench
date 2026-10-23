@@ -19,11 +19,12 @@ __all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "R
 
 
 class EntryMetadata(BaseModel):
+    # Every field is exported as-is into each bc-eval row's metadata, so keep fields scalar.
     model_config = ConfigDict(frozen=True)
 
     area: str | None = None
     image_count: Annotated[int, Field(ge=0)] | None = None
-    persona: str | None = None
+    family: str | None = None
 
 
 class BaseDatasetEntry(BaseModel):

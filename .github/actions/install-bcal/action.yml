@@ -1,0 +1,88 @@
+name: Install BCal
+description: Install BCal from the internal feed, either the latest prerelease or an exact version
+
+inputs:
+  client-id:
+    description: Azure client ID for the ADO feed
+    required: true
+  tenant-id:
+    description: Azure tenant ID for the ADO feed
+    required: true
+  package-id:
+    description: BCal NuGet package ID
+    required: true
+  feed:
+    description: "Feed to install from: official, or experiment (the internal test feed)"
+    required: false
+    default: official
+  official-feed-url:
+    description: Official BCal NuGet feed URL
+    required: true
+  experiment-feed-url:
+    description: Internal test feed URL; required when feed is experiment
+    required: false
+    default: ""
+  version:
+    description: Exact NuGet version to install; empty installs the latest prerelease
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Azure Login (OIDC) for ADO feed
+      uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        allow-no-subscriptions: true
+
+    - name: Install Azure Artifacts credential provider
+      shell: pwsh
+      run: |
+        dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool
+
+        echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
+
+    - name: Install BCal package
+      shell: pwsh
+      env:
+        BCAL_PACKAGE_ID: ${{ inputs.package-id }}
+        BCAL_FEED: ${{ inputs.feed }}
+        BCAL_OFFICIAL_FEED_URL: ${{ inputs.official-feed-url }}
+        BCAL_EXPERIMENT_FEED_URL: ${{ inputs.experiment-feed-url }}
+        BCAL_REQUESTED_VERSION: ${{ inputs.version }}
+      run: |
+        $PSNativeCommandUseErrorActionPreference = $false
+
+        $feedUrl = switch ($env:BCAL_FEED) {
+          "official" { $env:BCAL_OFFICIAL_FEED_URL }
+          "experiment" { $env:BCAL_EXPERIMENT_FEED_URL }
+          default { throw "Unknown BCal feed '$env:BCAL_FEED'; expected official or experiment." }
+        }
+        if (-not $feedUrl) { throw "No feed URL configured for BCal feed '$env:BCAL_FEED'." }
+
+        $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+        Write-Output "::add-mask::$adoToken"
+
+        $endpoints = @{
+          endpointCredentials = @(
+            @{
+              endpoint = $feedUrl
+              username = "anything"
+              password = $adoToken
+            }
+          )
+        } | ConvertTo-Json -Compress -Depth 5
+        $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
+
+        $versionArgs = if ($env:BCAL_REQUESTED_VERSION) { @("--version", $env:BCAL_REQUESTED_VERSION) } else { @("--prerelease") }
+
+        # The ADO Artifacts NuGet credential provider intermittently fails to load the service index; retry transient feed errors.
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+          dotnet tool install --global $env:BCAL_PACKAGE_ID @versionArgs --source $feedUrl
+          if ($LASTEXITCODE -eq 0) { break }
+          if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
+          Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
+          Start-Sleep -Seconds 20
+        }

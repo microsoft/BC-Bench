@@ -6,6 +6,7 @@ import pytest
 from bcbench_core.exceptions import AgentError
 from bcbench_core.git import commit_changes, init_repo
 
+from bcbench.agent.bcal import get_bcal_version
 from bcbench.agent.claude import get_claude_version
 from bcbench.agent.pr_review import get_pr_review_version
 
@@ -18,6 +19,16 @@ def test_claude_version_uses_the_evaluation_executable_resolver() -> None:
         assert get_claude_version() == "1.2.3"
     which.assert_called_once_with("claude")
     version.assert_called_once_with("chosen-claude", "Claude Code")
+
+
+def test_bcal_version_uses_the_evaluation_executable() -> None:
+    with (
+        patch("bcbench.agent.bcal.agent.shutil.which", return_value="chosen-bcal") as which,
+        patch("bcbench.agent.bcal.agent.get_cli_version", return_value="1.2.3.4") as version,
+    ):
+        assert get_bcal_version() == "1.2.3.4"
+    which.assert_called_once_with("bcal")
+    version.assert_called_once_with("chosen-bcal", "BCal")
 
 
 def _write_engine(root: Path) -> None:
