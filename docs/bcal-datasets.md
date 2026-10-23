@@ -2,11 +2,11 @@
 
 ## Dataset tiers
 
-All single-turn NL2AL entries live in `dataset/nl2al.jsonl`. Each entry's `metadata.tier` puts it in the `gold` benchmark set (default) or the harder held-out `challenge` set.
+Single-turn NL2AL entries live in two files: `dataset/nl2al.jsonl` is the `gold` benchmark set (default) and `dataset/nl2al_challenge.jsonl` is the harder held-out `challenge` set. NL2AL is currently the only category with a challenge set.
 
 The **Evaluation with bcal** workflow evaluates `gold` by default; manual runs can pick a tier from the `tier` input. The tier is part of the workflow run name, concurrency group, and bc-eval run name and tags, and every raw result and bc-eval row records it.
 
-Every command that loads entries accepts the same filter:
+Every command that loads entries accepts the same option:
 
 ```powershell
 uv run bcbench dataset list --category nl2al --tier challenge

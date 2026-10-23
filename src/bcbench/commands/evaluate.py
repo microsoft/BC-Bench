@@ -88,7 +88,7 @@ def evaluate_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id, tier=tier)[0]
+    entry = category.entry_class.load(category.dataset_path_for(tier), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -160,7 +160,7 @@ def evaluate_claude_code(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id, tier=tier)[0]
+    entry = category.entry_class.load(category.dataset_path_for(tier), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
@@ -272,7 +272,7 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id, tier=tier)[0])
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path_for(tier), entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         command=llm_command,
@@ -355,7 +355,7 @@ def evaluate_mock(
     """
     Evaluate mock agent on single dataset entry for testing purposes.
     """
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id, tier=tier)[0]
+    entry = category.entry_class.load(category.dataset_path_for(tier), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mock agent")

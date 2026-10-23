@@ -14,20 +14,28 @@ using module .\BenchmarkUtils.psm1
     The dataset category used to resolve the dataset path (via Get-BCBenchDatasetPath).
 .PARAMETER DatasetPath
     Optional override for the dataset (.jsonl) path. Defaults to the category-specific path via Get-BCBenchDatasetPath.
+.PARAMETER Version
+    BC version to download directly (e.g. from `bcbench dataset version`), skipping the dataset lookup.
 .PARAMETER Country
     BC artifact country (default: w1).
 .EXAMPLE
     .\scripts\Download-BCSymbols.ps1 -Category bug-fix -InstanceId bug-fix__job-budget-report-1
+.EXAMPLE
+    .\scripts\Download-BCSymbols.ps1 -Version 28.0
 #>
+[CmdletBinding(DefaultParameterSetName = 'ByEntry')]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = 'ByEntry')]
     [string]$InstanceId,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = 'ByEntry')]
     [string]$Category,
 
-    [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category $Category),
+    [Parameter(Mandatory = $false, ParameterSetName = 'ByEntry')]
+    [string]$DatasetPath,
+
+    [Parameter(Mandatory = $true, ParameterSetName = 'ByVersion')]
+    [string]$Version,
 
     [Parameter(Mandatory = $false)]
     [string]$Country = "w1"
@@ -35,13 +43,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-[string] $version = Get-BCBenchEntryVersion -InstanceId $InstanceId -Category $Category -DatasetPath $DatasetPath
-Write-Log "Resolved BC version $version for InstanceId $InstanceId" -Level Info
+if ($PSCmdlet.ParameterSetName -eq 'ByEntry') {
+    if (-not $DatasetPath) { $DatasetPath = Get-BCBenchDatasetPath -Category $Category }
+    $Version = Get-BCBenchEntryVersion -InstanceId $InstanceId -Category $Category -DatasetPath $DatasetPath
+    Write-Log "Resolved BC version $Version for InstanceId $InstanceId" -Level Info
+}
 
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
-[string] $artifactUrl = Get-BCArtifactUrl -version $version -country $Country -select 'Latest'
-if (-not $artifactUrl) { throw "No BC artifact URL resolved for version $version ($Country)" }
+[string] $artifactUrl = Get-BCArtifactUrl -version $Version -country $Country -select 'Latest'
+if (-not $artifactUrl) { throw "No BC artifact URL resolved for version $Version ($Country)" }
 Write-Log "Downloading artifact: $artifactUrl" -Level Info
 
 $paths = Download-Artifacts -artifactUrl $artifactUrl -includePlatform

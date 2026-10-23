@@ -118,7 +118,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
 
     class EntryClass:
         @staticmethod
-        def load(_dataset_path, entry_id: str, tier=None):
+        def load(_dataset_path, entry_id: str):
             assert entry_id == entry.instance_id
             return [entry]
 
@@ -172,7 +172,7 @@ def agent_command_category(tmp_path):
 
     class EntryClass:
         @staticmethod
-        def load(_dataset_path, entry_id: str, tier=None):
+        def load(_dataset_path, entry_id: str):
             assert entry_id == entry.instance_id
             return [entry]
 
@@ -184,7 +184,7 @@ def agent_command_category(tmp_path):
             agent_runner(context)
 
     return entry, SimpleNamespace(
-        dataset_path=tmp_path / "dataset.jsonl",
+        dataset_path_for=lambda _tier: tmp_path / "dataset.jsonl",
         entry_class=EntryClass,
         pipeline=Pipeline(),
         requires_container=False,

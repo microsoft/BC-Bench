@@ -5,16 +5,14 @@
   "panels": {
     "gold": {
       "file": "nl2al.jsonl",
-      "tier": "gold",
       "count": 110,
-      "sha256": "7e230d31fcdf922c60e5d9fe6ed19f9c6ebf03b789fe349d6529d81fad3fe16b",
+      "sha256": "b16c956333fad4a2c44c4ffa69dff93724dae56d70436a3a71dadc4971d5ca4c",
       "evaluation_scope": "single_turn"
     },
     "challenge": {
-      "file": "nl2al.jsonl",
-      "tier": "challenge",
+      "file": "nl2al_challenge.jsonl",
       "count": 65,
-      "sha256": "7e230d31fcdf922c60e5d9fe6ed19f9c6ebf03b789fe349d6529d81fad3fe16b",
+      "sha256": "8563f49db15fa3fc90f466e677109944a83e5ddcbe99024ec5ff5588e47cdd36",
       "evaluation_scope": "single_turn"
     },
     "multiturn": {

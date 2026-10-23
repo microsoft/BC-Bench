@@ -21,7 +21,7 @@ on:
         type: string
         default: "bug-fix"
       tier:
-        description: Dataset tier to list (entries are filtered on metadata.tier)
+        description: Dataset tier to list (gold, or challenge for categories that define one)
         required: false
         type: string
         default: "gold"

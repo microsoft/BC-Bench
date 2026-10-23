@@ -10,7 +10,7 @@ from typing import Any
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import BCalPackageProvenance, EvaluationCategory, ExpectedOutput, ExperimentConfiguration
+from bcbench.types import BCalPackageProvenance, DatasetTier, EvaluationCategory, ExpectedOutput, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +45,13 @@ def write_bceval_results(
     git_ref: str | None = None,
 ) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    entry_cls = category.entry_class
-    dataset_entries: list[BaseDatasetEntry] = entry_cls.load(category.dataset_path)
+    entries_by_tier: dict[DatasetTier, list[BaseDatasetEntry]] = {tier: category.entry_class.load(category.dataset_path_for(tier)) for tier in {result.tier for result in results}}
     benchmark_version = get_benchmark_version()
 
     output_file = out_dir / output_filename
     with output_file.open("w") as f:
         for result in results:
-            matching_entries = [e for e in dataset_entries if e.instance_id == result.instance_id]
+            matching_entries = [e for e in entries_by_tier[result.tier] if e.instance_id == result.instance_id]
 
             if not matching_entries:
                 logger.error(f"No matching dataset entry found for instance_id: {result.instance_id}")
