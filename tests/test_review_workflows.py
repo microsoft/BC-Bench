@@ -20,6 +20,19 @@ def _workflow(name: str) -> str:
     return text
 
 
+def test_ci_mock_artifact_name_matches_code_review_summary_filter() -> None:
+    ci = yaml.safe_load(_workflow("CI.yml"))
+    summary = yaml.safe_load(_workflow("summarize-results.yml"))
+    upload = next(step for step in ci["jobs"]["mock-evaluation"]["steps"] if step.get("uses", "").startswith("actions/upload-artifact@"))
+    download = next(step for step in summary["jobs"]["summarize-results"]["steps"] if step.get("uses", "").startswith("actions/download-artifact@"))
+
+    assert upload["with"]["name"] == "evaluation-results-${{ github.run_id }}-${{ matrix.entry }}"
+    assert upload["with"]["path"] == "${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl"
+    assert download["with"]["pattern"] == "${{ (inputs.dataset != '' || inputs.category == 'code-review') && 'evaluation-results-*' || '*' }}"
+    assert download["with"]["merge-multiple"] is True
+    assert ci["jobs"]["summarize-results"]["with"]["mock"] is True
+
+
 def test_copilot_workflow_routes_code_review_through_copilot() -> None:
     workflow = _workflow("copilot-evaluation.yml")
 
