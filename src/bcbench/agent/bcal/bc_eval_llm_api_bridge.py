@@ -19,6 +19,7 @@ _TAXONOMY_INFERENCE_STEP = "HostAgent"
 # Reasoning effort (not all models support this parameter), different models might have different available values:
 # Set to None to omit the parameter entirely (lets the model/service use its own default).
 _DEFAULT_REASONING_EFFORT: str | None = None
+_TOOL_REASONING_MODEL_PREFIX = "gpt-56-reasoning-"
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -100,13 +101,16 @@ def main() -> int:
         "messages": messages,
         "max_completion_tokens": request.get("max_completion_tokens", 16384),
     }
+    tools = request.get("tools")
     reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
-    if request.get("tools"):
+    if tools:
         kwargs["tools"] = request["tools"]
-        if reasoning_effort not in (None, "none"):
-            raise ValueError("Tool-bearing chat-completions requires reasoning_effort='none'.")
-        kwargs["reasoning_effort"] = "none"
-    elif reasoning_effort is not None:
+        if model.startswith(_TOOL_REASONING_MODEL_PREFIX):
+            if reasoning_effort not in (None, "none"):
+                raise ValueError(f"{model} tool-bearing chat-completions requires reasoning_effort='none'.")
+            reasoning_effort = "none"
+
+    if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
 
     response = client.chat.completions.create(**kwargs)
