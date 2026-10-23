@@ -129,7 +129,6 @@ def test_main_passes_local_certificate_credential_to_llm_api_client(monkeypatch,
         "messages": [{"role": "user", "content": "hi"}],
         "max_completion_tokens": 16384,
         "tools": tools,
-        "reasoning_effort": "none",
     }
 
 
@@ -142,17 +141,62 @@ def test_main_falls_back_to_bc_eval_default_credential_without_local_cert(monkey
     assert fake_llm_api["request"]["reasoning_effort"] == "low"
 
 
-def test_main_defaults_reasoning_effort_to_none_with_tools(monkeypatch, fake_llm_api):
+def test_main_defaults_reasoning_effort_to_none_for_reasoning_alias_with_tools(monkeypatch, fake_llm_api):
     tools = [{"type": "function", "function": {"name": "noop"}}]
 
-    _run_main(monkeypatch, {"model": "gpt-56-ceres", "messages": [], "tools": tools})
+    _run_main(monkeypatch, {"model": "gpt-56-reasoning-sol", "messages": [], "tools": tools})
 
     assert fake_llm_api["request"]["reasoning_effort"] == "none"
+
+
+def test_main_accepts_null_reasoning_effort_for_reasoning_alias_with_tools(monkeypatch, fake_llm_api):
+    tools = [{"type": "function", "function": {"name": "noop"}}]
+
+    _run_main(
+        monkeypatch,
+        {
+            "model": "gpt-56-reasoning-sol",
+            "messages": [],
+            "tools": tools,
+            "reasoning_effort": None,
+        },
+    )
+
+    assert fake_llm_api["request"]["reasoning_effort"] == "none"
+
+
+def test_main_omits_unspecified_reasoning_effort_for_gpt_55_chat_with_tools(monkeypatch, fake_llm_api):
+    tools = [{"type": "function", "function": {"name": "noop"}}]
+
+    _run_main(monkeypatch, {"model": "gpt-55-chat", "messages": [], "tools": tools})
+
+    assert "reasoning_effort" not in fake_llm_api["request"]
+
+
+def test_main_forwards_explicit_reasoning_effort_for_unaffected_model_with_tools(monkeypatch, fake_llm_api):
+    tools = [{"type": "function", "function": {"name": "noop"}}]
+
+    _run_main(
+        monkeypatch,
+        {"model": "gpt-55-chat", "messages": [], "tools": tools, "reasoning_effort": "medium"},
+    )
+
+    assert fake_llm_api["request"]["reasoning_effort"] == "medium"
 
 
 def test_main_omits_reasoning_effort_without_tools(monkeypatch, fake_llm_api):
     _run_main(monkeypatch, {"model": "gpt-56-ceres", "messages": []})
 
+    assert "reasoning_effort" not in fake_llm_api["request"]
+
+
+def test_main_treats_empty_tools_as_no_tools(monkeypatch, fake_llm_api):
+    _run_main(
+        monkeypatch,
+        {"model": "gpt-56-reasoning-sol", "messages": [], "tools": []},
+    )
+
+    assert "tools" not in fake_llm_api["request"]
     assert "reasoning_effort" not in fake_llm_api["request"]
 
 
@@ -162,27 +206,37 @@ def test_main_forwards_explicit_reasoning_effort_without_tools(monkeypatch, fake
     assert fake_llm_api["request"]["reasoning_effort"] == "medium"
 
 
-def test_main_accepts_explicit_none_reasoning_effort_with_tools(monkeypatch, fake_llm_api):
+def test_main_accepts_explicit_none_reasoning_effort_for_reasoning_alias_with_tools(monkeypatch, fake_llm_api):
     tools = [{"type": "function", "function": {"name": "noop"}}]
 
     _run_main(
         monkeypatch,
-        {"model": "gpt-56-ceres", "messages": [], "tools": tools, "reasoning_effort": "none"},
+        {
+            "model": "gpt-56-reasoning-sol",
+            "messages": [],
+            "tools": tools,
+            "reasoning_effort": "none",
+        },
     )
 
     assert fake_llm_api["request"]["reasoning_effort"] == "none"
 
 
-def test_main_rejects_incompatible_reasoning_effort_with_tools_before_request(monkeypatch, fake_llm_api):
+def test_main_rejects_incompatible_reasoning_effort_for_reasoning_alias_before_request(monkeypatch, fake_llm_api):
     tools = [{"type": "function", "function": {"name": "noop"}}]
 
     with pytest.raises(
         ValueError,
-        match="Tool-bearing chat-completions requires reasoning_effort='none'",
+        match="gpt-56-reasoning-sol tool-bearing chat-completions requires reasoning_effort='none'",
     ):
         _run_main(
             monkeypatch,
-            {"model": "gpt-56-ceres", "messages": [], "tools": tools, "reasoning_effort": "low"},
+            {
+                "model": "gpt-56-reasoning-sol",
+                "messages": [],
+                "tools": tools,
+                "reasoning_effort": "medium",
+            },
         )
 
     assert "request" not in fake_llm_api
