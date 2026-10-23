@@ -94,7 +94,9 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           package-id: ${{ secrets.BCAL_PACKAGE_ID }}
-          feed-url: ${{ inputs.bcal-feed == 'experiment' && secrets.BCAL_TEST_FEED_URL || secrets.BCAL_FEED_URL }}
+          feed: ${{ inputs.bcal-feed || 'official' }}
+          official-feed-url: ${{ secrets.BCAL_FEED_URL }}
+          experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
           version: ${{ env.BCAL_REQUESTED_VERSION }}
 
       - name: Build bc-eval LLM API bridge venv

@@ -11,9 +11,17 @@ inputs:
   package-id:
     description: BCal NuGet package ID
     required: true
-  feed-url:
-    description: BCal NuGet feed URL
+  feed:
+    description: "Feed to install from: official, or experiment (the internal test feed)"
+    required: false
+    default: official
+  official-feed-url:
+    description: Official BCal NuGet feed URL
     required: true
+  experiment-feed-url:
+    description: Internal test feed URL; required when feed is experiment
+    required: false
+    default: ""
   version:
     description: Exact NuGet version to install; empty installs the latest prerelease
     required: false
@@ -40,10 +48,19 @@ runs:
       shell: pwsh
       env:
         BCAL_PACKAGE_ID: ${{ inputs.package-id }}
-        BCAL_FEED_URL: ${{ inputs.feed-url }}
+        BCAL_FEED: ${{ inputs.feed }}
+        BCAL_OFFICIAL_FEED_URL: ${{ inputs.official-feed-url }}
+        BCAL_EXPERIMENT_FEED_URL: ${{ inputs.experiment-feed-url }}
         BCAL_REQUESTED_VERSION: ${{ inputs.version }}
       run: |
         $PSNativeCommandUseErrorActionPreference = $false
+
+        $feedUrl = switch ($env:BCAL_FEED) {
+          "official" { $env:BCAL_OFFICIAL_FEED_URL }
+          "experiment" { $env:BCAL_EXPERIMENT_FEED_URL }
+          default { throw "Unknown BCal feed '$env:BCAL_FEED'; expected official or experiment." }
+        }
+        if (-not $feedUrl) { throw "No feed URL configured for BCal feed '$env:BCAL_FEED'." }
 
         $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
         Write-Output "::add-mask::$adoToken"
@@ -51,7 +68,7 @@ runs:
         $endpoints = @{
           endpointCredentials = @(
             @{
-              endpoint = $env:BCAL_FEED_URL
+              endpoint = $feedUrl
               username = "anything"
               password = $adoToken
             }
@@ -63,7 +80,7 @@ runs:
 
         # The ADO Artifacts NuGet credential provider intermittently fails to load the service index; retry transient feed errors.
         for ($attempt = 1; $attempt -le 3; $attempt++) {
-          dotnet tool install --global $env:BCAL_PACKAGE_ID @versionArgs --source $env:BCAL_FEED_URL
+          dotnet tool install --global $env:BCAL_PACKAGE_ID @versionArgs --source $feedUrl
           if ($LASTEXITCODE -eq 0) { break }
           if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
           Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"

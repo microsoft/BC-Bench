@@ -65,7 +65,9 @@ def test_bcal_feed_selects_official_or_internal_test_feed():
 
     assert feed["default"] == "official"
     assert feed["options"] == ["official", "experiment"]
-    assert install["with"]["feed-url"] == "${{ inputs.bcal-feed == 'experiment' && secrets.BCAL_TEST_FEED_URL || secrets.BCAL_FEED_URL }}"
+    assert install["with"]["feed"] == "${{ inputs.bcal-feed || 'official' }}"
+    assert install["with"]["official-feed-url"] == "${{ secrets.BCAL_FEED_URL }}"
+    assert install["with"]["experiment-feed-url"] == "${{ secrets.BCAL_TEST_FEED_URL }}"
 
 
 def test_bcal_installs_selected_package():
@@ -79,7 +81,8 @@ def test_bcal_installs_selected_package():
     assert "bcal-version-mode" not in workflow
     assert '@("--version", $env:BCAL_REQUESTED_VERSION)' in action_install["run"]
     assert '@("--prerelease")' in action_install["run"]
-    assert "--source $env:BCAL_FEED_URL" in action_install["run"]
+    assert "--source $feedUrl" in action_install["run"]
+    assert 'throw "No feed URL configured' in action_install["run"]
     assert "--add-source" not in action_install["run"]
     assert "${{ inputs." not in action_install["run"]
 
