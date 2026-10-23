@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "7c98b750c200d88ed0a81daaea5e71184a3af01b",
+  "datasetHash": "8A36A70E92D9C5D6ADB179F4BB39A29409B116ACE8CB29764A4DF2E3E2DF9383",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "neg-pr12152-20261020",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/12152#discussion_r4158597544"
+  ],
+  "entryIds": [
+    "synthetic__testing-transactionmodel-not-required-01"
+  ],
+  "newEntryIds": [
+    "synthetic__testing-transactionmodel-not-required-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__testing-transactionmodel-not-required-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/12152#discussion_r4158597544",
+          "purpose": "false_positive_guard",
+          "file": "src/System Application/Test/Environment Information/src/EnvironmentInformationTest.Codeunit.al",
+          "lineStart": 103,
+          "lineEnd": 103,
+          "rationale": "Thumbs-down feedback plus the maintainer reply rejecting TransactionModel usage altogether (property should be removed from the product) show the AutoCommit->AutoRollback suggestion was wrong in substance, not just severity; the accepted fix deleted the attribute instead. No expected or ignored comment exists for this target in the dataset, so a guard expecting no finding on the TransactionModel line is faithful without inventing a clean precondition."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "7540A725B8803327C7924370D45ACBA3DECA096F408A99419602B4DD732CB7AA",
+      "instanceId": "synthetic__testing-transactionmodel-not-required-01"
+    }
+  ],
+  "sourceSnapshots": [
+    {
+      "commentUrl": "https://github.com/microsoft/BCApps/pull/12152#discussion_r4158597544",
+      "repo": "microsoft/BCApps",
+      "file": "src/System Application/Test/Environment Information/src/EnvironmentInformationTest.Codeunit.al",
+      "prBaseCommit": "ddffe8888a09e2f70339db87c31c5fb09f866816",
+      "headCommit": "fdd8048645b8160a22a89f468de951a78213b864",
+      "reviewCommit": "5c28dc37b5c241ebd6f788b0dabbf9716774acc0",
+      "baseCommit": "ddffe8888a09e2f70339db87c31c5fb09f866816",
+      "lineStart": 103,
+      "lineEnd": 103,
+      "patch": "diff --git a/src/System Application/Test/Environment Information/src/EnvironmentInformationTest.Codeunit.al b/src/System Application/Test/Environment Information/src/EnvironmentInformationTest.Codeunit.al\n--- a/src/System Application/Test/Environment Information/src/EnvironmentInformationTest.Codeunit.al\t\n+++ b/src/System Application/Test/Environment Information/src/EnvironmentInformationTest.Codeunit.al\t\n@@ -98,5 +98,20 @@ codeunit 135091 \"Environment Information Test\"\n         // [Then] Should return true\n         Assert.IsTrue(EnvironmentInformation.IsEarlyPreview(), 'Testability should have dictated an early preview environment');\n     end;\n-}\n \n+    [Test]\n+    [TransactionModel(TransactionModel::AutoCommit)]\n+    procedure TestEnvironmentDescriptionIsClearedAfterEnvironmentCopy()\n+    var\n+        EnvironmentTriggers: Codeunit \"Environment Triggers\";\n+    begin\n+        // [Given] The source environment has a description\n+        EnvironmentInformation.SetEnvironmentDescription('Source environment description');\n+\n+        // [When] The environment is copied\n+        EnvironmentTriggers.OnAfterCopyEnvironmentPerDatabase(0, 'Source', 1, 'Destination');\n+\n+        // [Then] The destination environment description is empty\n+        Assert.AreEqual('', EnvironmentInformation.GetEnvironmentDescription(), 'The environment description should be cleared after copying the environment.');\n+    end;\n+}\n"
+    }
+  ]
+}
