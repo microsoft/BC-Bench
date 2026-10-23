@@ -63,7 +63,7 @@ runs:
 
         # The ADO Artifacts NuGet credential provider intermittently fails to load the service index; retry transient feed errors.
         for ($attempt = 1; $attempt -le 3; $attempt++) {
-          dotnet tool install --global $env:BCAL_PACKAGE_ID @versionArgs --add-source $env:BCAL_FEED_URL
+          dotnet tool install --global $env:BCAL_PACKAGE_ID @versionArgs --source $env:BCAL_FEED_URL
           if ($LASTEXITCODE -eq 0) { break }
           if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
           Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"

@@ -79,6 +79,8 @@ def test_bcal_installs_selected_package():
     assert "bcal-version-mode" not in workflow
     assert '@("--version", $env:BCAL_REQUESTED_VERSION)' in action_install["run"]
     assert '@("--prerelease")' in action_install["run"]
+    assert "--source $env:BCAL_FEED_URL" in action_install["run"]
+    assert "--add-source" not in action_install["run"]
     assert "${{ inputs." not in action_install["run"]
 
 
