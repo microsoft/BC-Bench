@@ -45,10 +45,7 @@ def write_bceval_results(
     git_ref: str | None = None,
 ) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    tiers = {result.tier for result in results}
-    if len(tiers) != 1:
-        raise ValueError(f"Expected results from a single dataset tier, got: {sorted(tiers)}")
-    dataset_entries: list[BaseDatasetEntry] = category.entry_class.load(category.dataset_path(tiers.pop()))
+    dataset_entries: list[BaseDatasetEntry] = category.entry_class.load(category.dataset_path(results[0].tier))
     benchmark_version = get_benchmark_version()
 
     output_file = out_dir / output_filename
@@ -67,8 +64,7 @@ def write_bceval_results(
             metadata: dict[str, Any] = {
                 "model": result.model,
                 "tier": result.tier,
-                "area": matched_entry.metadata.area,
-                "family": matched_entry.metadata.family,
+                **matched_entry.metadata.model_dump(mode="json"),
                 "agent_version": result.agent_version,
                 "bcal_package_source": result.bcal_package.source if result.bcal_package else None,
                 "bcal_package_branch": result.bcal_package.branch if result.bcal_package else None,

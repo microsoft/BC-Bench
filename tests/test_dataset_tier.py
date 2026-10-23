@@ -64,21 +64,15 @@ def _raw_result(tmp_path, tier: DatasetTier, index: int = 0) -> BaseEvaluationRe
     return JudgeBasedEvaluationResult.create_raw(context, output="codeunit 50100 X {}")
 
 
-def test_bceval_export_loads_entries_from_the_run_tier_and_exports_classification(tmp_path):
+def test_bceval_export_loads_entries_from_the_run_tier_and_exports_entry_metadata(tmp_path):
     results = [_raw_result(tmp_path, DatasetTier.CHALLENGE, i) for i in range(2)]
     entries = NL2ALEntry.load(NL2AL.dataset_path(DatasetTier.CHALLENGE))[:2]
 
     write_bceval_results(results, tmp_path, "run", "bceval.jsonl", NL2AL)
 
     rows = [json.loads(line) for line in (tmp_path / "bceval.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert [(row["id"], row["metadata"]["tier"], row["metadata"]["area"], row["metadata"]["family"]) for row in rows] == [
-        (e.instance_id, DatasetTier.CHALLENGE, e.metadata.area, e.metadata.family) for e in entries
-    ]
+    assert [row["id"] for row in rows] == [e.instance_id for e in entries]
+    for row, entry in zip(rows, entries, strict=True):
+        assert row["metadata"]["tier"] == DatasetTier.CHALLENGE
+        assert row["metadata"].items() >= entry.metadata.model_dump(mode="json").items()
     assert all(e.metadata.family for e in entries)
-
-
-def test_bceval_export_rejects_mixed_tiers(tmp_path):
-    results = [_raw_result(tmp_path, tier) for tier in DatasetTier]
-
-    with pytest.raises(ValueError, match="single dataset tier"):
-        write_bceval_results(results, tmp_path, "run", "bceval.jsonl", NL2AL)
