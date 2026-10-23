@@ -14,14 +14,12 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 
 def run_copilot_agent(
@@ -31,6 +29,7 @@ def run_copilot_agent(
     repo_path: Path,
     output_dir: Path,
     runtime: AgentRuntimeConfig | None = None,
+    timeout: int = 60 * 60,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
@@ -93,7 +92,7 @@ def run_copilot_agent(
             prompt=prompt,
             model=model,
             work_dir=repo_path,
-            timeout=_config.timeout.agent_execution,
+            timeout=timeout,
             env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
             options=options,
         )

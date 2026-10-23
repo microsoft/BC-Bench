@@ -26,14 +26,13 @@ from bcbench_core.git import commit_changes, has_changes, init_repo
 
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentTimeoutError
+from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 _FINDINGS_OUTPUT_FILE = "al-code-review-findings.json"
 _REVIEW_OUTPUT_FILE = "review.json"
@@ -41,8 +40,7 @@ _PREPARE_BCQUALITY_SCRIPT = Path(__file__).parent / "scripts" / "Prepare-BCQuali
 
 
 def _load_pr_review_settings() -> dict[str, Any]:
-    config_file = _config.paths.agent_share_dir / "config.yaml"
-    return yaml.safe_load(config_file.read_text(encoding="utf-8"))["pr_review"]
+    return yaml.safe_load(SHARED_CONFIG_FILE.read_text(encoding="utf-8"))["pr_review"]
 
 
 def _resolve_pr_review_root(engine_path: Path | None) -> Path:
@@ -162,6 +160,7 @@ def run_pr_review_agent(
     output_dir: Path,
     engine_path: Path | None = None,
     min_severity: str | None = None,
+    timeout: int = 60 * 60,
 ) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
 
@@ -217,7 +216,7 @@ def run_pr_review_agent(
             capture_output=True,
             text=True,
             encoding="utf-8",
-            timeout=_config.timeout.agent_execution,
+            timeout=timeout,
             check=True,
         )
         logger.debug(f"Engine stdout:\n{result.stdout}")
@@ -226,8 +225,8 @@ def run_pr_review_agent(
         count = _write_review_json(output_dir, repo_path)
         logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
     except subprocess.TimeoutExpired:
-        logger.exception(f"Engine review timed out after {_config.timeout.agent_execution} seconds")
-        metrics = PRReviewMetrics(execution_time=_config.timeout.agent_execution)
+        logger.exception(f"Engine review timed out after {timeout} seconds")
+        metrics = PRReviewMetrics(execution_time=timeout)
         raise AgentTimeoutError("Engine review timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"Engine review failed (exit {e.returncode}):\n{e.stdout}\n{e.stderr}")

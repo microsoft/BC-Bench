@@ -6,7 +6,6 @@ import pytest
 from bcbench_core.agent.copilot import CopilotProcessError, CopilotTimeoutError
 
 from bcbench.agent.copilot.agent import run_copilot_agent
-from bcbench.config import get_config
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.types import EvaluationCategory, ExperimentConfiguration, PluginConfig
 from tests.conftest import create_dataset_entry
@@ -152,16 +151,17 @@ def configured_copilot_run(tmp_path):
 
 def test_copilot_timeout_adapts_core_metrics_and_preserves_experiment_metadata(configured_copilot_run):
     repo_path, output_dir, gateway, run = configured_copilot_run
-    timeout = get_config().timeout.agent_execution
+    timeout = 42
     run.side_effect = subprocess.TimeoutExpired(["copilot"], timeout)
 
     with pytest.raises(AgentTimeoutError, match="Copilot CLI timed out") as error:
-        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir)
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, timeout=timeout)
 
     assert error.value.metrics is not None
     assert error.value.metrics.execution_time == timeout
     assert error.value.config == ExperimentConfiguration(mcp_servers=["probe"], al_lsp_enabled=True, custom_instructions=True, skills_enabled=True, custom_agent="al-dev")
     assert isinstance(error.value.__cause__, CopilotTimeoutError)
+    assert run.call_args.kwargs["timeout"] == timeout
     gateway.stop.assert_called_once_with()
 
 
