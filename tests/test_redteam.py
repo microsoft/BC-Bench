@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import click
 import pytest
+from bcbench_core.exceptions import AgentError
 from rich.console import Console
 from typer.main import get_command
 
@@ -22,7 +23,6 @@ from bcbench import redteam
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.commands.redteam import _asr_table, _attack_result, _rows_table, redteam_app
-from bcbench.exceptions import AgentError
 
 
 @pytest.fixture

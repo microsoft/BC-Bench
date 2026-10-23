@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from bcbench.agent.copilot.metrics import parse_output
+from bcbench_core.agent.copilot.metrics import parse_output
 
 
 def _json_line(data: dict[str, object]) -> str:
@@ -174,3 +174,22 @@ def test_parse_output_logs_readable_transcript(caplog: pytest.LogCaptureFixture)
     assert "Copilot: Inspecting the implementation." in caplog.messages
     assert "Copilot tool: rg" in caplog.messages
     assert "Copilot: Done." in caplog.messages
+
+
+def test_parse_output_skips_malformed_events():
+    metrics, response = parse_output(
+        [
+            "",
+            "[1, 2]",
+            _json_line({"type": "tool.execution_start", "data": {"toolName": ""}}),
+            _json_line({"type": "assistant.message", "data": "not an object"}),
+            _json_line({"type": "session.usage_checkpoint", "data": "not an object"}),
+            _json_line({"type": "result", "usage": "not an object"}),
+            _json_line({"type": "model.call_start", "data": {}}),
+        ]
+    )
+
+    assert metrics is not None
+    assert metrics.turn_count == 1
+    assert metrics.tool_usage is None
+    assert response is None

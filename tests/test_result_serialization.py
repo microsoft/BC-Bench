@@ -1,10 +1,11 @@
 import json
 
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import AgentHarness, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 

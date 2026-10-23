@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared.altool_paths import (
     build_assembly_probing_paths,
@@ -10,7 +11,6 @@ from bcbench.agent.shared.altool_paths import (
 )
 from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentError
 from bcbench.types import AgentHarness, AgentRuntimeConfig, EvaluationCategory
 
 logger = logging.getLogger(__name__)

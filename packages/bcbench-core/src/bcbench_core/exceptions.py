@@ -118,3 +118,7 @@ class TestExecutionTimeoutExpired(Exception):
         self.timeout = timeout
         message = f"Test execution timed out (tests: {tests}) after {timeout} seconds"
         super().__init__(message)
+
+
+class AgentError(Exception):
+    """Agent execution errors."""
