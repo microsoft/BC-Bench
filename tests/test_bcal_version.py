@@ -95,7 +95,7 @@ def test_evaluate_bcal_exposes_expected_version_option_and_environment_variable(
 
 
 def test_expected_version_mismatch_saves_actual_version_without_running_agent(tmp_path) -> None:
-    path = EvaluationCategory.NL2AL.dataset_path
+    path = EvaluationCategory.NL2AL.dataset_path()
     entry = NL2ALEntry.load(path)[0]
 
     class Pipeline:

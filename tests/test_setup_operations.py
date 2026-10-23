@@ -71,7 +71,7 @@ def test_setup_repo_prebuild_commits_scope_compatibility_baseline(tmp_path: Path
 
 
 def test_benchmark_patches_do_not_depend_on_removed_scope_lines() -> None:
-    for entry in BugFixEntry.load(EvaluationCategory.BUG_FIX.dataset_path):
+    for entry in BugFixEntry.load(EvaluationCategory.BUG_FIX.dataset_path()):
         for patch in (entry.patch, entry.test_patch):
             assert re.search(r"(?im)^[-+ ]\s*Scope\s*=\s*OnPrem;", patch) is None, entry.instance_id
 

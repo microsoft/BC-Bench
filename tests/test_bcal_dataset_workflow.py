@@ -41,11 +41,10 @@ def test_bcal_threads_selected_tier_through_every_job():
     assert 'evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER"' in text
 
 
-def test_bcal_downloads_symbols_for_the_tier_resolved_version():
+def test_bcal_downloads_symbols_from_the_selected_tier():
     step = _step(_workflow("bcal-evaluation.yml"), "evaluate-with-bcal", "Download BC Application symbols")
 
-    assert step["env"]["BC_VERSION"] == "${{ steps.bcversion.outputs.version }}"
-    assert 'Download-BCSymbols.ps1 -Version "$env:BC_VERSION"' in step["run"]
+    assert '-Category nl2al -Tier "$env:TIER"' in step["run"]
 
 
 def test_bcal_run_identity_includes_tier_and_package_selection():

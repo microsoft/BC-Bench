@@ -51,6 +51,8 @@ function Get-RepoCloneInfo {
     Get the dataset path based on the provided category, must be maintained when adding new categories.
 .PARAMETER Category
     The category for which to get the dataset path
+.PARAMETER Tier
+    The dataset tier: gold (default) or challenge (only for categories that define one, currently nl2al)
 .OUTPUTS
     String representing the dataset path
 #>
@@ -61,18 +63,27 @@ function Get-BCBenchDatasetPath {
         [Parameter(Mandatory = $true)]
         # Category validation lives only here: every caller resolves the dataset path through this function, so there's no need to duplicate ValidateSet on each caller.
         [ValidateSet("bug-fix", "test-generation", "code-review", "nl2al", "data-query", "extensibility-request-advisor", "extensibility-request-implement", "extensibility-request-triage")]
-        [string] $Category
+        [string] $Category,
+
+        [ValidateSet("gold", "challenge")]
+        [string] $Tier = "gold"
     )
 
-    switch ($Category) {
-        "bug-fix" { $DatasetName = "bcbench.jsonl" }
-        "test-generation" { $DatasetName = "bcbench.jsonl" }
-        "code-review" { $DatasetName = "codereview.jsonl" }
-        "nl2al" { $DatasetName = "nl2al.jsonl" }
-        "data-query" { $DatasetName = "dataquery.jsonl" }
-        "extensibility-request-advisor" { $DatasetName = "extensibility_request_advisor.jsonl" }
-        "extensibility-request-implement" { $DatasetName = "extensibility_request_implement.jsonl" }
-        "extensibility-request-triage" { $DatasetName = "extensibility_request_triage.jsonl" }
+    if ($Tier -eq "challenge") {
+        if ($Category -ne "nl2al") { throw "Category '$Category' has no challenge dataset" }
+        $DatasetName = "nl2al_challenge.jsonl"
+    }
+    else {
+        switch ($Category) {
+            "bug-fix" { $DatasetName = "bcbench.jsonl" }
+            "test-generation" { $DatasetName = "bcbench.jsonl" }
+            "code-review" { $DatasetName = "codereview.jsonl" }
+            "nl2al" { $DatasetName = "nl2al.jsonl" }
+            "data-query" { $DatasetName = "dataquery.jsonl" }
+            "extensibility-request-advisor" { $DatasetName = "extensibility_request_advisor.jsonl" }
+            "extensibility-request-implement" { $DatasetName = "extensibility_request_implement.jsonl" }
+            "extensibility-request-triage" { $DatasetName = "extensibility_request_triage.jsonl" }
+        }
     }
 
     [string] $projectRoot = Split-Path $PSScriptRoot -Parent

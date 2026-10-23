@@ -27,7 +27,7 @@ def list_entries(
 ) -> None:
     """List dataset entry IDs."""
     entry_cls = category.entry_class
-    resolved_path = category.dataset_path_for(tier)
+    resolved_path = category.dataset_path(tier)
 
     if modified_only:
         import subprocess
@@ -75,7 +75,7 @@ def view_entry(
     from rich.panel import Panel
     from rich.table import Table
 
-    entry: BaseDatasetEntry = category.entry_class.load(category.dataset_path_for(tier), entry_id=entry_id)[0]
+    entry: BaseDatasetEntry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     console = Console()
 
     info_table = Table(show_header=False, box=None)
@@ -179,7 +179,7 @@ def version(
     github_output: Annotated[str | None, typer.Option(help="Write the version to GITHUB_OUTPUT with this key name")] = None,
 ) -> None:
     """Print an entry's environment_setup_version (the BC sandbox version)."""
-    entry = category.entry_class.load(category.dataset_path_for(tier), entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     print(entry.environment_setup_version)
     if github_output:
         write_step_outputs({github_output: entry.environment_setup_version})

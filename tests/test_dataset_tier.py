@@ -15,22 +15,20 @@ NL2AL = EvaluationCategory.NL2AL
 
 @pytest.mark.parametrize("category", list(EvaluationCategory))
 def test_gold_tier_is_the_category_dataset(category: EvaluationCategory):
-    assert category.dataset_path_for(DatasetTier.GOLD) == category.dataset_path
+    assert category.dataset_path(DatasetTier.GOLD) == category.dataset_path()
 
 
 @pytest.mark.parametrize("category", [c for c in EvaluationCategory if c is not NL2AL])
 def test_categories_without_challenge_dataset_reject_challenge_tier(category: EvaluationCategory):
-    assert category.challenge_dataset_path is None
     with pytest.raises(ValueError, match="has no challenge dataset"):
-        category.dataset_path_for(DatasetTier.CHALLENGE)
+        category.dataset_path(DatasetTier.CHALLENGE)
 
 
 def test_nl2al_challenge_dataset_is_separate_from_gold():
-    gold_ids = {e.instance_id for e in NL2ALEntry.load(NL2AL.dataset_path_for(DatasetTier.GOLD))}
-    challenge_ids = {e.instance_id for e in NL2ALEntry.load(NL2AL.dataset_path_for(DatasetTier.CHALLENGE))}
+    gold_ids = {e.instance_id for e in NL2ALEntry.load(NL2AL.dataset_path(DatasetTier.GOLD))}
+    challenge_ids = {e.instance_id for e in NL2ALEntry.load(NL2AL.dataset_path(DatasetTier.CHALLENGE))}
 
-    assert NL2AL.challenge_dataset_path is not None
-    assert NL2AL.challenge_dataset_path != NL2AL.dataset_path
+    assert NL2AL.dataset_path(DatasetTier.CHALLENGE) != NL2AL.dataset_path()
     assert gold_ids
     assert challenge_ids
     assert gold_ids.isdisjoint(challenge_ids)
@@ -38,7 +36,7 @@ def test_nl2al_challenge_dataset_is_separate_from_gold():
 
 @pytest.mark.parametrize("tier", list(DatasetTier))
 def test_dataset_list_defaults_to_gold_and_selects_tier(tier: DatasetTier):
-    expected = NL2ALEntry.load(NL2AL.dataset_path_for(tier))
+    expected = NL2ALEntry.load(NL2AL.dataset_path(tier))
     args = ["dataset", "list", "--category", "nl2al"] + ([] if tier is DatasetTier.GOLD else ["--tier", tier])
 
     result = CliRunner().invoke(app, args)
@@ -48,7 +46,7 @@ def test_dataset_list_defaults_to_gold_and_selects_tier(tier: DatasetTier):
 
 
 def test_result_records_context_tier_and_legacy_results_default_to_gold(tmp_path):
-    entry = NL2ALEntry.load(NL2AL.dataset_path_for(DatasetTier.CHALLENGE))[0]
+    entry = NL2ALEntry.load(NL2AL.dataset_path(DatasetTier.CHALLENGE))[0]
     context = create_evaluation_context(tmp_path, entry=entry, category=NL2AL)
     context.tier = DatasetTier.CHALLENGE
 
@@ -62,7 +60,7 @@ def test_result_records_context_tier_and_legacy_results_default_to_gold(tmp_path
 def test_bceval_export_resolves_each_result_from_its_tier_dataset(tmp_path):
     results: list[BaseEvaluationResult] = []
     for tier in DatasetTier:
-        entry = NL2ALEntry.load(NL2AL.dataset_path_for(tier))[0]
+        entry = NL2ALEntry.load(NL2AL.dataset_path(tier))[0]
         context = create_evaluation_context(tmp_path, entry=entry, category=NL2AL)
         context.tier = tier
         results.append(JudgeBasedEvaluationResult.create_raw(context, output="codeunit 50100 X {}"))

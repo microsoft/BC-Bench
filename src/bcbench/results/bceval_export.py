@@ -45,7 +45,7 @@ def write_bceval_results(
     git_ref: str | None = None,
 ) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    entries_by_tier: dict[DatasetTier, list[BaseDatasetEntry]] = {tier: category.entry_class.load(category.dataset_path_for(tier)) for tier in {result.tier for result in results}}
+    entries_by_tier: dict[DatasetTier, list[BaseDatasetEntry]] = {tier: category.entry_class.load(category.dataset_path(tier)) for tier in {result.tier for result in results}}
     benchmark_version = get_benchmark_version()
 
     output_file = out_dir / output_filename

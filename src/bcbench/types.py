@@ -335,9 +335,14 @@ class EvaluationCategory(StrEnum):
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
-    @property
-    def dataset_path(self) -> Path:
+    def dataset_path(self, tier: DatasetTier = DatasetTier.GOLD) -> Path:
         from bcbench.config import get_config
+
+        match self, tier:
+            case EvaluationCategory.NL2AL, DatasetTier.CHALLENGE:
+                return get_config().paths.dataset_dir / "nl2al_challenge.jsonl"
+            case _, DatasetTier.CHALLENGE:
+                raise ValueError(f"{self.value} has no {tier.value} dataset")
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -358,25 +363,6 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "extensibility_request_triage.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
-
-    @property
-    def challenge_dataset_path(self) -> Path | None:
-        from bcbench.config import get_config
-
-        match self:
-            case EvaluationCategory.NL2AL:
-                return get_config().paths.dataset_dir / "nl2al_challenge.jsonl"
-            case _:
-                return None
-
-    def dataset_path_for(self, tier: DatasetTier) -> Path:
-        match tier:
-            case DatasetTier.GOLD:
-                return self.dataset_path
-            case DatasetTier.CHALLENGE:
-                if self.challenge_dataset_path is None:
-                    raise ValueError(f"{self.value} has no {tier.value} dataset")
-                return self.challenge_dataset_path
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
