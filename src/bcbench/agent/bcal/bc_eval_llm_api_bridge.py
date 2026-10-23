@@ -100,11 +100,13 @@ def main() -> int:
         "messages": messages,
         "max_completion_tokens": request.get("max_completion_tokens", 16384),
     }
+    reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
     if request.get("tools"):
         kwargs["tools"] = request["tools"]
-
-    reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
-    if reasoning_effort is not None:
+        if reasoning_effort not in (None, "none"):
+            raise ValueError("Tool-bearing chat-completions requires reasoning_effort='none'.")
+        kwargs["reasoning_effort"] = "none"
+    elif reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
 
     response = client.chat.completions.create(**kwargs)
