@@ -10,7 +10,7 @@ from typing import Any
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import BCalPackageProvenance, DatasetTier, EvaluationCategory, ExpectedOutput, ExperimentConfiguration
+from bcbench.types import BCalPackageProvenance, EvaluationCategory, ExpectedOutput, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +45,16 @@ def write_bceval_results(
     git_ref: str | None = None,
 ) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    entries_by_tier: dict[DatasetTier, list[BaseDatasetEntry]] = {tier: category.entry_class.load(category.dataset_path(tier)) for tier in {result.tier for result in results}}
+    tiers = {result.tier for result in results}
+    if len(tiers) != 1:
+        raise ValueError(f"Expected results from a single dataset tier, got: {sorted(tiers)}")
+    dataset_entries: list[BaseDatasetEntry] = category.entry_class.load(category.dataset_path(tiers.pop()))
     benchmark_version = get_benchmark_version()
 
     output_file = out_dir / output_filename
     with output_file.open("w") as f:
         for result in results:
-            matching_entries = [e for e in entries_by_tier[result.tier] if e.instance_id == result.instance_id]
+            matching_entries = [e for e in dataset_entries if e.instance_id == result.instance_id]
 
             if not matching_entries:
                 logger.error(f"No matching dataset entry found for instance_id: {result.instance_id}")
@@ -64,6 +67,8 @@ def write_bceval_results(
             metadata: dict[str, Any] = {
                 "model": result.model,
                 "tier": result.tier,
+                "area": matched_entry.metadata.area,
+                "family": matched_entry.metadata.family,
                 "agent_version": result.agent_version,
                 "bcal_package_source": result.bcal_package.source if result.bcal_package else None,
                 "bcal_package_branch": result.bcal_package.branch if result.bcal_package else None,

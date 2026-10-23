@@ -57,15 +57,28 @@ def test_result_records_context_tier_and_legacy_results_default_to_gold(tmp_path
     assert BaseEvaluationResult.from_json(json.loads(json.dumps(payload))).tier is DatasetTier.GOLD
 
 
-def test_bceval_export_resolves_each_result_from_its_tier_dataset(tmp_path):
-    results: list[BaseEvaluationResult] = []
-    for tier in DatasetTier:
-        entry = NL2ALEntry.load(NL2AL.dataset_path(tier))[0]
-        context = create_evaluation_context(tmp_path, entry=entry, category=NL2AL)
-        context.tier = tier
-        results.append(JudgeBasedEvaluationResult.create_raw(context, output="codeunit 50100 X {}"))
+def _raw_result(tmp_path, tier: DatasetTier, index: int = 0) -> BaseEvaluationResult:
+    entry = NL2ALEntry.load(NL2AL.dataset_path(tier))[index]
+    context = create_evaluation_context(tmp_path, entry=entry, category=NL2AL)
+    context.tier = tier
+    return JudgeBasedEvaluationResult.create_raw(context, output="codeunit 50100 X {}")
+
+
+def test_bceval_export_loads_entries_from_the_run_tier_and_exports_classification(tmp_path):
+    results = [_raw_result(tmp_path, DatasetTier.CHALLENGE, i) for i in range(2)]
+    entries = NL2ALEntry.load(NL2AL.dataset_path(DatasetTier.CHALLENGE))[:2]
 
     write_bceval_results(results, tmp_path, "run", "bceval.jsonl", NL2AL)
 
     rows = [json.loads(line) for line in (tmp_path / "bceval.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert [(row["id"], row["metadata"]["tier"]) for row in rows] == [(r.instance_id, r.tier) for r in results]
+    assert [(row["id"], row["metadata"]["tier"], row["metadata"]["area"], row["metadata"]["family"]) for row in rows] == [
+        (e.instance_id, DatasetTier.CHALLENGE, e.metadata.area, e.metadata.family) for e in entries
+    ]
+    assert all(e.metadata.family for e in entries)
+
+
+def test_bceval_export_rejects_mixed_tiers(tmp_path):
+    results = [_raw_result(tmp_path, tier) for tier in DatasetTier]
+
+    with pytest.raises(ValueError, match="single dataset tier"):
+        write_bceval_results(results, tmp_path, "run", "bceval.jsonl", NL2AL)

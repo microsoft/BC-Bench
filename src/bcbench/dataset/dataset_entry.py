@@ -23,7 +23,7 @@ class EntryMetadata(BaseModel):
 
     area: str | None = None
     image_count: Annotated[int, Field(ge=0)] | None = None
-    persona: str | None = None
+    family: str | None = None
 
 
 class BaseDatasetEntry(BaseModel):
