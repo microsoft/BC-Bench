@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from collections import Counter
 from hashlib import sha256
@@ -18,12 +19,77 @@ _INTERNAL = "synthetic__security-014"
 _RELATION = "synthetic__data-modeling-tablerelation-restriction-mismatch-01"
 _NOTICE = "synthetic__style-012"
 _STATEMENT = "synthetic__style-013"
-_ENTRY_IDS = (_SCAN, _API, _GROUPS, _BULK, _INTERNAL, _RELATION, _NOTICE, _STATEMENT)
+_NOTE_TOOLTIP = "synthetic__style-018"
+_CLOSE_TOOLTIP = "synthetic__style-tooltip-mismatch-01"
+_COST_BASIS = "synthetic__performance-018"
+_VENDOR_REPORT = "synthetic__performance-023"
+_PENDING_CRM = "synthetic__privacy-010"
+_HTTP_LOCKS = "synthetic__privacy-015"
+_RESET = "synthetic__style-010"
+_FIRST_GOLD_BATCH = (_COST_BASIS, _VENDOR_REPORT, _PENDING_CRM, _HTTP_LOCKS, _RESET)
+_ENTRY_IDS = (_SCAN, _API, _GROUPS, _BULK, _INTERNAL, _RELATION, _NOTICE, _STATEMENT, _NOTE_TOOLTIP, _CLOSE_TOOLTIP, *_FIRST_GOLD_BATCH)
+_TOOLTIP_ALIAS_BODY = (
+    "This exact source field and its bound page control both lack tooltip text. Add the effective tooltip on either declaration. "
+    "This is an alternative anchor for the existing AA0218 neutral issue, not a second required issue."
+)
+_TOOLTIP_ALIASES = {
+    _NOTE_TOOLTIP: ReviewComment(
+        file="src/SampleNoteExt.TableExt.al",
+        line_start=5,
+        line_end=5,
+        severity=Severity.MEDIUM,
+        domain="ui",
+        body=_TOOLTIP_ALIAS_BODY,
+        articles=["ui/bound-page-field-inherits-source-field-tooltip"],
+        kind=ReviewCommentKind.ANALYZER_DIAGNOSTIC,
+        diagnostic_id="AA0218",
+    ),
+    _CLOSE_TOOLTIP: ReviewComment(
+        file="src/DemoSpendCard/DemoSpendRequest.Table.al",
+        line_start=8,
+        line_end=8,
+        severity=Severity.MEDIUM,
+        domain="ui",
+        body=_TOOLTIP_ALIAS_BODY,
+        kind=ReviewCommentKind.ANALYZER_DIAGNOSTIC,
+        diagnostic_id="AA0218",
+    ),
+}
 
 
 def _unique_object(pairs):
     assert len(dict(pairs)) == len(pairs), "Duplicate JSON object keys"
     return dict(pairs)
+
+
+@pytest.fixture(scope="module")
+def before_first_gold_batch():
+    # Restore only this batch's five repaired records and two aliases, not the audit artifacts.
+    snapshot = EvaluationCategory.CODE_REVIEW.dataset_path.parent.parent / "tests" / "fixtures" / "codereview-first-gold-batch-baseline.jsonl"
+    frozen = {json.loads(line)["instance_id"]: line for line in snapshot.read_bytes().splitlines(keepends=True)}
+    assert set(frozen) == set(_FIRST_GOLD_BATCH)
+    lines = EvaluationCategory.CODE_REVIEW.dataset_path.read_bytes().splitlines(keepends=True)
+    seen = set()
+    for index, line in enumerate(lines):
+        entry = json.loads(line, object_pairs_hook=_unique_object)
+        entry_id = entry["instance_id"]
+        assert entry_id not in seen
+        seen.add(entry_id)
+        if entry_id in frozen:
+            lines[index] = frozen[entry_id]
+        elif entry_id in _TOOLTIP_ALIASES:
+            assert [ReviewComment.model_validate(comment) for comment in entry.pop("ignored_comments")] == [_TOOLTIP_ALIASES[entry_id]]
+            lines[index] = (json.dumps(entry, ensure_ascii=False) + "\n").encode()
+    assert len(seen) == 145
+    assert _TOOLTIP_ALIASES.keys() <= seen
+    restored = b"".join(lines)
+    assert sha256(restored).hexdigest() == "42178a85e9e8ce023f32ef030a95f2c2829f76268d47cac47c8beafd577a8a30"
+    return restored
+
+
+@pytest.fixture(scope="module")
+def frozen_gold_entries(before_first_gold_batch):
+    return {entry.instance_id: entry for entry in (CodeReviewEntry.model_validate_json(line) for line in before_first_gold_batch.splitlines())}
 
 
 @pytest.fixture(scope="module")
@@ -65,6 +131,249 @@ def materialized_entries(tmp_path_factory):
             assert 1 <= comment.line_start <= (comment.line_end or comment.line_start) <= len(lines)
         materialized[entry_id] = entry, files
     return materialized
+
+
+@pytest.mark.parametrize(
+    ("entry_id", "page_index", "table_declaration", "page_declaration"),
+    [
+        (_NOTE_TOOLTIP, 0, 'field(50120; "Sample Note"; Text[50])', 'field(SampleNote; Rec."Sample Note")'),
+        (_CLOSE_TOOLTIP, 1, 'field(1; "No."; Code[20])', 'field("No."; Rec."No.")'),
+    ],
+)
+def test_table_tooltip_alias_is_neutral_for_the_exact_existing_page_binding(materialized_entries, before_first_gold_batch, entry_id, page_index, table_declaration, page_declaration):
+    entry, files = materialized_entries[entry_id]
+    alias = _TOOLTIP_ALIASES[entry_id]
+    assert entry.ignored_comments == [alias]
+    assert entry.environment_setup_version == "27.0"
+    page_gold = entry.expected_comments[page_index]
+    assert len(entry.expected_comments) == page_index + 1
+    assert page_gold.kind == alias.kind == ReviewCommentKind.ANALYZER_DIAGNOSTIC
+    assert page_gold.diagnostic_id == alias.diagnostic_id == "AA0218"
+    assert page_gold.file != alias.file
+    assert page_gold.articles == alias.articles
+    for gold, declaration in ((alias, table_declaration), (page_gold, page_declaration)):
+        lines = files[gold.file].splitlines()
+        assert lines[gold.line_start - 1].strip() == declaration
+        field_body = "\n".join(lines[gold.line_start :]).split("}", 1)[0]
+        assert "ToolTip" not in field_body
+
+    if entry_id == _NOTE_TOOLTIP:
+        page = files[page_gold.file]
+        assert 'field(No; Rec."No.")' in page
+        assert "field(Name; Rec.Name)" in page
+        assert not any(gold.kind == ReviewCommentKind.REVIEW_FINDING for gold in entry.expected_comments)
+    else:
+        close_gold = entry.expected_comments[0]
+        assert close_gold.kind == ReviewCommentKind.REVIEW_FINDING
+        assert close_gold.severity == Severity.MEDIUM
+        assert close_gold.line_start == 27
+        assert "processed for approval" in close_gold.body
+        assert "Rec.Status := Rec.Status::Closed;" in files[close_gold.file]
+
+
+@pytest.mark.parametrize(("entry_id", "addition_count"), [(_COST_BASIS, 1), (_VENDOR_REPORT, 1), (_PENDING_CRM, 1), (_HTTP_LOCKS, 3), (_RESET, 1)])
+def test_first_gold_batch_preserves_existing_gold_and_reanchors_without_changing_meaning(materialized_entries, frozen_gold_entries, entry_id, addition_count):
+    entry, files = materialized_entries[entry_id]
+    original = frozen_gold_entries[entry_id]
+    assert entry.model_dump(exclude={"patch", "expected_comments"}) == original.model_dump(exclude={"patch", "expected_comments"})
+    assert len(entry.expected_comments) == len(original.expected_comments) + addition_count
+    old_sources = {file.path: {line.target_line_no: line.value.rstrip("\r\n") for hunk in file for line in hunk if not line.is_removed} for file in PatchSet(original.patch)}
+    for before, after in zip(original.expected_comments, entry.expected_comments[: len(original.expected_comments)], strict=True):
+        assert before.model_dump(exclude={"line_start", "line_end"}) == after.model_dump(exclude={"line_start", "line_end"})
+        for old_line, new_line in ((before.line_start, after.line_start), (before.line_end, after.line_end)):
+            if old_line is not None:
+                assert new_line is not None
+                assert old_sources[before.file][old_line] == files[after.file].splitlines()[new_line - 1]
+    for gold in entry.expected_comments[len(original.expected_comments) :]:
+        assert gold.kind == ReviewCommentKind.REVIEW_FINDING
+        assert gold.severity in (Severity.MEDIUM, Severity.HIGH)
+        assert gold.articles == []
+
+
+@pytest.mark.parametrize("entry_id", _FIRST_GOLD_BATCH)
+def test_first_gold_batch_repairs_only_explicit_target_compatibility_blockers(materialized_entries, frozen_gold_entries, entry_id):
+    _, files = materialized_entries[entry_id]
+    replacements = {
+        _COST_BASIS: {
+            "src/BOMBufferMgt.Codeunit.al": [("BOMBuffer.Quantity", 'BOMBuffer."Qty. per BOM Line"')],
+            "src/CustomReportLayoutsList.Page.al": [
+                ('    CardPageId = "Custom Report Layout";\n', ""),
+                ('Rec."Layout Format"', "Rec.Type"),
+                ("Rec.\"Last Modified by User\" <> ''", "not IsNullGuid(Rec.SystemModifiedBy)"),
+                ('User.Get(Rec."Last Modified by User")', "User.Get(Rec.SystemModifiedBy)"),
+                ("Rec.\"Created by User\" <> ''", "not IsNullGuid(Rec.SystemCreatedBy)"),
+                ('User.Get(Rec."Created by User")', "User.Get(Rec.SystemCreatedBy)"),
+            ],
+        },
+        _VENDOR_REPORT: {},
+        _PENDING_CRM: {
+            file: [
+                ('Record "EA Outbox Email"', 'Record "Synthetic Outbox Email"'),
+                ("        HttpContent: HttpContent;\n", "        HttpContent: HttpContent;\n        ContentHeaders: HttpHeaders;\n"),
+                ("HttpContent.GetHeaders().Clear();", "HttpContent.GetHeaders(ContentHeaders);\n" + indent + "ContentHeaders.Clear();"),
+                ("HttpContent.GetHeaders().Add(", "ContentHeaders.Add("),
+            ]
+            for file, indent in (("src/ExternalCRMSync.Codeunit.al", "        "), ("src/OutboxEmailDispatcher.Codeunit.al", "                "))
+        },
+        _HTTP_LOCKS: {
+            "src/AIContextBuilder.Codeunit.al": [("AgentTask.Description", "AgentTask.Title")],
+            **{
+                file: [
+                    ('Record "EA Outbox Email"', 'Record "Synthetic Outbox Email"'),
+                    ("Content.GetHeaders(ContentHeaders);", "Content.GetHeaders(ContentHeaders);\n" + indent + "ContentHeaders.Clear();"),
+                ]
+                for file, indent in (
+                    ("src/CustomerDataExporter.Codeunit.al", "        "),
+                    ("src/ExternalCRMSync.Codeunit.al", "        "),
+                    ("src/OutboxEmailDispatcher.Codeunit.al", "                "),
+                )
+            },
+        },
+        _RESET: {
+            "src/ServiceMgtSetup.Page.al": [
+                ('page 50104 "Service Mgt. Setup"', 'page 50104 "Synthetic Service Mgt. Setup"'),
+                ('Rec."Service Shipment Nos."', 'Rec."Posted Service Shipment Nos."'),
+                ("Skip Manual Res. Alloc.", "Skip Manual Reservation"),
+                ("skip manual resource allocation", "skip manual reservation"),
+            ]
+        },
+    }
+    old_paths = set()
+    for file in PatchSet(frozen_gold_entries[entry_id].patch):
+        old_paths.add(file.path)
+        source = "".join(line.value for hunk in file for line in hunk if not line.is_removed)
+        for old, new in replacements[entry_id].get(file.path, []):
+            source = source.replace(old, new)
+        assert files[file.path] == source
+    new_paths = {
+        _COST_BASIS: {"src/SyntheticReceiptStatus.TableExt.al"},
+        _VENDOR_REPORT: set(),
+        _PENDING_CRM: {"src/SyntheticCRMCustomer.TableExt.al", "src/SyntheticOutboxEmail.Table.al"},
+        _HTTP_LOCKS: {"src/SyntheticCRMCustomer.TableExt.al", "src/SyntheticOutboxEmail.Table.al"},
+        _RESET: {"src/SyntheticServiceSetup.TableExt.al"},
+    }
+    assert set(files) - old_paths == new_paths[entry_id]
+
+
+def test_cost_basis_gold_preserves_all_three_cost_branches_and_missing_item_trigger(materialized_entries):
+    entry, files = materialized_entries[_COST_BASIS]
+    source = files["src/BOMBufferMgt.Codeunit.al"]
+    assert 'TotalCost += Item."Standard Cost" * BOMBuffer."Qty. per BOM Line"' in source
+    assert 'TotalCost += Item."Unit Cost" * BOMBuffer."Qty. per BOM Line"' in source
+    assert 'TotalCost += GetLastDirectCost(Item) * BOMBuffer."Qty. per BOM Line";' in source
+    assert 'BOMBuffer."Unit Cost" := Item."Unit Cost";' in source
+    assert 'BOMBuffer."Total Cost" := BOMBuffer."Unit Cost" * BOMBuffer."Qty. per BOM Line";' in source
+    assert "                end;\n\n                // Update line with calculated cost\n                UpdateBOMLineWithCost(BOMBuffer, Item);" in source
+    gold = entry.expected_comments[-1]
+    assert gold.line_start == 59
+    assert "do not prescribe a new costing policy" in gold.body
+    assert 'PurchRcptLine.CalcFields("Currency Code");' in files["src/PurchRcptLineMgt.Codeunit.al"]
+    assert 'field(50140; "Processed Date"; Date)' in files["src/SyntheticReceiptStatus.TableExt.al"]
+    page = files["src/CustomReportLayoutsList.Page.al"]
+    assert "trigger OnAfterGetRecord()" in page
+    assert "User.Get(Rec.SystemModifiedBy)" in page
+    assert "User.Get(Rec.SystemCreatedBy)" in page
+
+
+def test_vendor_report_gold_has_a_literal_witness_distinct_from_csv_gold(materialized_entries):
+    entry, files = materialized_entries[_VENDOR_REPORT]
+    source = files["src/ReportBuilder.Codeunit.al"]
+    header_match = re.search(r"VendorReportHeaderTok: Label '([^']*)'", source)
+    separator_match = re.search(r"RowSeparatorTok: Label '([^']*)'", source)
+    assert header_match is not None
+    assert separator_match is not None
+    header = header_match.group(1)
+    separator = separator_match.group(1)
+    assert "ReportBody := VendorReportHeaderTok;" in source
+    assert "ReportBody += Format(VendorLedgerEntry.\"Entry No.\") + ' | ' +" in source
+    assert 'Format(VendorLedgerEntry."Remaining Amount") + RowSeparatorTok;' in source
+    # Literal concatenation witness, not AL runtime execution.
+    assert header + "123 | 45" + separator == "Entry No. | Remaining Amount123 | 45; "
+    assert entry.expected_comments[-1].line_start == 28
+    assert entry.expected_comments[-1].severity == Severity.MEDIUM
+    assert entry.expected_comments[3].line_start == 13
+    assert "CSV" in entry.expected_comments[3].body
+
+
+@pytest.mark.parametrize("entry_id", [_PENDING_CRM, _HTTP_LOCKS])
+def test_privacy_dependencies_are_explicit_synthetic_persistent_records(materialized_entries, entry_id):
+    _, files = materialized_entries[entry_id]
+    customer = files["src/SyntheticCRMCustomer.TableExt.al"]
+    outbox = files["src/SyntheticOutboxEmail.Table.al"]
+    assert 'tableextension 57300 "Synthetic CRM Customer" extends Customer' in customer
+    assert 'field(57300; "CRM Sync Required"; Boolean)' in customer
+    assert 'table 57301 "Synthetic Outbox Email"' in outbox
+    assert "Temporary" not in outbox
+    assert "OptionMembers = Pending,Sent,Failed;" in outbox
+    assert 'key(PK; "Entry No.")' in outbox
+    assert "procedure GetBodyText(): Text\n    begin\n        exit(Body);" in outbox
+    assert "field(5; Body; Text[2048])" in outbox
+    for file, source in files.items():
+        assert 'Record "EA Outbox Email"' not in source
+        assert "GetHeaders()" not in source
+        if "ContentHeaders.Add(" in source:
+            assert source.index("ContentHeaders.Clear();") < source.index("ContentHeaders.Add(")
+        if file.endswith(".Codeunit.al"):
+            assert "PrivacyNotice" not in "\n".join(line for line in source.splitlines() if not line.strip().startswith("//"))
+
+
+def test_blank_email_still_clears_pending_work_and_retains_unescaped_payload_gold(materialized_entries):
+    entry, files = materialized_entries[_PENDING_CRM]
+    source = files["src/ExternalCRMSync.Codeunit.al"]
+    assert "if Customer.\"E-Mail\" = '' then\n            exit;" in source
+    assert 'SyncCustomerToExternalCRM(Customer);\n                Customer."CRM Sync Required" := false;\n                Customer.Modify(false);' in source
+    assert "JsonPayload := StrSubstNo(" in source
+    assert "JsonPayload := StrSubstNo(" in files["src/OutboxEmailDispatcher.Codeunit.al"]
+    assert entry.expected_comments[-1].line_start == 43
+    assert entry.expected_comments[-1].severity == Severity.HIGH
+    assert "Unsent work is marked complete" in entry.expected_comments[-1].body
+
+
+def test_http_gold_keeps_lock_holding_paths_and_unauthenticated_graph_request(materialized_entries):
+    entry, files = materialized_entries[_HTTP_LOCKS]
+    crm = files["src/ExternalCRMSync.Codeunit.al"]
+    outbox = files["src/OutboxEmailDispatcher.Codeunit.al"]
+    assert "Customer.FindSet(true)" in crm
+    assert 'SyncCustomerToExternalCRM(Customer);\n                Customer."CRM Sync Required" := false;\n                Customer.Modify(true);' in crm
+    assert "HttpClient.Post(CrmSyncUrlTok, Content, Response);" in crm
+    assert outbox.index("OutboxEmail.FindSet(true)") < outbox.index("HttpClient.Post(") < outbox.index("OutboxEmail.Modify(true)")
+    assert "Commit(" not in crm + outbox
+    assert "ReadIsolation" not in crm + outbox
+    assert "https://graph.microsoft.com/v1.0/me/sendMail" in outbox
+    assert "Authorization" not in outbox
+    assert "DefaultRequestHeaders" not in outbox
+    assert "HttpClient: HttpClient;" in outbox
+    golds = entry.expected_comments[-3:]
+    assert [(g.line_start, g.domain, g.severity) for g in golds] == [
+        (33, "performance", Severity.MEDIUM),
+        (15, "performance", Severity.MEDIUM),
+        (22, "security", Severity.HIGH),
+    ]
+    assert "do not fix this with an unqualified per-row Commit" in golds[0].body
+    assert "do not assume app-only tokens can call /me" in golds[2].body
+    assert "AgentTask.Title" in files["src/AIContextBuilder.Codeunit.al"]
+    assert 'User."Full Name"' in files["src/AIContextBuilder.Codeunit.al"]
+
+
+def test_reset_gold_preserves_partial_reset_and_misleading_address_binding(materialized_entries):
+    entry, files = materialized_entries[_RESET]
+    source = files["src/ServiceMgtSetup.Page.al"]
+    extension = files["src/SyntheticServiceSetup.TableExt.al"]
+    assert 'field(50105; "Ship-to Address"; Text[100])' in extension
+    assert 'field(50104; "Service Order Type"; Code[10])' in extension
+    assert 'field("Enable Concurrent Posting"; Rec."Ship-to Address")' in source
+    assert "ToolTip = 'Reset all settings to their default values.';" in source
+    assert "Confirm('Are you sure you want to reset all settings to their default values?')" in source
+    reset = source.split("    local procedure ResetToDefaults()", 1)[1]
+    assert re.findall(r'Rec\."([^"]+)" :=', reset) == [
+        "Default Response Time (Hours)",
+        "One Service Item Line/Order",
+        "Skip Manual Reservation",
+        "Fault Reason Code Mandatory",
+    ]
+    assert "Rec.Init()" not in reset
+    assert entry.expected_comments[-1].line_start == 168
+    assert "do not blindly erase user configuration" in entry.expected_comments[-1].body
 
 
 @pytest.mark.parametrize(("entry_id", "expected_count"), [(_SCAN, 2), (_API, 0), (_GROUPS, 1)])
@@ -254,14 +563,14 @@ def test_statement_semantic_finding_and_compiler_diagnostic_are_distinguished(ma
     assert [gold.kind for gold in golds] == [ReviewCommentKind.REVIEW_FINDING, ReviewCommentKind.COMPILER_DIAGNOSTIC]
 
 
-def test_audit_dispositions_cover_every_original_miss_without_relabeling_uncertainty():
+def test_audit_dispositions_cover_every_original_miss_without_relabeling_uncertainty(before_first_gold_batch, frozen_gold_entries):
     dataset = EvaluationCategory.CODE_REVIEW.dataset_path
     audit = json.loads((dataset.parent / "audits" / "run-39616090167.json").read_text(encoding="utf-8"))
-    entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
+    entries = frozen_gold_entries
     rows = audit["rows"]
     assert len(rows) == len({row["row_id"] for row in rows}) == 97
     assert Counter(row["status"] for row in rows) == audit["disposition_counts"]
-    assert audit["dataset_after_sha256"] == sha256(dataset.read_bytes()).hexdigest()
+    assert audit["dataset_after_sha256"] == sha256(before_first_gold_batch).hexdigest()
     assert audit["historical_metrics"]["matched"] == 105
     assert audit["historical_metrics"]["expected"] == 202
     assert audit["historical_metrics"]["incorrect_by_gold_matching"] == 322
@@ -287,13 +596,13 @@ def test_audit_dispositions_cover_every_original_miss_without_relabeling_uncerta
         assert any(gold.file == addition["file"] and gold.line_start == addition["line_start"] for gold in entries[addition["instance_id"]].expected_comments)
 
 
-def test_mechanical_inventory_preserves_all_records_sources_and_symmetric_historical_scope():
+def test_mechanical_inventory_preserves_all_records_sources_and_symmetric_historical_scope(before_first_gold_batch, frozen_gold_entries):
     dataset = EvaluationCategory.CODE_REVIEW.dataset_path
     inventory = json.loads((dataset.parent / "audits" / "mechanical-gold-scope.json").read_text(encoding="utf-8"))
-    entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
+    entries = frozen_gold_entries
     assert inventory["status"] == "approved_classification_applied"
     assert inventory["classified_dataset_sha256"] == "1495700a9b4089851f6648754cc199cb1a410cb241e3f27ba51757d01204116f"
-    assert inventory["current_dataset_sha256"] == sha256(dataset.read_bytes()).hexdigest()
+    assert inventory["current_dataset_sha256"] == sha256(before_first_gold_batch).hexdigest()
     assert len(entries) == len(inventory["entry_expected_counts"]) == 145
     assert sum(inventory["entry_expected_counts"].values()) == len(inventory["rows"]) == 233
     assert inventory["disposition_counts"] == {"retain": 188, "mechanical_neutral": 45}
@@ -348,10 +657,10 @@ def test_false_delivery_addition_does_not_claim_recovery_of_an_original_false_po
     assert "Resolved: one cause/fix" in addition["granularity_status"]
 
 
-def test_unmatched_audit_covers_frozen_population_without_converting_adjudications_to_scores():
+def test_unmatched_audit_covers_frozen_population_without_converting_adjudications_to_scores(before_first_gold_batch, frozen_gold_entries):
     dataset = EvaluationCategory.CODE_REVIEW.dataset_path
     ledger = json.loads((dataset.parent / "audits" / "run-39616090167-unmatched.json").read_text(encoding="utf-8"))
-    entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
+    entries = frozen_gold_entries
     rows = ledger["rows"]
     assert len(rows) == len({row["row_id"] for row in rows}) == 322
     assert len({row["instance_id"] for row in rows}) == 103
@@ -367,7 +676,7 @@ def test_unmatched_audit_covers_frozen_population_without_converting_adjudicatio
         "genuine_false_positive": 78,
         "unresolved": 81,
     }
-    assert ledger["dataset_after_sha256"] == sha256(dataset.read_bytes()).hexdigest()
+    assert ledger["dataset_after_sha256"] == sha256(before_first_gold_batch).hexdigest()
     assert len(ledger["source_packet_sha256"]) == 183
     assert len(ledger["entry_evidence"]) == 103
     assert f"{_NOTICE}:F001" not in {row["row_id"] for row in rows}
@@ -453,12 +762,12 @@ def test_temporary_table_repair_uses_actual_base_and_does_not_invent_replacement
     assert "a29ca6a" in retired["reason"]
 
 
-def test_dataset_alignment_keeps_mechanical_misses_and_changes_only_three_gold_bodies():
+def test_dataset_alignment_keeps_mechanical_misses_and_changes_only_three_gold_bodies(before_first_gold_batch):
     dataset = EvaluationCategory.CODE_REVIEW.dataset_path
     inventory = json.loads((dataset.parent / "audits" / "mechanical-gold-scope.json").read_text(encoding="utf-8"))
     misses = json.loads((dataset.parent / "audits" / "run-39616090167.json").read_text(encoding="utf-8"))
     alignment = inventory["alignment_review"]
-    assert alignment["after_dataset_sha256"] == sha256(dataset.read_bytes()).hexdigest()
+    assert alignment["after_dataset_sha256"] == sha256(before_first_gold_batch).hexdigest()
     assert alignment["before_dataset_sha256"] == "f30803905a7a1235688d151384490ce1f998214d614dea8ad117ed49bbcb39a4"
     assert alignment["knowledge_commit"] == "45cbe369527bbe6d4cad0b2a877bd1d61a617cdb"
     assert len(alignment["reviewed_articles"]) == 9
