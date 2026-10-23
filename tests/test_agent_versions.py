@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 from bcbench_core.git import commit_changes, init_repo
 
+from bcbench.agent.bcal import get_bcal_version
 from bcbench.agent.claude import get_claude_version
 from bcbench.agent.copilot import get_copilot_version
 from bcbench.agent.pr_review import get_pr_review_version
@@ -18,6 +19,7 @@ from bcbench.exceptions import AgentError
         ("GitHub Copilot CLI 1.0.82\nCommit: abc\n", "1.0.82"),
         ("2.1.221 (Claude Code)\n", "2.1.221"),
         ("1.2.3-preview.4+build.5\n", "1.2.3-preview.4+build.5"),
+        ("18.0.38.34155+a5d9d423a0e0860a51bcb535fdc31b2770b20863\n", "18.0.38.34155+a5d9d423a0e0860a51bcb535fdc31b2770b20863"),
     ],
 )
 def test_cli_version_parsing(output: str, expected: str) -> None:
@@ -68,6 +70,16 @@ def test_claude_version_uses_the_evaluation_executable_resolver() -> None:
         assert get_claude_version() == "1.2.3"
     which.assert_called_once_with("claude")
     version.assert_called_once_with("chosen-claude", "Claude Code")
+
+
+def test_bcal_version_uses_the_evaluation_executable() -> None:
+    with (
+        patch("bcbench.agent.bcal.agent.shutil.which", return_value="chosen-bcal") as which,
+        patch("bcbench.agent.bcal.agent.get_cli_version", return_value="1.2.3.4") as version,
+    ):
+        assert get_bcal_version() == "1.2.3.4"
+    which.assert_called_once_with("bcal")
+    version.assert_called_once_with("chosen-bcal", "BCal")
 
 
 def _write_engine(root: Path) -> None:

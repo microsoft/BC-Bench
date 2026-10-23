@@ -10,27 +10,21 @@ from typing import Any
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import BCalPackageProvenance, EvaluationCategory, ExpectedOutput, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 
 
-def _experiment_metadata(
-    experiment: ExperimentConfiguration | None,
-    bcal_package: BCalPackageProvenance | None,
-    git_ref: str | None,
-    benchmark_version: str,
-) -> dict[str, Any]:
+def _experiment_metadata(experiment: ExperimentConfiguration | None, git_ref: str | None, benchmark_version: str) -> dict[str, Any]:
     """Metadata identifying whether a run is a baseline or an experiment, and its configuration.
 
     bc-eval promotes the ``EvalRunType`` key to the Kusto ``EvalRunType``/``testJobType`` fields
-    when ``--eval-run-type`` is left at its default, so no extra CLI flag is needed.
+    unless the summarize workflow overrides it with ``--eval-run-type experiment``.
     """
-    has_configuration_experiment = experiment is not None and not experiment.is_empty()
-    is_experiment: bool = has_configuration_experiment or (bcal_package is not None and bcal_package.is_experiment)
+    is_experiment: bool = experiment is not None and not experiment.is_empty()
     return {
         "EvalRunType": "experiment" if is_experiment else "baseline",
-        "experiment": experiment.model_dump(mode="json") if has_configuration_experiment and experiment else None,
+        "experiment": experiment.model_dump(mode="json") if is_experiment and experiment else None,
         "git_branch": git_ref,
         "benchmark_version": benchmark_version,
     }
@@ -66,9 +60,6 @@ def write_bceval_results(
                 "tier": result.tier,
                 **matched_entry.metadata.model_dump(mode="json"),
                 "agent_version": result.agent_version,
-                "bcal_package_source": result.bcal_package.source if result.bcal_package else None,
-                "bcal_package_branch": result.bcal_package.branch if result.bcal_package else None,
-                "bcal_package_feed": result.bcal_package.feed_name if result.bcal_package else None,
                 **result.export_metadata,
                 "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
                 "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,
@@ -81,7 +72,7 @@ def write_bceval_results(
                 "project": result.project,
                 "error_message": result.error_message,
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
-                **_experiment_metadata(result.experiment, result.bcal_package, git_ref, benchmark_version),
+                **_experiment_metadata(result.experiment, git_ref, benchmark_version),
             }
 
             bceval_result = {

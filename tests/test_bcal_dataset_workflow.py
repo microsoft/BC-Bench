@@ -20,7 +20,11 @@ def _workflow(name: str):
 
 
 def _step(workflow: dict[Any, Any], job: str, name: str) -> dict[str, Any]:
-    return next(step for step in workflow["jobs"][job]["steps"] if step.get("name") == name)
+    return _step_named(workflow["jobs"][job]["steps"], name)
+
+
+def _step_named(steps: list[dict[str, Any]], name: str) -> dict[str, Any]:
+    return next(step for step in steps if step.get("name") == name)
 
 
 def test_bcal_tier_choices_match_dataset_tiers():
@@ -50,65 +54,43 @@ def test_bcal_downloads_symbols_from_the_selected_tier():
 def test_bcal_run_identity_includes_tier_and_package_selection():
     workflow = _workflow("bcal-evaluation.yml")
 
-    assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ")
-    assert (
-        "${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }}"
-        in workflow["run-name"]
-    )
-    assert workflow["concurrency"]["group"].startswith(f"bcal-evaluation-{SELECTED_TIER}-")
+    assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ${{{{ inputs.bcal-feed || 'official' }}}}@${{{{ inputs.bcal-version || 'latest' }}}} ")
+    assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}"
 
 
-def test_bcal_package_selection_defaults_to_official_latest_and_derives_branch_provenance():
+def test_bcal_feed_selects_official_or_internal_test_feed():
     workflow = _workflow("bcal-evaluation.yml")
-    inputs = workflow[True]["workflow_dispatch"]["inputs"]
-    validation = _step(workflow, "validate-bcal-package", "Validate and resolve BCal package selection")
-    provenance = _step(workflow, "validate-bcal-package", "Verify experimental package provenance")
+    feed = workflow[True]["workflow_dispatch"]["inputs"]["bcal-feed"]
+    install = _step(workflow, "evaluate-with-bcal", "Install bcal CLI from internal feed")
 
-    assert inputs["bcal-package-selection"] == {
-        "description": "BCAL package selection",
-        "required": False,
-        "default": "official-latest",
-        "type": "choice",
-        "options": ["official-latest", "official-pinned", "experiment-pinned"],
-    }
-    assert "bcal-package-channel" not in inputs
-    assert "bcal-version-mode" not in inputs
-    assert "bcal-branch" not in inputs
-    assert "BCAL_TEST_FEED_URL" not in workflow["env"]
-    assert validation["env"]["EXPERIMENT_FEED_URL"] == "${{ secrets.BCAL_TEST_FEED_URL }}"
-    assert "pkgs.dev.azure.com" not in _workflow_text("bcal-evaluation.yml")
-    assert 'channel="experiment"' in validation["run"]
-    assert 'version_mode="pinned"' in validation["run"]
-    assert 'echo "version-mode=$version_mode" >> "$GITHUB_OUTPUT"' in validation["run"]
-    assert 'feed="DynamicsSMBTest@Local"' in validation["run"]
-    assert provenance["if"] == "${{ steps.resolve.outputs.source == 'experiment' }}"
-    assert ".\\scripts\\Resolve-BCalPackageProvenance.ps1" in provenance["run"]
-    assert "-ExpectedBranch" not in provenance["run"]
-    assert '-TestFeedUrl "$env:BCAL_TEST_FEED_URL"' in provenance["run"]
-    assert workflow["jobs"]["validate-bcal-package"]["outputs"]["branch"] == "${{ steps.provenance.outputs.branch || steps.resolve.outputs.branch }}"
+    assert feed["default"] == "official"
+    assert feed["options"] == ["official", "experiment"]
+    assert install["with"]["feed"] == "${{ inputs.bcal-feed || 'official' }}"
+    assert install["with"]["official-feed-url"] == "${{ secrets.BCAL_FEED_URL }}"
+    assert install["with"]["experiment-feed-url"] == "${{ secrets.BCAL_TEST_FEED_URL }}"
 
 
 def test_bcal_installs_selected_package():
     workflow = _workflow_text("bcal-evaluation.yml")
+    install = _step(_workflow("bcal-evaluation.yml"), "evaluate-with-bcal", "Install bcal CLI from internal feed")
+    action = yaml.safe_load((WORKFLOWS.parent / "actions" / "install-bcal" / "action.yml").read_text(encoding="utf-8"))
+    action_install = _step_named(action["runs"]["steps"], "Install BCal package")
 
-    assert ".github/actions/install-bcal" in workflow
-    assert "bcal-package-selection" in workflow
+    assert install["uses"] == "$/.github/actions/install-bcal"
+    assert install["with"]["version"] == "${{ env.BCAL_REQUESTED_VERSION }}"
     assert "bcal-version-mode" not in workflow
+    assert '@("--version", $env:BCAL_REQUESTED_VERSION)' in action_install["run"]
+    assert '@("--prerelease")' in action_install["run"]
+    assert "--source $feedUrl" in action_install["run"]
+    assert 'throw "No feed URL configured' in action_install["run"]
+    assert "--add-source" not in action_install["run"]
+    assert "${{ inputs." not in action_install["run"]
 
 
-def test_summary_receives_package_provenance():
+def test_experimental_feed_runs_are_published_as_experiments():
     job = _workflow("bcal-evaluation.yml")["jobs"]["summarize-results"]
+    summarize = _workflow("summarize-results.yml")
 
-    assert set(job["needs"]) == {"validate-bcal-package", "evaluate-with-bcal"}
-    assert job["with"]["bcal-package-channel"] == "${{ needs.validate-bcal-package.outputs.source }}"
-    assert job["with"]["bcal-package-branch"] == "${{ needs.validate-bcal-package.outputs.branch }}"
-    assert job["with"]["bcal-package-feed"] == "${{ needs.validate-bcal-package.outputs.feed }}"
-
-
-def test_summary_tags_package_provenance():
-    workflow = _workflow_text("summarize-results.yml")
-
-    assert 'RUN_NAME="${RUN_NAME} [${BCAL_PACKAGE_CHANNEL}:${BCAL_PACKAGE_BRANCH}]"' in workflow
-    assert "bcal-channel-${CHANNEL_TAG}" in workflow
-    assert "bcal-branch-${PACKAGE_BRANCH_TAG}" in workflow
-    assert "bcal-feed-${FEED_TAG}" in workflow
+    assert job["with"]["experiment"] == "${{ inputs.bcal-feed == 'experiment' }}"
+    assert summarize[True]["workflow_call"]["inputs"]["experiment"]["default"] is False
+    assert "${{ inputs.experiment && '--eval-run-type experiment' || '' }}" in _step(summarize, "summarize-results", "Upload result using bceval")["run"]

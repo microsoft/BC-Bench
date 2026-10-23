@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -15,17 +15,16 @@ on:
         options:
           - gold
           - challenge
-      bcal-package-selection:
-        description: "BCAL package selection"
+      bcal-feed:
+        description: "BCal package feed: official, or the internal test feed for experimental builds"
         required: false
-        default: official-latest
+        default: official
         type: choice
         options:
-          - official-latest
-          - official-pinned
-          - experiment-pinned
+          - official
+          - experiment
       bcal-version:
-        description: "Exact BCal NuGet version for pinned selections; leave empty for official-latest"
+        description: "Exact BCal NuGet version; leave empty for the latest prerelease"
         required: false
         default: ""
         type: string
@@ -48,7 +47,7 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.tier || 'gold' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.test-run && 'test' || 'full' }}
+  group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -57,124 +56,7 @@ env:
   BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
 
 jobs:
-  validate-bcal-package:
-    runs-on: ubuntu-latest
-    environment:
-      name: ado-read
-      deployment: false
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      source: ${{ steps.resolve.outputs.source }}
-      branch: ${{ steps.provenance.outputs.branch || steps.resolve.outputs.branch }}
-      feed: ${{ steps.resolve.outputs.feed }}
-      version-mode: ${{ steps.resolve.outputs.version-mode }}
-    steps:
-      - name: Validate and resolve BCal package selection
-        id: resolve
-        shell: bash
-        env:
-          PACKAGE_SELECTION: ${{ inputs.bcal-package-selection || 'official-latest' }}
-          REQUESTED_VERSION: ${{ inputs.bcal-version }}
-          OFFICIAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
-          EXPERIMENT_FEED_URL: ${{ secrets.BCAL_TEST_FEED_URL }}
-        run: |
-          set -euo pipefail
-
-          exact_version='^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
-
-          case "$PACKAGE_SELECTION" in
-            official-latest)
-              channel="official"
-              version_mode="latest-prerelease"
-              ;;
-            official-pinned)
-              channel="official"
-              version_mode="pinned"
-              ;;
-            experiment-pinned)
-              channel="experiment"
-              version_mode="pinned"
-              ;;
-            *)
-              echo "::error::Unknown bcal-package-selection: $PACKAGE_SELECTION"
-              exit 1
-              ;;
-          esac
-
-          case "$version_mode" in
-            latest-prerelease)
-              if [[ -n "$REQUESTED_VERSION" ]]; then
-                echo "::error::bcal-version must be empty for official-latest."
-                exit 1
-              fi
-              ;;
-            pinned)
-              if [[ ! "$REQUESTED_VERSION" =~ $exact_version ]]; then
-                echo "::error::Pinned package selections require bcal-version to be an exact NuGet version."
-                exit 1
-              fi
-              ;;
-          esac
-
-          if [[ "$OFFICIAL_FEED_URL" != https://* ]]; then
-            echo "::error::BCAL_FEED_URL must be a non-empty HTTPS Azure Artifacts URL."
-            exit 1
-          fi
-
-          case "$channel" in
-            official)
-              branch="master"
-              feed="DynamicsSMBPackages"
-              ;;
-            experiment)
-              if [[ "$EXPERIMENT_FEED_URL" != https://* ]]; then
-                echo "::error::BCAL_TEST_FEED_URL must be a non-empty HTTPS Azure Artifacts URL."
-                exit 1
-              fi
-              if [[ "$OFFICIAL_FEED_URL" == "$EXPERIMENT_FEED_URL" ]]; then
-                echo "::error::Official and experimental BCAL feed URLs must differ."
-                exit 1
-              fi
-              branch=""
-              feed="DynamicsSMBTest@Local"
-              ;;
-          esac
-
-          echo "source=$channel" >> "$GITHUB_OUTPUT"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          echo "feed=$feed" >> "$GITHUB_OUTPUT"
-          echo "version-mode=$version_mode" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout repository for experimental package provenance
-        if: ${{ steps.resolve.outputs.source == 'experiment' }}
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Azure Login (OIDC) for experimental package provenance
-        if: ${{ steps.resolve.outputs.source == 'experiment' }}
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
-      - name: Verify experimental package provenance
-        if: ${{ steps.resolve.outputs.source == 'experiment' }}
-        id: provenance
-        shell: pwsh
-        env:
-          BCAL_PACKAGE_ID: ${{ secrets.BCAL_PACKAGE_ID }}
-          BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
-          BCAL_TEST_FEED_URL: ${{ secrets.BCAL_TEST_FEED_URL }}
-        run: |
-          .\scripts\Resolve-BCalPackageProvenance.ps1 `
-            -PackageId "$env:BCAL_PACKAGE_ID" `
-            -Version "$env:BCAL_REQUESTED_VERSION" `
-            -TestFeedUrl "$env:BCAL_TEST_FEED_URL"
-
   get-entries:
-    needs: validate-bcal-package
     uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run || false }}
@@ -183,7 +65,7 @@ jobs:
 
   evaluate-with-bcal:
     runs-on: windows-latest
-    needs: [validate-bcal-package, get-entries]
+    needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.get-entries.outputs.entries != '[]'
@@ -207,14 +89,14 @@ jobs:
         uses: $/.github/actions/setup-python-uv
 
       - name: Install bcal CLI from internal feed
-        id: install-bcal
         uses: $/.github/actions/install-bcal
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           package-id: ${{ secrets.BCAL_PACKAGE_ID }}
-          feed-url: ${{ needs.validate-bcal-package.outputs.source == 'experiment' && secrets.BCAL_TEST_FEED_URL || secrets.BCAL_FEED_URL }}
-          version-mode: ${{ needs.validate-bcal-package.outputs.version-mode }}
+          feed: ${{ inputs.bcal-feed || 'official' }}
+          official-feed-url: ${{ secrets.BCAL_FEED_URL }}
+          experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
           version: ${{ env.BCAL_REQUESTED_VERSION }}
 
       - name: Build bc-eval LLM API bridge venv
@@ -283,16 +165,10 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
-          BCAL_PACKAGE_VERSION: ${{ steps.install-bcal.outputs.version }}
-          BCAL_PACKAGE_CHANNEL: ${{ needs.validate-bcal-package.outputs.source }}
-          BCAL_PACKAGE_BRANCH: ${{ needs.validate-bcal-package.outputs.branch }}
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:BCAL_PACKAGE_VERSION)) {
-            throw "The installed BCal package version was not reported."
-          }
           $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
           if (-not (Test-Path $env:LLM_API_CERTIFICATE_FILE)) {
             throw "Expected LLM API client cert at $env:LLM_API_CERTIFICATE_FILE but it was not fetched from Key Vault."
@@ -310,7 +186,7 @@ jobs:
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: [validate-bcal-package, evaluate-with-bcal]
+    needs: evaluate-with-bcal
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
@@ -322,8 +198,6 @@ jobs:
       mock: ${{ inputs.test-run || false }}
       category: nl2al
       tier: ${{ inputs.tier || 'gold' }}
-      bcal-package-channel: ${{ needs.validate-bcal-package.outputs.source }}
-      bcal-package-branch: ${{ needs.validate-bcal-package.outputs.branch }}
-      bcal-package-feed: ${{ needs.validate-bcal-package.outputs.feed }}
+      experiment: ${{ inputs.bcal-feed == 'experiment' }}
       skip-leaderboard: true
     secrets: inherit
