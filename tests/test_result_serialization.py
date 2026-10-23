@@ -4,7 +4,18 @@ import pytest
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, AgentMetrics, BCalExecutionIdentity, BCalPackageProvenance, BCalPackageSource, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import (
+    AgentHarness,
+    AgentMetrics,
+    BCalCompilationEvent,
+    BCalExecutionFacts,
+    BCalExecutionIdentity,
+    BCalPackageProvenance,
+    BCalPackageSource,
+    EvaluationCategory,
+    ExperimentConfiguration,
+    PRReviewMetrics,
+)
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
@@ -217,6 +228,44 @@ class TestCategorySerialization:
 
         assert loaded.execution_identity == identity
         assert loaded.evidence == evidence
+
+    def test_bcal_execution_facts_round_trip(self, tmp_path, sample_result_bug_fix):
+        identity = BCalExecutionIdentity(
+            productVersion="1.2.3",
+            sourceCommitSha="050e84b25a0890d532a52433a3256c4183e81c7e",
+            buildConfiguration="Release",
+            scenarioContractVersion="1.0",
+            evidenceContractVersion="1.0",
+        )
+        facts = BCalExecutionFacts(
+            execution_identity=identity,
+            scenario_completed=True,
+            scenario_step_status="succeeded",
+            step_compile_succeeded=True,
+            compile_succeeded=True,
+            compile_evidence_source="scenario_step",
+            compilation_events=(
+                BCalCompilationEvent(
+                    sequence=33,
+                    type="compilation_outcome",
+                    scenarioStepId="benchmark-prompt",
+                    iteration=6,
+                    callId="call-compile",
+                    operation="compile",
+                    status="succeeded",
+                    succeeded=True,
+                ),
+            ),
+            evidence_status="present",
+            trace_truncated=False,
+        )
+        sample_result_bug_fix.execution_facts = facts
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.execution_facts == facts
 
     def test_tool_usage_saves_as_dict(self, tmp_path):
         tool_usage = {"bash": 5, "view": 3, "search": 2}

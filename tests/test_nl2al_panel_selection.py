@@ -5,6 +5,7 @@ from unittest.mock import PropertyMock, patch
 import pytest
 from typer.testing import CliRunner
 
+from bcbench.bcal_evidence import normalize_bcal_execution_facts
 from bcbench.cli import app
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
@@ -12,7 +13,7 @@ from bcbench.dataset import NL2ALEntry
 from bcbench.dataset.dataset_entry import EntryMetadata
 from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, EvaluationCategory, NL2ALDataset
+from bcbench.types import AgentHarness, BCalExecutionIdentity, EvaluationCategory, NL2ALDataset
 from tests.conftest import create_evaluation_context, create_nl2al_entry
 
 
@@ -30,8 +31,8 @@ def _panel_entry(panel: NL2ALDataset, *, prompt: str, expected=None) -> NL2ALEnt
     )
 
 
-def _result_for(entry: NL2ALEntry, panel: NL2ALDataset, path, tmp_path):
-    context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL, agent_name=AgentHarness.BCAL)
+def _result_for(entry: NL2ALEntry, panel: NL2ALDataset, path, tmp_path, agent_name: AgentHarness = AgentHarness.BCAL):
+    context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL, agent_name=agent_name)
     context.dataset = panel
     context.dataset_version = panel.version
     context.dataset_sha256 = sha256(path.read_bytes()).hexdigest()
@@ -253,3 +254,170 @@ def test_legacy_export_does_not_guess_gold_identity(tmp_path):
     payload = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))
     assert "dataset" not in payload["metadata"]
     assert payload["tags"] == []
+
+
+def _execution_identity() -> BCalExecutionIdentity:
+    return BCalExecutionIdentity(
+        productVersion="30.0.44.44408",
+        sourceCommitSha="b4a2ca199170f5d177e78c464d739547f52a5c48",
+        buildConfiguration="Release",
+        scenarioContractVersion="1.0",
+        evidenceContractVersion="1.0",
+    )
+
+
+def _compilation_evidence(*, succeeded: bool = True, truncated: bool = False):
+    identity = _execution_identity()
+    return {
+        "contractVersion": "1.0",
+        "executionIdentity": identity.model_dump(mode="json", by_alias=True),
+        "promptEvidence": {"compositions": [], "uses": []},
+        "trace": {
+            "contractVersion": "1.0",
+            "eventLimit": 10000,
+            "truncated": truncated,
+            "omittedEventCount": 0,
+            "events": [
+                {
+                    "sequence": 30,
+                    "type": "compilation_attempt",
+                    "scenarioStepId": "benchmark-prompt",
+                    "turn": 1,
+                    "iteration": 6,
+                    "callId": "call-compile",
+                    "operation": "compile",
+                    "status": "started",
+                },
+                {
+                    "sequence": 33,
+                    "type": "compilation_outcome",
+                    "scenarioStepId": "benchmark-prompt",
+                    "turn": 1,
+                    "iteration": 6,
+                    "callId": "call-compile",
+                    "operation": "compile",
+                    "status": "succeeded" if succeeded else "failed",
+                    "succeeded": succeeded,
+                },
+            ],
+        },
+    }
+
+
+@pytest.mark.parametrize("compile_succeeded", [True, False])
+def test_bcal_export_wraps_diff_with_authoritative_execution_facts(tmp_path, compile_succeeded):
+    entry = _panel_entry(NL2ALDataset.GOLD, prompt="Gold prompt")
+    path = tmp_path / "nl2al.jsonl"
+    _write_entry(path, entry)
+    context, result = _result_for(entry, NL2ALDataset.GOLD, path, tmp_path)
+    identity = _execution_identity()
+    evidence = _compilation_evidence(succeeded=compile_succeeded)
+    context.execution_identity = identity
+    context.evidence = evidence
+    context.execution_facts = normalize_bcal_execution_facts(
+        execution_identity=identity,
+        evidence=evidence,
+        scenario_completed=compile_succeeded,
+        scenario_step_status="succeeded" if compile_succeeded else "failed",
+        step_compile_succeeded=compile_succeeded,
+    )
+    result = JudgeBasedEvaluationResult.create_raw(context, "diff --git a/src.al b/src.al\n+subscriber")
+
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=path):
+        write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.GOLD)
+
+    payload = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))
+    scorer_output = json.loads(payload["output"])
+    assert scorer_output["artifact"] == {
+        "kind": "git_diff",
+        "content": "diff --git a/src.al b/src.al\n+subscriber",
+    }
+    assert scorer_output["authoritative_execution_facts"]["agent_authored"] is False
+    assert scorer_output["authoritative_execution_facts"]["compile_succeeded"] is compile_succeeded
+    assert payload["context"] == evidence
+    assert payload["metadata"]["compile_succeeded"] is compile_succeeded
+    assert payload["metadata"]["compile_evidence_source"] == "scenario_step"
+
+
+def test_bcal_export_derives_legacy_trace_facts_for_rescoring(tmp_path):
+    entry = _panel_entry(NL2ALDataset.GOLD, prompt="Gold prompt")
+    path = tmp_path / "nl2al.jsonl"
+    _write_entry(path, entry)
+    _, result = _result_for(entry, NL2ALDataset.GOLD, path, tmp_path)
+    result.execution_identity = _execution_identity()
+    result.evidence = _compilation_evidence()
+
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=path):
+        write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.GOLD)
+
+    payload = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))
+    scorer_output = json.loads(payload["output"])
+    facts = scorer_output["authoritative_execution_facts"]
+    assert facts["scenario_completed"] is None
+    assert facts["compile_succeeded"] is True
+    assert facts["compile_evidence_source"] == "trace_latest_outcome"
+    assert payload["context"] == result.evidence
+
+
+def test_bcal_export_does_not_claim_compile_success_from_missing_or_malformed_evidence(tmp_path):
+    entry = _panel_entry(NL2ALDataset.GOLD, prompt="Gold prompt")
+    path = tmp_path / "nl2al.jsonl"
+    _write_entry(path, entry)
+    identity = _execution_identity()
+
+    for name, evidence in (("missing", None), ("malformed", {"contractVersion": "1.0"})):
+        context, _ = _result_for(entry, NL2ALDataset.GOLD, path, tmp_path)
+        context.execution_identity = identity
+        context.evidence = evidence
+        context.execution_facts = normalize_bcal_execution_facts(
+            execution_identity=identity,
+            evidence=evidence,
+            scenario_completed=True,
+            scenario_step_status="succeeded",
+        )
+        result = JudgeBasedEvaluationResult.create_raw(context, "generated AL")
+
+        with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=path):
+            write_bceval_results([result], tmp_path, "run", f"{name}.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.GOLD)
+
+        payload = json.loads((tmp_path / f"{name}.jsonl").read_text(encoding="utf-8"))
+        facts = json.loads(payload["output"])["authoritative_execution_facts"]
+        assert facts["evidence_status"] == name
+        assert facts["compile_succeeded"] is None
+        assert payload["context"] == (evidence if evidence is not None else "")
+
+
+def test_non_bcal_nl2al_export_remains_byte_compatible(tmp_path):
+    entry = _panel_entry(NL2ALDataset.GOLD, prompt="Gold prompt")
+    path = tmp_path / "nl2al.jsonl"
+    _write_entry(path, entry)
+    context, result = _result_for(entry, NL2ALDataset.GOLD, path, tmp_path, agent_name=AgentHarness.COPILOT)
+    context.evidence = {"unexpected": "context"}
+    result = JudgeBasedEvaluationResult.create_raw(context, "generated AL")
+
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=path):
+        write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.GOLD)
+
+    payload = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))
+    assert payload["output"] == "generated AL"
+    assert payload["context"] == {"unexpected": "context"}
+    assert "compile_succeeded" not in payload["metadata"]
+
+
+def test_bcal_export_rejects_execution_facts_with_different_identity(tmp_path):
+    entry = _panel_entry(NL2ALDataset.GOLD, prompt="Gold prompt")
+    path = tmp_path / "nl2al.jsonl"
+    _write_entry(path, entry)
+    context, _ = _result_for(entry, NL2ALDataset.GOLD, path, tmp_path)
+    context.execution_identity = _execution_identity()
+    context.execution_facts = normalize_bcal_execution_facts(
+        execution_identity=_execution_identity().model_copy(update={"product_version": "different"}),
+        evidence=None,
+    )
+    result = JudgeBasedEvaluationResult.create_raw(context, "generated AL")
+
+    with (
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=path),
+        pytest.raises(ValueError, match="execution facts do not match"),
+    ):
+        write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.GOLD)

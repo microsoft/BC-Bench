@@ -8,12 +8,64 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+from bcbench.bcal_evidence import normalize_bcal_execution_facts
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import BCalPackageProvenance, EvaluationCategory, ExpectedOutput, ExperimentConfiguration, NL2ALDataset
+from bcbench.types import AgentHarness, BCalExecutionFacts, BCalPackageProvenance, EvaluationCategory, ExpectedOutput, ExperimentConfiguration, NL2ALDataset
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_bcal_execution_facts(result: BaseEvaluationResult) -> BCalExecutionFacts | None:
+    if result.category != EvaluationCategory.NL2AL or result.agent_name != AgentHarness.BCAL:
+        return None
+    if result.execution_facts is not None:
+        if result.execution_identity != result.execution_facts.execution_identity:
+            raise ValueError(f"Result {result.instance_id} execution facts do not match its execution identity")
+        return result.execution_facts
+    if result.execution_identity is None or result.evidence is None:
+        return None
+    return normalize_bcal_execution_facts(
+        execution_identity=result.execution_identity,
+        evidence=result.evidence,
+    )
+
+
+def _scorer_output(result: BaseEvaluationResult, execution_facts: BCalExecutionFacts | None) -> str:
+    if execution_facts is None:
+        return result.output
+
+    authoritative_facts: dict[str, Any] = execution_facts.model_dump(mode="json")
+    authoritative_facts["agent_version"] = result.agent_version
+    authoritative_facts["bcal_package"] = result.bcal_package.model_dump(mode="json") if result.bcal_package else None
+    return json.dumps(
+        {
+            "authoritative_execution_facts": authoritative_facts,
+            "artifact": {
+                "kind": "git_diff",
+                "content": result.output,
+            },
+        },
+        separators=(",", ":"),
+    )
+
+
+def _execution_facts_metadata(execution_facts: BCalExecutionFacts | None) -> dict[str, str | bool | None]:
+    if execution_facts is None:
+        return {}
+    return {
+        "execution_provider": execution_facts.provider,
+        "execution_product_version": execution_facts.execution_identity.product_version,
+        "execution_source_commit_sha": execution_facts.execution_identity.source_commit_sha,
+        "execution_build_configuration": execution_facts.execution_identity.build_configuration,
+        "scenario_completed": execution_facts.scenario_completed,
+        "scenario_step_status": execution_facts.scenario_step_status,
+        "compile_succeeded": execution_facts.compile_succeeded,
+        "compile_evidence_source": execution_facts.compile_evidence_source,
+        "evidence_status": execution_facts.evidence_status,
+        "trace_truncated": execution_facts.trace_truncated,
+    }
 
 
 def _experiment_metadata(
@@ -55,6 +107,7 @@ def write_bceval_results(
     rows: list[dict[str, Any]] = []
 
     for result in results:
+        execution_facts = _resolve_bcal_execution_facts(result)
         panel = result.dataset if category is EvaluationCategory.NL2AL else None
 
         if dataset is not None:
@@ -143,6 +196,7 @@ def write_bceval_results(
             "project": result.project,
             "error_message": result.error_message,
             "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
+            **_execution_facts_metadata(execution_facts),
             **_experiment_metadata(result.experiment, result.bcal_package, git_ref, benchmark_version),
         }
 
@@ -151,7 +205,7 @@ def write_bceval_results(
                 "id": result.instance_id,
                 "input": task_input,
                 "expected": expected,
-                "output": result.output,
+                "output": _scorer_output(result, execution_facts),
                 "context": result.evidence if result.evidence is not None else "",
                 "metadata": metadata,
                 "tags": tags,
