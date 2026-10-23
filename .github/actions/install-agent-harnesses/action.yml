@@ -2,6 +2,10 @@ name: Install Agent Harnesses
 description: Install the agent harnesses used by the evaluation workflows
 
 inputs:
+  copilot-version:
+    description: Exact Copilot CLI version (experiment-specific override)
+    required: false
+    default: "1.0.82"
   engine-sha:
     description: Full BC-ALAgents commit SHA (blank uses the default pin)
     required: false
@@ -36,7 +40,13 @@ runs:
       shell: pwsh
 
     - name: Install GitHub Copilot CLI
-      run: npm install -g @github/copilot@1.0.82
+      env:
+        COPILOT_VERSION: ${{ inputs.copilot-version }}
+      run: |
+        if ($env:COPILOT_VERSION -notmatch '\A\d+\.\d+\.\d+\z') {
+          throw "copilot-version must be an exact semantic release."
+        }
+        npm install -g "@github/copilot@$env:COPILOT_VERSION"
       shell: pwsh
 
     - name: Checkout BC-ALAgents

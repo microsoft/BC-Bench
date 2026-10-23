@@ -98,6 +98,96 @@ Articulate what you expect to see before triggering anything. A short hypothesis
 
 ## Running an Experiment
 
+### Frozen reviewer verification experiment
+
+The experiment branch adds `voting-phase=smoke|full` to **Evaluation with BC PR
+Review** (`pr-review-evaluation.yml`). The default `off` preserves the ordinary
+workflow. Voting calls `pr-review-voting.yml` and never invokes the ordinary
+publisher or repeat chain. This branch is a **draft experiment PR**, not a
+production rollout; do not merge it.
+
+The frozen dataset is BC-Bench `7c98b750c200d88ed0a81daaea5e71184a3af01b`:
+145 entries, 106 with expected findings, 39 empty-gold entries, 233 expected
+comments and one ignored comment. A dataset hash guard rejects changes.
+The smoke selects `synthetic__errh-tryfunction-swallowed-01` and
+`synthetic__get-clean-01` before generation.
+
+| Configuration | Frozen value |
+|---|---|
+| BC-ALAgents | `9607dea1c84fcf660983a5e3791dece1fb2f1623` |
+| Inherited BCQuality | `b74967bc5b7a454eae19d6a1250199afd869f064` |
+| Copilot CLI | `1.0.88` |
+| Root / leaves | `gpt-5.6-sol` / `gpt-5.6-luna`, serial |
+| Severity | Medium |
+| Three verifiers | Independent `gpt-5.6-sol` sessions, serial within each entry |
+| Semantic judge | `gpt-5.3-codex` |
+
+Each entry uses the production `run_pr_review_agent` once. Its findings are
+frozen with stable IDs. A keeps all candidates; B keeps voter1's supported
+subset; C needs two explicit supported decisions. Insufficient evidence is
+not refutation; invalid/missing votes exclude paired comparisons instead of
+becoming negative votes. One complete candidate-to-gold same-file semantic
+edge graph is judged, including ignored comments, and reused to recompute
+the existing one-to-one assignment for each subset. Empty-gold cases with no
+ignored comments need no judge invocation.
+
+The **separate** smoke budget is at most 2 full reviews, 6 verifiers and 2
+judge batches; the full budget is at most 145 full reviews, 435 verifiers and
+106 judge batches. No invocation retries or repeat rounds are permitted.
+A review itself contains multiple domain leaves/root model calls. Zero
+candidates skip verification and cannot demonstrate a passing smoke.
+
+Dispatch the existing workflow at the exact experiment commit with
+`voting-phase=smoke` and `voting-revision=<that SHA>`. After inspecting a
+successful smoke, dispatch **the same SHA** with `voting-phase=full`,
+`voting-revision=<that SHA>`, and `voting-smoke-run=<successful run ID>`.
+The workflow rejects rerun attempts, duplicate phase dispatches, revision
+mismatches, and full runs without a successful same-revision smoke artifact.
+The smoke requires both valid baselines, nonempty candidates, every applicable
+vote/evidence resolved, correct observed model/pin identities, successful
+strict scoring and A/B/C artifacts. It does not require reduced FPs or silence
+on the empty-gold case. Failure stops promotion; a repair and paid retry needs
+separate approval.
+
+Each matrix job uses one Linux source checkout and the engine's declared
+knowledge, with fresh voter homes, working directories and output directories.
+Only `view`, `rg`, and `glob` are available; writes/shell/URLs are denied and
+only the source/knowledge roots are added. Gold and other votes are outside
+those roots. The verifier must perform final **exact finite range reads** in
+the same context. The resolver preserves the existing conservative rules for
+short, unnumbered, masked and truncated views. Omitted trailing empty quote
+lines are accepted only when a complete successful view proves them explicitly,
+with normalization recorded separately from semantic correctness. These are
+CLI permission controls, not an OS sandbox or a guarantee against unrelated
+external modifications. There are no per-voter repository copies or full-tree
+hash passes.
+
+Per-entry safe artifacts and the artifact-only aggregate are retained for
+30 days, including failures, raw votes/permitted views, invocation configuration,
+engine manifests, judge edges and usage. Auth homes, checkout trees and arbitrary
+logs are not uploaded. Summary runs even after matrix failures and reports
+selected/missing, baseline complete/scored and complete-paired populations,
+micro/macro scores and unknown usage. No leaderboard, Braintrust or Kusto
+publication occurs. Missing evidence remains a limitation of the experiment,
+not a reason to change votes or labels after observing outcomes.
+
+#### Explicit gate revision after the original smoke
+
+On 2026-10-21 the user explicitly authorized one full run using a revised
+engineering gate: clean zero-candidate results are valid and need no voters;
+at least one nonempty case must exercise all three voters. Both smoke cases
+must still have valid baselines, scoring and all applicable evidence/model
+checks. No FP-reduction or desired-output criterion is introduced.
+
+Original run `39611471920` at `3ebaaad89884d29fc5d4ad8212aa0434bab988dd`
+remains **failed under its original gate**. The full-run plan creates a separate
+`voting-revised-gate-assessment` artifact binding the original summary/archive
+digests, code identities, unchanged inference configuration and revised commit.
+This exception accepts only that exact original run and its immediate gate-only
+successor commit. It rejects other runtime changes and duplicate dispatches.
+It spends no additional smoke calls; the existing full budget remains
+145 reviews / 435 verifiers / 106 judge batches, one round without retries.
+
 ### 1. Land your changes
 
 Edit [`config.yaml`](src/bcbench/agent/shared/config.yaml) and add any instruction/agent/skill files, or — for a harness-version experiment — update the pin in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml). Then open a draft PR using the [template](#experiment-pr-template) below. The PR will not be merged, only serve as an entry point so people can see what exactly is being evaluated.

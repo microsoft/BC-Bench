@@ -6,6 +6,19 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      voting-phase:
+        description: Artifact-only frozen A/B/C experiment (separate approved budgets)
+        type: choice
+        options: ["off", "smoke", "full"]
+        default: "off"
+      voting-revision:
+        description: Exact approved experiment SHA (voting only)
+        type: string
+        default: ""
+      voting-smoke-run:
+        description: Successful two-entry smoke run at the same SHA (full voting only)
+        type: string
+        default: ""
       model:
         description: "Copilot model used internally by BC PR Review"
         required: false
@@ -60,7 +73,22 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
+  voting-experiment:
+    if: ${{ inputs.voting-phase != 'off' }}
+    uses: $/.github/workflows/pr-review-voting.yml
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      copilot-requests: write
+    with:
+      phase: ${{ inputs.voting-phase }}
+      revision: ${{ inputs.voting-revision }}
+      smoke-run: ${{ inputs.voting-smoke-run }}
+    secrets: inherit
+
   pin-commit:
+    if: ${{ inputs.voting-phase == 'off' }}
     uses: $/.github/workflows/pin-evaluation-commit.yml
     permissions:
       contents: write
@@ -71,6 +99,7 @@ jobs:
       repeat: ${{ inputs.repeat }}
 
   get-entries:
+    if: ${{ inputs.voting-phase == 'off' }}
     uses: $/.github/workflows/get-entries.yml
     with:
       modified-only: ${{ inputs.modified-only }}
@@ -164,7 +193,7 @@ jobs:
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !failure() && !inputs.test-run && !inputs.modified-only }}
+    if: ${{ inputs.voting-phase == 'off' && !cancelled() && !failure() && !inputs.test-run && !inputs.modified-only }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
