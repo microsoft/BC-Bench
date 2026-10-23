@@ -35,7 +35,7 @@ def filepath_identification(
     if category is not EvaluationCategory.BUG_FIX:
         raise typer.BadParameter("filepath-identification currently supports only bug-fix category", param_hint="--category")
 
-    entry: BugFixEntry = BugFixEntry.load(category.dataset_path, entry_id=entry_id)[0]
+    entry: BugFixEntry = BugFixEntry.load(category.dataset_path(), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
     run_filepath_identification(entry=entry, model=model, result_dir=run_dir)
 

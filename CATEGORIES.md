@@ -12,7 +12,7 @@ This doc is a map; the source files and their comments are the source of truth. 
 
 Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py). It is the category registry. Each enum value maps to the pieces the rest of the CLI and workflows consume:
 
-- `dataset_path` — the dataset file for raw tasks.
+- `dataset_path(tier)` — the dataset file for raw tasks. Every category has a `gold` dataset (default); a category may also define a harder held-out `challenge` dataset (currently only NL2AL). Commands pick one with `--tier`, and results record it. Keep `Get-BCBenchDatasetPath` in `scripts/BenchmarkUtils.psm1` in sync.
 - `entry_class` — the typed Python model for one dataset row (aka one task).
 - `result_class` — the recorded outcome for one evaluated task.
 - `summary_class` / `aggregate_class` — the aggregate views used by result summaries and leaderboards.

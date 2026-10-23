@@ -24,11 +24,11 @@ on:
         description: "Evaluation category"
         required: true
         type: string
-      dataset:
-        description: "Optional NL2AL dataset selector (gold or challenge)"
+      tier:
+        description: "Dataset tier the run was evaluated on"
         required: false
         type: string
-        default: ""
+        default: "gold"
       bcal-package-channel:
         description: "Optional BCAL package channel label"
         required: false
@@ -41,11 +41,6 @@ on:
         default: ""
       bcal-package-feed:
         description: "Optional BCAL package feed label"
-        required: false
-        type: string
-        default: ""
-      expected-entries:
-        description: "Optional JSON array of selected entry IDs; require complete results before scoring upload"
         required: false
         type: string
         default: ""
@@ -75,13 +70,10 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     env:
-      EVALUATION_CATEGORY: ${{ inputs.category }}
-      NL2AL_DATASET: ${{ inputs.dataset }}
-      RESULTS_DIR: ${{ inputs.results-dir }}
+      EVALUATION_TIER: ${{ inputs.tier }}
       EVALUATION_AGENT: ${{ inputs.agent }}
       EVALUATION_MODEL: ${{ inputs.model }}
       EVALUATION_GIT_REF: ${{ inputs.git-ref || github.ref_name }}
-      EXPECTED_ENTRIES: ${{ inputs.expected-entries }}
       BCAL_PACKAGE_CHANNEL: ${{ inputs.bcal-package-channel }}
       BCAL_PACKAGE_BRANCH: ${{ inputs.bcal-package-branch }}
       BCAL_PACKAGE_FEED: ${{ inputs.bcal-package-feed }}
@@ -94,39 +86,12 @@ jobs:
 
       - name: Download all evaluation results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        continue-on-error: ${{ inputs.expected-entries != '' }}
         with:
-          pattern: ${{ inputs.dataset != '' && 'evaluation-results-*' || '*' }}
           path: ${{ inputs.results-dir }}/
           merge-multiple: true
 
       - name: Summarize evaluation results
-        shell: bash
-        run: |
-          cmd=(uv run bcbench result summarize
-            --category "$EVALUATION_CATEGORY"
-            --result-dir "$RESULTS_DIR"
-            --bceval-output "$BCEVAL_RESULT_FILE"
-            --summary-output "$SUMMARY_OUTPUT_FILE"
-            --git-ref "$EVALUATION_GIT_REF")
-
-          if [[ -n "$NL2AL_DATASET" ]]; then
-            cmd+=(--dataset "$NL2AL_DATASET")
-          fi
-          if [[ -n "$EXPECTED_ENTRIES" ]]; then
-            cmd+=(--expected-entries "$EXPECTED_ENTRIES")
-          fi
-
-          "${cmd[@]}"
-
-      - name: Upload evaluation coverage diagnostics
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: evaluation-coverage
-          path: ${{ inputs.results-dir }}/${{ github.run_id }}/evaluation_coverage.json
-          if-no-files-found: ignore
-          retention-days: ${{ inputs.mock && 1 || 30 }}
+        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "$EVALUATION_GIT_REF"
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -165,7 +130,10 @@ jobs:
           BRANCH_TAG="$EVALUATION_GIT_REF"
           BRANCH_TAG="${BRANCH_TAG//./-}"
           RUN_NAME="${EVALUATION_AGENT} (${EVALUATION_MODEL}) - #${GITHUB_RUN_ID}"
-          RUN_TAGS="${EVALUATION_AGENT},${MODEL_TAG},${BRANCH_TAG}"
+          RUN_TAGS="${EVALUATION_AGENT},${MODEL_TAG},${BRANCH_TAG},tier-${EVALUATION_TIER}"
+          if [[ "$EVALUATION_TIER" != "gold" ]]; then
+            RUN_NAME="${RUN_NAME} [${EVALUATION_TIER}]"
+          fi
           if [[ -n "$BCAL_PACKAGE_CHANNEL" ]]; then
             CHANNEL_TAG="$(printf '%s' "$BCAL_PACKAGE_CHANNEL" | tr -c '[:alnum:]_-' '-' | sed -E 's/^-+|-+$//g')"
             PACKAGE_BRANCH_TAG="$(printf '%s' "$BCAL_PACKAGE_BRANCH" | tr -c '[:alnum:]_-' '-' | sed -E 's/^-+|-+$//g')"
@@ -177,18 +145,14 @@ jobs:
             RUN_NAME="${RUN_NAME} [${BCAL_PACKAGE_CHANNEL}:${BCAL_PACKAGE_BRANCH}]"
             RUN_TAGS="${RUN_TAGS},bcal-channel-${CHANNEL_TAG},bcal-branch-${PACKAGE_BRANCH_TAG},bcal-feed-${FEED_TAG}"
           fi
-          if [[ -n "$NL2AL_DATASET" ]]; then
-            RUN_NAME="${RUN_NAME} [${NL2AL_DATASET}]"
-            RUN_TAGS="${RUN_TAGS},dataset-${NL2AL_DATASET}"
-          fi
 
           bceval metrics calculate \
             --feature-name "BC-Bench" \
-            --eval-suite-name "$EVALUATION_CATEGORY" \
+            --eval-suite-name "${{ inputs.category }}" \
             --eval-run-name "$RUN_NAME" \
             --tags "$RUN_TAGS" \
             --source "${{ github.sha }}" \
-            --input-file "${RESULTS_DIR}/${GITHUB_RUN_ID}/${BCEVAL_RESULT_FILE}" \
+            --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
             --evaluators "${{ steps.bceval.outputs.evaluators }}" \
             --core-score "${{ steps.bceval.outputs.core_score }}" \

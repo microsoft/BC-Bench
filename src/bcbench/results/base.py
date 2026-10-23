@@ -8,7 +8,7 @@ from typing import Any, Self, cast, override
 from pydantic import BaseModel, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AnyAgentMetrics, BCalPackageProvenance, EvaluationCategory, EvaluationContext, ExperimentConfiguration, NL2ALDataset
+from bcbench.types import AnyAgentMetrics, BCalPackageProvenance, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +21,9 @@ class BaseEvaluationResult(BaseModel):
     model: str
     agent_name: str
     category: EvaluationCategory
+    tier: DatasetTier = DatasetTier.GOLD
     agent_version: str | None = None
     bcal_package: BCalPackageProvenance | None = None
-    dataset: NL2ALDataset | None = None
-    dataset_version: str | None = None
-    dataset_sha256: str | None = None
 
     timeout: bool = False
 
@@ -50,12 +48,10 @@ class BaseEvaluationResult(BaseModel):
             "project": context.entry.extract_project_name(),
             "model": context.model.replace(".", "-"),
             "category": context.category,
+            "tier": context.tier,
             "agent_name": context.agent_name,
             "agent_version": context.agent_version,
             "bcal_package": context.bcal_package,
-            "dataset": context.dataset,
-            "dataset_version": context.dataset_version,
-            "dataset_sha256": context.dataset_sha256,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }

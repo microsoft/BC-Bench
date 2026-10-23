@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.dataset || 'gold' }} ${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -7,8 +7,8 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      dataset:
-        description: "NL2AL dataset to evaluate"
+      tier:
+        description: "NL2AL dataset tier to evaluate"
         required: false
         default: gold
         type: choice
@@ -48,12 +48,12 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.test-run && 'test' || 'full' }}
+  group: bcal-evaluation-${{ inputs.tier || 'gold' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
-  NL2AL_DATASET: ${{ inputs.dataset || 'gold' }}
+  TIER: ${{ inputs.tier || 'gold' }}
   BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
 
 jobs:
@@ -179,15 +179,13 @@ jobs:
     with:
       test-run: ${{ inputs.test-run || false }}
       category: nl2al
-      dataset: ${{ inputs.dataset || 'gold' }}
+      tier: ${{ inputs.tier || 'gold' }}
 
   evaluate-with-bcal:
     runs-on: windows-latest
     needs: [validate-bcal-package, get-entries]
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    env:
-      INSTANCE_ID: ${{ matrix.entry }}
     if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
@@ -242,7 +240,7 @@ jobs:
       - name: Resolve BC version for cache key
         id: bcversion
         shell: pwsh
-        run: uv run bcbench dataset version "$env:INSTANCE_ID" --category nl2al --dataset "$env:NL2AL_DATASET" --github-output version
+        run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --tier "$env:TIER" --github-output version
 
       # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
@@ -255,14 +253,9 @@ jobs:
       - name: Download BC Application symbols
         if: steps.bccache.outputs.cache-hit != 'true'
         shell: pwsh
-        env:
-          DATASET_PATH: ${{ steps.bcversion.outputs.dataset-path }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:DATASET_PATH)) {
-            throw "bcbench dataset version did not return a dataset-path."
-          }
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
-          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "$env:INSTANCE_ID" -DatasetPath "$env:DATASET_PATH"
+          .\scripts\Download-BCSymbols.ps1 -Category nl2al -Tier "$env:TIER" -InstanceId "${{ matrix.entry }}"
 
       - name: Azure Login (OIDC) for LLM API certificate Key Vault
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
@@ -306,7 +299,7 @@ jobs:
           }
           $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-llm-api-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py"
 
-          uv run bcbench evaluate bcal "$env:INSTANCE_ID" --dataset "$env:NL2AL_DATASET" --output-dir "$env:EVALUATION_RESULTS_DIR"
+          uv run bcbench evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -317,22 +310,20 @@ jobs:
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: [validate-bcal-package, get-entries, evaluate-with-bcal]
-    if: ${{ always() && !cancelled() && needs.validate-bcal-package.result == 'success' && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' }}
+    needs: [validate-bcal-package, evaluate-with-bcal]
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write
     with:
-      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir || 'evaluation_results' }}
+      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
       model: ${{ inputs.external-model || 'gpt-55-chat' }}
       agent: BCal-external-command
       mock: ${{ inputs.test-run || false }}
       category: nl2al
-      dataset: ${{ inputs.dataset || 'gold' }}
+      tier: ${{ inputs.tier || 'gold' }}
       bcal-package-channel: ${{ needs.validate-bcal-package.outputs.source }}
       bcal-package-branch: ${{ needs.validate-bcal-package.outputs.branch }}
       bcal-package-feed: ${{ needs.validate-bcal-package.outputs.feed }}
       skip-leaderboard: true
-      expected-entries: ${{ needs.get-entries.outputs.entries }}
     secrets: inherit

@@ -15,7 +15,7 @@ from bcbench.commands import evaluate as evaluate_commands
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import EvaluationCategory, NL2ALDataset
+from bcbench.types import EvaluationCategory
 
 BCAL_VERSION = "18.0.38.47039-beta"
 BCAL = {"packageId": "example.bcal.cli", "version": BCAL_VERSION, "commands": ["bcal"]}
@@ -95,7 +95,7 @@ def test_evaluate_bcal_exposes_expected_version_option_and_environment_variable(
 
 
 def test_expected_version_mismatch_saves_actual_version_without_running_agent(tmp_path) -> None:
-    path = EvaluationCategory.NL2AL.dataset_path_for(NL2ALDataset.GOLD)
+    path = EvaluationCategory.NL2AL.dataset_path()
     entry = NL2ALEntry.load(path)[0]
 
     class Pipeline:
@@ -120,7 +120,6 @@ def test_expected_version_mismatch_saves_actual_version_without_running_agent(tm
             output_dir=tmp_path / "out",
             run_id="run",
             llm_command="bridge",
-            dataset=NL2ALDataset.GOLD,
             bcal_version="18.0.1.1-beta",
         )
 

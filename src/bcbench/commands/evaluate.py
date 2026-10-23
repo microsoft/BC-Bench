@@ -1,6 +1,5 @@
 import logging
 import random
-from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, cast, override
 
@@ -25,6 +24,7 @@ from bcbench.cli_options import (
     PRReviewEnginePath,
     RepoPath,
     RunId,
+    TierOption,
     resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
@@ -38,10 +38,10 @@ from bcbench.types import (
     AgentMetrics,
     BCalPackageProvenance,
     BCalPackageSource,
+    DatasetTier,
     EvaluationCategory,
     EvaluationContext,
     ExperimentConfiguration,
-    NL2ALDataset,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
@@ -87,7 +88,7 @@ def evaluate_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -101,6 +102,7 @@ def evaluate_copilot(
         agent_name=AgentHarness.COPILOT,
         agent_version=get_copilot_version(),
         category=category,
+        tier=tier,
     )
 
     pipeline = category.pipeline
@@ -124,6 +126,7 @@ def evaluate_copilot(
 def evaluate_claude_code(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
@@ -157,7 +160,7 @@ def evaluate_claude_code(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
@@ -171,6 +174,7 @@ def evaluate_claude_code(
         agent_name=AgentHarness.CLAUDE,
         agent_version=get_claude_version(),
         category=category,
+        tier=tier,
     )
 
     pipeline = category.pipeline
@@ -211,7 +215,7 @@ def evaluate_pr_review(
     To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
@@ -246,12 +250,12 @@ def evaluate_pr_review(
 @evaluate_app.command("bcal")
 def evaluate_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    tier: TierOption = DatasetTier.GOLD,
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
-    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
     bcal_version: Annotated[str | None, typer.Option(envvar="BCAL_PACKAGE_VERSION", help="Expected installed BCAL NuGet version; verified against dotnet tool list")] = None,
     bcal_package_channel: Annotated[
         BCalPackageSource,
@@ -268,8 +272,7 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    dataset_path = category.dataset_path_for(dataset)
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         command=llm_command,
@@ -291,10 +294,8 @@ def evaluate_bcal(
         model=llm_model or "external-command",
         agent_name=AgentHarness.BCAL,
         category=category,
+        tier=tier,
         bcal_package=bcal_package,
-        dataset=dataset,
-        dataset_version=dataset.version,
-        dataset_sha256=sha256(dataset_path.read_bytes()).hexdigest(),
     )
 
     try:
@@ -347,13 +348,14 @@ def evaluate_judge_calibration(
 def evaluate_mock(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "mock_run",
 ) -> None:
     """
     Evaluate mock agent on single dataset entry for testing purposes.
     """
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mock agent")
@@ -365,6 +367,7 @@ def evaluate_mock(
         model="mock-model",
         agent_name=AgentHarness.MOCK,
         category=category,
+        tier=tier,
     )
 
     pipeline = MockEvaluationPipeline()

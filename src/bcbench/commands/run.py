@@ -20,11 +20,12 @@ from bcbench.cli_options import (
     OutputDir,
     PRReviewEnginePath,
     RepoPath,
+    TierOption,
     resolve_agent_runtime,
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.types import EvaluationCategory, NL2ALDataset
+from bcbench.types import DatasetTier, EvaluationCategory
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -36,6 +37,7 @@ run_app = typer.Typer(help="Run agents on single dataset entry")
 def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
@@ -70,7 +72,7 @@ def run_copilot(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_copilot_agent(
@@ -87,6 +89,7 @@ def run_copilot(
 def run_claude(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
@@ -121,7 +124,7 @@ def run_claude(
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
     )
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_claude_code(
@@ -157,7 +160,7 @@ def run_pr_review(
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path(), entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_pr_review_agent(
@@ -174,10 +177,10 @@ def run_pr_review(
 @run_app.command("bcal")
 def run_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    tier: TierOption = DatasetTier.GOLD,
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
-    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
 ) -> None:
     """
     Run BCal dotnet tool on a single nl2al entry to generate AL code.
@@ -188,7 +191,7 @@ def run_bcal(
         uv run bcbench run bcal nl2al__job-budget-report-1
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path_for(dataset), entry_id=entry_id)[0])
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_bcal_agent(

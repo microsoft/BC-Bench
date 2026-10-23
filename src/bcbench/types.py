@@ -32,6 +32,7 @@ __all__ = [
     "ChecklistAssertion",
     "ChecklistLevel",
     "CommitSha",
+    "DatasetTier",
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
@@ -39,7 +40,6 @@ __all__ = [
     "HttpMcpServer",
     "JudgeCalibrationReport",
     "McpServerConfig",
-    "NL2ALDataset",
     "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
@@ -316,13 +316,10 @@ class AgentHarness(StrEnum):
                 raise ValueError(f"{self.value} does not support repository setup")
 
 
-class NL2ALDataset(StrEnum):
+class DatasetTier(StrEnum):
+    # Every category has a gold dataset; a category may optionally define a harder held-out challenge dataset.
     GOLD = "gold"
     CHALLENGE = "challenge"
-
-    @property
-    def version(self) -> str:
-        return "2026-10-09.candidate-v2"
 
 
 class EvaluationCategory(StrEnum):
@@ -338,23 +335,14 @@ class EvaluationCategory(StrEnum):
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
-    def dataset_path_for(self, dataset: NL2ALDataset | None = None) -> Path:
-        if dataset is None:
-            return self.dataset_path
-        if self is not EvaluationCategory.NL2AL:
-            raise ValueError("The dataset panel option is only supported for the nl2al category")
-
-        match dataset:
-            case NL2ALDataset.GOLD:
-                return self.dataset_path
-            case NL2ALDataset.CHALLENGE:
-                return self.dataset_path.with_name("nl2al_challenge.jsonl")
-
-        raise ValueError(f"Unknown NL2AL dataset: {dataset}")
-
-    @property
-    def dataset_path(self) -> Path:
+    def dataset_path(self, tier: DatasetTier = DatasetTier.GOLD) -> Path:
         from bcbench.config import get_config
+
+        match self, tier:
+            case EvaluationCategory.NL2AL, DatasetTier.CHALLENGE:
+                return get_config().paths.dataset_dir / "nl2al_challenge.jsonl"
+            case _, DatasetTier.CHALLENGE:
+                raise ValueError(f"{self.value} has no {tier.value} dataset")
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -762,15 +750,13 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # Evaluation category
     category: EvaluationCategory
+    tier: DatasetTier = DatasetTier.GOLD
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
 
     agent_version: str | None = None
     bcal_package: BCalPackageProvenance | None = None
-    dataset: NL2ALDataset | None = None
-    dataset_version: str | None = None
-    dataset_sha256: str | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None
