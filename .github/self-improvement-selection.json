@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "7c98b750c200d88ed0a81daaea5e71184a3af01b",
+  "datasetHash": "4BB90627EA444D4C36EF5A1103738A6727AA48D8CD6F08398E0CD8EF6204B754",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "neg-pr12261-20261020",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/12261#discussion_r4165554398"
+  ],
+  "entryIds": [
+    "synthetic__sec-internal-reschedule-job-01"
+  ],
+  "newEntryIds": [
+    "synthetic__sec-internal-reschedule-job-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__sec-internal-reschedule-job-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/12261#discussion_r4165554398",
+          "purpose": "false_positive_guard",
+          "file": "src/Layers/W1/BaseApp/Integration/Dataverse/CRMIntegrationManagement.Codeunit.al",
+          "lineStart": 3832,
+          "lineEnd": 3832,
+          "rationale": "The reviewed source snapshot shows the only call to the new internal RescheduleJobQueueEntriesForTable procedure is the pre-existing caller that already executes 'if not UserCanRescheduleJob() then exit;' immediately before invoking it, so the authorization boundary for this operation is unchanged and still enforced at its one reachable call site. The bot's 'Access=Internal is not a security boundary' critique is correct as a general principle but misapplied here since no new unauthorized path was introduced; the developer's rejection ('Internal procedure') matches this. expected_comments is empty and no finding is asserted in this range; limitation: this guard does not generalize to internal helpers with multiple or future call sites that might skip the check."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "7A79D408B52749B3268923B0D50697A93B9256C048379A98CD4097597AFDB5F9",
+      "instanceId": "synthetic__sec-internal-reschedule-job-01"
+    }
+  ],
+  "sourceSnapshots": [
+    {
+      "commentUrl": "https://github.com/microsoft/BCApps/pull/12261#discussion_r4165554398",
+      "repo": "microsoft/BCApps",
+      "file": "src/Layers/W1/BaseApp/Integration/Dataverse/CRMIntegrationManagement.Codeunit.al",
+      "prBaseCommit": "30a3bb8d6a5c96925ca41784e5f30d1be8a94e52",
+      "headCommit": "77700fd44cb7224da46836ff5746952898e89af2",
+      "reviewCommit": "2d7397d1f7bf90f5fda000a415de6812cd0d99c5",
+      "baseCommit": "ddffe8888a09e2f70339db87c31c5fb09f866816",
+      "lineStart": 3832,
+      "lineEnd": 3832,
+      "patch": "diff --git a/src/Layers/W1/BaseApp/Integration/Dataverse/CRMIntegrationManagement.Codeunit.al b/src/Layers/W1/BaseApp/Integration/Dataverse/CRMIntegrationManagement.Codeunit.al\n--- a/src/Layers/W1/BaseApp/Integration/Dataverse/CRMIntegrationManagement.Codeunit.al\t\n+++ b/src/Layers/W1/BaseApp/Integration/Dataverse/CRMIntegrationManagement.Codeunit.al\t\n@@ -3776,15 +3776,10 @@ codeunit 5330 \"CRM Integration Management\"\n     var\n         CRMConnectionSetup: Record \"CRM Connection Setup\";\n         CDSConnectionSetup: Record \"CDS Connection Setup\";\n-        JobQueueEntry: Record \"Job Queue Entry\";\n-        JobQueueEntryUpdate: Record \"Job Queue Entry\";\n-        ScheduledTask: Record \"Scheduled Task\";\n         IntegrationTableMapping: Record \"Integration Table Mapping\";\n         DataUpgradeMgt: Codeunit \"Data Upgrade Mgt.\";\n-        NewEarliestStartDateTime: DateTime;\n         Enabled: Boolean;\n         IsCRMIntRec: Boolean;\n-        RescheduleOffsetInMs: Integer;\n     begin\n         if CDSConnectionSetup.Get() then\n             Enabled := CDSConnectionSetup.\"Is Enabled\";\n@@ -3824,10 +3819,21 @@ codeunit 5330 \"CRM Integration Management\"\n         if not UserCanRescheduleJob() then\n             exit;\n \n+        RescheduleJobQueueEntriesForTable(TableNo);\n+    end;\n+\n+    internal procedure RescheduleJobQueueEntriesForTable(TableNo: Integer)\n+    var\n+        JobQueueEntry: Record \"Job Queue Entry\";\n+        JobQueueEntryUpdate: Record \"Job Queue Entry\";\n+        ScheduledTask: Record \"Scheduled Task\";\n+        NewEarliestStartDateTime: DateTime;\n+        RescheduleOffsetInMs: Integer;\n+    begin\n         JobQueueEntryUpdate.ReadIsolation := IsolationLevel::UpdLock;\n         JobQueueEntry.Reset();\n         JobQueueEntry.ReadIsolation := IsolationLevel::ReadUncommitted;\n-        JobQueueEntry.SetLoadFields(Status, \"System Task ID\", \"Object Type to Run\", \"Object ID to Run\", \"Record ID to Process\", Description);\n+        JobQueueEntry.SetLoadFields(Status, \"System Task ID\", \"Object Type to Run\", \"Object ID to Run\", \"Record ID to Process\", Description, \"Earliest Start Date/Time\");\n         JobQueueEntry.SetFilter(Status, Format(JobQueueEntry.Status::Ready) + '|' + Format(JobQueueEntry.Status::\"On Hold with Inactivity Timeout\"));\n         JobQueueEntry.SetRange(\"Object Type to Run\", JobQueueEntry.\"Object Type to Run\"::Codeunit);\n         JobQueueEntry.SetFilter(\"Object ID to Run\", '%1|%2|%3|%4|%5', Codeunit::\"Integration Synch. Job Runner\", Codeunit::\"CRM Statistics Job\", Codeunit::\"Int. Coupling Job Runner\",\n@@ -3853,23 +3859,39 @@ codeunit 5330 \"CRM Integration Management\"\n             // Therefore the task will restart with a delay to lower a risk of use of \"old\" data.\n             // If the task is scheduled to run soon (in 60 seconds from now) we don't reschedule\n             NewEarliestStartDateTime := CurrentDateTime() + RescheduleOffsetInMs;\n+            // \"Not Before\" of the scheduled task is not guaranteed to reflect a previous SetTaskReady call,\n+            // so the job queue entry's \"Earliest Start Date/Time\" is also checked to avoid rescheduling the same task on every change.\n             if DoesJobActOnTable(JobQueueEntry, TableNo) then\n-                if ScheduledTask.Get(JobQueueEntry.\"System Task ID\") then\n-                    if (NewEarliestStartDateTime + RescheduleOffSetInMs) < ScheduledTask.\"Not Before\" then\n-                        if TaskScheduler.SetTaskReady(JobQueueEntry.\"System Task ID\", NewEarliestStartDateTime) then begin\n+                if not IsJobScheduledToRunSoon(JobQueueEntry, NewEarliestStartDateTime + RescheduleOffSetInMs) then\n+                    if ScheduledTask.Get(JobQueueEntry.\"System Task ID\") then\n+                        if (NewEarliestStartDateTime + RescheduleOffSetInMs) < ScheduledTask.\"Not Before\" then begin\n                             JobQueueEntryUpdate.ID := JobQueueEntry.ID;\n-                            if JobQueueEntryUpdate.GetRecLockedExtendedTimeout() then\n-                                if JobQueueEntryUpdate.Status in [JobQueueEntry.Status::Ready, JobQueueEntry.Status::\"On Hold with Inactivity Timeout\"] then begin\n-                                    JobQueueEntryUpdate.Status := JobQueueEntry.Status::Ready;\n-                                    JobQueueEntryUpdate.\"Earliest Start Date/Time\" := NewEarliestStartDateTime;\n-                                    JobQueueEntryUpdate.\"Parameter String\" := Format(TableNo);\n-                                    JobQueueEntryUpdate.Modify();\n-                                    Session.LogMessage('0000JAV', StrSubstNo(RescheduledTaskTxt, Format(ScheduledTask.ID), Format(JobQueueEntry.ID), JobQueueEntry.Description, Format(ScheduledTask.\"Not Before\")), Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', CategoryTok);\n-                                end;\n+                            if JobQueueEntryUpdate.GetRecLockedExtendedTimeout() then begin\n+                                // Waiting for the lock can take a while, so the new start time is calculated again\n+                                NewEarliestStartDateTime := CurrentDateTime() + RescheduleOffsetInMs;\n+                                if (JobQueueEntryUpdate.Status in [JobQueueEntry.Status::Ready, JobQueueEntry.Status::\"On Hold with Inactivity Timeout\"]) and\n+                                   (JobQueueEntryUpdate.\"System Task ID\" = JobQueueEntry.\"System Task ID\") and\n+                                   not IsJobScheduledToRunSoon(JobQueueEntryUpdate, NewEarliestStartDateTime + RescheduleOffSetInMs)\n+                                then\n+                                    if TaskScheduler.SetTaskReady(JobQueueEntry.\"System Task ID\", NewEarliestStartDateTime) then begin\n+                                        JobQueueEntryUpdate.Status := JobQueueEntry.Status::Ready;\n+                                        JobQueueEntryUpdate.\"Earliest Start Date/Time\" := NewEarliestStartDateTime;\n+                                        JobQueueEntryUpdate.\"Parameter String\" := Format(TableNo);\n+                                        JobQueueEntryUpdate.Modify();\n+                                        Session.LogMessage('0000JAV', StrSubstNo(RescheduledTaskTxt, Format(ScheduledTask.ID), Format(JobQueueEntry.ID), JobQueueEntry.Description, Format(ScheduledTask.\"Not Before\")), Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', CategoryTok);\n+                                    end;\n+                            end;\n                         end;\n         until JobQueueEntry.Next() = 0;\n     end;\n \n+    local procedure IsJobScheduledToRunSoon(JobQueueEntry: Record \"Job Queue Entry\"; Threshold: DateTime): Boolean\n+    begin\n+        if JobQueueEntry.\"Earliest Start Date/Time\" = 0DT then\n+            exit(false);\n+        exit((JobQueueEntry.\"Earliest Start Date/Time\" > CurrentDateTime()) and (JobQueueEntry.\"Earliest Start Date/Time\" <= Threshold));\n+    end;\n+\n     local procedure DoesJobActOnTable(JobQueueEntry: Record \"Job Queue Entry\"; TableNo: Integer): Boolean\n     var\n         IntegrationTableMapping: Record \"Integration Table Mapping\";\n"
+    }
+  ]
+}
