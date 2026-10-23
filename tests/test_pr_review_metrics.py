@@ -5,9 +5,12 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_review_metrics
+from bcbench.agent.pr_review.run_manifest import RunManifest
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError
 from bcbench.results.bceval_export import write_bceval_results
+from bcbench.results.codereview import CodeReviewResultSummary
+from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
 from bcbench.types import AgentHarness, EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry, create_codereview_result
 
@@ -40,24 +43,81 @@ def _write_run_metrics(root: Path, **overrides: object) -> None:
     (root / RUN_METRICS_FILE_NAME).write_text(json.dumps(_run_metrics(**overrides)), encoding="utf-8")
 
 
+def _manifest(
+    *,
+    cli_version: str = "1.0.81-0",
+    root_model: str = "gpt-5.6-sol",
+    leaf_model: str = "gpt-5.4-mini",
+) -> RunManifest:
+    return RunManifest.model_validate(
+        {
+            "schema_version": 1,
+            "status": "completed",
+            "started_at": "2026-09-14T12:00:00Z",
+            "completed_at": "2026-09-14T12:00:01Z",
+            "failure_reason": None,
+            "engine": {
+                "repository": "microsoft/BC-ALAgents",
+                "commit": "e" * 40,
+                "agent_version": "1.6.6",
+            },
+            "bcquality": {"commit": None, "source_snapshot": None},
+            "configuration": {
+                "copilot_cli_version": cli_version,
+                "root_model": root_model,
+                "leaf_model": leaf_model,
+                "leaf_execution": "serial",
+                "max_leaf_concurrency": 4,
+                "cli_timeout_minutes": 30,
+                "minimum_severity": "Medium",
+                "agent_minimum_severity": "Medium",
+                "review_source": "local",
+            },
+            "plan": {
+                "skill_id": "al-code-review",
+                "leaf_count": 1,
+                "leaf_ids": ["al-performance-review"],
+            },
+            "processes": [
+                {
+                    "role": "leaf",
+                    "ordinal": 1,
+                    "skill_id": "al-performance-review",
+                    "requested_model": leaf_model,
+                    "observed_models": [leaf_model],
+                    "status": "completed",
+                    "started_at": "2026-09-14T12:00:00Z",
+                    "completed_at": "2026-09-14T12:00:01Z",
+                    "duration_seconds": 1.0,
+                    "exit_code": 0,
+                    "report_path": "leaf-results/1/_review-report.json",
+                    "failure_reason": None,
+                    "metrics": None,
+                }
+            ],
+        }
+    )
+
+
 def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> None:
     _write_run_metrics(tmp_path)
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=12.5)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=12.5, manifest=_manifest())
 
     assert isinstance(metrics, PRReviewMetrics)
     assert metrics.kind == "pr-review"
     assert metrics.execution_time == 12.5
     assert metrics.prompt_tokens == 150
-    assert metrics.completion_tokens == 28
-    assert metrics.total_tokens == 178
-    assert metrics.ai_credits == 1.75
     assert metrics.cached_tokens == 60
     assert metrics.cache_creation_tokens == 10
+    assert metrics.completion_tokens == 28
     assert metrics.reasoning_tokens == 7
+    assert metrics.total_tokens == 178
     assert metrics.api_calls == 2
     assert metrics.failed_api_calls == 1
     assert metrics.usage_api_calls == 2
+    assert metrics.ai_credits == 1.75
+    assert metrics.models == ["gpt-5.4-mini", "gpt-5.6-sol"]
     assert metrics.usage_complete is True
     assert metrics.malformed_records == 0
     assert metrics.copilot_cli_version == "1.0.81-0"
@@ -66,7 +126,6 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
 def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: Path) -> None:
     _write_run_metrics(
         tmp_path,
-        cli_version=None,
         wall_time_seconds=None,
         cached_tokens=None,
         cache_creation_tokens=None,
@@ -76,18 +135,34 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
         models=["gpt-5.4-mini", "gpt-5.6-sol"],
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
 
     assert metrics.ai_credits is None
     assert metrics.total_tokens == 178
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"cli_version": None},
+        {"cli_version": ""},
+        {"cli_version": "1.0.82"},
+        {"models": []},
+        {"models": ["gpt-5.4-mini"]},
+        {"models": ["gpt-5.4-mini", "gpt-5.6-sol", "gpt-5.6-sol"]},
+        {"models": ["gpt-5.4-mini", "unexpected-model"]},
+    ],
+)
+def test_validated_manifest_rejects_mismatched_aggregate_metrics(tmp_path: Path, overrides: dict[str, object]) -> None:
+    _write_run_metrics(tmp_path, **overrides)
+    with pytest.raises(AgentError, match="aggregate metrics"):
+        build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
+
+
 @pytest.mark.parametrize("has_token_usage", [False, True], ids=["no-chat-spans", "chat-without-billing"])
 def test_valid_engine_metrics_without_billing_preserve_unknown_credits_through_export(tmp_path: Path, has_token_usage: bool) -> None:
-    # Get-CopilotRunMetrics at engine 159572aad814d6e1022ca8d54e85a6eab7c4d5c6 emits these nullable shapes.
     _write_run_metrics(
         tmp_path,
-        cli_version=None,
         wall_time_seconds=2.5,
         prompt_tokens=150 if has_token_usage else None,
         cached_tokens=None,
@@ -100,12 +175,11 @@ def test_valid_engine_metrics_without_billing_preserve_unknown_credits_through_e
         usage_api_calls=1 if has_token_usage else None,
         ai_credits=None,
         premium_requests=None,
-        models=[],
         usage_complete=has_token_usage,
         malformed_records=0,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.5)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.5, manifest=_manifest())
     assert metrics.ai_credits is None
     assert metrics.total_tokens == (178 if has_token_usage else None)
     result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
@@ -139,15 +213,21 @@ def test_malformed_records_suppress_all_usage_metrics(tmp_path: Path) -> None:
         malformed_records=3,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
 
     assert metrics.prompt_tokens is None
     assert metrics.completion_tokens is None
     assert metrics.total_tokens is None
     assert metrics.ai_credits is None
+    assert metrics.usage_complete is False
+    assert metrics.malformed_records == 3
 
 
-def test_incomplete_usage_suppresses_tokens_but_preserves_exact_credits(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("usage_complete", "malformed_records"),
+    [(False, 0), (True, 1), (False, 1)],
+)
+def test_ineligible_usage_preserves_quality_but_not_cost_comparisons(tmp_path: Path, usage_complete: bool, malformed_records: int) -> None:
     _write_run_metrics(
         tmp_path,
         prompt_tokens=25,
@@ -155,28 +235,66 @@ def test_incomplete_usage_suppresses_tokens_but_preserves_exact_credits(tmp_path
         total_tokens=30,
         api_calls=2,
         ai_credits=0.1,
-        usage_complete=False,
-        malformed_records=0,
+        usage_complete=usage_complete,
+        malformed_records=malformed_records,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
 
-    assert metrics.prompt_tokens is None
-    assert metrics.completion_tokens is None
-    assert metrics.total_tokens is None
-    assert metrics.ai_credits == 0.1
+    for name in ("prompt_tokens", "cached_tokens", "cache_creation_tokens", "completion_tokens", "reasoning_tokens", "total_tokens", "ai_credits"):
+        assert getattr(metrics, name) is None
+    assert metrics.usage_complete is usage_complete
+    assert metrics.malformed_records == malformed_records
+    result = create_codereview_result(instance_id="proj__review-1", agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
+    incomplete_summary = CodeReviewResultSummary.from_results([result], run_id="incomplete")
+    assert incomplete_summary.total == 1
+    assert incomplete_summary.valid_review_output_rate == 1.0
+    assert incomplete_summary.f1 == result.f1
+    for name in ("average_prompt_tokens", "average_completion_tokens", "average_total_tokens", "average_ai_credits"):
+        assert getattr(incomplete_summary, name) is None
+
+    complete_result = create_codereview_result(
+        instance_id="proj__review-2",
+        agent_name=AgentHarness.PR_REVIEW,
+        metrics=PRReviewMetrics(prompt_tokens=100, completion_tokens=10, total_tokens=110, ai_credits=0.5),
+    )
+    mixed_summary = CodeReviewResultSummary.from_results([result, complete_result], run_id="mixed")
+    complete_summary = CodeReviewResultSummary.from_results([complete_result], run_id="complete")
+    aggregate = CodeReviewLeaderboardAggregate.from_runs([incomplete_summary, complete_summary])
+    for summary in (mixed_summary, aggregate):
+        assert summary.average_prompt_tokens == 100
+        assert summary.average_completion_tokens == 10
+        assert summary.average_total_tokens == 110
+        assert summary.average_ai_credits == 0.5
+    unavailable_aggregate = CodeReviewLeaderboardAggregate.from_runs([incomplete_summary])
+    for name in ("average_prompt_tokens", "average_completion_tokens", "average_total_tokens", "average_ai_credits"):
+        assert getattr(unavailable_aggregate, name) is None
+
+
+def test_complete_zero_usage_remains_available(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, prompt_tokens=0, completion_tokens=0, total_tokens=0, ai_credits=0.0)
+
+    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=_manifest())
+    summary = CodeReviewResultSummary.from_results([create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)], run_id="zero")
+    aggregate = CodeReviewLeaderboardAggregate.from_runs([summary])
+
+    for result in (summary, aggregate):
+        assert result.average_prompt_tokens == 0
+        assert result.average_completion_tokens == 0
+        assert result.average_total_tokens == 0
+        assert result.average_ai_credits == 0
 
 
 def test_missing_run_metrics_raises(tmp_path: Path) -> None:
     with pytest.raises(AgentError, match="run metrics artifact not found"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
 
 
 def test_invalid_run_metrics_json_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text("not json", encoding="utf-8")
 
     with pytest.raises(AgentError, match="Could not read engine run metrics artifact"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
 
 
 @pytest.mark.parametrize(
@@ -197,7 +315,7 @@ def test_invalid_run_metrics_contract_raises(tmp_path: Path, overrides: dict[str
     _write_run_metrics(tmp_path, **overrides)
 
     with pytest.raises(AgentError, match="does not satisfy schema version 1"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
 
 
 def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
@@ -206,7 +324,7 @@ def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(AgentError, match="does not satisfy schema version 1"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
 
 
 def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
@@ -232,7 +350,7 @@ def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
     )
 
     with pytest.raises(AgentError, match="must contain AL changes"):
-        build_pr_review_metrics(tmp_path, execution_time=0.25)
+        build_pr_review_metrics(tmp_path, execution_time=0.25, manifest=_manifest())
 
 
 @pytest.mark.parametrize(
@@ -272,4 +390,4 @@ def test_not_applicable_rejects_noncanonical_shape(tmp_path: Path, field: str, v
     _write_run_metrics(tmp_path, **not_applicable)
 
     with pytest.raises(AgentError, match="not-applicable metrics have invalid fields"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, execution_time=1.0, manifest=_manifest())
