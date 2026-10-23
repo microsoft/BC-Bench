@@ -54,41 +54,18 @@ def test_bcal_downloads_symbols_from_the_selected_tier():
 def test_bcal_run_identity_includes_tier_and_package_selection():
     workflow = _workflow("bcal-evaluation.yml")
 
-    assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ")
-    assert (
-        "${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }}"
-        in workflow["run-name"]
-    )
-    assert workflow["concurrency"]["group"].startswith(f"bcal-evaluation-{SELECTED_TIER}-")
+    assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ${{{{ inputs.bcal-feed || 'official' }}}}@${{{{ inputs.bcal-version || 'latest' }}}} ")
+    assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}"
 
 
-def test_bcal_package_selection_defaults_to_official_latest_and_derives_branch_provenance():
+def test_bcal_feed_selects_official_or_internal_test_feed():
     workflow = _workflow("bcal-evaluation.yml")
-    inputs = workflow[True]["workflow_dispatch"]["inputs"]
-    validation = _step(workflow, "validate-bcal-package", "Validate and resolve BCal package selection")
-    provenance = _step(workflow, "validate-bcal-package", "Verify experimental package provenance")
+    feed = workflow[True]["workflow_dispatch"]["inputs"]["bcal-feed"]
+    install = _step(workflow, "evaluate-with-bcal", "Install bcal CLI from internal feed")
 
-    assert inputs["bcal-package-selection"] == {
-        "description": "BCAL package selection",
-        "required": False,
-        "default": "official-latest",
-        "type": "choice",
-        "options": ["official-latest", "official-pinned", "experiment-pinned"],
-    }
-    assert "bcal-package-channel" not in inputs
-    assert "bcal-version-mode" not in inputs
-    assert "bcal-branch" not in inputs
-    assert "BCAL_TEST_FEED_URL" not in workflow["env"]
-    assert validation["env"]["EXPERIMENT_FEED_URL"] == "${{ secrets.BCAL_TEST_FEED_URL }}"
-    assert "pkgs.dev.azure.com" not in _workflow_text("bcal-evaluation.yml")
-    assert 'channel="experiment"' in validation["run"]
-    assert 'version_mode="pinned"' in validation["run"]
-    assert 'feed="DynamicsSMBTest@Local"' in validation["run"]
-    assert provenance["if"] == "${{ steps.resolve.outputs.source == 'experiment' }}"
-    assert ".\\scripts\\Resolve-BCalPackageProvenance.ps1" in provenance["run"]
-    assert "-ExpectedBranch" not in provenance["run"]
-    assert '-TestFeedUrl "$env:BCAL_TEST_FEED_URL"' in provenance["run"]
-    assert workflow["jobs"]["validate-bcal-package"]["outputs"]["branch"] == "${{ steps.provenance.outputs.branch || steps.resolve.outputs.branch }}"
+    assert feed["default"] == "official"
+    assert feed["options"] == ["official", "experiment"]
+    assert install["with"]["feed-url"] == "${{ inputs.bcal-feed == 'experiment' && secrets.BCAL_TEST_FEED_URL || secrets.BCAL_FEED_URL }}"
 
 
 def test_bcal_installs_selected_package():
@@ -105,19 +82,10 @@ def test_bcal_installs_selected_package():
     assert "${{ inputs." not in action_install["run"]
 
 
-def test_summary_receives_package_provenance():
+def test_experimental_feed_runs_are_published_as_experiments():
     job = _workflow("bcal-evaluation.yml")["jobs"]["summarize-results"]
+    summarize = _workflow("summarize-results.yml")
 
-    assert set(job["needs"]) == {"validate-bcal-package", "evaluate-with-bcal"}
-    assert job["with"]["bcal-package-channel"] == "${{ needs.validate-bcal-package.outputs.source }}"
-    assert job["with"]["bcal-package-branch"] == "${{ needs.validate-bcal-package.outputs.branch }}"
-    assert job["with"]["bcal-package-feed"] == "${{ needs.validate-bcal-package.outputs.feed }}"
-
-
-def test_summary_tags_package_provenance():
-    workflow = _workflow_text("summarize-results.yml")
-
-    assert 'RUN_NAME="${RUN_NAME} [${BCAL_PACKAGE_CHANNEL}:${BCAL_PACKAGE_BRANCH}]"' in workflow
-    assert "bcal-channel-${CHANNEL_TAG}" in workflow
-    assert "bcal-branch-${PACKAGE_BRANCH_TAG}" in workflow
-    assert "bcal-feed-${FEED_TAG}" in workflow
+    assert job["with"]["experiment"] == "${{ inputs.bcal-feed == 'experiment' }}"
+    assert summarize[True]["workflow_call"]["inputs"]["experiment"]["default"] is False
+    assert "${{ inputs.experiment && '--eval-run-type experiment' || '' }}" in _step(summarize, "summarize-results", "Upload result using bceval")["run"]

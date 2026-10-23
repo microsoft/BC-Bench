@@ -5,7 +5,6 @@ from typing import Annotated, cast, override
 
 import typer
 from bcbench_core.filesystem import prepare_run_dir
-from pydantic import ValidationError
 
 from bcbench.agent import BCalBackendConfig, get_bcal_version, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
@@ -35,8 +34,6 @@ from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBas
 from bcbench.types import (
     AgentHarness,
     AgentMetrics,
-    BCalPackageProvenance,
-    BCalPackageSource,
     DatasetTier,
     EvaluationCategory,
     EvaluationContext,
@@ -255,14 +252,6 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
-    bcal_package_channel: Annotated[
-        BCalPackageSource,
-        typer.Option("--bcal-package-channel", envvar="BCAL_PACKAGE_CHANNEL", help="BCAL package channel: official baseline or experimental package"),
-    ] = BCalPackageSource.OFFICIAL,
-    bcal_branch: Annotated[
-        str,
-        typer.Option(envvar="BCAL_PACKAGE_BRANCH", help="BCAL source branch; official packages use master"),
-    ] = "master",
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -276,13 +265,8 @@ def evaluate_bcal(
         command=llm_command,
         model=llm_model,
     )
-    try:
-        bcal_package = BCalPackageProvenance(source=bcal_package_channel, branch=bcal_branch)
-    except ValidationError as exc:
-        message = exc.errors()[0]["msg"].removeprefix("Value error, ")
-        raise typer.BadParameter(message, param_hint="--bcal-branch") from exc
 
-    logger.info(f"Running evaluation on entry {entry_id} with BCal package {bcal_package.source}/{bcal_package.branch}")
+    logger.info(f"Running evaluation on entry {entry_id} with BCal")
 
     context = EvaluationContext(
         entry=entry,
@@ -294,7 +278,6 @@ def evaluate_bcal(
         agent_version=get_bcal_version(),
         category=category,
         tier=tier,
-        bcal_package=bcal_package,
     )
 
     try:
