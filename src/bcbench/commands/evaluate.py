@@ -278,6 +278,10 @@ def evaluate_bcal(
         str,
         typer.Option(envvar="BCAL_PACKAGE_BRANCH", help="BCAL source branch; official packages use master"),
     ] = "master",
+    cohort_name: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_NAME", help="Selected evaluation cohort name")] = None,
+    cohort_sha256: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_SHA256", help="SHA-256 of the selected evaluation cohort manifest")] = None,
+    repetition_index: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_INDEX", help="One-based repetition index")] = None,
+    repetition_count: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_COUNT", help="Total independent repetitions")] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -285,6 +289,15 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
+    if (cohort_name is None) != (cohort_sha256 is None):
+        raise typer.BadParameter("cohort name and SHA-256 must be provided together")
+    if (repetition_index is None) != (repetition_count is None):
+        raise typer.BadParameter("repetition index and count must be provided together")
+    if repetition_index is not None and repetition_count is not None and (repetition_count < 1 or not 1 <= repetition_index <= repetition_count):
+        raise typer.BadParameter("repetition index must be between 1 and repetition count")
+    if cohort_name is not None and repetition_index is None:
+        raise typer.BadParameter("cohort evaluations must include repetition metadata")
+
     dataset_path = category.dataset_path_for(dataset)
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
@@ -312,6 +325,10 @@ def evaluate_bcal(
         dataset=dataset,
         dataset_version=dataset.version,
         dataset_sha256=sha256(dataset_path.read_bytes()).hexdigest(),
+        cohort_name=cohort_name,
+        cohort_sha256=cohort_sha256,
+        repetition_index=repetition_index,
+        repetition_count=repetition_count,
     )
 
     try:

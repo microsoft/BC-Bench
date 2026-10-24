@@ -782,6 +782,10 @@ class EvaluationContext[E: BaseDatasetEntry]:
     dataset: NL2ALDataset | None = None
     dataset_version: str | None = None
     dataset_sha256: str | None = None
+    cohort_name: str | None = None
+    cohort_sha256: str | None = None
+    repetition_index: int | None = None
+    repetition_count: int | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
 

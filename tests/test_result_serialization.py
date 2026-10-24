@@ -218,6 +218,37 @@ class TestCategorySerialization:
         assert loaded.execution_identity == identity
         assert loaded.evidence == evidence
 
+    def test_cohort_and_repetition_metadata_round_trip(self, tmp_path, sample_result_bug_fix):
+        sample_result_bug_fix.cohort_name = "55-chat-completion-policy"
+        sample_result_bug_fix.cohort_sha256 = "a" * 64
+        sample_result_bug_fix.repetition_index = 2
+        sample_result_bug_fix.repetition_count = 3
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.cohort_name == "55-chat-completion-policy"
+        assert loaded.cohort_sha256 == "a" * 64
+        assert loaded.repetition_index == 2
+        assert loaded.repetition_count == 3
+
+    @pytest.mark.parametrize(
+        ("changes", "match"),
+        [
+            ({"cohort_name": "focus"}, "cohort_name and cohort_sha256"),
+            ({"repetition_index": 1}, "repetition_index and repetition_count"),
+            ({"repetition_index": 3, "repetition_count": 2}, "between 1 and repetition_count"),
+            ({"cohort_name": "focus", "cohort_sha256": "a" * 64}, "cohort results must record repetition"),
+        ],
+    )
+    def test_invalid_cohort_metadata_is_rejected(self, sample_result_bug_fix, changes, match):
+        payload = sample_result_bug_fix.model_dump(mode="json")
+        payload.update(changes)
+
+        with pytest.raises(ValueError, match=match):
+            BaseEvaluationResult.from_json(payload)
+
     def test_tool_usage_saves_as_dict(self, tmp_path):
         tool_usage = {"bash": 5, "view": 3, "search": 2}
         result = create_bugfix_result(

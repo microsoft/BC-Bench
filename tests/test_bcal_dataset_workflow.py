@@ -39,9 +39,11 @@ def test_bcal_run_identity_includes_selected_dataset():
         in workflow["run-name"]
     )
     assert workflow["concurrency"]["group"] == (
-        "bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.test-run && 'test' || 'full' }}"
+        "bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.cohort || 'all' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.test-run && 'test' || 'full' }}-x${{ inputs.repeat-count || 1 }}"
     )
     assert workflow["jobs"]["get-entries"]["with"]["dataset"] == "${{ inputs.dataset || 'gold' }}"
+    assert workflow["jobs"]["get-entries"]["with"]["cohort"] == "${{ inputs.cohort || '' }}"
+    assert workflow["jobs"]["get-entries"]["with"]["repeat-count"] == "${{ inputs.repeat-count || 1 }}"
 
 
 def test_bcal_package_selection_defaults_to_official_latest_and_derives_branch_provenance():
@@ -87,6 +89,8 @@ def test_get_entries_threads_optional_dataset_without_eval():
 
     assert 'cmd=(uv run bcbench dataset list --category "$EVALUATION_CATEGORY" --github-output entries)' in workflow
     assert 'cmd+=(--dataset "$NL2AL_DATASET")' in workflow
+    assert 'cmd+=(--cohort "$EVALUATION_COHORT")' in workflow
+    assert 'cmd+=(--repeat-count "$REPEAT_COUNT")' in workflow
     assert '"${cmd[@]}"' in workflow
     assert 'eval "$cmd"' not in workflow
     assert workflow.index('if [[ "$MODIFIED_ONLY" == "true" ]]') < workflow.index('elif [[ "$TEST_RUN" == "true" ]]')
@@ -124,6 +128,27 @@ def test_summary_runs_after_non_cancelled_matrix_failures_with_exact_ids():
     assert job["with"]["bcal-package-channel"] == "${{ needs.validate-bcal-package.outputs.source }}"
     assert job["with"]["bcal-package-branch"] == "${{ needs.validate-bcal-package.outputs.branch }}"
     assert job["with"]["bcal-package-feed"] == "${{ needs.validate-bcal-package.outputs.feed }}"
+    assert job["strategy"]["matrix"]["repetition"] == "${{ fromJson(needs.get-entries.outputs.repetitions) }}"
+    assert job["with"]["cohort-name"] == "${{ needs.get-entries.outputs.cohort-name }}"
+    assert job["with"]["cohort-sha256"] == "${{ needs.get-entries.outputs.cohort-sha256 }}"
+    assert job["with"]["repetition-index"] == "${{ matrix.repetition }}"
+    assert job["with"]["repetition-count"] == "${{ fromJson(needs.get-entries.outputs.repetition-count) }}"
+
+
+def test_bcal_repetitions_use_independent_result_artifacts_and_summaries():
+    workflow = _workflow("bcal-evaluation.yml")
+    evaluate_job = workflow["jobs"]["evaluate-with-bcal"]
+    summary_job = workflow["jobs"]["summarize-results"]
+    upload = _step(workflow, "evaluate-with-bcal", "Upload evaluation results")
+    run = _step(workflow, "evaluate-with-bcal", "Run BCal for entry ${{ matrix.entry }}")
+
+    assert evaluate_job["strategy"]["matrix"]["repetition"] == "${{ fromJson(needs.get-entries.outputs.repetitions) }}"
+    assert "if ([int]$env:BCBENCH_REPETITION_COUNT -gt 1)" in run["run"]
+    assert '$runId = "$runId-r$env:BCBENCH_REPETITION_INDEX"' in run["run"]
+    assert '--run-id "$runId"' in run["run"]
+    assert "format('-r{0}', matrix.repetition)" in upload["with"]["name"]
+    assert "format('-r{0}', matrix.repetition)" in summary_job["with"]["artifact-pattern"]
+    assert "format('{0}-r{1}', github.run_id, matrix.repetition)" in summary_job["with"]["evaluation-run-id"]
 
 
 def test_summary_validates_coverage_and_tags_selected_dataset():
@@ -140,3 +165,7 @@ def test_summary_validates_coverage_and_tags_selected_dataset():
     assert "bcal-channel-${CHANNEL_TAG}" in workflow
     assert "bcal-branch-${PACKAGE_BRANCH_TAG}" in workflow
     assert "bcal-feed-${FEED_TAG}" in workflow
+    assert '--run-id "$RESULT_RUN_ID"' in workflow
+    assert "inputs.artifact-pattern" in workflow
+    assert 'RUN_NAME="${RUN_NAME} [cohort:${COHORT_NAME}]"' in workflow
+    assert 'RUN_NAME="${RUN_NAME} [repetition:${REPETITION_INDEX}/${REPETITION_COUNT}]"' in workflow

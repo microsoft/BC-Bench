@@ -205,6 +205,30 @@ class TestWriteBcevalResults:
         row = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))
         assert row["context"] == ""
 
+    def test_writes_cohort_and_repetition_metadata(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
+        sample_bugfix_result_with_metrics.cohort_name = "55-chat-completion-policy"
+        sample_bugfix_result_with_metrics.cohort_sha256 = "a" * 64
+        sample_bugfix_result_with_metrics.repetition_index = 2
+        sample_bugfix_result_with_metrics.repetition_count = 3
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[sample_bugfix_result_with_metrics],
+                out_dir=tmp_path,
+                run_id="cohort",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        assert metadata["cohort_name"] == "55-chat-completion-policy"
+        assert metadata["cohort_sha256"] == "a" * 64
+        assert metadata["repetition_index"] == 2
+        assert metadata["repetition_count"] == 3
+
     def test_skips_results_without_matching_dataset_entry(self, tmp_path, sample_dataset_file):
         output_dir = tmp_path / "output"
         output_dir.mkdir()

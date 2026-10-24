@@ -49,6 +49,41 @@ on:
         required: false
         type: string
         default: ""
+      artifact-pattern:
+        description: "Optional artifact pattern used to isolate one repeated evaluation"
+        required: false
+        type: string
+        default: ""
+      artifact-suffix:
+        description: "Optional suffix for summary and coverage artifacts"
+        required: false
+        type: string
+        default: ""
+      evaluation-run-id:
+        description: "Optional result-directory run ID, distinct from the GitHub workflow run ID"
+        required: false
+        type: string
+        default: ""
+      cohort-name:
+        description: "Optional evaluation cohort name"
+        required: false
+        type: string
+        default: ""
+      cohort-sha256:
+        description: "Optional evaluation cohort manifest SHA-256"
+        required: false
+        type: string
+        default: ""
+      repetition-index:
+        description: "One-based repetition index"
+        required: false
+        type: number
+        default: 1
+      repetition-count:
+        description: "Total repetition count"
+        required: false
+        type: number
+        default: 1
       skip-leaderboard:
         description: "Whether to skip updating the leaderboard"
         required: false
@@ -85,6 +120,11 @@ jobs:
       BCAL_PACKAGE_CHANNEL: ${{ inputs.bcal-package-channel }}
       BCAL_PACKAGE_BRANCH: ${{ inputs.bcal-package-branch }}
       BCAL_PACKAGE_FEED: ${{ inputs.bcal-package-feed }}
+      RESULT_RUN_ID: ${{ inputs.evaluation-run-id || github.run_id }}
+      COHORT_NAME: ${{ inputs.cohort-name }}
+      COHORT_SHA256: ${{ inputs.cohort-sha256 }}
+      REPETITION_INDEX: ${{ inputs.repetition-index }}
+      REPETITION_COUNT: ${{ inputs.repetition-count }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -96,7 +136,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         continue-on-error: ${{ inputs.expected-entries != '' }}
         with:
-          pattern: ${{ inputs.dataset != '' && 'evaluation-results-*' || '*' }}
+          pattern: ${{ inputs.artifact-pattern || (inputs.dataset != '' && 'evaluation-results-*' || '*') }}
           path: ${{ inputs.results-dir }}/
           merge-multiple: true
 
@@ -104,6 +144,7 @@ jobs:
         shell: bash
         run: |
           cmd=(uv run bcbench result summarize
+            --run-id "$RESULT_RUN_ID"
             --category "$EVALUATION_CATEGORY"
             --result-dir "$RESULTS_DIR"
             --bceval-output "$BCEVAL_RESULT_FILE"
@@ -123,16 +164,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: evaluation-coverage
-          path: ${{ inputs.results-dir }}/${{ github.run_id }}/evaluation_coverage.json
+          name: evaluation-coverage${{ inputs.artifact-suffix }}
+          path: ${{ inputs.results-dir }}/${{ inputs.evaluation-run-id || github.run_id }}/evaluation_coverage.json
           if-no-files-found: ignore
           retention-days: ${{ inputs.mock && 1 || 30 }}
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: evaluation-summary
-          path: ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}
+          name: evaluation-summary${{ inputs.artifact-suffix }}
+          path: ${{ inputs.results-dir }}/${{ inputs.evaluation-run-id || github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}
           if-no-files-found: error
           retention-days: ${{ inputs.mock && 1 || 30 }}
 
@@ -166,6 +207,19 @@ jobs:
           BRANCH_TAG="${BRANCH_TAG//./-}"
           RUN_NAME="${EVALUATION_AGENT} (${EVALUATION_MODEL}) - #${GITHUB_RUN_ID}"
           RUN_TAGS="${EVALUATION_AGENT},${MODEL_TAG},${BRANCH_TAG}"
+          if [[ -n "$COHORT_NAME" ]]; then
+            if [[ -z "$COHORT_SHA256" ]]; then
+              echo "::error::Cohort name requires a cohort SHA-256."
+              exit 1
+            fi
+            COHORT_TAG="$(printf '%s' "$COHORT_NAME" | tr -c '[:alnum:]_-' '-' | sed -E 's/^-+|-+$//g')"
+            RUN_NAME="${RUN_NAME} [cohort:${COHORT_NAME}]"
+            RUN_TAGS="${RUN_TAGS},cohort-${COHORT_TAG},cohort-sha256-${COHORT_SHA256}"
+          fi
+          if [[ "$REPETITION_COUNT" -gt 1 ]]; then
+            RUN_NAME="${RUN_NAME} [repetition:${REPETITION_INDEX}/${REPETITION_COUNT}]"
+            RUN_TAGS="${RUN_TAGS},repetition-${REPETITION_INDEX}-of-${REPETITION_COUNT}"
+          fi
           if [[ -n "$BCAL_PACKAGE_CHANNEL" ]]; then
             CHANNEL_TAG="$(printf '%s' "$BCAL_PACKAGE_CHANNEL" | tr -c '[:alnum:]_-' '-' | sed -E 's/^-+|-+$//g')"
             PACKAGE_BRANCH_TAG="$(printf '%s' "$BCAL_PACKAGE_BRANCH" | tr -c '[:alnum:]_-' '-' | sed -E 's/^-+|-+$//g')"
@@ -188,7 +242,7 @@ jobs:
             --eval-run-name "$RUN_NAME" \
             --tags "$RUN_TAGS" \
             --source "${{ github.sha }}" \
-            --input-file "${RESULTS_DIR}/${GITHUB_RUN_ID}/${BCEVAL_RESULT_FILE}" \
+            --input-file "${RESULTS_DIR}/${RESULT_RUN_ID}/${BCEVAL_RESULT_FILE}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
             --evaluators "${{ steps.bceval.outputs.evaluators }}" \
             --core-score "${{ steps.bceval.outputs.core_score }}" \
