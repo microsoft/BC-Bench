@@ -8,7 +8,7 @@ import typer
 from bcbench_core.filesystem import prepare_run_dir
 from pydantic import ValidationError
 
-from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, BCalScenarioError, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.agent.bcal.version import get_bcal_version, verify_bcal_version
 from bcbench.cli_options import (
     ClaudeCodeModel,
@@ -48,6 +48,23 @@ logger = logging.getLogger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
+
+
+def _run_bcal_for_evaluation(context: EvaluationContext[NL2ALEntry], backend_config: BCalBackendConfig) -> tuple[AgentMetrics, ExperimentConfiguration]:
+    try:
+        run_result = run_bcal_agent(
+            entry=context.entry,
+            repo_path=context.repo_path,
+            backend_config=backend_config,
+        )
+    except BCalScenarioError as exc:
+        if exc.scenario_result is not None:
+            context.execution_identity = exc.scenario_result.execution_identity
+            context.evidence = exc.scenario_result.evidence
+        raise
+    context.execution_identity = run_result.execution_identity
+    context.evidence = run_result.evidence
+    return run_result.metrics, run_result.experiment
 
 
 @evaluate_app.command("copilot")
@@ -261,6 +278,10 @@ def evaluate_bcal(
         str,
         typer.Option(envvar="BCAL_PACKAGE_BRANCH", help="BCAL source branch; official packages use master"),
     ] = "master",
+    cohort_name: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_NAME", help="Selected evaluation cohort name")] = None,
+    cohort_sha256: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_SHA256", help="SHA-256 of the selected evaluation cohort manifest")] = None,
+    repetition_index: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_INDEX", help="One-based repetition index")] = None,
+    repetition_count: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_COUNT", help="Total independent repetitions")] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -268,6 +289,15 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
+    if (cohort_name is None) != (cohort_sha256 is None):
+        raise typer.BadParameter("cohort name and SHA-256 must be provided together")
+    if (repetition_index is None) != (repetition_count is None):
+        raise typer.BadParameter("repetition index and count must be provided together")
+    if repetition_index is not None and repetition_count is not None and (repetition_count < 1 or not 1 <= repetition_index <= repetition_count):
+        raise typer.BadParameter("repetition index must be between 1 and repetition count")
+    if cohort_name is not None and repetition_index is None:
+        raise typer.BadParameter("cohort evaluations must include repetition metadata")
+
     dataset_path = category.dataset_path_for(dataset)
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
@@ -295,6 +325,10 @@ def evaluate_bcal(
         dataset=dataset,
         dataset_version=dataset.version,
         dataset_sha256=sha256(dataset_path.read_bytes()).hexdigest(),
+        cohort_name=cohort_name,
+        cohort_sha256=cohort_sha256,
+        repetition_index=repetition_index,
+        repetition_count=repetition_count,
     )
 
     try:
@@ -302,11 +336,7 @@ def evaluate_bcal(
         verify_bcal_version(context.agent_version, bcal_version)
         category.pipeline.execute(
             context,
-            lambda ctx: run_bcal_agent(
-                entry=cast(NL2ALEntry, ctx.entry),
-                repo_path=ctx.repo_path,
-                backend_config=backend_config,
-            ),
+            lambda ctx: _run_bcal_for_evaluation(cast(EvaluationContext[NL2ALEntry], ctx), backend_config),
         )
     except AgentError as exc:
         result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))

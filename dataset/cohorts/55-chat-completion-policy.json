@@ -1,0 +1,26 @@
+{
+  "name": "55-chat-completion-policy",
+  "dataset": "gold",
+  "entries": [
+    "nl2al__collected-overdue-collection-review-1",
+    "nl2al__collected-product-sample-followup-1",
+    "nl2al__collected-shipment-complaint-log-1",
+    "nl2al__collected-van-mileage-maintenance-1",
+    "nl2al__persona-item-low-stock-warning-consultant-2",
+    "nl2al__expanded-customer-email-review-invalidation-1",
+    "nl2al__expanded-compound-revision-modal-selection-1",
+    "nl2al__read-only-compliance-register-permission-set-1",
+    "nl2al__expanded-incremental-labor-billing-preview-1",
+    "nl2al__expanded-atomic-json-request-parser-1",
+    "nl2al__block-purchase-order-without-vendor-vat-2",
+    "nl2al__expanded-enum-interface-fee-dispatch-1",
+    "nl2al__expanded-customer-csv-export-1",
+    "nl2al__expanded-task-sheet-parent-child-lifecycle-1",
+    "nl2al__expanded-sales-eligible-variant-picker-1",
+    "nl2al__add-industry-field-customer-card-2",
+    "nl2al__move-name-customer-card-2",
+    "nl2al__expanded-location-bin-pair-integrity-1",
+    "nl2al__expanded-company-scoped-data-upgrade-1",
+    "nl2al__block-quote-release-over-credit-2"
+  ]
+}

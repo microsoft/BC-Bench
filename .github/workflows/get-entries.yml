@@ -25,10 +25,32 @@ on:
         required: false
         type: string
         default: ""
+      cohort:
+        description: Optional checked-in evaluation cohort name
+        required: false
+        type: string
+        default: ""
+      repeat-count:
+        description: Number of independent repetitions
+        required: false
+        type: string
+        default: "1"
     outputs:
       entries:
         description: JSON array of dataset entries
         value: ${{ jobs.get-entries.outputs.entries }}
+      cohort-name:
+        description: Validated cohort name
+        value: ${{ jobs.get-entries.outputs.cohort-name }}
+      cohort-sha256:
+        description: SHA-256 of the validated cohort manifest
+        value: ${{ jobs.get-entries.outputs.cohort-sha256 }}
+      repetition-count:
+        description: Validated repetition count
+        value: ${{ jobs.get-entries.outputs.repetition-count }}
+      repetitions:
+        description: JSON array of one-based repetition indexes
+        value: ${{ jobs.get-entries.outputs.repetitions }}
       runner:
         description: GitHub Actions runner label to evaluate this category on
         value: ${{ jobs.get-entries.outputs.runner }}
@@ -45,8 +67,14 @@ jobs:
     env:
       EVALUATION_CATEGORY: ${{ inputs.category }}
       NL2AL_DATASET: ${{ inputs.dataset }}
+      EVALUATION_COHORT: ${{ inputs.cohort }}
+      REPEAT_COUNT: ${{ inputs.repeat-count }}
     outputs:
       entries: ${{ steps.get-entries.outputs.entries }}
+      cohort-name: ${{ steps.get-entries.outputs.cohort-name }}
+      cohort-sha256: ${{ steps.get-entries.outputs.cohort-sha256 }}
+      repetition-count: ${{ steps.get-entries.outputs.repetition-count }}
+      repetitions: ${{ steps.get-entries.outputs.repetitions }}
       runner: ${{ steps.runtime-config.outputs.runner }}
       requires-container: ${{ steps.runtime-config.outputs.requires-container }}
       requires-repo: ${{ steps.runtime-config.outputs.requires-repo }}
@@ -75,6 +103,10 @@ jobs:
           if [[ -n "$NL2AL_DATASET" ]]; then
             cmd+=(--dataset "$NL2AL_DATASET")
           fi
+          if [[ -n "$EVALUATION_COHORT" ]]; then
+            cmd+=(--cohort "$EVALUATION_COHORT")
+          fi
+          cmd+=(--repeat-count "$REPEAT_COUNT")
 
           if [[ "$MODIFIED_ONLY" == "true" ]]; then
             cmd+=(--modified-only)
