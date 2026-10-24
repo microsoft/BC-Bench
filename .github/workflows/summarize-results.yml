@@ -77,13 +77,13 @@ on:
       repetition-index:
         description: "One-based repetition index"
         required: false
-        type: number
-        default: 1
+        type: string
+        default: "1"
       repetition-count:
         description: "Total repetition count"
         required: false
-        type: number
-        default: 1
+        type: string
+        default: "1"
       skip-leaderboard:
         description: "Whether to skip updating the leaderboard"
         required: false

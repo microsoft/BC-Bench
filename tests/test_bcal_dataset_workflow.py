@@ -43,7 +43,7 @@ def test_bcal_run_identity_includes_selected_dataset():
     )
     assert workflow["jobs"]["get-entries"]["with"]["dataset"] == "${{ inputs.dataset || 'gold' }}"
     assert workflow["jobs"]["get-entries"]["with"]["cohort"] == "${{ inputs.cohort || '' }}"
-    assert workflow["jobs"]["get-entries"]["with"]["repeat-count"] == "${{ inputs.repeat-count || 1 }}"
+    assert workflow["jobs"]["get-entries"]["with"]["repeat-count"] == ("${{ format('{0}', inputs.repeat-count || 1) }}")
 
 
 def test_bcal_package_selection_defaults_to_official_latest_and_derives_branch_provenance():
@@ -85,8 +85,10 @@ def test_reusable_dataset_input_is_optional_for_existing_callers(workflow_name):
 
 
 def test_get_entries_threads_optional_dataset_without_eval():
+    parsed = _workflow("get-entries.yml")
     workflow = _workflow_text("get-entries.yml")
 
+    assert parsed[True]["workflow_call"]["inputs"]["repeat-count"]["type"] == "string"
     assert 'cmd=(uv run bcbench dataset list --category "$EVALUATION_CATEGORY" --github-output entries)' in workflow
     assert 'cmd+=(--dataset "$NL2AL_DATASET")' in workflow
     assert 'cmd+=(--cohort "$EVALUATION_COHORT")' in workflow
@@ -115,8 +117,12 @@ def test_bcal_keeps_existing_installation_and_single_turn_execution():
 
 
 def test_summary_runs_after_non_cancelled_matrix_failures_with_exact_ids():
-    job = _workflow("bcal-evaluation.yml")["jobs"]["summarize-results"]
+    workflow = _workflow("bcal-evaluation.yml")
+    job = workflow["jobs"]["summarize-results"]
+    summary_inputs = _workflow("summarize-results.yml")[True]["workflow_call"]["inputs"]
 
+    assert summary_inputs["repetition-index"]["type"] == "string"
+    assert summary_inputs["repetition-count"]["type"] == "string"
     assert set(job["needs"]) == {"validate-bcal-package", "get-entries", "evaluate-with-bcal"}
     assert "always()" in job["if"]
     assert "!cancelled()" in job["if"]
@@ -131,8 +137,8 @@ def test_summary_runs_after_non_cancelled_matrix_failures_with_exact_ids():
     assert job["strategy"]["matrix"]["repetition"] == "${{ fromJson(needs.get-entries.outputs.repetitions) }}"
     assert job["with"]["cohort-name"] == "${{ needs.get-entries.outputs.cohort-name }}"
     assert job["with"]["cohort-sha256"] == "${{ needs.get-entries.outputs.cohort-sha256 }}"
-    assert job["with"]["repetition-index"] == "${{ matrix.repetition }}"
-    assert job["with"]["repetition-count"] == "${{ fromJson(needs.get-entries.outputs.repetition-count) }}"
+    assert job["with"]["repetition-index"] == "${{ format('{0}', matrix.repetition) }}"
+    assert job["with"]["repetition-count"] == "${{ needs.get-entries.outputs.repetition-count }}"
 
 
 def test_bcal_repetitions_use_independent_result_artifacts_and_summaries():

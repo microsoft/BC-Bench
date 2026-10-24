@@ -191,7 +191,7 @@ jobs:
       category: nl2al
       dataset: ${{ inputs.dataset || 'gold' }}
       cohort: ${{ inputs.cohort || '' }}
-      repeat-count: ${{ inputs.repeat-count || 1 }}
+      repeat-count: ${{ format('{0}', inputs.repeat-count || 1) }}
 
   evaluate-with-bcal:
     runs-on: windows-latest
@@ -367,6 +367,6 @@ jobs:
       evaluation-run-id: ${{ inputs.repeat-count > 1 && format('{0}-r{1}', github.run_id, matrix.repetition) || github.run_id }}
       cohort-name: ${{ needs.get-entries.outputs.cohort-name }}
       cohort-sha256: ${{ needs.get-entries.outputs.cohort-sha256 }}
-      repetition-index: ${{ matrix.repetition }}
-      repetition-count: ${{ fromJson(needs.get-entries.outputs.repetition-count) }}
+      repetition-index: ${{ format('{0}', matrix.repetition) }}
+      repetition-count: ${{ needs.get-entries.outputs.repetition-count }}
     secrets: inherit
