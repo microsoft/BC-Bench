@@ -258,15 +258,15 @@ def test_legacy_export_does_not_guess_gold_identity(tmp_path):
 
 def _execution_identity() -> BCalExecutionIdentity:
     return BCalExecutionIdentity(
-        productVersion="30.0.44.44408",
-        sourceCommitSha="b4a2ca199170f5d177e78c464d739547f52a5c48",
+        productVersion="30.0.44.57422",
+        sourceCommitSha="247e0a970bfd54edf5babdb0058754c940eb7b20",
         buildConfiguration="Release",
         scenarioContractVersion="1.0",
         evidenceContractVersion="1.0",
     )
 
 
-def _compilation_evidence(*, succeeded: bool = True, truncated: bool = False):
+def _compilation_evidence(*, succeeded: bool = True, truncated: bool = False, events: list[dict[str, object]] | None = None):
     identity = _execution_identity()
     return {
         "contractVersion": "1.0",
@@ -277,7 +277,9 @@ def _compilation_evidence(*, succeeded: bool = True, truncated: bool = False):
             "eventLimit": 10000,
             "truncated": truncated,
             "omittedEventCount": 0,
-            "events": [
+            "events": events
+            if events is not None
+            else [
                 {
                     "sequence": 30,
                     "type": "compilation_attempt",
@@ -302,6 +304,101 @@ def _compilation_evidence(*, succeeded: bool = True, truncated: bool = False):
             ],
         },
     }
+
+
+PURCHASE_VAT_COMPILATION_EVENTS: dict[str, list[dict[str, object]]] = {
+    "81a91f6e-3556-45b4-8c94-dea59a335f7d": [
+        {
+            "type": "compilation_attempt",
+            "operation": "compile",
+            "iteration": 7,
+            "sequence": 38,
+            "status": "started",
+            "callId": "call_DqNz2VhguHyEJhzeUClKFJ1i",
+            "turn": 1,
+            "scenarioStepId": "benchmark-prompt",
+        },
+        {
+            "type": "compilation_outcome",
+            "operation": "compile",
+            "iteration": 7,
+            "sequence": 41,
+            "status": "succeeded",
+            "succeeded": True,
+            "callId": "call_DqNz2VhguHyEJhzeUClKFJ1i",
+            "turn": 1,
+            "scenarioStepId": "benchmark-prompt",
+        },
+        {
+            "type": "deployment_transition",
+            "operation": "compile",
+            "iteration": 7,
+            "sequence": 42,
+            "status": "completed",
+            "fromState": "none",
+            "toState": "compiled_unpublished",
+            "callId": "call_DqNz2VhguHyEJhzeUClKFJ1i",
+            "turn": 1,
+            "scenarioStepId": "benchmark-prompt",
+        },
+    ],
+    "83808c80-1d98-42ed-bcde-bf60dadcb407": [
+        {
+            "type": "compilation_attempt",
+            "operation": "compile",
+            "iteration": 5,
+            "sequence": 24,
+            "status": "started",
+            "callId": "call_LghN2dMhn0YPZ93eb4BEr6vi",
+            "turn": 1,
+            "scenarioStepId": "benchmark-prompt",
+        },
+        {
+            "type": "compilation_outcome",
+            "operation": "compile",
+            "iteration": 5,
+            "sequence": 27,
+            "status": "failed",
+            "succeeded": False,
+            "callId": "call_LghN2dMhn0YPZ93eb4BEr6vi",
+            "turn": 1,
+            "scenarioStepId": "benchmark-prompt",
+        },
+        {
+            "type": "compilation_attempt",
+            "operation": "compile",
+            "iteration": 7,
+            "sequence": 34,
+            "status": "started",
+            "callId": "call_Y52mN1Z8Ubf7OOulUuwTjqQH",
+            "turn": 1,
+            "scenarioStepId": "benchmark-prompt",
+        },
+        {
+            "type": "compilation_outcome",
+            "operation": "compile",
+            "iteration": 7,
+            "sequence": 37,
+            "status": "succeeded",
+            "succeeded": True,
+            "callId": "call_Y52mN1Z8Ubf7OOulUuwTjqQH",
+            "turn": 1,
+            "scenarioStepId": "benchmark-prompt",
+        },
+        {
+            "type": "deployment_transition",
+            "operation": "compile",
+            "iteration": 7,
+            "sequence": 38,
+            "status": "completed",
+            "fromState": "none",
+            "toState": "compiled_unpublished",
+            "callId": "call_Y52mN1Z8Ubf7OOulUuwTjqQH",
+            "turn": 1,
+            "scenarioStepId": "benchmark-prompt",
+        },
+    ],
+}
 
 
 @pytest.mark.parametrize("compile_succeeded", [True, False])
@@ -339,13 +436,16 @@ def test_bcal_export_wraps_diff_with_authoritative_execution_facts(tmp_path, com
     assert payload["metadata"]["compile_evidence_source"] == "scenario_step"
 
 
-def test_bcal_export_derives_legacy_trace_facts_for_rescoring(tmp_path):
+@pytest.mark.parametrize(("eval_run_id", "expected_outcomes"), [("81a91f6e-3556-45b4-8c94-dea59a335f7d", [True]), ("83808c80-1d98-42ed-bcde-bf60dadcb407", [False, True])])
+def test_bcal_export_derives_purchase_vat_legacy_trace_facts_for_rescoring(tmp_path, eval_run_id, expected_outcomes):
     entry = _panel_entry(NL2ALDataset.GOLD, prompt="Gold prompt")
     path = tmp_path / "nl2al.jsonl"
     _write_entry(path, entry)
     _, result = _result_for(entry, NL2ALDataset.GOLD, path, tmp_path)
+    stored_diff = "diff --git a/src.al b/src.al\n+subscriber"
+    result.output = stored_diff
     result.execution_identity = _execution_identity()
-    result.evidence = _compilation_evidence()
+    result.evidence = _compilation_evidence(events=PURCHASE_VAT_COMPILATION_EVENTS[eval_run_id])
 
     with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=path):
         write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.GOLD)
@@ -356,6 +456,8 @@ def test_bcal_export_derives_legacy_trace_facts_for_rescoring(tmp_path):
     assert facts["scenario_completed"] is None
     assert facts["compile_succeeded"] is True
     assert facts["compile_evidence_source"] == "trace_latest_outcome"
+    assert [event["succeeded"] for event in facts["compilation_events"] if event["type"] == "compilation_outcome"] == expected_outcomes
+    assert scorer_output["artifact"] == {"kind": "git_diff", "content": stored_diff}
     assert payload["context"] == result.evidence
 
 

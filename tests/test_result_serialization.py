@@ -90,6 +90,17 @@ class TestCategorySerialization:
 
         assert result.category == EvaluationCategory.TEST_GENERATION
 
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"id": "nl2al__case", "output": "diff", "context": {"contractVersion": "1.0"}, "metadata": {}},
+            {"Id": "nl2al__case", "Output": "diff", "Context": {"contractVersion": "1.0"}, "Metadata": {}},
+        ],
+    )
+    def test_published_bceval_row_is_rejected_as_raw_result(self, payload):
+        with pytest.raises(ValueError, match="Published bc-eval rows are not raw BC-Bench result JSONL"):
+            BaseEvaluationResult.from_json(payload)
+
     def test_round_trip_bug_fix(self, tmp_path):
         original = create_bugfix_result(instance_id="round-trip-test", project="test-project", model="test-model", agent_name="test-agent")
 

@@ -144,6 +144,8 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "BaseEvaluationResult":
+        if "category" not in payload and ({"id", "context", "metadata"} <= payload.keys() or {"Id", "Context", "Metadata"} <= payload.keys()):
+            raise ValueError("Published bc-eval rows are not raw BC-Bench result JSONL; re-export the retained per-instance result artifact instead")
         category = EvaluationCategory(payload["category"])
         return category.result_class.model_validate(payload)
 

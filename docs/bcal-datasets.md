@@ -153,7 +153,7 @@ The stored result `output` remains the exact workspace git diff. For BCal NL2AL 
 
 Compilation success is taken from the scenario step's `compileSucceeded` value when present. Evidence-only legacy results may use the latest structured `compilation_outcome` event only when the trace is valid and not truncated. BC-Bench never infers compilation success from step completion, completion assessment, stdout/stderr, error text, the agent response, or the generated diff. Missing, malformed, or truncated evidence remains unknown rather than becoming a success or failure claim.
 
-The normalized facts and exported scalar metadata are additive and nullable, so older result JSONL remains loadable and existing non-BCal Kusto rows retain their shape. Raw results produced with scenario evidence can be re-exported and scored under a new run ID; do not overwrite historical Kusto/Braintrust scores. Results created before scenario evidence was recorded cannot be backfilled with compilation facts.
+The normalized facts and exported scalar metadata are additive and nullable, so older result JSONL remains loadable and existing non-BCal Kusto rows retain their shape. Raw results produced with scenario evidence can be re-exported and scored under a new run ID; do not overwrite historical Kusto/Braintrust scores. Published bc-eval/Kusto rows are not accepted as raw BC-Bench result JSONL because they no longer contain the typed result identity needed to establish the trust boundary; re-scoring must start from the retained per-instance result artifact. Results created before scenario evidence was recorded cannot be backfilled with compilation facts.
 
 ## Complete-panel safety
 
