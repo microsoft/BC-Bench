@@ -78,8 +78,13 @@ def _write_result_from_args(
 
 class TestCliArgs:
     def test_string_inputs_are_stripped(self):
-        config = BCalBackendConfig(command=" python bridge.py ", model=" gpt-5 ")
+        config = BCalBackendConfig(
+            command=" python bridge.py ",
+            model=" gpt-5 ",
+            completion_review_model=" gpt-56-reasoning-sol ",
+        )
         assert config.cli_args() == ["--llm-backend=external-command", "--llm-command=python bridge.py", "--deployment=gpt-5"]
+        assert config.completion_review_model == "gpt-56-reasoning-sol"
 
     def test_includes_command_and_model(self):
         args = BCalBackendConfig(command="python bridge.py", model="gpt-5").cli_args()
@@ -101,6 +106,23 @@ class TestCliArgs:
         assert "--llm-backend=external-command" in args
         assert "--llm-command=python bridge.py" in args
         assert not any(a.startswith("--deployment=") for a in args)
+
+    def test_omits_completion_review_model_when_unspecified(self):
+        assert BCalBackendConfig(command="python bridge.py").completion_review_cli_args() == []
+
+    def test_completion_review_model_uses_upstream_cli_contract(self):
+        config = BCalBackendConfig(command="python bridge.py", completion_review_model="gpt-56-reasoning-sol")
+
+        assert config.completion_review_cli_args() == [
+            "--completion-review-deployment",
+            "gpt-56-reasoning-sol",
+        ]
+
+    def test_completion_review_model_uses_isolated_cli_seam(self):
+        config = BCalBackendConfig(command="python bridge.py", completion_review_model="gpt-56-reasoning-sol")
+
+        with patch.object(bcal_agent, "_BCAL_COMPLETION_REVIEW_MODEL_OPTION", "--test-review-model"):
+            assert config.completion_review_cli_args() == ["--test-review-model", "gpt-56-reasoning-sol"]
 
 
 class TestRunBcalAgent:
@@ -143,6 +165,33 @@ class TestRunBcalAgent:
         assert not any(arg.startswith("--prompt=") for arg in args)
         assert not any(a.startswith("--endpoint=") for a in args)
         assert not any(a.startswith("--capi-") for a in args)
+
+    def test_passes_completion_review_model_when_configured(self, workspace: Path):
+        captured: dict[str, list[str]] = {}
+
+        def fake_run(args: list[str], **_: object) -> MagicMock:
+            captured["args"] = args
+            _write_result_from_args(args)
+            return MagicMock(returncode=0)
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(bcal_agent, "_BCAL_COMPLETION_REVIEW_MODEL_OPTION", "--test-review-model"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+        ):
+            bcal_agent.run_bcal_agent(
+                entry=create_nl2al_entry(),
+                repo_path=workspace,
+                backend_config=BCalBackendConfig(
+                    command="python bridge.py",
+                    model="gpt-55-chat",
+                    completion_review_model="gpt-56-reasoning-sol",
+                ),
+            )
+
+        assert "--deployment=gpt-55-chat" in captured["args"]
+        option_index = captured["args"].index("--test-review-model")
+        assert captured["args"][option_index + 1] == "gpt-56-reasoning-sol"
 
     def test_writes_one_step_scenario_without_interactions(self, workspace: Path):
         entry = create_nl2al_entry(nl_prompt="Create a customer extension")

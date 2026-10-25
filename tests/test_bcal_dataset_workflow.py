@@ -38,12 +38,27 @@ def test_bcal_run_identity_includes_selected_dataset():
         "${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }}"
         in workflow["run-name"]
     )
-    assert workflow["concurrency"]["group"] == (
-        "bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.cohort || 'all' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.test-run && 'test' || 'full' }}-x${{ inputs.repeat-count || 1 }}"
-    )
+    assert "inputs.external-model || 'gpt-55-chat'" in workflow["concurrency"]["group"]
+    assert "inputs.completion-review-model || 'same-review-model'" in workflow["concurrency"]["group"]
     assert workflow["jobs"]["get-entries"]["with"]["dataset"] == "${{ inputs.dataset || 'gold' }}"
     assert workflow["jobs"]["get-entries"]["with"]["cohort"] == "${{ inputs.cohort || '' }}"
     assert workflow["jobs"]["get-entries"]["with"]["repeat-count"] == ("${{ format('{0}', inputs.repeat-count || 1) }}")
+
+
+def test_bcal_completion_review_model_is_optional_and_threaded_only_when_configured():
+    workflow = _workflow("bcal-evaluation.yml")
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    run = _step(workflow, "evaluate-with-bcal", "Run BCal for entry ${{ matrix.entry }}")
+
+    assert inputs["completion-review-model"] == {
+        "description": "Optional separate model for BCal completion diagnostics and final review",
+        "required": False,
+        "default": "",
+        "type": "string",
+    }
+    assert run["env"]["BCAL_COMPLETION_REVIEW_MODEL"] == "${{ inputs.completion-review-model || '' }}"
+    assert "if (-not [string]::IsNullOrWhiteSpace($env:BCAL_COMPLETION_REVIEW_MODEL))" in run["run"]
+    assert '$evaluateArgs += @("--completion-review-model", "$env:BCAL_COMPLETION_REVIEW_MODEL")' in run["run"]
 
 
 def test_bcal_package_selection_defaults_to_official_latest_and_derives_branch_provenance():
@@ -104,7 +119,8 @@ def test_bcal_resolves_symbols_and_evaluation_from_selected_panel():
     assert 'dataset version "$env:INSTANCE_ID" --category nl2al --dataset "$env:NL2AL_DATASET"' in workflow
     assert "DATASET_PATH: ${{ steps.bcversion.outputs.dataset-path }}" in workflow
     assert '-DatasetPath "$env:DATASET_PATH"' in workflow
-    assert 'evaluate bcal "$env:INSTANCE_ID" --dataset "$env:NL2AL_DATASET"' in workflow
+    assert '"run", "bcbench", "evaluate", "bcal", "$env:INSTANCE_ID"' in workflow
+    assert '"--dataset", "$env:NL2AL_DATASET"' in workflow
 
 
 def test_bcal_keeps_existing_installation_and_single_turn_execution():
@@ -151,7 +167,7 @@ def test_bcal_repetitions_use_independent_result_artifacts_and_summaries():
     assert evaluate_job["strategy"]["matrix"]["repetition"] == "${{ fromJson(needs.get-entries.outputs.repetitions) }}"
     assert "if ([int]$env:BCBENCH_REPETITION_COUNT -gt 1)" in run["run"]
     assert '$runId = "$runId-r$env:BCBENCH_REPETITION_INDEX"' in run["run"]
-    assert '--run-id "$runId"' in run["run"]
+    assert '"--run-id", "$runId"' in run["run"]
     assert "format('-r{0}', matrix.repetition)" in upload["with"]["name"]
     assert "format('-r{0}', matrix.repetition)" in summary_job["with"]["artifact-pattern"]
     assert "format('{0}-r{1}', github.run_id, matrix.repetition)" in summary_job["with"]["evaluation-run-id"]

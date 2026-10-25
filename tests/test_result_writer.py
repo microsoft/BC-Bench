@@ -229,6 +229,26 @@ class TestWriteBcevalResults:
         assert metadata["repetition_index"] == 2
         assert metadata["repetition_count"] == 3
 
+    def test_writes_completion_review_model_metadata(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
+        sample_bugfix_result_with_metrics.completion_review_model = "gpt-56-reasoning-sol"
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[sample_bugfix_result_with_metrics],
+                out_dir=tmp_path,
+                run_id="review-model",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        assert metadata["model"] == sample_bugfix_result_with_metrics.model
+        assert metadata["completion_review_model"] == "gpt-56-reasoning-sol"
+        assert "judge_model" not in metadata
+
     def test_skips_results_without_matching_dataset_entry(self, tmp_path, sample_dataset_file):
         output_dir = tmp_path / "output"
         output_dir.mkdir()

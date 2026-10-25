@@ -233,6 +233,15 @@ class TestCategorySerialization:
         assert loaded.repetition_index == 2
         assert loaded.repetition_count == 3
 
+    def test_completion_review_model_round_trip(self, tmp_path, sample_result_bug_fix):
+        sample_result_bug_fix.completion_review_model = "gpt-56-reasoning-sol"
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.completion_review_model == "gpt-56-reasoning-sol"
+
     @pytest.mark.parametrize(
         ("changes", "match"),
         [

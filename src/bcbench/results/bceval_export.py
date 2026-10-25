@@ -134,6 +134,7 @@ def write_bceval_results(
             "cohort_sha256": result.cohort_sha256,
             "repetition_index": result.repetition_index,
             "repetition_count": result.repetition_count,
+            "completion_review_model": result.completion_review_model,
             **result.export_metadata,
             **dataset_metadata,
             "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,

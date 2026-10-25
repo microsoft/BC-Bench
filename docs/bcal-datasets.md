@@ -37,6 +37,21 @@ Each repetition executes every selected entry independently, uses its own result
 
 Leaving `cohort` empty and `repeat-count` at `1` preserves the existing full-dataset behavior.
 
+## Separate completion-review model
+
+BCal evaluations can optionally use a separate model for completion diagnostics and final review while leaving `external-model` as the implementation model:
+
+```powershell
+gh workflow run bcal-evaluation.yml -R microsoft/BC-Bench `
+  --ref esbenk-bcal-scenario-evidence `
+  -f dataset=gold `
+  -f external-model=gpt-55-chat `
+  -f completion-review-model=gpt-56-reasoning-sol `
+  -f test-run=false
+```
+
+Leaving `completion-review-model` empty preserves existing behavior. The configured value is recorded as `completion_review_model` in raw results and bc-eval metadata, separately from the generation `model` and `judge_model`.
+
 ## Dataset source and freshness
 
 BC-DeveloperExperience is the source of truth for the `candidate-v2` BCAL datasets. BC-Bench keeps a reviewed snapshot so evaluations remain reproducible and do not depend on another repository at runtime.
@@ -117,6 +132,7 @@ Each named-panel bc-eval row includes:
 | `dataset`, `dataset_version`, `dataset_sha256` | Exact panel identity |
 | `cohort_name`, `cohort_sha256` | Checked-in focused cohort identity, or `null` for full-panel runs |
 | `repetition_index`, `repetition_count` | Independent repetition identity |
+| `completion_review_model` | Optional BCal completion diagnostic/final reviewer model, separate from generation and judge models |
 | `dataset_mode` | `single_turn` |
 | `dataset_turn_count` | `1` |
 | `evaluation_scope` | `single_turn` |

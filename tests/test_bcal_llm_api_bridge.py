@@ -190,6 +190,14 @@ def test_main_omits_reasoning_effort_without_tools(monkeypatch, fake_llm_api):
     assert "reasoning_effort" not in fake_llm_api["request"]
 
 
+def test_main_preserves_no_tools_behavior_for_reasoning_completion_reviewer(monkeypatch, fake_llm_api):
+    _run_main(monkeypatch, {"model": "gpt-56-reasoning-sol", "messages": []})
+
+    assert fake_llm_api["request"]["model"] == "gpt-56-reasoning-sol"
+    assert "tools" not in fake_llm_api["request"]
+    assert "reasoning_effort" not in fake_llm_api["request"]
+
+
 def test_main_treats_empty_tools_as_no_tools(monkeypatch, fake_llm_api):
     _run_main(
         monkeypatch,

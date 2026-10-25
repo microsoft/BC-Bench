@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 _config = get_config()
 
 _BCAL_TOOL = "bcal"
+_BCAL_COMPLETION_REVIEW_MODEL_OPTION = "--completion-review-deployment"
 
 
 class BCalBackendConfig(BaseModel):
@@ -31,8 +32,9 @@ class BCalBackendConfig(BaseModel):
 
     command: str | None = None
     model: str | None = None
+    completion_review_model: str | None = None
 
-    @field_validator("command", "model", mode="before")
+    @field_validator("command", "model", "completion_review_model", mode="before")
     @classmethod
     def _strip_optional_string(cls, value: object) -> object:
         if isinstance(value, str):
@@ -47,6 +49,11 @@ class BCalBackendConfig(BaseModel):
         if self.model:
             args.append(f"--deployment={self.model}")
         return args
+
+    def completion_review_cli_args(self) -> list[str]:
+        if not self.completion_review_model:
+            return []
+        return [_BCAL_COMPLETION_REVIEW_MODEL_OPTION, self.completion_review_model]
 
 
 class _BCalScenarioStepResult(BaseModel):
@@ -164,6 +171,7 @@ def _bcal_cli_args(entry: NL2ALEntry, package_cache_path: Path, export_folder: P
         _resolve_bcal_executable(),
         f"--packagecachepath={package_cache_path}",
         *backend_config.cli_args(),
+        *backend_config.completion_review_cli_args(),
         f"--audience={entry.audience}",
         f"--page={entry.page}",
         f"--exportfolder={export_folder}",

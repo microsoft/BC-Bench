@@ -786,6 +786,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     cohort_sha256: str | None = None
     repetition_index: int | None = None
     repetition_count: int | None = None
+    completion_review_model: str | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
 

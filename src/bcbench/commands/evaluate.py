@@ -268,6 +268,10 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    completion_review_model: Annotated[
+        str | None,
+        typer.Option(envvar="BCAL_COMPLETION_REVIEW_MODEL", help="Optional model used by BCal completion diagnostics and final review"),
+    ] = None,
     dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
     bcal_version: Annotated[str | None, typer.Option(envvar="BCAL_PACKAGE_VERSION", help="Expected installed BCAL NuGet version; verified against dotnet tool list")] = None,
     bcal_package_channel: Annotated[
@@ -304,6 +308,7 @@ def evaluate_bcal(
     backend_config = BCalBackendConfig(
         command=llm_command,
         model=llm_model,
+        completion_review_model=completion_review_model,
     )
     try:
         bcal_package = BCalPackageProvenance(source=bcal_package_channel, branch=bcal_branch)
@@ -329,6 +334,7 @@ def evaluate_bcal(
         cohort_sha256=cohort_sha256,
         repetition_index=repetition_index,
         repetition_count=repetition_count,
+        completion_review_model=backend_config.completion_review_model,
     )
 
     try:

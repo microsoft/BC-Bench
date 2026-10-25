@@ -140,6 +140,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             run_id="bcal-run",
             llm_command=" python bridge.py ",
             llm_model=llm_model,
+            completion_review_model=" gpt-56-reasoning-sol ",
             cohort_name="55-chat-completion-policy",
             cohort_sha256="a" * 64,
             repetition_index=2,
@@ -147,6 +148,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
         )
 
     assert captured["context"].model == expected_model
+    assert captured["context"].completion_review_model == "gpt-56-reasoning-sol"
     assert captured["context"].agent_version == "18.0.1.2-beta"
     assert captured["context"].bcal_package == BCalPackageProvenance(source=BCalPackageSource.OFFICIAL, branch="master")
     assert captured["context"].cohort_name == "55-chat-completion-policy"

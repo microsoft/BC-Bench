@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.dataset || 'gold' }}${{ inputs.cohort && format('/{0}', inputs.cohort) || '' }} ${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}${{ inputs.repeat-count > 1 && format(' x{0}', inputs.repeat-count) || '' }}
+run-name: BCal ${{ inputs.dataset || 'gold' }}${{ inputs.cohort && format('/{0}', inputs.cohort) || '' }} ${{ inputs.bcal-package-selection == 'experiment-pinned' && format('experiment@{0}', inputs.bcal-version) || inputs.bcal-package-selection == 'official-pinned' && format('official@{0}', inputs.bcal-version) || 'official/latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}${{ inputs.repeat-count > 1 && format(' x{0}', inputs.repeat-count) || '' }}
 permissions:
   contents: read
   actions: write
@@ -38,6 +38,11 @@ on:
           - "gpt-56-reasoning-nano-luna"
           - "gpt-56-reasoning-sol"
           - "gpt-55-chat"
+      completion-review-model:
+        description: "Optional separate model for BCal completion diagnostics and final review"
+        required: false
+        default: ""
+        type: string
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -58,7 +63,7 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.cohort || 'all' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.test-run && 'test' || 'full' }}-x${{ inputs.repeat-count || 1 }}
+  group: bcal-evaluation-${{ inputs.dataset || 'gold' }}-${{ inputs.cohort || 'all' }}-${{ inputs.bcal-package-selection || 'official-latest' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.external-model || 'gpt-55-chat' }}-${{ inputs.completion-review-model || 'same-review-model' }}-${{ inputs.test-run && 'test' || 'full' }}-x${{ inputs.repeat-count || 1 }}
   cancel-in-progress: false
 
 env:
@@ -304,6 +309,7 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
+          BCAL_COMPLETION_REVIEW_MODEL: ${{ inputs.completion-review-model || '' }}
           BCAL_PACKAGE_VERSION: ${{ steps.install-bcal.outputs.version }}
           BCAL_PACKAGE_CHANNEL: ${{ needs.validate-bcal-package.outputs.source }}
           BCAL_PACKAGE_BRANCH: ${{ needs.validate-bcal-package.outputs.branch }}
@@ -329,7 +335,16 @@ jobs:
             $runId = "$runId-r$env:BCBENCH_REPETITION_INDEX"
           }
 
-          uv run bcbench evaluate bcal "$env:INSTANCE_ID" --dataset "$env:NL2AL_DATASET" --output-dir "$env:EVALUATION_RESULTS_DIR" --run-id "$runId"
+          $evaluateArgs = @(
+            "run", "bcbench", "evaluate", "bcal", "$env:INSTANCE_ID",
+            "--dataset", "$env:NL2AL_DATASET",
+            "--output-dir", "$env:EVALUATION_RESULTS_DIR",
+            "--run-id", "$runId"
+          )
+          if (-not [string]::IsNullOrWhiteSpace($env:BCAL_COMPLETION_REVIEW_MODEL)) {
+            $evaluateArgs += @("--completion-review-model", "$env:BCAL_COMPLETION_REVIEW_MODEL")
+          }
+          uv @evaluateArgs
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

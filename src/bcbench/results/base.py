@@ -30,6 +30,7 @@ class BaseEvaluationResult(BaseModel):
     cohort_sha256: str | None = None
     repetition_index: int | None = None
     repetition_count: int | None = None
+    completion_review_model: str | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
 
@@ -66,6 +67,7 @@ class BaseEvaluationResult(BaseModel):
             "cohort_sha256": context.cohort_sha256,
             "repetition_index": context.repetition_index,
             "repetition_count": context.repetition_count,
+            "completion_review_model": context.completion_review_model,
             "execution_identity": context.execution_identity,
             "evidence": context.evidence,
             "metrics": context.metrics,

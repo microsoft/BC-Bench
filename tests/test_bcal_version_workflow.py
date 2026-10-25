@@ -63,7 +63,7 @@ def test_bcal_installed_version_output_flows_to_evaluation_metadata() -> None:
     assert evaluate["env"]["BCAL_PACKAGE_CHANNEL"] == "${{ needs.validate-bcal-package.outputs.source }}"
     assert evaluate["env"]["BCAL_PACKAGE_BRANCH"] == "${{ needs.validate-bcal-package.outputs.branch }}"
     assert "[string]::IsNullOrWhiteSpace($env:BCAL_PACKAGE_VERSION)" in evaluate["run"]
-    assert evaluate["run"].index("BCAL_PACKAGE_VERSION") < evaluate["run"].index("bcbench evaluate bcal")
+    assert evaluate["run"].index("BCAL_PACKAGE_VERSION") < evaluate["run"].index('"run", "bcbench", "evaluate", "bcal"')
 
 
 def test_bcal_matrix_resolves_versions_per_job_and_preserves_feed_authentication() -> None:
