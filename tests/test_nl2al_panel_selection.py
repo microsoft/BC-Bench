@@ -13,7 +13,7 @@ from bcbench.dataset import NL2ALEntry
 from bcbench.dataset.dataset_entry import EntryMetadata
 from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, BCalExecutionIdentity, EvaluationCategory, NL2ALDataset
+from bcbench.types import AgentHarness, BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, NL2ALDataset
 from tests.conftest import create_evaluation_context, create_nl2al_entry
 
 
@@ -434,6 +434,44 @@ def test_bcal_export_wraps_diff_with_authoritative_execution_facts(tmp_path, com
     assert payload["context"] == evidence
     assert payload["metadata"]["compile_succeeded"] is compile_succeeded
     assert payload["metadata"]["compile_evidence_source"] == "scenario_step"
+
+
+def test_incomplete_bcal_export_preserves_failure_metadata_and_wraps_generated_diff(tmp_path):
+    entry = _panel_entry(NL2ALDataset.GOLD, prompt="Gold prompt")
+    path = tmp_path / "nl2al.jsonl"
+    _write_entry(path, entry)
+    context, _ = _result_for(entry, NL2ALDataset.GOLD, path, tmp_path)
+    identity = _execution_identity()
+    evidence = _compilation_evidence(succeeded=True)
+    context.execution_identity = identity
+    context.evidence = evidence
+    context.bcal_failure = BCalScenarioFailure(
+        code="incomplete_execution",
+        message="repair_budget_exhausted",
+        stepId="benchmark-prompt",
+        retryable=False,
+    )
+    context.execution_facts = normalize_bcal_execution_facts(
+        execution_identity=identity,
+        evidence=evidence,
+        scenario_completed=False,
+        scenario_step_status="failed",
+        step_compile_succeeded=True,
+    )
+    stored_diff = "diff --git a/src.al b/src.al\n+incomplete subscriber"
+    result = JudgeBasedEvaluationResult.create_failure(context, output=stored_diff, error_message="BCal scenario exited with status 1")
+
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=path):
+        write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.NL2AL, dataset=NL2ALDataset.GOLD)
+
+    payload = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))
+    scorer_output = json.loads(payload["output"])
+    assert scorer_output["artifact"] == {"kind": "git_diff", "content": stored_diff}
+    assert scorer_output["authoritative_execution_facts"]["compile_succeeded"] is True
+    assert scorer_output["authoritative_execution_facts"]["scenario_completed"] is False
+    assert payload["context"] == evidence
+    assert payload["metadata"]["bcal_failure_code"] == "incomplete_execution"
+    assert payload["metadata"]["bcal_terminal_reason"] == "repair_budget_exhausted"
 
 
 @pytest.mark.parametrize(("eval_run_id", "expected_outcomes"), [("81a91f6e-3556-45b4-8c94-dea59a335f7d", [True]), ("83808c80-1d98-42ed-bcde-bf60dadcb407", [False, True])])
