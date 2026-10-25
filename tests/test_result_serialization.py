@@ -5,7 +5,7 @@ from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, BCalExecutionIdentity, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import AgentHarness, BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
@@ -208,6 +208,31 @@ class TestCategorySerialization:
 
         assert loaded.execution_identity == identity
         assert loaded.evidence == evidence
+
+    def test_bcal_failure_round_trip(self, tmp_path, sample_result_bug_fix):
+        failure = BCalScenarioFailure(
+            code="incomplete_execution",
+            message="repair_budget_exhausted",
+            stepId="benchmark-prompt",
+            retryable=False,
+        )
+        sample_result_bug_fix.bcal_failure = failure
+        sample_result_bug_fix.output = "diff --git a/src/Generated.al b/src/Generated.al\n+pageextension"
+        sample_result_bug_fix.error_message = "BCal scenario exited with status 1"
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert payload["bcal_failure"] == {
+            "code": "incomplete_execution",
+            "message": "repair_budget_exhausted",
+            "step_id": "benchmark-prompt",
+            "retryable": False,
+        }
+        assert loaded.bcal_failure == failure
+        assert loaded.output == sample_result_bug_fix.output
+        assert loaded.error_message == sample_result_bug_fix.error_message
 
     def test_tool_usage_saves_as_dict(self, tmp_path):
         tool_usage = {"bash": 5, "view": 3, "search": 2}
