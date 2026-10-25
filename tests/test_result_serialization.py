@@ -186,6 +186,15 @@ class TestCategorySerialization:
         assert data["experiment"]["custom_instructions"] is True
         assert data["experiment"]["mcp_servers"] is None
 
+    def test_completion_review_model_round_trip(self, tmp_path, sample_result_bug_fix):
+        sample_result_bug_fix.completion_review_model = "gpt-56-reasoning-sol"
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.completion_review_model == "gpt-56-reasoning-sol"
+
     def test_bcal_evidence_and_execution_identity_round_trip(self, tmp_path, sample_result_bug_fix):
         identity = BCalExecutionIdentity(
             productVersion="1.2.3",

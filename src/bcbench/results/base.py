@@ -23,6 +23,7 @@ class BaseEvaluationResult(BaseModel):
     category: EvaluationCategory
     tier: DatasetTier = DatasetTier.GOLD
     agent_version: str | None = None
+    completion_review_model: str | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
     bcal_failure: BCalScenarioFailure | None = None
@@ -53,6 +54,7 @@ class BaseEvaluationResult(BaseModel):
             "tier": context.tier,
             "agent_name": context.agent_name,
             "agent_version": context.agent_version,
+            "completion_review_model": context.completion_review_model,
             "execution_identity": context.execution_identity,
             "evidence": context.evidence,
             "bcal_failure": context.bcal_failure,
