@@ -29,6 +29,7 @@ __all__ = [
     "BCalExecutionIdentity",
     "BCalPackageProvenance",
     "BCalPackageSource",
+    "BCalScenarioFailure",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
@@ -119,6 +120,15 @@ class BCalExecutionIdentity(BaseModel):
     build_configuration: str = Field(alias="buildConfiguration")
     scenario_contract_version: Literal["1.0"] = Field(alias="scenarioContractVersion")
     evidence_contract_version: Literal["1.0"] = Field(alias="evidenceContractVersion")
+
+
+class BCalScenarioFailure(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    code: str
+    message: str
+    step_id: str | None = Field(default=None, alias="stepId")
+    retryable: bool | None = None
 
 
 class AgentMetrics(BaseModel):
@@ -789,6 +799,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     completion_review_model: str | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
+    bcal_failure: BCalScenarioFailure | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

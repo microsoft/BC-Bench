@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Annotated, cast, override
 
 import typer
+from bcbench_core.exceptions import EmptyDiffError
 from bcbench_core.filesystem import prepare_run_dir
+from bcbench_core.git import stage_and_get_diff
 from pydantic import ValidationError
 
 from bcbench.agent import BCalBackendConfig, BCalScenarioError, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
@@ -61,10 +63,21 @@ def _run_bcal_for_evaluation(context: EvaluationContext[NL2ALEntry], backend_con
         if exc.scenario_result is not None:
             context.execution_identity = exc.scenario_result.execution_identity
             context.evidence = exc.scenario_result.evidence
+            benchmark_step = next((step for step in exc.scenario_result.steps if step.id == "benchmark-prompt"), None)
+            context.bcal_failure = exc.scenario_result.failure or (benchmark_step.failure if benchmark_step else None)
         raise
     context.execution_identity = run_result.execution_identity
     context.evidence = run_result.evidence
     return run_result.metrics, run_result.experiment
+
+
+def _get_incomplete_bcal_output(context: EvaluationContext[NL2ALEntry]) -> str:
+    if context.bcal_failure is None or context.bcal_failure.code != "incomplete_execution":
+        return ""
+    try:
+        return stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
+    except EmptyDiffError:
+        return ""
 
 
 @evaluate_app.command("copilot")
@@ -345,7 +358,11 @@ def evaluate_bcal(
             lambda ctx: _run_bcal_for_evaluation(cast(EvaluationContext[NL2ALEntry], ctx), backend_config),
         )
     except AgentError as exc:
-        result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
+        result = JudgeBasedEvaluationResult.create_failure(
+            context,
+            output=_get_incomplete_bcal_output(context),
+            error_message=str(exc),
+        )
         category.pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
         raise typer.Exit(code=1) from exc

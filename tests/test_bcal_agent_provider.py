@@ -13,7 +13,7 @@ from bcbench.agent.bcal import BCalBackendConfig, BCalRunResult, BCalScenarioErr
 from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.commands import evaluate
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.types import AgentHarness, AgentMetrics, BCalExecutionIdentity, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentHarness, AgentMetrics, BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_nl2al_entry
 
 EXECUTION_IDENTITY: dict[str, object] = {
@@ -430,7 +430,19 @@ class TestRunBcalAgent:
                 "executionIdentity": EXECUTION_IDENTITY,
                 "evidence": EVIDENCE,
                 "completed": False,
-                "steps": [{"id": "benchmark-prompt", "type": "user", "status": "failed"}],
+                "steps": [
+                    {
+                        "id": "benchmark-prompt",
+                        "type": "user",
+                        "status": "failed",
+                        "failure": {
+                            "code": "incomplete_execution",
+                            "message": "repair_budget_exhausted",
+                            "stepId": "benchmark-prompt",
+                            "retryable": False,
+                        },
+                    }
+                ],
             }
         )
 
@@ -442,6 +454,68 @@ class TestRunBcalAgent:
 
         assert context.execution_identity == scenario_result.execution_identity
         assert context.evidence == EVIDENCE
+        assert context.bcal_failure == BCalScenarioFailure(
+            code="incomplete_execution",
+            message="repair_budget_exhausted",
+            stepId="benchmark-prompt",
+            retryable=False,
+        )
+
+    def test_incomplete_result_preserves_generated_patch(self, workspace: Path, tmp_path: Path):
+        context = EvaluationContext(
+            entry=create_nl2al_entry(),
+            repo_path=workspace,
+            result_dir=tmp_path,
+            agent_name=AgentHarness.BCAL,
+            model="external-command",
+            category=EvaluationCategory.NL2AL,
+            bcal_failure=BCalScenarioFailure(
+                code="incomplete_execution",
+                message="repair_budget_exhausted",
+                stepId="benchmark-prompt",
+            ),
+        )
+        generated_patch = 'diff --git a/src/Generated.al b/src/Generated.al\n+pageextension 50100 Generated extends "Customer Card"'
+
+        with patch.object(evaluate, "stage_and_get_diff", return_value=generated_patch) as get_diff:
+            output = evaluate._get_incomplete_bcal_output(context)
+
+        assert output == generated_patch
+        get_diff.assert_called_once_with(workspace, exclude=("**/app.json", "*.docx", "*.md"))
+
+    def test_incomplete_result_without_export_preserves_empty_output(self, workspace: Path, tmp_path: Path):
+        context = EvaluationContext(
+            entry=create_nl2al_entry(),
+            repo_path=workspace,
+            result_dir=tmp_path,
+            agent_name=AgentHarness.BCAL,
+            model="external-command",
+            category=EvaluationCategory.NL2AL,
+            bcal_failure=BCalScenarioFailure(
+                code="incomplete_execution",
+                message="interrupted_before_finalization",
+                stepId="benchmark-prompt",
+            ),
+        )
+
+        with patch.object(evaluate, "stage_and_get_diff", side_effect=evaluate.EmptyDiffError):
+            assert evaluate._get_incomplete_bcal_output(context) == ""
+
+    def test_non_incomplete_failure_does_not_collect_generated_patch(self, workspace: Path, tmp_path: Path):
+        context = EvaluationContext(
+            entry=create_nl2al_entry(),
+            repo_path=workspace,
+            result_dir=tmp_path,
+            agent_name=AgentHarness.BCAL,
+            model="external-command",
+            category=EvaluationCategory.NL2AL,
+            bcal_failure=BCalScenarioFailure(code="compile_failed", message="Generated AL did not compile"),
+        )
+
+        with patch.object(evaluate, "stage_and_get_diff") as get_diff:
+            assert evaluate._get_incomplete_bcal_output(context) == ""
+
+        get_diff.assert_not_called()
 
 
 class TestRunBcalPrompt:

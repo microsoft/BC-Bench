@@ -11,6 +11,8 @@ import typer
 from typer.main import get_command
 from typer.testing import CliRunner
 
+from bcbench.agent.bcal import BCalScenarioError
+from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.cli import _redteam_extra_installed, app
 from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtime
 from bcbench.commands import evaluate as evaluate_commands
@@ -155,6 +157,88 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     assert captured["context"].cohort_sha256 == "a" * 64
     assert captured["context"].repetition_index == 2
     assert captured["context"].repetition_count == 3
+
+
+def test_evaluate_bcal_incomplete_result_persists_exported_patch_and_failure(tmp_path):
+    entry = create_nl2al_entry()
+    dataset_path = tmp_path / "nl2al.jsonl"
+    dataset_path.write_text(entry.model_dump_json() + "\n", encoding="utf-8")
+    evidence = {"contractVersion": "1.0", "trace": {"events": []}}
+    scenario_result = bcal_agent._BCalScenarioResult.model_validate(
+        {
+            "schemaVersion": "1.0",
+            "executionIdentity": {
+                "productVersion": "30.0.44.1",
+                "sourceCommitSha": "a" * 40,
+                "buildConfiguration": "Release",
+                "scenarioContractVersion": "1.0",
+                "evidenceContractVersion": "1.0",
+            },
+            "evidence": evidence,
+            "completed": False,
+            "steps": [
+                {
+                    "id": "benchmark-prompt",
+                    "type": "user",
+                    "status": "failed",
+                    "failure": {
+                        "code": "incomplete_execution",
+                        "message": "repair_budget_exhausted",
+                        "stepId": "benchmark-prompt",
+                        "retryable": False,
+                    },
+                }
+            ],
+        }
+    )
+    generated_patch = 'diff --git a/BcalDataset/src/Generated.al b/BcalDataset/src/Generated.al\n+pageextension 50100 Generated extends "Customer Card"'
+
+    class EntryClass:
+        @staticmethod
+        def load(_dataset_path, entry_id: str):
+            assert entry_id == entry.instance_id
+            return [entry]
+
+    class Pipeline:
+        def execute(self, context, agent_runner):
+            agent_runner(context)
+
+        def save_result(self, context, result):
+            result.save(context.result_dir, f"{context.entry.instance_id}.jsonl")
+
+    with (
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
+        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        patch.object(evaluate_commands, "get_bcal_version", return_value="30.0.44.1"),
+        patch.object(
+            evaluate_commands,
+            "run_bcal_agent",
+            side_effect=BCalScenarioError("BCal scenario exited with status 1", scenario_result),
+        ),
+        patch.object(evaluate_commands, "stage_and_get_diff", return_value=generated_patch),
+        pytest.raises(typer.Exit) as exc_info,
+    ):
+        evaluate_commands.evaluate_bcal(
+            entry_id=entry.instance_id,
+            repo_path=tmp_path / "repo",
+            output_dir=tmp_path / "results",
+            run_id="bcal-incomplete",
+            llm_command="python bridge.py",
+        )
+
+    result_path = tmp_path / "results" / "bcal-incomplete" / f"{entry.instance_id}.jsonl"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert exc_info.value.exit_code == 1
+    assert result["output"] == generated_patch
+    assert result["error_message"] == "BCal scenario exited with status 1"
+    assert result["evidence"] == evidence
+    assert result["bcal_failure"] == {
+        "code": "incomplete_execution",
+        "message": "repair_budget_exhausted",
+        "step_id": "benchmark-prompt",
+        "retryable": False,
+    }
 
 
 def _option_names(command: click.Command) -> set[str]:

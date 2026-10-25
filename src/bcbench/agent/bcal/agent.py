@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.types import AgentMetrics, BCalExecutionIdentity, ExperimentConfiguration
+from bcbench.types import AgentMetrics, BCalExecutionIdentity, BCalScenarioFailure, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -62,16 +62,7 @@ class _BCalScenarioStepResult(BaseModel):
     id: str
     type: Literal["user"]
     status: Literal["succeeded", "failed"]
-    failure: "_BCalFailure | None" = None
-
-
-class _BCalFailure(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    code: str
-    message: str
-    step_id: str | None = Field(default=None, alias="stepId")
-    retryable: bool | None = None
+    failure: BCalScenarioFailure | None = None
 
 
 class _BCalOutputStatus(BaseModel):
@@ -96,7 +87,7 @@ class _BCalScenarioResult(BaseModel):
     steps: list[_BCalScenarioStepResult] = Field(min_length=1)
     export: _BCalOutputStatus | None = None
     session_archive: _BCalOutputStatus | None = Field(default=None, alias="sessionArchive")
-    failure: _BCalFailure | None = None
+    failure: BCalScenarioFailure | None = None
 
 
 class BCalScenarioError(AgentError):
@@ -219,7 +210,7 @@ def _parse_scenario_result(path: Path) -> _BCalScenarioResult:
     return result
 
 
-def _format_failure(failure: _BCalFailure | None) -> str:
+def _format_failure(failure: BCalScenarioFailure | None) -> str:
     if failure is None:
         return "none"
     details = [f"code={failure.code}", f"message={failure.message}"]
