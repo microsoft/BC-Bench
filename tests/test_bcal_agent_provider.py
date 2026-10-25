@@ -11,6 +11,7 @@ import pytest
 
 from bcbench.agent.bcal import BCalBackendConfig, BCalRunResult, BCalScenarioError
 from bcbench.agent.bcal import agent as bcal_agent
+from bcbench.bcal_evidence import normalize_bcal_execution_facts
 from bcbench.commands import evaluate
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.types import AgentHarness, AgentMetrics, BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -29,6 +30,38 @@ EVIDENCE: dict[str, object] = {
     "promptEvidence": {"compositions": [], "uses": []},
     "trace": {"contractVersion": "1.0", "eventLimit": 10000, "truncated": False, "omittedEventCount": 0, "events": []},
 }
+COMPILATION_EVIDENCE: dict[str, object] = {
+    **EVIDENCE,
+    "trace": {
+        "contractVersion": "1.0",
+        "eventLimit": 10000,
+        "truncated": False,
+        "omittedEventCount": 0,
+        "events": [
+            {
+                "sequence": 30,
+                "type": "compilation_attempt",
+                "scenarioStepId": "benchmark-prompt",
+                "turn": 1,
+                "iteration": 6,
+                "callId": "call-compile",
+                "operation": "compile",
+                "status": "started",
+            },
+            {
+                "sequence": 33,
+                "type": "compilation_outcome",
+                "scenarioStepId": "benchmark-prompt",
+                "turn": 1,
+                "iteration": 6,
+                "callId": "call-compile",
+                "operation": "compile",
+                "status": "succeeded",
+                "succeeded": True,
+            },
+        ],
+    },
+}
 
 
 @pytest.fixture
@@ -45,6 +78,7 @@ def _write_result_from_args(
     schema_version: str = "1.0",
     completed: bool = True,
     step_status: str = "succeeded",
+    compile_succeeded: bool | None = None,
     failure: dict[str, object] | None = None,
     step_failure: dict[str, object] | None = None,
 ) -> None:
@@ -53,7 +87,15 @@ def _write_result_from_args(
         "schemaVersion": schema_version,
         "executionIdentity": EXECUTION_IDENTITY,
         "completed": completed,
-        "steps": [{"id": "benchmark-prompt", "type": "user", "status": step_status, "failure": step_failure}],
+        "steps": [
+            {
+                "id": "benchmark-prompt",
+                "type": "user",
+                "status": step_status,
+                "compileSucceeded": compile_succeeded,
+                "failure": step_failure,
+            }
+        ],
         "export": {
             "attempted": True,
             "success": False,
@@ -273,6 +315,80 @@ class TestRunBcalAgent:
         assert result.execution_identity.product_version == "1.2.3"
         assert result.execution_identity.source_commit_sha == "050e84b25a0890d532a52433a3256c4183e81c7e"
 
+    def test_normalizes_authoritative_compile_facts(self, workspace: Path):
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(
+                subprocess,
+                "run",
+                side_effect=lambda args, **_: _write_result_from_args(
+                    args,
+                    evidence=COMPILATION_EVIDENCE,
+                    compile_succeeded=True,
+                ),
+            ),
+        ):
+            result = bcal_agent.run_bcal_agent(
+                entry=create_nl2al_entry(),
+                repo_path=workspace,
+                backend_config=BCalBackendConfig(command="python bridge.py"),
+            )
+
+        assert result.execution_facts.compile_succeeded is True
+        assert result.execution_facts.compile_evidence_source == "scenario_step"
+        assert result.execution_facts.evidence_status == "present"
+        assert [event.type for event in result.execution_facts.compilation_events] == [
+            "compilation_attempt",
+            "compilation_outcome",
+        ]
+
+    def test_trace_outcome_is_legacy_compile_fallback(self):
+        facts = normalize_bcal_execution_facts(
+            execution_identity=BCalExecutionIdentity.model_validate(EXECUTION_IDENTITY),
+            evidence=COMPILATION_EVIDENCE,
+        )
+
+        assert facts.compile_succeeded is True
+        assert facts.compile_evidence_source == "trace_latest_outcome"
+
+    def test_truncated_trace_does_not_claim_compile_success(self):
+        trace = COMPILATION_EVIDENCE["trace"]
+        assert isinstance(trace, dict)
+        evidence = {
+            **COMPILATION_EVIDENCE,
+            "trace": {
+                **trace,
+                "truncated": True,
+            },
+        }
+
+        facts = normalize_bcal_execution_facts(
+            execution_identity=BCalExecutionIdentity.model_validate(EXECUTION_IDENTITY),
+            evidence=evidence,
+        )
+
+        assert facts.compile_succeeded is None
+        assert facts.compile_evidence_source is None
+        assert facts.trace_truncated is True
+
+    @pytest.mark.parametrize(
+        "evidence",
+        [
+            {"contractVersion": "1.0"},
+            {**EVIDENCE, "executionIdentity": {**EXECUTION_IDENTITY, "productVersion": "different"}},
+            {**EVIDENCE, "trace": {"contractVersion": "1.0", "truncated": "false", "events": []}},
+        ],
+    )
+    def test_malformed_evidence_does_not_claim_compile_success(self, evidence):
+        facts = normalize_bcal_execution_facts(
+            execution_identity=BCalExecutionIdentity.model_validate(EXECUTION_IDENTITY),
+            evidence=evidence,
+        )
+
+        assert facts.evidence_status == "malformed"
+        assert facts.compile_succeeded is None
+        assert facts.compilation_events == ()
+
     def test_allows_missing_evidence(self, workspace: Path):
         with (
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
@@ -285,6 +401,8 @@ class TestRunBcalAgent:
             )
 
         assert result.evidence is None
+        assert result.execution_facts.evidence_status == "missing"
+        assert result.execution_facts.compile_succeeded is None
 
     def test_missing_result_fails_clearly(self, workspace: Path):
         with (
@@ -333,8 +451,10 @@ class TestRunBcalAgent:
         def fake_run(args: list[str], **_: object) -> None:
             _write_result_from_args(
                 args,
+                evidence=COMPILATION_EVIDENCE,
                 completed=False,
                 step_status="failed",
+                compile_succeeded=False,
                 failure=top_failure,
                 step_failure=step_failure,
             )
@@ -365,7 +485,14 @@ class TestRunBcalAgent:
         assert "stdout:\nscenario stdout" in message
         assert "stderr:\nscenario stderr" in message
         assert exc_info.value.scenario_result is not None
-        assert exc_info.value.scenario_result.evidence == EVIDENCE
+        assert exc_info.value.scenario_result.evidence == COMPILATION_EVIDENCE
+        assert exc_info.value.execution_facts is not None
+        assert exc_info.value.execution_facts.compile_succeeded is False
+        assert exc_info.value.execution_facts.compile_evidence_source == "scenario_step"
+        assert exc_info.value.execution_facts.scenario_failure is not None
+        assert exc_info.value.execution_facts.scenario_failure.code == "scenario_failed"
+        assert exc_info.value.execution_facts.step_failure is not None
+        assert exc_info.value.execution_facts.step_failure.code == "compile_failed"
 
     def test_argument_parser_failure_includes_stdout_when_no_result_exists(self, workspace: Path):
         failure = subprocess.CalledProcessError(
@@ -404,6 +531,10 @@ class TestRunBcalAgent:
             experiment=ExperimentConfiguration(),
             execution_identity=BCalExecutionIdentity.model_validate(EXECUTION_IDENTITY),
             evidence=EVIDENCE,
+            execution_facts=normalize_bcal_execution_facts(
+                execution_identity=BCalExecutionIdentity.model_validate(EXECUTION_IDENTITY),
+                evidence=EVIDENCE,
+            ),
         )
 
         with patch.object(evaluate, "run_bcal_agent", return_value=run_result):
@@ -413,6 +544,7 @@ class TestRunBcalAgent:
         assert experiment == run_result.experiment
         assert context.execution_identity == run_result.execution_identity
         assert context.evidence == EVIDENCE
+        assert context.execution_facts == run_result.execution_facts
 
     def test_evaluation_adapter_preserves_context_from_nonzero_result(self, workspace: Path, tmp_path: Path):
         entry = create_nl2al_entry()
@@ -435,6 +567,7 @@ class TestRunBcalAgent:
                         "id": "benchmark-prompt",
                         "type": "user",
                         "status": "failed",
+                        "compileSucceeded": False,
                         "failure": {
                             "code": "incomplete_execution",
                             "message": "repair_budget_exhausted",
@@ -460,6 +593,8 @@ class TestRunBcalAgent:
             stepId="benchmark-prompt",
             retryable=False,
         )
+        assert context.execution_facts is not None
+        assert context.execution_facts.compile_succeeded is False
 
     def test_incomplete_result_preserves_generated_patch(self, workspace: Path, tmp_path: Path):
         context = EvaluationContext(

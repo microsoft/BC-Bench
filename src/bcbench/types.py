@@ -26,7 +26,10 @@ __all__ = [
     "AgentMetrics",
     "AgentMetricsContract",
     "AnyAgentMetrics",
+    "BCalCompilationEvent",
+    "BCalExecutionFacts",
     "BCalExecutionIdentity",
+    "BCalFailureFacts",
     "BCalPackageProvenance",
     "BCalPackageSource",
     "BCalScenarioFailure",
@@ -129,6 +132,49 @@ class BCalScenarioFailure(BaseModel):
     message: str
     step_id: str | None = Field(default=None, alias="stepId")
     retryable: bool | None = None
+
+
+class BCalFailureFacts(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
+
+    code: str
+    message: str
+    step_id: str | None = Field(default=None, alias="stepId")
+    retryable: bool | None = None
+
+
+class BCalCompilationEvent(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="ignore")
+
+    sequence: int = Field(ge=0)
+    type: Literal["compilation_attempt", "compilation_outcome"]
+    scenario_step_id: str = Field(alias="scenarioStepId")
+    turn: int | None = Field(default=None, ge=0)
+    iteration: int | None = Field(default=None, ge=0)
+    call_id: str | None = Field(default=None, alias="callId")
+    operation: str
+    status: str
+    succeeded: StrictBool | None = None
+
+
+class BCalExecutionFacts(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    contract_version: Literal["1.0"] = "1.0"
+    provider: Literal["bcal"] = "bcal"
+    source: Literal["bcal_scenario_result"] = "bcal_scenario_result"
+    agent_authored: Literal[False] = False
+    execution_identity: BCalExecutionIdentity
+    scenario_completed: bool | None = None
+    scenario_step_status: Literal["succeeded", "failed"] | None = None
+    step_compile_succeeded: bool | None = None
+    compile_succeeded: bool | None = None
+    compile_evidence_source: Literal["scenario_step", "trace_latest_outcome"] | None = None
+    compilation_events: tuple[BCalCompilationEvent, ...] = ()
+    scenario_failure: BCalFailureFacts | None = None
+    step_failure: BCalFailureFacts | None = None
+    evidence_status: Literal["present", "missing", "malformed"]
+    trace_truncated: bool | None = None
 
 
 class AgentMetrics(BaseModel):
@@ -800,6 +846,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
     bcal_failure: BCalScenarioFailure | None = None
+    execution_facts: BCalExecutionFacts | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

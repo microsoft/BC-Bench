@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator
 
+from bcbench.bcal_evidence import normalize_bcal_execution_facts
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.types import AgentMetrics, BCalExecutionIdentity, BCalScenarioFailure, ExperimentConfiguration
+from bcbench.types import AgentMetrics, BCalExecutionFacts, BCalExecutionIdentity, BCalFailureFacts, BCalScenarioFailure, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -62,6 +63,7 @@ class _BCalScenarioStepResult(BaseModel):
     id: str
     type: Literal["user"]
     status: Literal["succeeded", "failed"]
+    compile_succeeded: StrictBool | None = Field(default=None, alias="compileSucceeded")
     failure: BCalScenarioFailure | None = None
 
 
@@ -83,7 +85,7 @@ class _BCalScenarioResult(BaseModel):
     schema_version: Literal["1.0"] = Field(alias="schemaVersion")
     execution_identity: BCalExecutionIdentity = Field(alias="executionIdentity")
     evidence: dict[str, Any] | None = None
-    completed: bool
+    completed: StrictBool
     steps: list[_BCalScenarioStepResult] = Field(min_length=1)
     export: _BCalOutputStatus | None = None
     session_archive: _BCalOutputStatus | None = Field(default=None, alias="sessionArchive")
@@ -93,6 +95,7 @@ class _BCalScenarioResult(BaseModel):
 class BCalScenarioError(AgentError):
     def __init__(self, message: str, scenario_result: _BCalScenarioResult | None = None) -> None:
         self.scenario_result = scenario_result
+        self.execution_facts = _execution_facts_from_scenario_result(scenario_result) if scenario_result is not None else None
         super().__init__(message)
 
 
@@ -102,6 +105,7 @@ class BCalRunResult:
     experiment: ExperimentConfiguration
     execution_identity: BCalExecutionIdentity
     evidence: dict[str, Any] | None
+    execution_facts: BCalExecutionFacts
 
 
 def _resolve_bcal_executable() -> str:
@@ -208,6 +212,30 @@ def _parse_scenario_result(path: Path) -> _BCalScenarioResult:
     if len(matching_steps) != 1:
         raise AgentError("BCal scenario result must contain exactly one 'benchmark-prompt' step")
     return result
+
+
+def _failure_facts(failure: BCalScenarioFailure | None) -> BCalFailureFacts | None:
+    if failure is None:
+        return None
+    return BCalFailureFacts(
+        code=failure.code,
+        message=failure.message,
+        stepId=failure.step_id,
+        retryable=failure.retryable,
+    )
+
+
+def _execution_facts_from_scenario_result(result: _BCalScenarioResult) -> BCalExecutionFacts:
+    step = next(step for step in result.steps if step.id == "benchmark-prompt")
+    return normalize_bcal_execution_facts(
+        execution_identity=result.execution_identity,
+        evidence=result.evidence,
+        scenario_completed=result.completed,
+        scenario_step_status=step.status,
+        step_compile_succeeded=step.compile_succeeded,
+        scenario_failure=_failure_facts(result.failure),
+        step_failure=_failure_facts(step.failure),
+    )
 
 
 def _format_failure(failure: BCalScenarioFailure | None) -> str:
@@ -330,6 +358,7 @@ def run_bcal_agent(
             experiment=ExperimentConfiguration(),
             execution_identity=scenario_result.execution_identity,
             evidence=scenario_result.evidence,
+            execution_facts=_execution_facts_from_scenario_result(scenario_result),
         )
     except subprocess.TimeoutExpired:
         logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")

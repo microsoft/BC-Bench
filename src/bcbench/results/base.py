@@ -8,7 +8,17 @@ from typing import Any, Self, cast, override
 from pydantic import BaseModel, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AnyAgentMetrics, BCalExecutionIdentity, BCalPackageProvenance, BCalScenarioFailure, EvaluationCategory, EvaluationContext, ExperimentConfiguration, NL2ALDataset
+from bcbench.types import (
+    AnyAgentMetrics,
+    BCalExecutionFacts,
+    BCalExecutionIdentity,
+    BCalPackageProvenance,
+    BCalScenarioFailure,
+    EvaluationCategory,
+    EvaluationContext,
+    ExperimentConfiguration,
+    NL2ALDataset,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +44,7 @@ class BaseEvaluationResult(BaseModel):
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
     bcal_failure: BCalScenarioFailure | None = None
+    execution_facts: BCalExecutionFacts | None = None
 
     timeout: bool = False
 
@@ -72,6 +83,7 @@ class BaseEvaluationResult(BaseModel):
             "execution_identity": context.execution_identity,
             "evidence": context.evidence,
             "bcal_failure": context.bcal_failure,
+            "execution_facts": context.execution_facts,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }
@@ -142,6 +154,8 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "BaseEvaluationResult":
+        if "category" not in payload and ({"id", "context", "metadata"} <= payload.keys() or {"Id", "Context", "Metadata"} <= payload.keys()):
+            raise ValueError("Published bc-eval rows are not raw BC-Bench result JSONL; re-export the retained per-instance result artifact instead")
         category = EvaluationCategory(payload["category"])
         return category.result_class.model_validate(payload)
 

@@ -65,9 +65,11 @@ def _run_bcal_for_evaluation(context: EvaluationContext[NL2ALEntry], backend_con
             context.evidence = exc.scenario_result.evidence
             benchmark_step = next((step for step in exc.scenario_result.steps if step.id == "benchmark-prompt"), None)
             context.bcal_failure = exc.scenario_result.failure or (benchmark_step.failure if benchmark_step else None)
+            context.execution_facts = exc.execution_facts
         raise
     context.execution_identity = run_result.execution_identity
     context.evidence = run_result.evidence
+    context.execution_facts = run_result.execution_facts
     return run_result.metrics, run_result.experiment
 
 
