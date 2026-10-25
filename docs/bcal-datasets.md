@@ -9,6 +9,49 @@ BC-Bench exposes two reviewed single-turn NL2AL panels for BCAL evaluation:
 
 The **Evaluation with bcal** workflow defaults to `gold` for both scheduled and manual runs. Manual runs can select either panel from the `dataset` input. The selected panel is included in the workflow run name, concurrency group, bc-eval run name, and bc-eval tags.
 
+## Focused cohorts and repetitions
+
+Checked-in cohort manifests under `dataset/cohorts/` select an explicit ordered subset of one NL2AL panel. The CLI validates that a cohort is nonempty, contains no duplicate IDs, targets the selected panel, and contains only IDs present in that panel. Invalid cohorts fail before the evaluation matrix starts.
+
+List and validate a cohort locally:
+
+```powershell
+uv run bcbench dataset list --category nl2al --dataset gold --cohort 55-chat-completion-policy --repeat-count 2
+```
+
+Launch two independent repetitions with normal scoring and Kusto publication:
+
+```powershell
+gh workflow run bcal-evaluation.yml -R microsoft/BC-Bench `
+  --ref esbenk-bcal-scenario-evidence `
+  -f dataset=gold `
+  -f cohort=55-chat-completion-policy `
+  -f repeat-count=2 `
+  -f bcal-package-selection=experiment-pinned `
+  -f bcal-version=<exact-experimental-version> `
+  -f external-model=gpt-55-chat `
+  -f test-run=false
+```
+
+Each repetition executes every selected entry independently, uses its own result directory and artifacts, and invokes bc-eval separately. The repetitions therefore receive separate EvalRunIds in Kusto. Raw results and bc-eval metadata record `cohort_name`, `cohort_sha256`, `repetition_index`, and `repetition_count`.
+
+Leaving `cohort` empty and `repeat-count` at `1` preserves the existing full-dataset behavior.
+
+## Separate completion-review model
+
+BCal evaluations can optionally use a separate model for completion diagnostics and final review while leaving `external-model` as the implementation model:
+
+```powershell
+gh workflow run bcal-evaluation.yml -R microsoft/BC-Bench `
+  --ref esbenk-bcal-scenario-evidence `
+  -f dataset=gold `
+  -f external-model=gpt-55-chat `
+  -f completion-review-model=gpt-56-reasoning-sol `
+  -f test-run=false
+```
+
+Leaving `completion-review-model` empty preserves existing behavior. The configured value is recorded as `completion_review_model` in raw results and bc-eval metadata, separately from the generation `model` and `judge_model`.
+
 ## Dataset source and freshness
 
 BC-DeveloperExperience is the source of truth for the `candidate-v2` BCAL datasets. BC-Bench keeps a reviewed snapshot so evaluations remain reproducible and do not depend on another repository at runtime.
@@ -87,6 +130,9 @@ Each named-panel bc-eval row includes:
 | `bcal_package_branch` | `master` or the provenance-derived BC-DeveloperExperience source branch |
 | `bcal_package_feed` | `DynamicsSMBPackages` or `DynamicsSMBTest@Local` |
 | `dataset`, `dataset_version`, `dataset_sha256` | Exact panel identity |
+| `cohort_name`, `cohort_sha256` | Checked-in focused cohort identity, or `null` for full-panel runs |
+| `repetition_index`, `repetition_count` | Independent repetition identity |
+| `completion_review_model` | Optional BCal completion diagnostic/final reviewer model, separate from generation and judge models |
 | `dataset_mode` | `single_turn` |
 | `dataset_turn_count` | `1` |
 | `evaluation_scope` | `single_turn` |

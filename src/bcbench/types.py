@@ -26,8 +26,10 @@ __all__ = [
     "AgentMetrics",
     "AgentMetricsContract",
     "AnyAgentMetrics",
+    "BCalExecutionIdentity",
     "BCalPackageProvenance",
     "BCalPackageSource",
+    "BCalScenarioFailure",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
@@ -108,6 +110,25 @@ class BCalPackageProvenance(BaseModel):
     @property
     def is_experiment(self) -> bool:
         return self.source is BCalPackageSource.EXPERIMENT
+
+
+class BCalExecutionIdentity(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    product_version: str = Field(alias="productVersion")
+    source_commit_sha: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{7,64}$")] | None = Field(alias="sourceCommitSha")
+    build_configuration: str = Field(alias="buildConfiguration")
+    scenario_contract_version: Literal["1.0"] = Field(alias="scenarioContractVersion")
+    evidence_contract_version: Literal["1.0"] = Field(alias="evidenceContractVersion")
+
+
+class BCalScenarioFailure(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    code: str
+    message: str
+    step_id: str | None = Field(default=None, alias="stepId")
+    retryable: bool | None = None
 
 
 class AgentMetrics(BaseModel):
@@ -771,6 +792,14 @@ class EvaluationContext[E: BaseDatasetEntry]:
     dataset: NL2ALDataset | None = None
     dataset_version: str | None = None
     dataset_sha256: str | None = None
+    cohort_name: str | None = None
+    cohort_sha256: str | None = None
+    repetition_index: int | None = None
+    repetition_count: int | None = None
+    completion_review_model: str | None = None
+    execution_identity: BCalExecutionIdentity | None = None
+    evidence: dict[str, Any] | None = None
+    bcal_failure: BCalScenarioFailure | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

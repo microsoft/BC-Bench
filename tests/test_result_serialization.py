@@ -4,7 +4,7 @@ import pytest
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, AgentMetrics, BCalPackageProvenance, BCalPackageSource, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import AgentHarness, AgentMetrics, BCalExecutionIdentity, BCalPackageProvenance, BCalPackageSource, BCalScenarioFailure, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
@@ -194,6 +194,94 @@ class TestCategorySerialization:
 
         assert payload["bcal_package"] == {"source": "experiment", "branch": "private/user/change"}
         assert loaded.bcal_package == sample_result_bug_fix.bcal_package
+
+    def test_bcal_evidence_and_execution_identity_round_trip(self, tmp_path, sample_result_bug_fix):
+        identity = BCalExecutionIdentity(
+            productVersion="1.2.3",
+            sourceCommitSha="050e84b25a0890d532a52433a3256c4183e81c7e",
+            buildConfiguration="Release",
+            scenarioContractVersion="1.0",
+            evidenceContractVersion="1.0",
+        )
+        evidence = {
+            "contractVersion": "1.0",
+            "executionIdentity": identity.model_dump(mode="json", by_alias=True),
+            "trace": {"events": []},
+        }
+        sample_result_bug_fix.execution_identity = identity
+        sample_result_bug_fix.evidence = evidence
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.execution_identity == identity
+        assert loaded.evidence == evidence
+
+    def test_bcal_failure_round_trip(self, tmp_path, sample_result_bug_fix):
+        failure = BCalScenarioFailure(
+            code="incomplete_execution",
+            message="repair_budget_exhausted",
+            stepId="benchmark-prompt",
+            retryable=False,
+        )
+        sample_result_bug_fix.bcal_failure = failure
+        sample_result_bug_fix.output = "diff --git a/src/Generated.al b/src/Generated.al\n+pageextension"
+        sample_result_bug_fix.error_message = "BCal scenario exited with status 1"
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert payload["bcal_failure"] == {
+            "code": "incomplete_execution",
+            "message": "repair_budget_exhausted",
+            "step_id": "benchmark-prompt",
+            "retryable": False,
+        }
+        assert loaded.bcal_failure == failure
+        assert loaded.output == sample_result_bug_fix.output
+        assert loaded.error_message == sample_result_bug_fix.error_message
+
+    def test_cohort_and_repetition_metadata_round_trip(self, tmp_path, sample_result_bug_fix):
+        sample_result_bug_fix.cohort_name = "55-chat-completion-policy"
+        sample_result_bug_fix.cohort_sha256 = "a" * 64
+        sample_result_bug_fix.repetition_index = 2
+        sample_result_bug_fix.repetition_count = 3
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.cohort_name == "55-chat-completion-policy"
+        assert loaded.cohort_sha256 == "a" * 64
+        assert loaded.repetition_index == 2
+        assert loaded.repetition_count == 3
+
+    def test_completion_review_model_round_trip(self, tmp_path, sample_result_bug_fix):
+        sample_result_bug_fix.completion_review_model = "gpt-56-reasoning-sol"
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.completion_review_model == "gpt-56-reasoning-sol"
+
+    @pytest.mark.parametrize(
+        ("changes", "match"),
+        [
+            ({"cohort_name": "focus"}, "cohort_name and cohort_sha256"),
+            ({"repetition_index": 1}, "repetition_index and repetition_count"),
+            ({"repetition_index": 3, "repetition_count": 2}, "between 1 and repetition_count"),
+            ({"cohort_name": "focus", "cohort_sha256": "a" * 64}, "cohort results must record repetition"),
+        ],
+    )
+    def test_invalid_cohort_metadata_is_rejected(self, sample_result_bug_fix, changes, match):
+        payload = sample_result_bug_fix.model_dump(mode="json")
+        payload.update(changes)
+
+        with pytest.raises(ValueError, match=match):
+            BaseEvaluationResult.from_json(payload)
 
     def test_tool_usage_saves_as_dict(self, tmp_path):
         tool_usage = {"bash": 5, "view": 3, "search": 2}
