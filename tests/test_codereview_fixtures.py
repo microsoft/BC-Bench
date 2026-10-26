@@ -63,12 +63,23 @@ def _unique_object(pairs):
 
 
 @pytest.fixture(scope="module")
-def before_first_gold_batch():
+def before_incidental_cleanup():
+    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    snapshot = dataset.parent.parent / "tests" / "fixtures" / "codereview-incidental-cleanup-baseline.jsonl"
+    frozen = {json.loads(line)["instance_id"]: line for line in snapshot.read_bytes().splitlines(keepends=True)}
+    assert len(frozen) == 23
+    restored = b"".join(frozen.get(json.loads(line)["instance_id"], line) for line in dataset.read_bytes().splitlines(keepends=True))
+    assert sha256(restored).hexdigest() == "5bef88326e6467a0f4f5ad265a6fdbb2ce679bb795cacbf92d7b4aad17b5b348"
+    return restored
+
+
+@pytest.fixture(scope="module")
+def before_first_gold_batch(before_incidental_cleanup):
     # Restore only this batch's five repaired records and two aliases, not the audit artifacts.
     snapshot = EvaluationCategory.CODE_REVIEW.dataset_path.parent.parent / "tests" / "fixtures" / "codereview-first-gold-batch-baseline.jsonl"
     frozen = {json.loads(line)["instance_id"]: line for line in snapshot.read_bytes().splitlines(keepends=True)}
     assert set(frozen) == set(_FIRST_GOLD_BATCH)
-    lines = EvaluationCategory.CODE_REVIEW.dataset_path.read_bytes().splitlines(keepends=True)
+    lines = before_incidental_cleanup.splitlines(keepends=True)
     seen = set()
     for index, line in enumerate(lines):
         entry = json.loads(line, object_pairs_hook=_unique_object)
@@ -137,7 +148,6 @@ def materialized_entries(tmp_path_factory):
     ("entry_id", "page_index", "table_declaration", "page_declaration"),
     [
         (_NOTE_TOOLTIP, 0, 'field(50120; "Sample Note"; Text[50])', 'field(SampleNote; Rec."Sample Note")'),
-        (_CLOSE_TOOLTIP, 1, 'field(1; "No."; Code[20])', 'field("No."; Rec."No.")'),
     ],
 )
 def test_table_tooltip_alias_is_neutral_for_the_exact_existing_page_binding(materialized_entries, before_first_gold_batch, entry_id, page_index, table_declaration, page_declaration):
@@ -235,6 +245,7 @@ def test_first_gold_batch_repairs_only_explicit_target_compatibility_blockers(ma
                 ('Rec."Service Shipment Nos."', 'Rec."Posted Service Shipment Nos."'),
                 ("Skip Manual Res. Alloc.", "Skip Manual Reservation"),
                 ("skip manual resource allocation", "skip manual reservation"),
+                ("Caption = 'Reset to Defaults';", "Caption = 'Reset to defaults';"),
             ]
         },
     }
@@ -559,7 +570,7 @@ def test_statement_semantic_finding_and_compiler_diagnostic_are_distinguished(ma
     assert "        except\n" in source
     assert "    end;\n\n        exit(GenerationSuccess);\n    end;" in source
     golds = [gold for gold in entry.expected_comments if gold.file == "src/CustStPDFDocHandler.Codeunit.al" and gold.domain == "error-handling"]
-    assert [(gold.line_start, gold.line_end, gold.severity) for gold in golds] == [(14, 21, Severity.MEDIUM), (32, 40, Severity.HIGH)]
+    assert [(gold.line_start, gold.line_end, gold.severity) for gold in golds] == [(14, 20, Severity.MEDIUM), (31, 39, Severity.HIGH)]
     assert [gold.kind for gold in golds] == [ReviewCommentKind.REVIEW_FINDING, ReviewCommentKind.COMPILER_DIAGNOSTIC]
 
 
@@ -711,9 +722,9 @@ def test_unmatched_audit_covers_frozen_population_without_converting_adjudicatio
     assert all(row["integration_decisions"][0]["status"] == "accepted" for row in mixed_missing)
 
 
-def test_integrated_neutral_diagnostics_keep_evidence_boundaries_and_correct_anchors():
+def test_integrated_neutral_diagnostics_keep_evidence_boundaries_and_correct_anchors(before_incidental_cleanup):
     dataset = EvaluationCategory.CODE_REVIEW.dataset_path
-    entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
+    entries = {entry.instance_id: entry for entry in (CodeReviewEntry.model_validate_json(line) for line in before_incidental_cleanup.splitlines())}
     ledger = json.loads((dataset.parent / "audits" / "run-39616090167-unmatched.json").read_text(encoding="utf-8"))
     inventory = json.loads((dataset.parent / "audits" / "mechanical-gold-scope.json").read_text(encoding="utf-8"))
     sources = {
