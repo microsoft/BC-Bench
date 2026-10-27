@@ -63,12 +63,12 @@ def _unique_object(pairs):
 
 
 @pytest.fixture(scope="module")
-def before_incidental_cleanup():
+def before_incidental_cleanup(before_style_cleanup):
     dataset = EvaluationCategory.CODE_REVIEW.dataset_path
     snapshot = dataset.parent.parent / "tests" / "fixtures" / "codereview-incidental-cleanup-baseline.jsonl"
     frozen = {json.loads(line)["instance_id"]: line for line in snapshot.read_bytes().splitlines(keepends=True)}
     assert len(frozen) == 23
-    restored = b"".join(frozen.get(json.loads(line)["instance_id"], line) for line in dataset.read_bytes().splitlines(keepends=True))
+    restored = b"".join(frozen.get(json.loads(line)["instance_id"], line) for line in before_style_cleanup.splitlines(keepends=True))
     assert sha256(restored).hexdigest() == "5bef88326e6467a0f4f5ad265a6fdbb2ce679bb795cacbf92d7b4aad17b5b348"
     return restored
 
@@ -104,10 +104,9 @@ def frozen_gold_entries(before_first_gold_batch):
 
 
 @pytest.fixture(scope="module")
-def materialized_entries(tmp_path_factory):
-    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
-    entries = {entry.instance_id: entry for entry in CodeReviewEntry.load(dataset)}
-    raw_entries = {json.loads(line)["instance_id"]: line for line in dataset.read_text(encoding="utf-8").splitlines() if line.strip()}
+def materialized_entries(tmp_path_factory, before_style_cleanup):
+    entries = {entry.instance_id: entry for entry in map(CodeReviewEntry.model_validate_json, before_style_cleanup.splitlines())}
+    raw_entries = {json.loads(line)["instance_id"]: line for line in before_style_cleanup.decode("utf-8").splitlines() if line.strip()}
     materialized = {}
     for entry_id in _ENTRY_IDS:
         raw = json.loads(raw_entries[entry_id], object_pairs_hook=_unique_object)

@@ -7,6 +7,7 @@ meeting all Pydantic validation requirements.
 
 import json
 from collections.abc import Generator
+from hashlib import sha256
 from pathlib import Path
 from typing import Literal, cast
 from unittest.mock import patch
@@ -37,6 +38,17 @@ VALID_PROJECT_PATHS = ["App\\Apps\\W1\\Shopify\\app", "App\\Apps\\W1\\Shopify\\t
 
 # Default problem statement content
 PROBLEM_STATEMENT_CONTENT = "# Test Problem Statement\n\nThis is a test task."
+
+
+@pytest.fixture(scope="module")
+def before_style_cleanup() -> bytes:
+    dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    snapshot = Path(__file__).parent / "fixtures" / "codereview-style-cleanup-baseline.jsonl"
+    frozen = {json.loads(line)["instance_id"]: line for line in snapshot.read_bytes().splitlines(keepends=True)}
+    assert len(frozen) == 14
+    restored = b"".join(frozen.get(json.loads(line)["instance_id"], line) for line in dataset.read_bytes().splitlines(keepends=True))
+    assert sha256(restored).hexdigest() == "2499ef2792e99b7c02b983da5cd0c3810158968767b16705ec35a2338e5a844f"
+    return restored
 
 
 def create_test_entry(codeunit_id: int = 100, function_names: set[str] | None = None) -> TestEntry:

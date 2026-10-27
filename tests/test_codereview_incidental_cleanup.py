@@ -138,21 +138,21 @@ def _normalized(case, file, source):
 
 
 @pytest.fixture(scope="module")
-def cleanup_entries():
+def cleanup_entries(before_style_cleanup):
     path = EvaluationCategory.CODE_REVIEW.dataset_path
     snapshot = path.parent.parent / "tests" / "fixtures" / "codereview-incidental-cleanup-baseline.jsonl"
     before = {entry.instance_id: entry for entry in CodeReviewEntry.load(snapshot)}
-    after = {entry.instance_id: entry for entry in CodeReviewEntry.load(path)}
+    after = {entry.instance_id: entry for entry in map(CodeReviewEntry.model_validate_json, before_style_cleanup.splitlines())}
     assert set(before) == {"synthetic__" + case for case in _CASE_MEMBERS}
     return before, after
 
 
-def test_cleanup_changes_only_the_authorized_cases_and_keeps_frozen_identity(cleanup_entries):
+def test_cleanup_changes_only_the_authorized_cases_and_keeps_frozen_identity(cleanup_entries, before_style_cleanup):
     before, after = cleanup_entries
     path = EvaluationCategory.CODE_REVIEW.dataset_path
     snapshot = path.parent.parent / "tests" / "fixtures" / "codereview-incidental-cleanup-baseline.jsonl"
     raw_before = {json.loads(line)["instance_id"]: line for line in snapshot.read_bytes().splitlines(keepends=True)}
-    current_lines = path.read_bytes().splitlines(keepends=True)
+    current_lines = before_style_cleanup.splitlines(keepends=True)
     restored = b"".join(raw_before.get(json.loads(line)["instance_id"], line) for line in current_lines)
     assert sha256(restored).hexdigest() == "5bef88326e6467a0f4f5ad265a6fdbb2ce679bb795cacbf92d7b4aad17b5b348"
     assert len(before) == 23
