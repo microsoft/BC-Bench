@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.pr_review.run_manifest import RunManifest, load_run_manifest, validate_run_manifest
-from bcbench.exceptions import AgentError
 
 ENGINE_COMMIT = "e" * 40
 BCQUALITY_COMMIT = "b" * 40

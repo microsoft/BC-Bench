@@ -21,10 +21,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from bcbench_core.agent.copilot import get_copilot_version
 from bcbench_core.exceptions import AgentError
 from bcbench_core.git import commit_changes, has_changes, init_repo
 
-from bcbench.agent.copilot.cli import get_copilot_version
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.agent.pr_review.run_manifest import RUN_MANIFEST_FILE_NAME, load_run_manifest, validate_run_manifest
