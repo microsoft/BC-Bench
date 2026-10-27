@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 import pytest
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.pr_review.definitions import (
     DEFAULT_PR_REVIEW_DEFINITION_ID,
@@ -9,7 +10,6 @@ from bcbench.agent.pr_review.definitions import (
     validate_requested_pr_review_definition,
 )
 from bcbench.agent.pr_review.run_manifest import RunManifest
-from bcbench.exceptions import AgentError
 
 
 def _baseline_manifest_payload() -> dict[str, object]:

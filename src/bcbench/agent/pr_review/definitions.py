@@ -1,7 +1,7 @@
+from bcbench_core.exceptions import AgentError
 from pydantic import BaseModel, ConfigDict, Field
 
 from bcbench.agent.pr_review.run_manifest import RunManifest
-from bcbench.exceptions import AgentError
 
 UNCLASSIFIED_PR_REVIEW_DEFINITION_ID = "unclassified"
 
