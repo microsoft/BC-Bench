@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 
 from bcbench.cli_options import EvaluationCategoryOption, TierOption
-from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
+from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry, evaluation_cohort_path, load_evaluation_cohort
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
 from bcbench.types import DatasetTier, EvaluationCategory
@@ -24,10 +24,19 @@ def list_entries(
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
+    cohort: Annotated[str | None, typer.Option(help="Checked-in evaluation cohort name")] = None,
+    repeat_count: Annotated[int, typer.Option(min=1, help="Number of independent repetitions")] = 1,
 ) -> None:
     """List dataset entry IDs."""
     entry_cls = category.entry_class
     resolved_path = category.dataset_path(tier)
+    cohort_name = ""
+    cohort_sha256 = ""
+
+    if cohort is not None and category is not EvaluationCategory.NL2AL:
+        raise typer.BadParameter("--cohort is only supported for the nl2al category")
+    if cohort is not None and (modified_only or test_run):
+        raise typer.BadParameter("--cohort cannot be combined with --modified-only or --test-run")
 
     if modified_only:
         import subprocess
@@ -53,14 +62,35 @@ def list_entries(
         entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
     else:
         entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path, random=4 if test_run else None)
-        entry_ids: list[str] = [e.instance_id for e in entries]
+        if cohort is None:
+            entry_ids = [entry.instance_id for entry in entries]
+        else:
+            try:
+                resolved_cohort = load_evaluation_cohort(
+                    evaluation_cohort_path(resolved_path.parent / "cohorts", cohort),
+                    dataset=tier,
+                    available_entries=entries,
+                )
+            except ValueError as exc:
+                raise typer.BadParameter(str(exc), param_hint="--cohort") from exc
+            entry_ids = resolved_cohort.cohort.entry_ids
+            cohort_name = resolved_cohort.cohort.name
+            cohort_sha256 = resolved_cohort.sha256
 
     print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")
     for entry_id in entry_ids:
         print(f"  - {entry_id}")
 
     if github_output:
-        write_step_outputs({github_output: json.dumps(entry_ids)})
+        write_step_outputs(
+            {
+                github_output: json.dumps(entry_ids),
+                "cohort-name": cohort_name,
+                "cohort-sha256": cohort_sha256,
+                "repetition-count": str(repeat_count),
+                "repetitions": json.dumps(list(range(1, repeat_count + 1))),
+            }
+        )
 
 
 @dataset_app.command("view")

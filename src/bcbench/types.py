@@ -694,6 +694,18 @@ class EvaluationContext[E: BaseDatasetEntry]:
     # Experiment configuration
     experiment: ExperimentConfiguration | None = None
 
+    cohort_name: str | None = None
+    cohort_sha256: str | None = None
+    cohort_applicability: list[str] | None = None
+    cohort_role: Literal["target", "control"] | None = None
+    cohort_notes: str | None = None
+    repetition_index: int | None = None
+    repetition_count: int | None = None
+    study_id: str | None = None
+    variant_id: str | None = None
+    bcal_common_base_sha: str | None = None
+    bcal_variant_patch_sha: str | None = None
+
     def get_container(self) -> ContainerConfig:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")

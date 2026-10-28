@@ -25,10 +25,32 @@ on:
         required: false
         type: string
         default: "gold"
+      cohort:
+        description: Optional checked-in evaluation cohort name
+        required: false
+        type: string
+        default: ""
+      repeat-count:
+        description: Number of independent repetitions
+        required: false
+        type: string
+        default: "1"
     outputs:
       entries:
         description: JSON array of dataset entries
         value: ${{ jobs.get-entries.outputs.entries }}
+      cohort-name:
+        description: Validated cohort name
+        value: ${{ jobs.get-entries.outputs.cohort-name }}
+      cohort-sha256:
+        description: SHA-256 of the validated cohort manifest
+        value: ${{ jobs.get-entries.outputs.cohort-sha256 }}
+      repetition-count:
+        description: Validated repetition count
+        value: ${{ jobs.get-entries.outputs.repetition-count }}
+      repetitions:
+        description: JSON array of one-based repetition indexes
+        value: ${{ jobs.get-entries.outputs.repetitions }}
       runner:
         description: GitHub Actions runner label to evaluate this category on
         value: ${{ jobs.get-entries.outputs.runner }}
@@ -44,6 +66,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       entries: ${{ steps.get-entries.outputs.entries }}
+      cohort-name: ${{ steps.get-entries.outputs.cohort-name }}
+      cohort-sha256: ${{ steps.get-entries.outputs.cohort-sha256 }}
+      repetition-count: ${{ steps.get-entries.outputs.repetition-count }}
+      repetitions: ${{ steps.get-entries.outputs.repetitions }}
       runner: ${{ steps.runtime-config.outputs.runner }}
       requires-container: ${{ steps.runtime-config.outputs.requires-container }}
       requires-repo: ${{ steps.runtime-config.outputs.requires-repo }}
@@ -62,8 +88,16 @@ jobs:
 
       - name: Get entries for matrix
         id: get-entries
+        env:
+          COHORT: ${{ inputs.cohort }}
+          REPEAT_COUNT: ${{ inputs.repeat-count }}
         run: |
           cmd="uv run bcbench dataset list --category ${{ inputs.category }} --tier ${{ inputs.tier }} --github-output entries"
+
+          if [[ -n "$COHORT" ]]; then
+            cmd="$cmd --cohort $COHORT"
+          fi
+          cmd="$cmd --repeat-count $REPEAT_COUNT"
 
           if [[ "${{ inputs.modified-only }}" == "true" ]]; then
             cmd="$cmd --modified-only"

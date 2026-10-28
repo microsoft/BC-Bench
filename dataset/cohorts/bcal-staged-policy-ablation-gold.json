@@ -1,0 +1,90 @@
+{
+  "name": "bcal-staged-policy-ablation-gold",
+  "dataset": "gold",
+  "entries": [
+    {
+      "instance_id": "nl2al__collected-shipment-complaint-log-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "target",
+      "notes": "High-discovery, handover-prone, completion-prone original-problem case."
+    },
+    {
+      "instance_id": "nl2al__collected-product-sample-followup-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "target",
+      "notes": "High-discovery, handover-prone, completion-prone original-problem case."
+    },
+    {
+      "instance_id": "nl2al__collected-van-mileage-maintenance-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "target",
+      "notes": "High-discovery, handover-prone, completion-prone original-problem case."
+    },
+    {
+      "instance_id": "nl2al__collected-overdue-collection-review-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "target",
+      "notes": "High-discovery, handover-prone, completion-prone original-problem case."
+    },
+    {
+      "instance_id": "nl2al__expanded-customer-email-review-invalidation-1",
+      "applicability": ["8656"],
+      "role": "target",
+      "notes": "High-discovery suspected-regression case."
+    },
+    {
+      "instance_id": "nl2al__expanded-allowance-rate-configuration-fallback-1",
+      "applicability": ["8656"],
+      "role": "target",
+      "notes": "High-discovery suspected-regression case."
+    },
+    {
+      "instance_id": "nl2al__expanded-task-sheet-parent-child-lifecycle-1",
+      "applicability": ["8669", "8735"],
+      "role": "target",
+      "notes": "Handover-prone and implementation-completion target."
+    },
+    {
+      "instance_id": "nl2al__expanded-atomic-json-request-parser-1",
+      "applicability": ["8669", "8735"],
+      "role": "target",
+      "notes": "External-dependency and implementation-completion target."
+    },
+    {
+      "instance_id": "nl2al__add-industry-field-customer-card-2",
+      "applicability": ["8735"],
+      "role": "control",
+      "notes": "Simple implementation-completion control."
+    },
+    {
+      "instance_id": "nl2al__move-name-customer-card-2",
+      "applicability": ["8735"],
+      "role": "control",
+      "notes": "Simple implementation-completion control."
+    },
+    {
+      "instance_id": "nl2al__block-purchase-order-without-vendor-vat-2",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "control",
+      "notes": "Compile-focused control shared across variants."
+    },
+    {
+      "instance_id": "nl2al__expanded-enum-interface-fee-dispatch-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "control",
+      "notes": "Event and interface control shared across variants."
+    },
+    {
+      "instance_id": "nl2al__expanded-compound-revision-modal-selection-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "control",
+      "notes": "General complex control shared across variants."
+    },
+    {
+      "instance_id": "nl2al__read-only-compliance-register-permission-set-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "control",
+      "notes": "General permissions control shared across variants."
+    }
+  ]
+}

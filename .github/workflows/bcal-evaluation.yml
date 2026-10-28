@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.tier || 'gold' }}${{ inputs.cohort && format('/{0}', inputs.cohort) || '' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }})${{ inputs.study-id && format(' [{0}/{1}]', inputs.study-id, inputs.variant-id) || '' }} - ${{ inputs.test-run && 'test' || 'full' }}${{ inputs.repeat-count > 1 && format(' x{0}', inputs.repeat-count) || '' }}
 permissions:
   contents: read
   actions: write
@@ -42,12 +42,42 @@ on:
         required: false
         default: true
         type: boolean
+      cohort:
+        description: "Checked-in evaluation cohort name; leave empty for the full selected dataset"
+        required: false
+        default: ""
+        type: string
+      repeat-count:
+        description: "Number of independent repetitions"
+        required: false
+        default: 1
+        type: number
+      study-id:
+        description: "Study identifier; requires all study provenance inputs"
+        required: false
+        default: ""
+        type: string
+      variant-id:
+        description: "Study variant identifier"
+        required: false
+        default: ""
+        type: string
+      bcal-common-base-sha:
+        description: "Common BCal source base SHA shared by study variants"
+        required: false
+        default: ""
+        type: string
+      bcal-variant-patch-sha:
+        description: "BCal variant patch SHA"
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "0 3 * * 0"
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: bcal-evaluation-${{ inputs.tier || 'gold' }}-${{ inputs.cohort || 'all' }}-${{ inputs.bcal-feed || 'official' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.external-model || 'gpt-55-chat' }}-${{ inputs.study-id || 'no-study' }}-${{ inputs.variant-id || 'no-variant' }}-${{ inputs.bcal-common-base-sha || 'no-common-base' }}-${{ inputs.bcal-variant-patch-sha || 'no-variant-patch' }}-${{ inputs.test-run && 'test' || 'full' }}-x${{ inputs.repeat-count || 1 }}
   cancel-in-progress: false
 
 env:
@@ -56,12 +86,38 @@ env:
   BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
 
 jobs:
+  validate-study:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate study provenance
+        shell: bash
+        env:
+          STUDY_ID: ${{ inputs.study-id }}
+          VARIANT_ID: ${{ inputs.variant-id }}
+          BCAL_COMMON_BASE_SHA: ${{ inputs.bcal-common-base-sha }}
+          BCAL_VARIANT_PATCH_SHA: ${{ inputs.bcal-variant-patch-sha }}
+        run: |
+          values=("$STUDY_ID" "$VARIANT_ID" "$BCAL_COMMON_BASE_SHA" "$BCAL_VARIANT_PATCH_SHA")
+          populated=0
+          for value in "${values[@]}"; do
+            if [[ -n "${value//[[:space:]]/}" ]]; then
+              populated=$((populated + 1))
+            fi
+          done
+          if [[ "$populated" -ne 0 && "$populated" -ne 4 ]]; then
+            echo "::error::study-id, variant-id, bcal-common-base-sha, and bcal-variant-patch-sha must be nonempty together."
+            exit 1
+          fi
+
   get-entries:
+    needs: validate-study
     uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run || false }}
       category: nl2al
       tier: ${{ inputs.tier || 'gold' }}
+      cohort: ${{ inputs.cohort || '' }}
+      repeat-count: ${{ format('{0}', inputs.repeat-count || 1) }}
 
   evaluate-with-bcal:
     runs-on: windows-latest
@@ -81,6 +137,7 @@ jobs:
       max-parallel: 32
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        repetition: ${{ fromJson(needs.get-entries.outputs.repetitions) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -165,6 +222,14 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
+          BCBENCH_COHORT_NAME: ${{ needs.get-entries.outputs.cohort-name }}
+          BCBENCH_COHORT_SHA256: ${{ needs.get-entries.outputs.cohort-sha256 }}
+          BCBENCH_REPETITION_INDEX: ${{ (inputs.cohort != '' || inputs.repeat-count > 1) && matrix.repetition || '' }}
+          BCBENCH_REPETITION_COUNT: ${{ (inputs.cohort != '' || inputs.repeat-count > 1) && needs.get-entries.outputs.repetition-count || '' }}
+          BCBENCH_STUDY_ID: ${{ inputs.study-id }}
+          BCBENCH_VARIANT_ID: ${{ inputs.variant-id }}
+          BCAL_COMMON_BASE_SHA: ${{ inputs.bcal-common-base-sha }}
+          BCAL_VARIANT_PATCH_SHA: ${{ inputs.bcal-variant-patch-sha }}
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
         shell: pwsh
@@ -175,13 +240,18 @@ jobs:
           }
           $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-llm-api-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py"
 
-          uv run bcbench evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          $runId = "$env:GITHUB_RUN_ID"
+          if (-not [string]::IsNullOrWhiteSpace($env:BCBENCH_REPETITION_INDEX)) {
+            $runId = "$runId-r$env:BCBENCH_REPETITION_INDEX"
+          }
+
+          uv run bcbench evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER" --output-dir "$env:EVALUATION_RESULTS_DIR" --run-id "$runId"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
+          name: evaluation-results-${{ github.run_id }}${{ inputs.repeat-count > 1 && format('-r{0}', matrix.repetition) || '' }}-${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 

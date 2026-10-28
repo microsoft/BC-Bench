@@ -3,7 +3,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Self, cast, override
+from typing import Any, Literal, Self, cast, override
 
 from pydantic import BaseModel, model_validator
 
@@ -31,6 +31,17 @@ class BaseEvaluationResult(BaseModel):
 
     metrics: AnyAgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
+    cohort_name: str | None = None
+    cohort_sha256: str | None = None
+    cohort_applicability: list[str] | None = None
+    cohort_role: Literal["target", "control"] | None = None
+    cohort_notes: str | None = None
+    repetition_index: int | None = None
+    repetition_count: int | None = None
+    study_id: str | None = None
+    variant_id: str | None = None
+    bcal_common_base_sha: str | None = None
+    bcal_variant_patch_sha: str | None = None
 
     @classmethod
     def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
@@ -52,7 +63,36 @@ class BaseEvaluationResult(BaseModel):
             "agent_version": context.agent_version,
             "metrics": context.metrics,
             "experiment": context.experiment,
+            "cohort_name": context.cohort_name,
+            "cohort_sha256": context.cohort_sha256,
+            "cohort_applicability": context.cohort_applicability,
+            "cohort_role": context.cohort_role,
+            "cohort_notes": context.cohort_notes,
+            "repetition_index": context.repetition_index,
+            "repetition_count": context.repetition_count,
+            "study_id": context.study_id,
+            "variant_id": context.variant_id,
+            "bcal_common_base_sha": context.bcal_common_base_sha,
+            "bcal_variant_patch_sha": context.bcal_variant_patch_sha,
         }
+
+    @model_validator(mode="after")
+    def validate_study_metadata(self) -> Self:
+        if (self.cohort_name is None) != (self.cohort_sha256 is None):
+            raise ValueError("cohort name and SHA-256 must be provided together")
+        if (self.repetition_index is None) != (self.repetition_count is None):
+            raise ValueError("repetition index and repetition count must be provided together")
+        if self.repetition_index is not None and self.repetition_count is not None and (self.repetition_count < 1 or not 1 <= self.repetition_index <= self.repetition_count):
+            raise ValueError("repetition index must be between 1 and repetition count")
+        if self.cohort_name is not None and self.repetition_index is None:
+            raise ValueError("cohort results must record repetition metadata")
+
+        study_values = (self.study_id, self.variant_id, self.bcal_common_base_sha, self.bcal_variant_patch_sha)
+        if any(value is not None for value in study_values) and any(value is None for value in study_values):
+            raise ValueError("study ID, variant ID, BCal common base SHA, and BCal variant patch SHA must be provided together")
+        if any(value is not None and not value.strip() for value in study_values):
+            raise ValueError("study metadata values must be nonempty")
+        return self
 
     @classmethod
     def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:
@@ -87,12 +127,25 @@ class BaseEvaluationResult(BaseModel):
         return {}
 
     @property
-    def export_metadata(self) -> dict[str, str | int | float | bool | None]:
+    def export_metadata(self) -> dict[str, Any]:
         """Extra metadata fields for the bceval export beyond the shared ones.
 
         Subclasses override to record category-specific provenance such as the judge model.
         """
-        return {}
+        metadata = {
+            "cohort_name": self.cohort_name,
+            "cohort_sha256": self.cohort_sha256,
+            "cohort_applicability": self.cohort_applicability,
+            "cohort_role": self.cohort_role,
+            "cohort_notes": self.cohort_notes,
+            "repetition_index": self.repetition_index,
+            "repetition_count": self.repetition_count,
+            "study_id": self.study_id,
+            "variant_id": self.variant_id,
+            "bcal_common_base_sha": self.bcal_common_base_sha,
+            "bcal_variant_patch_sha": self.bcal_variant_patch_sha,
+        }
+        return {key: value for key, value in metadata.items() if value is not None}
 
     @property
     def display_row(self) -> dict[str, str]:
@@ -169,8 +222,8 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
 
     @property
     @override
-    def export_metadata(self) -> dict[str, str | int | float | bool | None]:
-        return {"judge_model": self.judge_model}
+    def export_metadata(self) -> dict[str, Any]:
+        return {**super().export_metadata, "judge_model": self.judge_model}
 
 
 class JudgeBasedEvaluationResult(JudgeScoredEvaluationResult):

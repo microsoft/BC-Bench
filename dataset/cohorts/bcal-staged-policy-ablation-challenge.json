@@ -1,0 +1,90 @@
+{
+  "name": "bcal-staged-policy-ablation-challenge",
+  "dataset": "challenge",
+  "entries": [
+    {
+      "instance_id": "nl2al__collected-receipt-inspection-checkpoint-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "target",
+      "notes": "High-discovery, handover-prone, completion-prone challenge case."
+    },
+    {
+      "instance_id": "nl2al__vendor-monthly-performance-report-2",
+      "applicability": ["8656"],
+      "role": "target",
+      "notes": "High-discovery challenge target."
+    },
+    {
+      "instance_id": "nl2al__suggest-alternate-vendors-action-2",
+      "applicability": ["8656"],
+      "role": "target",
+      "notes": "High-discovery challenge target."
+    },
+    {
+      "instance_id": "nl2al__collected-margin-order-approval-1",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "target",
+      "notes": "High-discovery, handover-prone, completion-prone challenge case."
+    },
+    {
+      "instance_id": "nl2al__hard-bank-recon-cheque-and-tolerance-match-2",
+      "applicability": ["8656", "8669"],
+      "role": "target",
+      "notes": "High-discovery and multi-item handover target."
+    },
+    {
+      "instance_id": "nl2al__collected-inventory-risk-snapshot-1",
+      "applicability": ["8656"],
+      "role": "target",
+      "notes": "High-discovery challenge target."
+    },
+    {
+      "instance_id": "nl2al__collected-vendor-certificate-gates-1",
+      "applicability": ["8669", "8735"],
+      "role": "target",
+      "notes": "External-dependency and implementation-completion target."
+    },
+    {
+      "instance_id": "nl2al__collected-returnable-container-balances-1",
+      "applicability": ["8669", "8735"],
+      "role": "target",
+      "notes": "Multi-item handover and implementation-completion target."
+    },
+    {
+      "instance_id": "nl2al__collected-equipment-loan-register-1",
+      "applicability": ["8669", "8735"],
+      "role": "target",
+      "notes": "Handover-prone and implementation-completion target."
+    },
+    {
+      "instance_id": "nl2al__collected-donation-register-1",
+      "applicability": ["8735"],
+      "role": "target",
+      "notes": "Implementation-completion and blocker-prone target."
+    },
+    {
+      "instance_id": "nl2al__event-subscriber-onafterpostsalesdoc-2",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "control",
+      "notes": "Narrow event-subscriber control shared across variants."
+    },
+    {
+      "instance_id": "nl2al__open-outstanding-pos-action-2",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "control",
+      "notes": "Narrow action control shared across variants."
+    },
+    {
+      "instance_id": "nl2al__hard-custom-workflow-event-publisher-2",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "control",
+      "notes": "General workflow and event control shared across variants."
+    },
+    {
+      "instance_id": "nl2al__hard-page-background-task-top10-customers-2",
+      "applicability": ["8656", "8669", "8735"],
+      "role": "control",
+      "notes": "General asynchronous implementation control shared across variants."
+    }
+  ]
+}

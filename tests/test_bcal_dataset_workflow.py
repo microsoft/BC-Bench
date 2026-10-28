@@ -54,8 +54,22 @@ def test_bcal_downloads_symbols_from_the_selected_tier():
 def test_bcal_run_identity_includes_tier_and_package_selection():
     workflow = _workflow("bcal-evaluation.yml")
 
-    assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ${{{{ inputs.bcal-feed || 'official' }}}}@${{{{ inputs.bcal-version || 'latest' }}}} ")
-    assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}"
+    run_name = workflow["run-name"]
+    assert run_name.startswith(f"BCal {SELECTED_TIER}")
+    assert "${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }}" in run_name
+    concurrency = workflow["concurrency"]["group"]
+    for identity in (
+        "inputs.tier",
+        "inputs.cohort",
+        "inputs.bcal-feed",
+        "inputs.bcal-version",
+        "inputs.study-id",
+        "inputs.variant-id",
+        "inputs.bcal-common-base-sha",
+        "inputs.bcal-variant-patch-sha",
+        "inputs.repeat-count",
+    ):
+        assert identity in concurrency
 
 
 def test_bcal_feed_selects_official_or_internal_test_feed():
@@ -94,3 +108,30 @@ def test_experimental_feed_runs_are_published_as_experiments():
     assert job["with"]["experiment"] == "${{ inputs.bcal-feed == 'experiment' }}"
     assert summarize[True]["workflow_call"]["inputs"]["experiment"]["default"] is False
     assert "${{ inputs.experiment && '--eval-run-type experiment' || '' }}" in _step(summarize, "summarize-results", "Upload result using bceval")["run"]
+
+
+def test_bcal_study_inputs_are_validated_and_propagated():
+    workflow = _workflow("bcal-evaluation.yml")
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    run_step = _step(workflow, "evaluate-with-bcal", "Run BCal for entry ${{ matrix.entry }}")
+    validation = _step(workflow, "validate-study", "Validate study provenance")
+
+    assert {"study-id", "variant-id", "bcal-common-base-sha", "bcal-variant-patch-sha", "cohort", "repeat-count"} <= inputs.keys()
+    assert "must be nonempty together" in validation["run"]
+    assert run_step["env"]["BCBENCH_STUDY_ID"] == "${{ inputs.study-id }}"
+    assert run_step["env"]["BCBENCH_VARIANT_ID"] == "${{ inputs.variant-id }}"
+    assert run_step["env"]["BCAL_COMMON_BASE_SHA"] == "${{ inputs.bcal-common-base-sha }}"
+    assert run_step["env"]["BCAL_VARIANT_PATCH_SHA"] == "${{ inputs.bcal-variant-patch-sha }}"
+
+
+def test_bcal_cohort_and_repetition_contract_reaches_matrix_and_results():
+    workflow = _workflow("bcal-evaluation.yml")
+    get_entries = workflow["jobs"]["get-entries"]["with"]
+    evaluate = workflow["jobs"]["evaluate-with-bcal"]
+    run_step = _step(workflow, "evaluate-with-bcal", "Run BCal for entry ${{ matrix.entry }}")
+
+    assert get_entries["cohort"] == "${{ inputs.cohort || '' }}"
+    assert "inputs.repeat-count" in get_entries["repeat-count"]
+    assert evaluate["strategy"]["matrix"]["repetition"] == "${{ fromJson(needs.get-entries.outputs.repetitions) }}"
+    assert run_step["env"]["BCBENCH_COHORT_NAME"] == "${{ needs.get-entries.outputs.cohort-name }}"
+    assert run_step["env"]["BCBENCH_REPETITION_INDEX"] == "${{ (inputs.cohort != '' || inputs.repeat-count > 1) && matrix.repetition || '' }}"

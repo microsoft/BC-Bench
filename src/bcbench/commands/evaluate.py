@@ -29,7 +29,7 @@ from bcbench.cli_options import (
     resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
+from bcbench.dataset import BaseDatasetEntry, NL2ALEntry, evaluation_cohort_path, load_evaluation_cohort
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -247,6 +247,14 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    cohort_name: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_NAME", help="Selected evaluation cohort name")] = None,
+    cohort_sha256: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_SHA256", help="SHA-256 of the selected cohort manifest")] = None,
+    repetition_index: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_INDEX", help="One-based repetition index")] = None,
+    repetition_count: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_COUNT", help="Total independent repetitions")] = None,
+    study_id: Annotated[str | None, typer.Option(envvar="BCBENCH_STUDY_ID", help="Study identifier")] = None,
+    variant_id: Annotated[str | None, typer.Option(envvar="BCBENCH_VARIANT_ID", help="Study variant identifier")] = None,
+    bcal_common_base_sha: Annotated[str | None, typer.Option(envvar="BCAL_COMMON_BASE_SHA", help="Common BCal source base SHA")] = None,
+    bcal_variant_patch_sha: Annotated[str | None, typer.Option(envvar="BCAL_VARIANT_PATCH_SHA", help="BCal variant patch SHA")] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -254,7 +262,43 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
+    dataset_path = category.dataset_path(tier)
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
+    cohort_applicability: list[str] | None = None
+    cohort_role = None
+    cohort_notes = None
+
+    if (cohort_name is None) != (cohort_sha256 is None):
+        raise typer.BadParameter("cohort name and SHA-256 must be provided together")
+    if (repetition_index is None) != (repetition_count is None):
+        raise typer.BadParameter("repetition index and repetition count must be provided together")
+    if repetition_index is not None and repetition_count is not None and (repetition_count < 1 or not 1 <= repetition_index <= repetition_count):
+        raise typer.BadParameter("repetition index must be between 1 and repetition count")
+    if cohort_name is not None and repetition_index is None:
+        raise typer.BadParameter("cohort evaluations must include repetition metadata")
+    if cohort_name is not None and cohort_sha256 is not None:
+        available_entries = category.entry_class.load(dataset_path)
+        try:
+            resolved_cohort = load_evaluation_cohort(
+                evaluation_cohort_path(dataset_path.parent / "cohorts", cohort_name),
+                dataset=tier,
+                available_entries=available_entries,
+            )
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc), param_hint="--cohort-name") from exc
+        if resolved_cohort.sha256 != cohort_sha256:
+            raise typer.BadParameter("cohort SHA-256 does not match the checked-in manifest", param_hint="--cohort-sha256")
+        if entry_id not in resolved_cohort.cohort.entry_ids:
+            raise typer.BadParameter(f"entry {entry_id!r} is not in cohort {cohort_name!r}", param_hint="entry_id")
+        if cohort_entry := resolved_cohort.cohort.metadata_for(entry_id):
+            cohort_applicability = [str(applicability) for applicability in cohort_entry.applicability]
+            cohort_role = cohort_entry.role
+            cohort_notes = cohort_entry.notes
+
+    study_values = tuple((value.strip() or None) if value is not None else None for value in (study_id, variant_id, bcal_common_base_sha, bcal_variant_patch_sha))
+    if any(study_values) and not all(study_values):
+        raise typer.BadParameter("study ID, variant ID, BCal common base SHA, and BCal variant patch SHA must be nonempty together")
+    study_id, variant_id, bcal_common_base_sha, bcal_variant_patch_sha = study_values
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         command=llm_command,
@@ -273,6 +317,17 @@ def evaluate_bcal(
         agent_version=get_bcal_version(),
         category=category,
         tier=tier,
+        cohort_name=cohort_name,
+        cohort_sha256=cohort_sha256,
+        cohort_applicability=cohort_applicability,
+        cohort_role=cohort_role,
+        cohort_notes=cohort_notes,
+        repetition_index=repetition_index,
+        repetition_count=repetition_count,
+        study_id=study_id,
+        variant_id=variant_id,
+        bcal_common_base_sha=bcal_common_base_sha,
+        bcal_variant_patch_sha=bcal_variant_patch_sha,
     )
 
     try:
