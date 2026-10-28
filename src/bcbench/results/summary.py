@@ -86,6 +86,8 @@ class EvaluationResultSummary(BaseModel, ABC):
 
         first_result = results[0]
         experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
+        if any((result.experiment if result.experiment and not result.experiment.is_empty() else None) != experiment for result in results):
+            raise ValueError("Cannot summarize results with different experiment configurations")
 
         return {
             "total": len(results),
