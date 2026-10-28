@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.tier || 'gold' }}${{ inputs.cohort && format('/{0}', inputs.cohort) || '' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }})${{ inputs.study-id && format(' [{0}/{1}]', inputs.study-id, inputs.variant-id) || '' }} - ${{ inputs.test-run && 'test' || 'full' }}${{ inputs.repeat-count > 1 && format(' x{0}', inputs.repeat-count) || '' }}
+run-name: ${{ inputs.publish-source-run-id && format('Publish source {0} - ', inputs.publish-source-run-id) || '' }}BCal ${{ inputs.tier || 'gold' }}${{ inputs.cohort && format('/{0}', inputs.cohort) || '' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }})${{ inputs.study-id && format(' [{0}/{1}]', inputs.study-id, inputs.variant-id) || '' }} - ${{ inputs.publish-source-run-id && 'publication-only' || (inputs.test-run && 'test' || 'full') }}${{ inputs.repeat-count > 1 && format(' x{0}', inputs.repeat-count) || '' }}
 permissions:
   contents: read
   actions: write
@@ -72,12 +72,17 @@ on:
         required: false
         default: ""
         type: string
+      publish-source-run-id:
+        description: "Publish immutable artifacts from this prior BCal workflow run without evaluating"
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "0 3 * * 0"
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.tier || 'gold' }}-${{ inputs.cohort || 'all' }}-${{ inputs.bcal-feed || 'official' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.external-model || 'gpt-55-chat' }}-${{ inputs.study-id || 'no-study' }}-${{ inputs.variant-id || 'no-variant' }}-${{ inputs.bcal-common-base-sha || 'no-common-base' }}-${{ inputs.bcal-variant-patch-sha || 'no-variant-patch' }}-${{ inputs.test-run && 'test' || 'full' }}-x${{ inputs.repeat-count || 1 }}
+  group: bcal-evaluation-${{ inputs.publish-source-run-id || 'new-run' }}-${{ inputs.tier || 'gold' }}-${{ inputs.cohort || 'all' }}-${{ inputs.bcal-feed || 'official' }}-${{ inputs.bcal-version || 'latest' }}-${{ inputs.external-model || 'gpt-55-chat' }}-${{ inputs.study-id || 'no-study' }}-${{ inputs.variant-id || 'no-variant' }}-${{ inputs.bcal-common-base-sha || 'no-common-base' }}-${{ inputs.bcal-variant-patch-sha || 'no-variant-patch' }}-${{ inputs.test-run && 'test' || 'full' }}-x${{ inputs.repeat-count || 1 }}
   cancel-in-progress: false
 
 env:
@@ -87,6 +92,7 @@ env:
 
 jobs:
   validate-study:
+    if: ${{ inputs.publish-source-run-id == '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate study provenance
@@ -110,10 +116,9 @@ jobs:
           fi
 
   get-entries:
-    needs: validate-study
     uses: $/.github/workflows/get-entries.yml
     with:
-      test-run: ${{ inputs.test-run || false }}
+      test-run: ${{ inputs.publish-source-run-id == '' && (inputs.test-run || false) }}
       category: nl2al
       tier: ${{ inputs.tier || 'gold' }}
       cohort: ${{ inputs.cohort || '' }}
@@ -121,10 +126,10 @@ jobs:
 
   evaluate-with-bcal:
     runs-on: windows-latest
-    needs: get-entries
+    needs: [validate-study, get-entries]
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    if: needs.get-entries.outputs.entries != '[]'
+    if: ${{ inputs.publish-source-run-id == '' && needs.validate-study.result == 'success' && needs.get-entries.outputs.entries != '[]' }}
     environment:
       name: ado-read
       deployment: false
@@ -257,7 +262,7 @@ jobs:
 
   summarize-results:
     needs: [validate-study, get-entries, evaluate-with-bcal]
-    if: ${{ always() && !cancelled() && needs.validate-study.result == 'success' && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' }}
+    if: ${{ always() && !cancelled() && inputs.publish-source-run-id == '' && needs.validate-study.result == 'success' && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -291,4 +296,44 @@ jobs:
       variant-id: ${{ inputs.variant-id }}
       bcal-common-base-sha: ${{ inputs.bcal-common-base-sha }}
       bcal-variant-patch-sha: ${{ inputs.bcal-variant-patch-sha }}
+    secrets: inherit
+
+  publish-existing-results:
+    needs: get-entries
+    if: ${{ inputs.publish-source-run-id != '' && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        repetition: ${{ fromJson(needs.get-entries.outputs.repetitions) }}
+    uses: $/.github/workflows/summarize-results.yml
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    with:
+      results-dir: evaluation_results
+      model: ${{ inputs.external-model || 'gpt-55-chat' }}
+      agent: BCal-external-command
+      mock: false
+      category: nl2al
+      tier: ${{ inputs.tier || 'gold' }}
+      experiment: ${{ inputs.bcal-feed == 'experiment' }}
+      skip-leaderboard: true
+      expected-entries: ${{ needs.get-entries.outputs.entries }}
+      allow-incomplete-results: true
+      artifact-pattern: evaluation-results-${{ inputs.publish-source-run-id }}-r${{ matrix.repetition }}-*
+      artifact-suffix: -source-${{ inputs.publish-source-run-id }}-r${{ matrix.repetition }}
+      source-workflow-run-id: ${{ inputs.publish-source-run-id }}
+      evaluation-run-id: ${{ inputs.publish-source-run-id }}-r${{ matrix.repetition }}
+      cohort-name: ${{ needs.get-entries.outputs.cohort-name }}
+      cohort-sha256: ${{ needs.get-entries.outputs.cohort-sha256 }}
+      repetition-index: ${{ format('{0}', matrix.repetition) }}
+      repetition-count: ${{ needs.get-entries.outputs.repetition-count }}
+      bcal-feed: ${{ inputs.bcal-feed || 'official' }}
+      bcal-version: ${{ inputs.bcal-version || 'latest' }}
+      study-id: ${{ inputs.study-id }}
+      variant-id: ${{ inputs.variant-id }}
+      bcal-common-base-sha: ${{ inputs.bcal-common-base-sha }}
+      bcal-variant-patch-sha: ${{ inputs.bcal-variant-patch-sha }}
+      git-ref: esbenk-bcal-staged-ablation
     secrets: inherit

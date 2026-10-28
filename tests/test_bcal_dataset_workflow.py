@@ -55,7 +55,8 @@ def test_bcal_run_identity_includes_tier_and_package_selection():
     workflow = _workflow("bcal-evaluation.yml")
 
     run_name = workflow["run-name"]
-    assert run_name.startswith(f"BCal {SELECTED_TIER}")
+    assert f"BCal {SELECTED_TIER}" in run_name
+    assert "inputs.publish-source-run-id" in run_name
     assert "${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }}" in run_name
     concurrency = workflow["concurrency"]["group"]
     for identity in (

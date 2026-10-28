@@ -16,11 +16,15 @@ def _step(workflow: dict[Any, Any], job: str, name: str) -> dict[str, Any]:
 
 def test_normal_bcal_publication_runs_once_per_repetition_after_evaluation_failures():
     workflow = _workflow("bcal-evaluation.yml")
+    evaluate = workflow["jobs"]["evaluate-with-bcal"]
     summary = workflow["jobs"]["summarize-results"]
 
+    assert evaluate["needs"] == ["validate-study", "get-entries"]
+    assert "inputs.publish-source-run-id == ''" in evaluate["if"]
     assert summary["needs"] == ["validate-study", "get-entries", "evaluate-with-bcal"]
     assert "always()" in summary["if"]
     assert "!cancelled()" in summary["if"]
+    assert "inputs.publish-source-run-id == ''" in summary["if"]
     assert "needs.validate-study.result == 'success'" in summary["if"]
     assert "needs.get-entries.result == 'success'" in summary["if"]
     assert summary["strategy"]["matrix"]["repetition"] == "${{ fromJson(needs.get-entries.outputs.repetitions) }}"
@@ -29,6 +33,28 @@ def test_normal_bcal_publication_runs_once_per_repetition_after_evaluation_failu
     assert summary["with"]["expected-entries"] == "${{ needs.get-entries.outputs.entries }}"
     assert summary["with"]["repetition-index"] == "${{ format('{0}', matrix.repetition) }}"
     assert summary["with"]["study-id"] == "${{ inputs.study-id }}"
+
+
+def test_registered_bcal_workflow_publication_mode_bypasses_evaluation_jobs():
+    workflow = _workflow("bcal-evaluation.yml")
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    get_entries = workflow["jobs"]["get-entries"]
+    validation = workflow["jobs"]["validate-study"]
+    evaluate = workflow["jobs"]["evaluate-with-bcal"]
+    publish = workflow["jobs"]["publish-existing-results"]
+
+    assert inputs["publish-source-run-id"]["default"] == ""
+    assert validation["if"] == "${{ inputs.publish-source-run-id == '' }}"
+    assert "inputs.publish-source-run-id == ''" in evaluate["if"]
+    assert publish["needs"] == "get-entries"
+    assert "inputs.publish-source-run-id != ''" in publish["if"]
+    assert "evaluate-with-bcal" not in str(publish)
+    assert get_entries["with"]["test-run"] == "${{ inputs.publish-source-run-id == '' && (inputs.test-run || false) }}"
+    assert publish["strategy"]["matrix"]["repetition"] == "${{ fromJson(needs.get-entries.outputs.repetitions) }}"
+    assert publish["with"]["artifact-pattern"] == "evaluation-results-${{ inputs.publish-source-run-id }}-r${{ matrix.repetition }}-*"
+    assert publish["with"]["source-workflow-run-id"] == "${{ inputs.publish-source-run-id }}"
+    assert publish["with"]["evaluation-run-id"] == "${{ inputs.publish-source-run-id }}-r${{ matrix.repetition }}"
+    assert publish["with"]["mock"] is False
 
 
 def test_summary_can_download_one_repetition_from_a_prior_workflow_run():
