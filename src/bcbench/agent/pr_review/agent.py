@@ -162,6 +162,8 @@ def run_pr_review_agent(
     output_dir: Path,
     engine_path: Path | None = None,
     min_severity: str | None = None,
+    leaf_model: str | None = None,
+    cli_version: str | None = None,
 ) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
 
@@ -205,6 +207,13 @@ def run_pr_review_agent(
         "COPILOT_MODEL": model,
         "AGENT_MINIMUM_SEVERITY": severity,
     }
+    if leaf_model is not None:
+        env["COPILOT_REVIEW_LEAF_MODEL"] = leaf_model
+        env["COPILOT_REVIEW_LEAF_EXECUTION"] = "serial"
+        env["COPILOT_REVIEW_MAX_LEAF_CONCURRENCY"] = "4"
+        env["MINIMUM_SEVERITY"] = severity
+    if cli_version is not None:
+        env["COPILOT_REVIEW_CLI_VERSION"] = cli_version
 
     config = ExperimentConfiguration()
 

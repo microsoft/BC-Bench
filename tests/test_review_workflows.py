@@ -128,7 +128,10 @@ def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.82" in action
+    config = yaml.safe_load(action)
+    assert config["inputs"]["copilot-version"]["default"] == "1.0.82"
+    assert '"@github/copilot@$env:COPILOT_VERSION"' in action
+    assert "COPILOT_VERSION: ${{ inputs.copilot-version }}" in action
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
