@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 import yaml
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, ValidationInfo, field_validator, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -38,6 +38,7 @@ __all__ = [
     "HttpMcpServer",
     "JudgeCalibrationReport",
     "McpServerConfig",
+    "PRReviewConfiguration",
     "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
@@ -104,6 +105,24 @@ class AgentMetricsContract:
             raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
 
 
+class PRReviewConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    leaf_model: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    leaf_execution: Literal["serial", "parallel"]
+    max_leaf_concurrency: int | None = Field(default=None, ge=1, validate_default=True)
+    copilot_cli_version: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+    @field_validator("max_leaf_concurrency")
+    @classmethod
+    def normalize_concurrency(cls, value: int | None, info: ValidationInfo) -> int | None:
+        if info.data.get("leaf_execution") == "serial":
+            return None
+        if value is None:
+            raise ValueError("Parallel PR Review execution requires max_leaf_concurrency")
+        return value
+
+
 class ExperimentConfiguration(BaseModel):
     """Configuration for agent experiment execution.
 
@@ -131,13 +150,23 @@ class ExperimentConfiguration(BaseModel):
     # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
+    pr_review: PRReviewConfiguration | None = None
+
     def is_empty(self) -> bool:
         """Check if this configuration has all default/empty values.
 
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+        return (
+            self.mcp_servers is None
+            and self.al_lsp_enabled is False
+            and self.custom_instructions is False
+            and self.skills_enabled is False
+            and self.custom_agent is None
+            and self.plugins is None
+            and self.pr_review is None
+        )
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub

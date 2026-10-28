@@ -1,14 +1,15 @@
 import json
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import patch
 
 import pytest
 from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_cli_version, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
-from bcbench.types import EvaluationCategory, PRReviewMetrics
+from bcbench.exceptions import AgentTimeoutError
+from bcbench.types import EvaluationCategory, PRReviewConfiguration, PRReviewMetrics
 from tests.conftest import create_codereview_entry
 
 
@@ -286,7 +287,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert metrics.max_leaf_concurrency == 4
     assert metrics.bcquality_commit == "b" * 40
     assert metrics.review_process_count == 2
-    assert config.is_empty()
+    assert config.pr_review == PRReviewConfiguration(leaf_model="gpt-5.4", leaf_execution="serial", copilot_cli_version="1.0.83")
     resolve_engine.assert_called_once_with(tmp_path / "engine")
     prepare_bcquality.assert_called_once_with(tmp_path / "engine", "pwsh", (tmp_path / "output" / "bcquality").resolve())
     assert run_process.call_args.kwargs["encoding"] == "utf-8"
@@ -308,7 +309,9 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert "-GenerateOnly" not in run_process.call_args.args[0]
 
 
-def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("timeout", [False, True])
+@pytest.mark.parametrize("leaf_execution", ["serial", "parallel"])
+def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, timeout: bool, leaf_execution: Literal["serial", "parallel"]) -> None:
     _, repo = _dirs(tmp_path)
     entry = create_codereview_entry()
     settings = {"min_severity": "Medium"}
@@ -347,6 +350,10 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
         encoding="utf-8",
     )
     _write_run_manifest(output_dir, root_model="gpt-5.6-sol", leaf_model="gpt-5.6-luna")
+    manifest_path = output_dir / "_run-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["configuration"]["leaf_execution"] = leaf_execution
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.setenv("COPILOT_REVIEW_LEAF_MODEL", "ambient-leaf")
     monkeypatch.setenv("COPILOT_REVIEW_LEAF_EXECUTION", "parallel")
     monkeypatch.setenv("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "99")
@@ -362,24 +369,45 @@ def test_engine_configuration_uses_explicit_inputs_not_ambient_environment(tmp_p
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.get_copilot_version", return_value="1.0.83"),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[1.0, 2.0]),
-        patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
+        patch(
+            "bcbench.agent.pr_review.agent.subprocess.run",
+            return_value=completed,
+            side_effect=subprocess.TimeoutExpired(["pwsh"], 600) if timeout else None,
+        ) as run_process,
     ):
-        run_pr_review_agent(
-            entry=entry,
-            model="gpt-5.6-sol",
-            category=EvaluationCategory.CODE_REVIEW,
-            repo_path=repo,
-            output_dir=output_dir,
-            agent_version="e" * 40,
-            engine_path=engine_root,
-            cli_version="1.0.83",
-            leaf_execution="serial",
-            max_leaf_concurrency=4,
-            cli_timeout_minutes=30,
-        )
+
+        def run():
+            return run_pr_review_agent(
+                entry=entry,
+                model="gpt-5.6-sol",
+                category=EvaluationCategory.CODE_REVIEW,
+                repo_path=repo,
+                output_dir=output_dir,
+                agent_version="e" * 40,
+                engine_path=engine_root,
+                cli_version="1.0.83",
+                leaf_execution=leaf_execution,
+                max_leaf_concurrency=4,
+                cli_timeout_minutes=30,
+            )
+
+        if timeout:
+            with pytest.raises(AgentTimeoutError) as error:
+                run()
+            config = error.value.config
+            assert config is not None
+        else:
+            _, config = run()
+
+    assert config.pr_review == PRReviewConfiguration(
+        leaf_model="gpt-5.6-luna",
+        leaf_execution=leaf_execution,
+        max_leaf_concurrency=4,
+        copilot_cli_version="1.0.83",
+    )
 
     engine_env = run_process.call_args.kwargs["env"]
     assert engine_env["COPILOT_REVIEW_LEAF_MODEL"] == "gpt-5.6-luna"
-    assert engine_env["COPILOT_REVIEW_LEAF_EXECUTION"] == "serial"
+    assert engine_env["COPILOT_REVIEW_LEAF_EXECUTION"] == leaf_execution
     assert engine_env["COPILOT_REVIEW_MAX_LEAF_CONCURRENCY"] == "4"
     assert engine_env["COPILOT_REVIEW_CLI_TIMEOUT_MINUTES"] == "30"

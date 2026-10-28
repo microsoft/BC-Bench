@@ -32,7 +32,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentTimeoutError
-from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewConfiguration, PRReviewMetrics
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -243,7 +243,14 @@ def run_pr_review_agent(
         "AGENT_MINIMUM_SEVERITY": severity,
     }
 
-    config = ExperimentConfiguration()
+    config = ExperimentConfiguration(
+        pr_review=PRReviewConfiguration(
+            leaf_model=leaf_model,
+            leaf_execution=leaf_execution,
+            max_leaf_concurrency=max_leaf_concurrency,
+            copilot_cli_version=cli_version,
+        )
+    )
 
     start = time.monotonic()
     try:
