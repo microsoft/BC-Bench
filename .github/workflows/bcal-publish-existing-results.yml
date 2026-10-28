@@ -1,0 +1,110 @@
+name: Publish existing BCal results
+run-name: Publish BCal run ${{ inputs.source-run-id }} ${{ inputs.tier }}/${{ inputs.cohort }} [${{ inputs.study-id }}/${{ inputs.variant-id }}] x${{ inputs.repeat-count }}
+
+permissions:
+  actions: read
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      source-run-id:
+        description: "Completed BCal workflow run containing immutable evaluation artifacts"
+        required: true
+        type: string
+      tier:
+        description: "NL2AL dataset tier"
+        required: true
+        type: choice
+        options:
+          - gold
+          - challenge
+      cohort:
+        description: "Checked-in evaluation cohort name"
+        required: true
+        type: string
+      model:
+        description: "Generation model recorded by the source run"
+        required: true
+        default: "gpt-55-chat"
+        type: string
+      bcal-feed:
+        description: "BCal package feed recorded by the source run"
+        required: true
+        default: "experiment"
+        type: choice
+        options:
+          - official
+          - experiment
+      bcal-version:
+        description: "Exact BCal package version recorded by the source run"
+        required: true
+        type: string
+      study-id:
+        description: "Study identifier recorded by the source run"
+        required: true
+        type: string
+      variant-id:
+        description: "Variant identifier recorded by the source run"
+        required: true
+        type: string
+      bcal-common-base-sha:
+        description: "Common BCal source base SHA recorded by the source run"
+        required: true
+        type: string
+      bcal-variant-patch-sha:
+        description: "BCal variant patch SHA recorded by the source run"
+        required: true
+        type: string
+      repeat-count:
+        description: "Number of repetitions present in the source run"
+        required: true
+        default: 3
+        type: number
+
+jobs:
+  get-entries:
+    uses: $/.github/workflows/get-entries.yml
+    with:
+      category: nl2al
+      tier: ${{ inputs.tier }}
+      cohort: ${{ inputs.cohort }}
+      repeat-count: ${{ format('{0}', inputs.repeat-count) }}
+
+  publish-results:
+    needs: get-entries
+    strategy:
+      fail-fast: false
+      matrix:
+        repetition: ${{ fromJson(needs.get-entries.outputs.repetitions) }}
+    uses: $/.github/workflows/summarize-results.yml
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    with:
+      results-dir: evaluation_results
+      model: ${{ inputs.model }}
+      agent: BCal-external-command
+      category: nl2al
+      tier: ${{ inputs.tier }}
+      experiment: ${{ inputs.bcal-feed == 'experiment' }}
+      skip-leaderboard: true
+      expected-entries: ${{ needs.get-entries.outputs.entries }}
+      allow-incomplete-results: true
+      artifact-pattern: evaluation-results-${{ inputs.source-run-id }}-r${{ matrix.repetition }}-*
+      artifact-suffix: -source-${{ inputs.source-run-id }}-r${{ matrix.repetition }}
+      source-workflow-run-id: ${{ inputs.source-run-id }}
+      evaluation-run-id: ${{ inputs.source-run-id }}-r${{ matrix.repetition }}
+      cohort-name: ${{ needs.get-entries.outputs.cohort-name }}
+      cohort-sha256: ${{ needs.get-entries.outputs.cohort-sha256 }}
+      repetition-index: ${{ format('{0}', matrix.repetition) }}
+      repetition-count: ${{ needs.get-entries.outputs.repetition-count }}
+      bcal-feed: ${{ inputs.bcal-feed }}
+      bcal-version: ${{ inputs.bcal-version }}
+      study-id: ${{ inputs.study-id }}
+      variant-id: ${{ inputs.variant-id }}
+      bcal-common-base-sha: ${{ inputs.bcal-common-base-sha }}
+      bcal-variant-patch-sha: ${{ inputs.bcal-variant-patch-sha }}
+      git-ref: esbenk-bcal-staged-ablation
+    secrets: inherit

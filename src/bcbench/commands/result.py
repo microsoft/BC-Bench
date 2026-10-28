@@ -1,7 +1,8 @@
 import json
 import logging
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
@@ -36,6 +37,8 @@ def result_summarize(
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
     git_ref: Annotated[str | None, typer.Option("--git-ref", help="Git ref (branch/tag) the run was dispatched from; recorded in bceval metadata as git_branch")] = None,
+    expected_entries: Annotated[str | None, typer.Option(help="JSON array of selected instance IDs; incomplete or duplicate results block export")] = None,
+    allow_incomplete_results: Annotated[bool, typer.Option(help="Export available results while recording incomplete coverage diagnostics")] = False,
 ) -> None:
     """
     Summarize evaluation results from a completed run.
@@ -45,11 +48,16 @@ def result_summarize(
     run_dir: Path = result_dir / run_id
 
     if not run_dir.exists():
+        if expected_entries is not None:
+            run_dir.mkdir(parents=True, exist_ok=True)
+            _validate_selected_coverage([], expected_entries, run_dir, allow_incomplete=allow_incomplete_results)
         logger.error(f"Results directory not found: {run_dir}")
         raise typer.Exit(code=1)
 
     result_files = list(run_dir.rglob(result_pattern))
     if not result_files:
+        if expected_entries is not None:
+            _validate_selected_coverage([], expected_entries, run_dir, allow_incomplete=allow_incomplete_results)
         logger.error(f"No result files matching '{result_pattern}' found in {run_dir}")
         raise typer.Exit(code=1)
 
@@ -58,6 +66,8 @@ def result_summarize(
     result_files = [f for f in result_files if instance_pattern_regex.match(f.stem)]
 
     if not result_files:
+        if expected_entries is not None:
+            _validate_selected_coverage([], expected_entries, run_dir, allow_incomplete=allow_incomplete_results)
         logger.error(f"No instance-specific result files found in {run_dir}")
         raise typer.Exit(code=1)
 
@@ -68,8 +78,13 @@ def result_summarize(
             results.extend(BaseEvaluationResult.from_json(json.loads(line)) for line in f if line.strip())
 
     if not results:
+        if expected_entries is not None:
+            _validate_selected_coverage([], expected_entries, run_dir, allow_incomplete=allow_incomplete_results)
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
+
+    if expected_entries is not None:
+        _validate_selected_coverage(results, expected_entries, run_dir, allow_incomplete=allow_incomplete_results)
 
     write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
 
@@ -81,6 +96,37 @@ def result_summarize(
         create_console_summary(results, summary)
 
     summary.save(run_dir, summary_output)
+
+
+def _validate_selected_coverage(results: Sequence[BaseEvaluationResult], selected_json: str, run_dir: Path, *, allow_incomplete: bool = False) -> None:
+    try:
+        selected = json.loads(selected_json)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter("expected-entries must be a JSON array of instance IDs") from exc
+
+    if not isinstance(selected, list) or not selected or not all(isinstance(value, str) and value for value in selected):
+        raise typer.BadParameter("expected-entries must be a nonempty JSON array of instance IDs")
+
+    expected = set(selected)
+    if len(expected) != len(selected):
+        raise typer.BadParameter("expected-entries contains duplicate IDs")
+
+    observed = Counter(result.instance_id for result in results)
+    coverage = {
+        "expected_entry_count": len(expected),
+        "produced_entry_count": len(observed),
+        "missing_entries": sorted(expected - observed.keys()),
+        "unexpected_entries": sorted(observed.keys() - expected),
+        "duplicate_entries": sorted(instance_id for instance_id, count in observed.items() if count != 1),
+    }
+    (run_dir / "evaluation_coverage.json").write_text(json.dumps(coverage, indent=2) + "\n", encoding="utf-8")
+
+    invalid_coverage = bool(coverage["missing_entries"] or coverage["unexpected_entries"] or coverage["duplicate_entries"])
+    if invalid_coverage and not allow_incomplete:
+        logger.error("Selected dataset coverage is incomplete or invalid; refusing scoring upload: %s", coverage)
+        raise typer.Exit(code=1)
+    if invalid_coverage:
+        logger.warning("Publishing available results with incomplete coverage: %s", coverage)
 
 
 def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[LeaderboardAggregate]:

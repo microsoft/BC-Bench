@@ -34,6 +34,86 @@ on:
         required: false
         type: boolean
         default: false
+      expected-entries:
+        description: "Optional JSON array of selected entry IDs; require complete results before scoring upload"
+        required: false
+        type: string
+        default: ""
+      allow-incomplete-results:
+        description: "Publish available rows with explicit incomplete-coverage diagnostics"
+        required: false
+        type: boolean
+        default: false
+      artifact-pattern:
+        description: "Optional artifact pattern used to isolate one repeated evaluation"
+        required: false
+        type: string
+        default: ""
+      artifact-suffix:
+        description: "Optional suffix for summary and coverage artifacts"
+        required: false
+        type: string
+        default: ""
+      source-workflow-run-id:
+        description: "Optional prior workflow run ID containing immutable result artifacts"
+        required: false
+        type: string
+        default: ""
+      evaluation-run-id:
+        description: "Optional result-directory run ID, distinct from the publication workflow run ID"
+        required: false
+        type: string
+        default: ""
+      cohort-name:
+        description: "Optional evaluation cohort name"
+        required: false
+        type: string
+        default: ""
+      cohort-sha256:
+        description: "Optional evaluation cohort manifest SHA-256"
+        required: false
+        type: string
+        default: ""
+      repetition-index:
+        description: "One-based repetition index"
+        required: false
+        type: string
+        default: "1"
+      repetition-count:
+        description: "Total repetition count"
+        required: false
+        type: string
+        default: "1"
+      bcal-feed:
+        description: "BCal package feed label"
+        required: false
+        type: string
+        default: ""
+      bcal-version:
+        description: "Exact BCal package version"
+        required: false
+        type: string
+        default: ""
+      study-id:
+        description: "Study identifier"
+        required: false
+        type: string
+        default: ""
+      variant-id:
+        description: "Study variant identifier"
+        required: false
+        type: string
+        default: ""
+      bcal-common-base-sha:
+        description: "Common BCal source base SHA"
+        required: false
+        type: string
+        default: ""
+      bcal-variant-patch-sha:
+        description: "BCal variant patch SHA"
+        required: false
+        type: string
+        default: ""
       skip-leaderboard:
         description: "Whether to skip updating the leaderboard"
         required: false
@@ -56,6 +136,7 @@ jobs:
       name: ado-read
       deployment: false
     permissions:
+      actions: read
       contents: write
       id-token: write
     runs-on: ubuntu-latest
@@ -64,6 +145,19 @@ jobs:
       EVALUATION_AGENT: ${{ inputs.agent }}
       EVALUATION_MODEL: ${{ inputs.model }}
       EVALUATION_GIT_REF: ${{ inputs.git-ref || github.ref_name }}
+      EXPECTED_ENTRIES: ${{ inputs.expected-entries }}
+      RESULT_RUN_ID: ${{ inputs.evaluation-run-id || github.run_id }}
+      SOURCE_WORKFLOW_RUN_ID: ${{ inputs.source-workflow-run-id || github.run_id }}
+      COHORT_NAME: ${{ inputs.cohort-name }}
+      COHORT_SHA256: ${{ inputs.cohort-sha256 }}
+      REPETITION_INDEX: ${{ inputs.repetition-index }}
+      REPETITION_COUNT: ${{ inputs.repetition-count }}
+      BCAL_FEED: ${{ inputs.bcal-feed }}
+      BCAL_VERSION: ${{ inputs.bcal-version }}
+      STUDY_ID: ${{ inputs.study-id }}
+      VARIANT_ID: ${{ inputs.variant-id }}
+      BCAL_COMMON_BASE_SHA: ${{ inputs.bcal-common-base-sha }}
+      BCAL_VARIANT_PATCH_SHA: ${{ inputs.bcal-variant-patch-sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,20 +165,80 @@ jobs:
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
 
+      - name: Resolve source workflow metadata
+        id: source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          head_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_WORKFLOW_RUN_ID}" --jq '.head_sha')"
+          if [[ ! "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Source workflow run did not resolve to a full commit SHA."
+            exit 1
+          fi
+          echo "head-sha=$head_sha" >> "$GITHUB_OUTPUT"
+
       - name: Download all evaluation results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          pattern: ${{ inputs.artifact-pattern || '*' }}
           path: ${{ inputs.results-dir }}/
           merge-multiple: true
+          run-id: ${{ inputs.source-workflow-run-id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summarize evaluation results
-        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "$EVALUATION_GIT_REF"
+        shell: bash
+        run: |
+          cmd=(uv run bcbench result summarize
+            --run-id "$RESULT_RUN_ID"
+            --category "${{ inputs.category }}"
+            --result-dir "${{ inputs.results-dir }}"
+            --bceval-output "$BCEVAL_RESULT_FILE"
+            --summary-output "$SUMMARY_OUTPUT_FILE"
+            --git-ref "$EVALUATION_GIT_REF")
+          if [[ -n "$EXPECTED_ENTRIES" ]]; then
+            cmd+=(--expected-entries "$EXPECTED_ENTRIES")
+          fi
+          if [[ "${{ inputs.allow-incomplete-results }}" == "true" ]]; then
+            cmd+=(--allow-incomplete-results)
+          fi
+          "${cmd[@]}"
+
+      - name: Read evaluation coverage
+        id: coverage
+        if: always()
+        shell: bash
+        run: |
+          coverage_file="${{ inputs.results-dir }}/${{ inputs.evaluation-run-id || github.run_id }}/evaluation_coverage.json"
+          if [[ ! -f "$coverage_file" ]]; then
+            echo "complete=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          expected="$(jq -r '.expected_entry_count' "$coverage_file")"
+          produced="$(jq -r '.produced_entry_count' "$coverage_file")"
+          missing="$(jq -r '.missing_entries | length' "$coverage_file")"
+          unexpected="$(jq -r '.unexpected_entries | length' "$coverage_file")"
+          duplicates="$(jq -r '.duplicate_entries | length' "$coverage_file")"
+          complete="$([[ "$missing" == 0 && "$unexpected" == 0 && "$duplicates" == 0 ]] && echo true || echo false)"
+          echo "complete=$complete" >> "$GITHUB_OUTPUT"
+          echo "expected=$expected" >> "$GITHUB_OUTPUT"
+          echo "produced=$produced" >> "$GITHUB_OUTPUT"
+
+      - name: Upload evaluation coverage diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evaluation-coverage${{ inputs.artifact-suffix }}
+          path: ${{ inputs.results-dir }}/${{ inputs.evaluation-run-id || github.run_id }}/evaluation_coverage.json
+          if-no-files-found: ignore
+          retention-days: ${{ inputs.mock && 1 || 30 }}
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: evaluation-summary
-          path: ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}
+          name: evaluation-summary${{ inputs.artifact-suffix }}
+          path: ${{ inputs.results-dir }}/${{ inputs.evaluation-run-id || github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}
           if-no-files-found: error
           retention-days: ${{ inputs.mock && 1 || 30 }}
 
@@ -118,6 +272,28 @@ jobs:
           BRANCH_TAG="${BRANCH_TAG//./-}"
           RUN_NAME="${EVALUATION_AGENT} (${EVALUATION_MODEL}) - #${GITHUB_RUN_ID}"
           RUN_TAGS="${EVALUATION_AGENT},${MODEL_TAG},${BRANCH_TAG},tier-${EVALUATION_TIER}"
+          if [[ -n "$COHORT_NAME" ]]; then
+            RUN_NAME="${RUN_NAME} [cohort:${COHORT_NAME}]"
+            RUN_TAGS="${RUN_TAGS},cohort-${COHORT_NAME},cohort-sha256-${COHORT_SHA256}"
+          fi
+          if [[ "$REPETITION_COUNT" -gt 1 ]]; then
+            RUN_NAME="${RUN_NAME} [repetition:${REPETITION_INDEX}/${REPETITION_COUNT}]"
+            RUN_TAGS="${RUN_TAGS},repetition-${REPETITION_INDEX}-of-${REPETITION_COUNT}"
+          fi
+          if [[ -n "$STUDY_ID" ]]; then
+            RUN_NAME="${RUN_NAME} [${STUDY_ID}/${VARIANT_ID}]"
+            RUN_TAGS="${RUN_TAGS},study-${STUDY_ID},variant-${VARIANT_ID},bcal-common-base-${BCAL_COMMON_BASE_SHA},bcal-variant-patch-${BCAL_VARIANT_PATCH_SHA}"
+          fi
+          if [[ -n "$BCAL_FEED" ]]; then
+            RUN_TAGS="${RUN_TAGS},bcal-feed-${BCAL_FEED},bcal-version-${BCAL_VERSION}"
+          fi
+          if [[ "$SOURCE_WORKFLOW_RUN_ID" != "$GITHUB_RUN_ID" ]]; then
+            RUN_NAME="${RUN_NAME} [source-run:${SOURCE_WORKFLOW_RUN_ID}]"
+            RUN_TAGS="${RUN_TAGS},source-workflow-run-${SOURCE_WORKFLOW_RUN_ID}"
+          fi
+          if [[ "${{ steps.coverage.outputs.complete }}" != "unknown" ]]; then
+            RUN_TAGS="${RUN_TAGS},coverage-${{ steps.coverage.outputs.complete == 'true' && 'complete' || 'incomplete' }},coverage-${{ steps.coverage.outputs.produced }}-of-${{ steps.coverage.outputs.expected }}"
+          fi
           if [[ "$EVALUATION_TIER" != "gold" ]]; then
             RUN_NAME="${RUN_NAME} [${EVALUATION_TIER}]"
           fi
@@ -127,8 +303,8 @@ jobs:
             --eval-suite-name "${{ inputs.category }}" \
             --eval-run-name "$RUN_NAME" \
             --tags "$RUN_TAGS" \
-            --source "${{ github.sha }}" \
-            --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
+            --source "${{ steps.source.outputs.head-sha }}" \
+            --input-file "${{ inputs.results-dir }}/${{ inputs.evaluation-run-id || github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
             --evaluators "${{ steps.bceval.outputs.evaluators }}" \
             --core-score "${{ steps.bceval.outputs.core_score }}" \

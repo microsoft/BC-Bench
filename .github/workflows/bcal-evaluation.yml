@@ -251,18 +251,24 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: evaluation-results-${{ github.run_id }}${{ inputs.repeat-count > 1 && format('-r{0}', matrix.repetition) || '' }}-${{ matrix.entry }}
+          name: evaluation-results-${{ github.run_id }}${{ (inputs.cohort != '' || inputs.repeat-count > 1) && format('-r{0}', matrix.repetition) || '' }}-${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: evaluate-with-bcal
+    needs: [validate-study, get-entries, evaluate-with-bcal]
+    if: ${{ always() && !cancelled() && needs.validate-study.result == 'success' && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        repetition: ${{ fromJson(needs.get-entries.outputs.repetitions) }}
     uses: $/.github/workflows/summarize-results.yml
     permissions:
+      actions: read
       contents: write
       id-token: write
     with:
-      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
+      results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir || 'evaluation_results' }}
       model: ${{ inputs.external-model || 'gpt-55-chat' }}
       agent: BCal-external-command
       mock: ${{ inputs.test-run || false }}
@@ -270,4 +276,19 @@ jobs:
       tier: ${{ inputs.tier || 'gold' }}
       experiment: ${{ inputs.bcal-feed == 'experiment' }}
       skip-leaderboard: true
+      expected-entries: ${{ needs.get-entries.outputs.entries }}
+      allow-incomplete-results: true
+      artifact-pattern: evaluation-results-${{ github.run_id }}${{ (inputs.cohort != '' || inputs.repeat-count > 1) && format('-r{0}', matrix.repetition) || '' }}-*
+      artifact-suffix: ${{ (inputs.cohort != '' || inputs.repeat-count > 1) && format('-r{0}', matrix.repetition) || '' }}
+      evaluation-run-id: ${{ (inputs.cohort != '' || inputs.repeat-count > 1) && format('{0}-r{1}', github.run_id, matrix.repetition) || github.run_id }}
+      cohort-name: ${{ needs.get-entries.outputs.cohort-name }}
+      cohort-sha256: ${{ needs.get-entries.outputs.cohort-sha256 }}
+      repetition-index: ${{ format('{0}', matrix.repetition) }}
+      repetition-count: ${{ needs.get-entries.outputs.repetition-count }}
+      bcal-feed: ${{ inputs.bcal-feed || 'official' }}
+      bcal-version: ${{ inputs.bcal-version || 'latest' }}
+      study-id: ${{ inputs.study-id }}
+      variant-id: ${{ inputs.variant-id }}
+      bcal-common-base-sha: ${{ inputs.bcal-common-base-sha }}
+      bcal-variant-patch-sha: ${{ inputs.bcal-variant-patch-sha }}
     secrets: inherit
