@@ -214,6 +214,27 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Collect bounded CLI failure diagnostic
+        if: always() && steps.evaluate-review.outcome == 'failure' && inputs.review-integration != 'none'
+        shell: pwsh
+        env:
+          ENTRY_ID: ${{ matrix.entry }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: |
+          python (Join-Path 'tools' 'collect_pr_review_failure.py') `
+            --source-dir (Join-Path $env:EVALUATION_RESULTS_DIR $env:WORKFLOW_RUN_ID) `
+            --output-dir (Join-Path (Join-Path $env:EVALUATION_RESULTS_DIR 'failure-diagnostic') $env:ENTRY_ID)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload bounded CLI failure diagnostic
+        if: always() && steps.evaluate-review.outcome == 'failure' && inputs.review-integration != 'none'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: failure-diagnostic-${{ github.run_id }}-${{ matrix.entry }}
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/failure-diagnostic/${{ matrix.entry }}/failure-diagnostic.json
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Upload evaluation results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
