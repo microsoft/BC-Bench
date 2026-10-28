@@ -76,7 +76,7 @@ runs:
         } | ConvertTo-Json -Compress -Depth 5
         $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
 
-        $versionArgs = if ($env:BCAL_REQUESTED_VERSION) { @("--version", $env:BCAL_REQUESTED_VERSION) } else { @("--prerelease") }
+        [string[]]$versionArgs = if ($env:BCAL_REQUESTED_VERSION) { @("--version", $env:BCAL_REQUESTED_VERSION) } else { @("--prerelease") }
 
         # The ADO Artifacts NuGet credential provider intermittently fails to load the service index; retry transient feed errors.
         for ($attempt = 1; $attempt -le 3; $attempt++) {
