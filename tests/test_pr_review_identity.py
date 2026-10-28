@@ -82,6 +82,25 @@ def test_serial_concurrency_is_not_part_of_identity() -> None:
     assert not first.experiment.is_empty()
 
 
+def test_serial_metrics_preserve_normalized_routing_identity() -> None:
+    config = _configuration()
+    summaries = [
+        EvaluationResultSummary.from_results(
+            [
+                create_codereview_result(
+                    agent_name=AgentHarness.PR_REVIEW,
+                    metrics=PRReviewMetrics(leaf_execution="serial", max_leaf_concurrency=concurrency),
+                ).model_copy(update={"experiment": config})
+            ],
+            "run",
+        )
+        for concurrency in (1, 99)
+    ]
+
+    assert summaries[0].combination_key() == summaries[1].combination_key()
+    assert CodeReviewLeaderboardAggregate.from_runs(summaries).num_runs == 2
+
+
 @pytest.mark.parametrize(
     "config",
     [
