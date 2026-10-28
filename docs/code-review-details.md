@@ -49,7 +49,9 @@ Diagnostic averages use only tasks that reported the metric. Cross-run averages 
   <thead>
     <tr>
       <th>Agent</th>
-      <th>Model</th>
+      <th>Root model</th>
+      <th>Definition</th>
+      <th>Definition ID</th>
       <th>Configuration</th>
       <th>Models (leaf → root)</th>
       <th>Leaf Model</th>
@@ -99,6 +101,10 @@ Diagnostic averages use only tasks that reported the metric. Cross-run averages 
       <th>Copilot CLI</th>
       <th>BC-ALAgents</th>
       <th>BCQuality</th>
+      <th>Leaf model</th>
+      <th>Leaf scheduling</th>
+      <th>Review policy</th>
+      <th>BCQuality source snapshot</th>
     </tr>
   </thead>
   <tbody>
@@ -107,6 +113,8 @@ Diagnostic averages use only tasks that reported the metric. Cross-run averages 
     <tr>
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
+      <td>{{ agg.definition_name | default: agg.model }}</td>
+      <td>{% if agg.definition_id %}<code>{{ agg.definition_id }}</code>{% else %}—{% endif %}</td>
       <td>{% if agg.experiment %}<code>{{ agg.experiment | jsonify }}</code>{% else %}Baseline{% endif %}</td>
       <td>{% if agg.models and agg.models.size > 0 %}<code>{{ agg.models | join: " → " }}</code>{% else %}—{% endif %}</td>
       <td>{% if agg.leaf_model %}{{ agg.leaf_model }}{% else %}—{% endif %}</td>
@@ -156,6 +164,10 @@ Diagnostic averages use only tasks that reported the metric. Cross-run averages 
       <td>{% if agg.copilot_cli_version %}{{ agg.copilot_cli_version }}{% else %}—{% endif %}</td>
       <td>{% if agg.bc_alagents_commit %}<a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">{{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
       <td>{% if agg.bcquality_commit %}<a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">{{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% else %}—{% endif %}</td>
+      <td>{% if agg.leaf_model %}{{ agg.leaf_model }}{% else %}—{% endif %}</td>
+      <td>{% if agg.leaf_execution %}{{ agg.leaf_execution }} ({{ agg.max_leaf_concurrency }}){% else %}—{% endif %}</td>
+      <td>{% if agg.minimum_severity %}knowledge ≥ {{ agg.minimum_severity }}; agent ≥ {{ agg.agent_minimum_severity }}; {{ agg.cli_timeout_minutes }}m{% else %}—{% endif %}</td>
+      <td>{% if agg.bcquality_source_snapshot %}<code>{{ agg.bcquality_source_snapshot }}</code>{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -174,7 +186,9 @@ Diagnostic averages use only tasks that reported the metric. Cross-run averages 
     <tr>
       <th>Run</th>
       <th>Agent</th>
-      <th>Model</th>
+      <th>Root model</th>
+      <th>Definition</th>
+      <th>Definition ID</th>
       <th>Configuration</th>
       <th>Models (leaf → root)</th>
       <th>Leaf Model</th>
@@ -230,6 +244,10 @@ Diagnostic averages use only tasks that reported the metric. Cross-run averages 
       <th>Copilot CLI</th>
       <th>BC-ALAgents</th>
       <th>BCQuality</th>
+      <th>Leaf model</th>
+      <th>Leaf scheduling</th>
+      <th>Review policy</th>
+      <th>BCQuality source snapshot</th>
     </tr>
   </thead>
   <tbody>
@@ -239,6 +257,8 @@ Diagnostic averages use only tasks that reported the metric. Cross-run averages 
       <td>{% if run.github_run_id %}<a href="https://github.com/microsoft/BC-Bench/actions/runs/{{ run.github_run_id }}" target="_blank">{{ run.github_run_id }}</a>{% else %}—{% endif %}</td>
       <td>{{ run.agent_name }}</td>
       <td>{{ run.model }}</td>
+      <td>{{ run.definition_name | default: run.model }}</td>
+      <td>{% if run.definition_id %}<code>{{ run.definition_id }}</code>{% else %}—{% endif %}</td>
       <td>{% if run.experiment %}<code>{{ run.experiment | jsonify }}</code>{% else %}Baseline{% endif %}</td>
       <td>{% if run.models and run.models.size > 0 %}<code>{{ run.models | join: " → " }}</code>{% else %}—{% endif %}</td>
       <td>{% if run.leaf_model %}{{ run.leaf_model }}{% else %}—{% endif %}</td>
@@ -294,6 +314,10 @@ Diagnostic averages use only tasks that reported the metric. Cross-run averages 
       <td>{% if run.copilot_cli_version %}{{ run.copilot_cli_version }}{% else %}—{% endif %}</td>
       <td>{% if run.bc_alagents_commit %}<a href="https://github.com/{{ run.bc_alagents_repository }}/commit/{{ run.bc_alagents_commit }}" target="_blank">{{ run.bc_alagents_commit | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
       <td>{% if run.bcquality_commit %}<a href="https://github.com/{{ run.bcquality_repository }}/commit/{{ run.bcquality_commit }}" target="_blank">{{ run.bcquality_commit | slice: 0, 8 }}</a>{% if run.bcquality_version %} ({{ run.bcquality_version }}){% endif %}{% else %}—{% endif %}</td>
+      <td>{% if run.leaf_model %}{{ run.leaf_model }}{% else %}—{% endif %}</td>
+      <td>{% if run.leaf_execution %}{{ run.leaf_execution }} ({{ run.max_leaf_concurrency }}){% else %}—{% endif %}</td>
+      <td>{% if run.minimum_severity %}knowledge ≥ {{ run.minimum_severity }}; agent ≥ {{ run.agent_minimum_severity }}; {{ run.cli_timeout_minutes }}m{% else %}—{% endif %}</td>
+      <td>{% if run.bcquality_source_snapshot %}<code>{{ run.bcquality_source_snapshot }}</code>{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
