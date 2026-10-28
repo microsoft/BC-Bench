@@ -363,10 +363,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             self.bcquality_repository,
             self.bcquality_commit,
             self.bcquality_version,
-            tuple(self.models) if self.models is not None else None,
+            tuple(self.models) if self.models else None,
             self.leaf_model,
             self.leaf_execution,
-            self.max_leaf_concurrency,
+            self.max_leaf_concurrency if self.leaf_execution == "parallel" else None,
             self.bcquality_source_snapshot,
             self.review_process_count,
         )
