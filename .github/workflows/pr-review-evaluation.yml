@@ -237,6 +237,8 @@ jobs:
       mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.review-integration == 'none' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
+      experiment: true
+      skip-leaderboard: true
     secrets: inherit
 
   requeue:

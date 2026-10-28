@@ -41,12 +41,22 @@ PROBLEM_STATEMENT_CONTENT = "# Test Problem Statement\n\nThis is a test task."
 
 
 @pytest.fixture(scope="module")
-def before_style_cleanup() -> bytes:
+def before_fixture_repairs() -> bytes:
     dataset = EvaluationCategory.CODE_REVIEW.dataset_path
+    snapshot = Path(__file__).parent / "fixtures" / "codereview-fixture-repairs-baseline.jsonl"
+    frozen = {json.loads(line)["instance_id"]: line for line in snapshot.read_bytes().splitlines(keepends=True)}
+    assert len(frozen) == 7
+    restored = b"".join(frozen.get(json.loads(line)["instance_id"], line) for line in dataset.read_bytes().splitlines(keepends=True))
+    assert sha256(restored).hexdigest() == "4c925f0f45c77018681e71f84fd3750bf918f12d6c15192d07024e9c52655235"
+    return restored
+
+
+@pytest.fixture(scope="module")
+def before_style_cleanup(before_fixture_repairs: bytes) -> bytes:
     snapshot = Path(__file__).parent / "fixtures" / "codereview-style-cleanup-baseline.jsonl"
     frozen = {json.loads(line)["instance_id"]: line for line in snapshot.read_bytes().splitlines(keepends=True)}
     assert len(frozen) == 14
-    restored = b"".join(frozen.get(json.loads(line)["instance_id"], line) for line in dataset.read_bytes().splitlines(keepends=True))
+    restored = b"".join(frozen.get(json.loads(line)["instance_id"], line) for line in before_fixture_repairs.splitlines(keepends=True))
     assert sha256(restored).hexdigest() == "2499ef2792e99b7c02b983da5cd0c3810158968767b16705ec35a2338e5a844f"
     return restored
 

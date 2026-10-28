@@ -98,6 +98,21 @@ def test_experiment_workflow_freezes_root_leaf_cli_and_both_severity_floors() ->
     assert config["judges"]["code-review"]["model"] == "gpt-5.3-codex"
 
 
+@pytest.mark.parametrize("filename", ["CI.yml", "pr-review-evaluation.yml"])
+def test_fixture_experiment_routes_uploads_away_from_baselines_and_leaderboard(filename: str) -> None:
+    workflow = yaml.safe_load(_workflow(filename))
+    summary = yaml.safe_load(_workflow("summarize-results.yml"))
+    inputs = workflow["jobs"]["summarize-results"]["with"]
+    upload = next(step for step in summary["jobs"]["summarize-results"]["steps"] if step["name"] == "Upload result using bceval")
+    leaderboard = next(step for step in summary["jobs"]["summarize-results"]["steps"] if step["name"] == "Update leaderboard in a new branch")
+
+    assert inputs["experiment"] is True
+    assert inputs["skip-leaderboard"] is True
+    assert summary[True]["workflow_call"]["inputs"]["experiment"]["default"] is False
+    assert "${{ inputs.experiment && '--eval-run-type experiment' || '' }}" in upload["run"]
+    assert "inputs.skip-leaderboard" in leaderboard["if"]
+
+
 def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
     """An override runs a revision other than the reviewed default pin, so it must stay off the dashboards."""
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))

@@ -7,7 +7,6 @@ import pytest
 from unidiff import PatchSet
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewCommentKind, Severity
-from bcbench.types import EvaluationCategory
 
 _RENAMES = {
     "performance-001": {
@@ -106,13 +105,13 @@ def _expected_files(case, sources):
 
 
 @pytest.fixture(scope="module")
-def style_cleanup_entries(before_style_cleanup):
+def style_cleanup_entries(before_style_cleanup, before_fixture_repairs):
     before = {e.instance_id: e for e in map(CodeReviewEntry.model_validate_json, before_style_cleanup.splitlines())}
-    after = {e.instance_id: e for e in CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path)}
+    after = {e.instance_id: e for e in map(CodeReviewEntry.model_validate_json, before_fixture_repairs.splitlines())}
     return before, after
 
 
-def test_style_cleanup_scope_and_frozen_identity(before_style_cleanup, style_cleanup_entries):
+def test_style_cleanup_scope_and_frozen_identity(before_style_cleanup, before_fixture_repairs, style_cleanup_entries):
     before, after = style_cleanup_entries
     assert sha256(before_style_cleanup).hexdigest() == "2499ef2792e99b7c02b983da5cd0c3810158968767b16705ec35a2338e5a844f"
     assert len(_CASES) == 14
@@ -130,7 +129,7 @@ def test_style_cleanup_scope_and_frozen_identity(before_style_cleanup, style_cle
     )
     assert before["synthetic__style-015"] == after["synthetic__style-015"]
     original_rows = {json.loads(line)["instance_id"]: line for line in before_style_cleanup.splitlines(keepends=True)}
-    for line in EvaluationCategory.CODE_REVIEW.dataset_path.read_bytes().splitlines(keepends=True):
+    for line in before_fixture_repairs.splitlines(keepends=True):
         current = json.loads(line)
         original = json.loads(original_rows[current["instance_id"]])
         if current["instance_id"] not in {"synthetic__" + case for case in _CASES}:

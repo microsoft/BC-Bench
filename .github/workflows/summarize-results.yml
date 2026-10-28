@@ -24,6 +24,11 @@ on:
         description: "Evaluation category"
         required: true
         type: string
+      experiment:
+        description: "Mark the run as an experiment rather than a baseline"
+        required: false
+        type: boolean
+        default: false
       dataset:
         description: "Optional NL2AL dataset selector (gold or challenge)"
         required: false
@@ -194,6 +199,7 @@ jobs:
             --core-score "${{ steps.bceval.outputs.core_score }}" \
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
+            ${{ inputs.experiment && '--eval-run-type experiment' || '' }} \
             ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
 
       - name: Update leaderboard in a new branch

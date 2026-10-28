@@ -160,5 +160,7 @@ jobs:
       model: ${{ github.run_id }}
       agent: "mock-agent"
       mock: true
+      experiment: true
+      skip-leaderboard: true
       category: ${{ needs.select-category.outputs.category }}
     secrets: inherit
