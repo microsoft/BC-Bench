@@ -99,6 +99,9 @@ def test_native_path_probe_is_isolated_and_never_invokes_a_prompt() -> None:
     assert script.count("env -i ") == 2
     assert "@github/copilot@1.0.88" in script
     assert "pathResolvedSessionEventsPath(null, null, home, identifier)" in script
+    assert '"prebuilds", "linux-x64", "runtime.node"' in script
+    assert '"runtime.linux-x64-gnu.node"' in script
+    assert "fs.readSync(descriptor, header, 0, 4, 0)" in script
     for excluded in ("${{ secrets.", "${{ github.token", "upload-artifact", "checkout@", "--prompt", "sessionCreate", "sessionConstruct", "COPILOT_GITHUB_TOKEN", "GH_TOKEN"):
         assert excluded not in text
     assert "console.log(JSON.stringify({ status, ...checks }))" in script

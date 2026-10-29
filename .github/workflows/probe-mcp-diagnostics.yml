@@ -66,9 +66,25 @@ jobs:
             if (!packageRoot) {
               finish("fixed_platform_layout_unverified");
             } else {
-              const native = path.join(packageRoot, "prebuilds", "linux-x64", "runtime.node");
-              if (!fs.existsSync(native)) {
-                finish("standalone_native_resolver_unavailable", { fixed_platform_verified: true });
+              const layouts = [
+                path.join(packageRoot, "prebuilds", "linux-x64", "runtime.node"),
+                path.join(packageRoot, "runtime.linux-x64-gnu.node")
+              ];
+              const native = layouts.find(candidate => fs.existsSync(candidate));
+              if (!native) {
+                const descriptor = fs.openSync(entry, "r");
+                const header = Buffer.alloc(4);
+                try {
+                  fs.readSync(descriptor, header, 0, 4, 0);
+                } finally {
+                  fs.closeSync(descriptor);
+                }
+                finish("documented_native_layouts_unavailable", {
+                  fixed_platform_verified: true,
+                  entry_is_elf: header.equals(Buffer.from([127, 69, 76, 70])),
+                  separate_app_js_present: fs.existsSync(path.join(packageRoot, "app.js")),
+                  separate_runtime_schema_present: fs.existsSync(path.join(packageRoot, "schemas", "session-events.schema.json"))
+                });
               } else {
                 const runtime = require(native);
                 const available = ["pathOsHomeDir", "pathResolvedSessionsHome", "pathResolvedSessionEventsPath"]
