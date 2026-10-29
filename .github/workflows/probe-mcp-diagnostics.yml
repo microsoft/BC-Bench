@@ -1,0 +1,98 @@
+name: Probe isolated CLI event-store
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Inspect fixed distribution without credentials or prompts
+        shell: bash
+        run: |
+          set -eu
+          root="$(mktemp -d)"
+          mkdir -p "$root/home" "$root/tmp" "$root/config" "$root/cache"
+          touch "$root/user.npmrc" "$root/global.npmrc"
+          if ! env -i PATH="$PATH" HOME="$root/home" TMPDIR="$root/tmp" \
+            XDG_CONFIG_HOME="$root/config" \
+            NPM_CONFIG_USERCONFIG="$root/user.npmrc" \
+            NPM_CONFIG_GLOBALCONFIG="$root/global.npmrc" \
+            NPM_CONFIG_CACHE="$root/cache" \
+            npm install --prefix "$root/install" --no-save --package-lock=false \
+              --no-audit --no-fund @github/copilot@1.0.88 \
+              >"$root/install.log" 2>&1; then
+            echo '{"status":"installation_unavailable"}'
+            exit 1
+          fi
+          env -i PATH="$PATH" HOME="$root/home" TMPDIR="$root/tmp" \
+            XDG_CONFIG_HOME="$root/config" \
+            node - "$root/install" "$root/home" <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const { createRequire } = require("node:module");
+          const install = process.argv[2];
+          const home = process.argv[3];
+          function finish(status, checks = {}) {
+            console.log(JSON.stringify({ status, ...checks }));
+            process.exitCode = status === "path_contract_verified" ? 0 : 1;
+          }
+          try {
+            const localRequire = createRequire(path.join(install, "package.json"));
+            const entry = localRequire.resolve("@github/copilot-linux-x64");
+            let directory = path.dirname(entry);
+            let packageRoot;
+            for (let depth = 0; depth < 3; depth++) {
+              if (!directory.startsWith(install + path.sep)) break;
+              const metadata = path.join(directory, "package.json");
+              if (fs.existsSync(metadata)) {
+                const value = JSON.parse(fs.readFileSync(metadata, "utf8"));
+                if (value.name === "@github/copilot-linux-x64" && value.version === "1.0.88") {
+                  packageRoot = directory;
+                  break;
+                }
+              }
+              directory = path.dirname(directory);
+            }
+            if (!packageRoot) {
+              finish("fixed_platform_layout_unverified");
+            } else {
+              const native = path.join(packageRoot, "prebuilds", "linux-x64", "runtime.node");
+              if (!fs.existsSync(native)) {
+                finish("standalone_native_resolver_unavailable", { fixed_platform_verified: true });
+              } else {
+                const runtime = require(native);
+                const available = ["pathOsHomeDir", "pathResolvedSessionsHome", "pathResolvedSessionEventsPath"]
+                  .every(name => typeof runtime[name] === "function");
+                if (!available) {
+                  finish("native_contract_unavailable", { fixed_platform_verified: true });
+                } else {
+                  const identifier = "00000000-0000-4000-8000-000000000001";
+                  const sessions = runtime.pathResolvedSessionsHome(null, null, home);
+                  const events = runtime.pathResolvedSessionEventsPath(null, null, home, identifier);
+                  const checks = {
+                    fixed_platform_verified: true,
+                    isolated_home_verified: runtime.pathOsHomeDir() === home,
+                    sessions_path_verified: sessions === path.join(home, ".copilot", "session-state"),
+                    events_path_verified: events === path.join(sessions, identifier, "events.jsonl"),
+                    real_session_opened: false,
+                    prompt_sent: false
+                  };
+                  const valid = checks.isolated_home_verified && checks.sessions_path_verified && checks.events_path_verified;
+                  finish(valid ? "path_contract_verified" : "path_contract_mismatch", checks);
+                }
+              }
+            }
+          } catch {
+            finish("probe_unavailable");
+          }
+          NODE

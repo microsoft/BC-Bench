@@ -85,3 +85,20 @@ def test_failure_workflow_upload_is_explicit_short_lived_and_post_failure_only()
     assert upload["with"]["path"] == "${{ env.EVALUATION_RESULTS_DIR }}/failure-diagnostic/${{ matrix.entry }}/failure-diagnostic.json"
     assert "*" not in upload["with"]["path"]
     assert steps.index(collect) > next(index for index, step in enumerate(steps) if step.get("id") == "evaluate-review")
+
+
+def test_native_path_probe_is_isolated_and_never_invokes_a_prompt() -> None:
+    text = (ROOT / ".github" / "workflows" / "probe-mcp-diagnostics.yml").read_text()
+    workflow = yaml.safe_load(text)
+    assert workflow.get("on", workflow.get(True)) == {"workflow_dispatch": None}
+    assert workflow["permissions"] == {"contents": "read"}
+    assert list(workflow["jobs"]) == ["probe"]
+    steps = workflow["jobs"]["probe"]["steps"]
+    assert len(steps) == 2
+    script = steps[1]["run"]
+    assert script.count("env -i ") == 2
+    assert "@github/copilot@1.0.88" in script
+    assert "pathResolvedSessionEventsPath(null, null, home, identifier)" in script
+    for excluded in ("${{ secrets.", "${{ github.token", "upload-artifact", "checkout@", "--prompt", "sessionCreate", "sessionConstruct", "COPILOT_GITHUB_TOKEN", "GH_TOKEN"):
+        assert excluded not in text
+    assert "console.log(JSON.stringify({ status, ...checks }))" in script
