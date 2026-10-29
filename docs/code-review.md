@@ -97,6 +97,34 @@ The inline patches in `dataset/codereview.jsonl` are the canonical fixture sourc
 
 All 14 complete fixtures were compiled before and after with the same official BC27 compiler and W1 symbols used above. Eight pairs compile successfully, including the split enum; six retain exactly the same diagnostics after mapping file names and comment-deletion line offsets. Those existing syntax, missing-dependency and product-object conflicts remain limitations, not successful builds. No source stubs or repairs were introduced.
 
+### Structured diagnostic compatibility smoke
+
+The diagnostic experiment pins BC-ALAgents to
+`4517a6d602700fb0eb5a6f598942028436a7dcaf`, a direct child of the previous
+`17f5761d95ee08d47dd1a68571e84b1c440883c5` engine. CLI 1.0.88, BCQuality
+`cb65498d5ca1c3456174b4c91971c912bb4a2a80`, models, severity, fixture data,
+gold and scoring remain unchanged. Only one standard four-case smoke is
+authorized; no automatic retry or full run follows. This tests diagnostic
+compatibility, not a same-engine precision A/B against historical runs.
+
+The failure collector no longer reads stdout/stderr. It independently validates
+the exact engine `_cli-failure-diagnostic.json` schema and reprojects fixed
+constants, bounded integers and existing scalar metrics. The frozen 19-leaf
+manifest supplies bounded, unique work-directory names; the file's ordinal must
+match its directory. Unknown fields, duplicate keys, unsafe paths and oversized
+inputs are rejected without printing their contents. Missing evidence is
+explicitly unavailable, never evidence of success or an inferred cause.
+
+To keep the existing single-file upload at most 4 KiB, the artifact retains only
+the first exception-path diagnostic in plan order and explicitly counts other
+available diagnostics omitted from the artifact. Each retained engine diagnostic
+has at most eight observations. The upload allowlist remains exactly
+`failure-diagnostic.json`, with one-day retention; no raw streams, session files,
+OTel, prompts or arbitrary server strings are added. Runtime manifests/traces
+retain their existing separate per-process completeness and stage evidence.
+CLI observations may describe retried requests and do not establish the terminal
+cause. Root failures are outside the new leaf diagnostic's coverage.
+
 ### Bounded incidental defect repairs
 
 This experiment follows `EXPERIMENT.md`: a draft PR, a four-entry Actions smoke run, then one complete 145-entry run. It retains the `a5d5df63e5140f46d94ee0ef90b698b33967647c` experiment chain and compares against frozen run `40500385865`, including its nine partial reviews and recovered-attempt provenance. A historical observation is not a simultaneous paired control; changes outside the seven repaired entries also expose run-to-run variation.
