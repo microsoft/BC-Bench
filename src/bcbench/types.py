@@ -708,6 +708,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     container: ContainerConfig | None = None
 
     agent_version: str | None = None
+    completion_review_model: str | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
     bcal_failure: BCalScenarioFailure | None = None

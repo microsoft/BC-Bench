@@ -60,6 +60,7 @@ def write_bceval_results(
                 "tier": result.tier,
                 **matched_entry.metadata.model_dump(mode="json"),
                 "agent_version": result.agent_version,
+                "completion_review_model": result.completion_review_model,
                 **result.export_metadata,
                 "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
                 "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,

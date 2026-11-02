@@ -142,9 +142,11 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             run_id="bcal-run",
             llm_command=" python bridge.py ",
             llm_model=llm_model,
+            completion_review_model=" gpt-56-reasoning-sol ",
         )
 
     assert captured["context"].model == expected_model
+    assert captured["context"].completion_review_model == "gpt-56-reasoning-sol"
     assert captured["context"].agent_version == "18.0.1.2-beta"
 
 

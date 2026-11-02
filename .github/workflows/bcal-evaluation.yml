@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -37,6 +37,11 @@ on:
           - "gpt-56-reasoning-nano-luna"
           - "gpt-56-reasoning-sol"
           - "gpt-55-chat"
+      completion-review-model:
+        description: "Optional separate model for BCal completion diagnostics and final review"
+        required: false
+        default: ""
+        type: string
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -165,6 +170,7 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
+          BCAL_COMPLETION_REVIEW_MODEL: ${{ inputs.completion-review-model || '' }}
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
         shell: pwsh

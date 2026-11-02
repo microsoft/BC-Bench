@@ -276,6 +276,10 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    completion_review_model: Annotated[
+        str | None,
+        typer.Option(envvar="BCAL_COMPLETION_REVIEW_MODEL", help="Optional model used by BCal completion diagnostics and final review"),
+    ] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -288,6 +292,7 @@ def evaluate_bcal(
     backend_config = BCalBackendConfig(
         command=llm_command,
         model=llm_model,
+        completion_review_model=completion_review_model,
     )
 
     logger.info(f"Running evaluation on entry {entry_id} with BCal")
@@ -302,6 +307,7 @@ def evaluate_bcal(
         agent_version=get_bcal_version(),
         category=category,
         tier=tier,
+        completion_review_model=backend_config.completion_review_model,
     )
 
     try:
