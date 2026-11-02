@@ -17,7 +17,7 @@ from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtim
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
@@ -221,6 +221,37 @@ def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_cat
     assert runtime.al_mcp is True
     assert runtime.bc_mcp is True
     assert runtime.container.name == "bcbench"
+
+
+@pytest.mark.parametrize(
+    ("commands", "command_name", "agent_name", "extra_args"),
+    [
+        (run_commands, "run_copilot", "run_copilot_agent", {}),
+        (run_commands, "run_claude", "run_claude_code", {}),
+        (evaluate_commands, "evaluate_copilot", "run_copilot_agent", {"run_id": "test-run"}),
+        (evaluate_commands, "evaluate_claude_code", "run_claude_code", {"run_id": "test-run"}),
+    ],
+)
+def test_agent_commands_pass_the_given_agent_config(tmp_path, agent_command_category, commands, command_name, agent_name, extra_args):
+    entry, category = agent_command_category
+    agent_config_path = tmp_path / "agent-config.yaml"
+    agent_config_path.write_text("instructions:\n  enabled: true\n", encoding="utf-8")
+
+    with (
+        patch.object(commands, agent_name) as run_agent,
+        patch.object(evaluate_commands, "get_copilot_version", return_value="1.2.3"),
+        patch.object(evaluate_commands, "get_claude_version", return_value="1.2.3"),
+    ):
+        getattr(commands, command_name)(
+            entry_id=entry.instance_id,
+            category=category,
+            repo_path=tmp_path / "repo",
+            output_dir=tmp_path / "results",
+            agent_config_path=agent_config_path,
+            **extra_args,
+        )
+
+    assert run_agent.call_args.kwargs["agent_config"] == AgentConfig.model_validate({"instructions": {"enabled": True}})
 
 
 def _runtime_options(**overrides):

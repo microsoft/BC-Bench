@@ -29,6 +29,8 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 
 Note: `instructions.enabled: true` is a superset — you don't also need to enable `skills` or `agents` to get them. Use `skills`/`agents` when you want to isolate the effect of just that piece.
 
+For local `bcbench run` and `bcbench evaluate` runs with Copilot or Claude, `--agent-config <file>` uses another config file in place of the shipped one.
+
 ### Custom instructions / skills / custom agents
 
 Files live under `src/bcbench/agent/shared/instructions/<profile>/`, where `<profile>` is the dataset entry's `customization_profile`. Repo-grounded categories derive it from the repo path with `/` replaced by `-` (e.g. `microsoft/BCApps` -> `microsoft-BCApps`), which reproduces the customization a developer would already have checked in. Categories that scaffold their own workspace and have no repo (e.g. `nl2al`) name their own folder and place it alongside the repo-keyed ones.
