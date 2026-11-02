@@ -91,8 +91,11 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
     assert contexts[0].agent_name is AgentHarness.PR_REVIEW
     assert contexts[0].agent_version == "a" * 40
     assert contexts[0].category is EvaluationCategory.CODE_REVIEW
-    assert contexts[0].model == "gpt-5.6-luna"
+    assert contexts[0].model == "gpt-5.6-sol"
+    assert agent_runner.call_args.kwargs["model"] == "gpt-5.6-sol"
+    assert agent_runner.call_args.kwargs["leaf_model"] == "gpt-5.6-luna"
     assert agent_runner.call_args.kwargs["engine_path"] == tmp_path
+    assert agent_runner.call_args.kwargs["agent_version"] == "a" * 40
     get_version.assert_called_once_with(tmp_path)
 
 
@@ -102,6 +105,7 @@ def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
         patch.object(CodeReviewEntry, "load", return_value=[entry]),
         patch.object(CodeReviewPipeline, "setup_workspace"),
         patch.object(run_commands, "run_pr_review_agent") as agent_runner,
+        patch.object(run_commands, "get_pr_review_version", return_value="a" * 40) as get_version,
     ):
         result = CliRunner().invoke(
             app,
@@ -121,8 +125,34 @@ def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.exception
     assert agent_runner.call_args.kwargs["entry"] is entry
     assert agent_runner.call_args.kwargs["category"] is EvaluationCategory.CODE_REVIEW
-    assert agent_runner.call_args.kwargs["model"] == "gpt-5.6-luna"
+    assert agent_runner.call_args.kwargs["model"] == "gpt-5.6-sol"
+    assert agent_runner.call_args.kwargs["leaf_model"] == "gpt-5.6-luna"
     assert agent_runner.call_args.kwargs["engine_path"] == tmp_path
+    assert agent_runner.call_args.kwargs["agent_version"] == "a" * 40
+    get_version.assert_called_once_with(tmp_path, require_clean=False)
+
+
+def test_pr_review_run_rejects_unsupported_leaf_execution(tmp_path: Path) -> None:
+    with (
+        patch.object(CodeReviewEntry, "load", return_value=[object()]),
+        patch.object(CodeReviewPipeline, "setup_workspace"),
+        patch.object(run_commands, "run_pr_review_agent") as agent_runner,
+    ):
+        result = CliRunner().invoke(
+            app,
+            [
+                "run",
+                "pr-review",
+                "synthetic__style-018",
+                "--leaf-execution",
+                "random",
+                "--repo-path",
+                str(tmp_path),
+            ],
+        )
+
+    assert result.exit_code != 0
+    agent_runner.assert_not_called()
 
 
 def test_pr_review_is_public_command() -> None:
@@ -135,3 +165,19 @@ def test_pr_review_is_public_command() -> None:
     assert evaluate_help.exit_code == 0
     assert "pr-review" in run_help.stdout
     assert "pr-review" in evaluate_help.stdout
+
+
+@pytest.mark.parametrize("command", ["run", "evaluate"])
+@pytest.mark.parametrize(("option", "model"), [("--model", "gpt-6-astra"), ("--leaf-model", "gpt-6-astra"), ("--leaf-model", "gpt-5.6-sol")])
+def test_pr_review_cli_rejects_unsupported_models(command: str, option: str, model: str) -> None:
+    with (
+        patch.object(run_commands, "run_pr_review_agent") as run_agent,
+        patch.object(evaluate_commands, "run_pr_review_agent") as evaluate_agent,
+        patch.object(CodeReviewEntry, "load") as load_entry,
+    ):
+        result = CliRunner().invoke(app, [command, "pr-review", "synthetic__style-018", option, model])
+
+    assert result.exit_code == 2
+    load_entry.assert_not_called()
+    run_agent.assert_not_called()
+    evaluate_agent.assert_not_called()

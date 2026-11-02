@@ -417,7 +417,7 @@ class TestExperimentConfiguration:
 
         assert data["experiment"] is None
 
-    def test_from_results_extracts_experiment_from_first_result(self):
+    def test_from_results_preserves_shared_experiment(self):
         experiment = ExperimentConfiguration(
             mcp_servers=["pylance", "filesystem"],
             custom_instructions=True,
@@ -437,8 +437,8 @@ class TestExperimentConfiguration:
                 metrics=AgentMetrics(execution_time=150.0, prompt_tokens=6000, completion_tokens=1500),
             ),
         ]
-        # Set experiment on the first result
-        results[0].experiment = experiment
+        for result in results:
+            result.experiment = experiment
 
         summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
