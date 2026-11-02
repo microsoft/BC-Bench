@@ -2,42 +2,27 @@ import logging
 from pathlib import Path
 from shutil import copytree, rmtree
 
-from bcbench.dataset.dataset_entry import BaseDatasetEntry
-from bcbench.operations.instruction_operations import _get_source_instructions_path
-from bcbench.types import AgentConfig, AgentHarness
+from bcbench.operations.instruction_operations import require_dir
+from bcbench.types import ToggleConfig
 
 logger = logging.getLogger(__name__)
 
 
-def setup_agent_skills(
-    agent_config: AgentConfig,
-    entry: BaseDatasetEntry,
-    repo_path: Path,
-    harness: AgentHarness,
-) -> bool:
-    """Copy skills into the repository when enabled via ``config.yaml``'s ``skills.enabled``.
+def setup_agent_skills(config: ToggleConfig, source_dir: Path, target_dir: Path) -> bool:
+    """Replace ``target_dir/skills`` with a copy of ``source_dir/skills`` when enabled.
 
     Returns:
-        True if skills were copied, False if skills are disabled.
+        Whether skills are enabled.
     """
-    skills_enabled: bool = agent_config.skills.enabled
+    if not config.enabled:
+        return False
 
-    if skills_enabled:
-        source_skills: Path = _get_source_instructions_path(entry.customization_profile)
-        source_skills_dir = source_skills / "skills"
+    source_skills = source_dir / "skills"
+    require_dir(source_skills)
+    skills_dir = target_dir / "skills"
+    if skills_dir.exists():
+        rmtree(skills_dir)
+    copytree(source_skills, skills_dir)
 
-        if not source_skills_dir.exists():
-            raise FileNotFoundError(f"Skills folder not found for profile: {entry.customization_profile} at {source_skills_dir}")
-
-        # Copilot reads from .github automatically, Claude reads from .claude automatically
-        target_dir: Path = harness.get_target_dir(repo_path)
-        skills_dir = target_dir / "skills"
-
-        # Remove existing skills directory to ensure clean state
-        if skills_dir.exists():
-            rmtree(skills_dir)
-
-        copytree(source_skills_dir, skills_dir)
-
-        logger.info(f"Skills copied from {source_skills_dir} to {skills_dir}")
-    return skills_enabled
+    logger.info(f"Skills copied from {source_skills} to {skills_dir}")
+    return True

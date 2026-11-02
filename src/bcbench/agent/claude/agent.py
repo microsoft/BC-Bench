@@ -18,7 +18,7 @@ from bcbench.agent.shared import (
 )
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
+from bcbench.operations import instructions_profile_dir, setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
@@ -67,9 +67,11 @@ def run_claude_code(
         plugin_root,
         runtime=runtime,
     )
-    instructions_enabled: bool = setup_instructions_from_config(agent_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    skills_enabled: bool = setup_agent_skills(agent_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    custom_agent: str | None = setup_custom_agent(agent_config, entry, repo_path, harness=AgentHarness.CLAUDE)
+    profile_dir: Path = instructions_profile_dir(entry.customization_profile)
+    target_dir: Path = AgentHarness.CLAUDE.get_target_dir(repo_path)
+    instructions_enabled: bool = setup_instructions_from_config(agent_config.instructions, profile_dir, target_dir, AgentHarness.CLAUDE.instruction_filename)
+    skills_enabled: bool = setup_agent_skills(agent_config.skills, profile_dir, target_dir)
+    custom_agent: str | None = setup_custom_agent(agent_config.agents, profile_dir, target_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(agent_config, plugin_root, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(

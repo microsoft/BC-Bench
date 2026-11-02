@@ -1,63 +1,73 @@
-"""
-Simple verification script for custom instructions framework.
-Verifies that instruction files get created without invoking the copilot agent.
-"""
-
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock
 
 import pytest
 
-from bcbench.dataset import BugFixEntry, RepoGroundedEntry
-from bcbench.operations.instruction_operations import (
-    INSTRUCTION_SOURCE_FILE,
-    _get_source_instructions_path,
-    setup_custom_agent,
-    setup_instructions_from_config,
-)
-from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory
+from bcbench.dataset import BugFixEntry
+from bcbench.operations.instruction_operations import INSTRUCTION_SOURCE_FILE, instructions_profile_dir, setup_custom_agent, setup_instructions_from_config
+from bcbench.types import CustomAgentsConfig, EvaluationCategory, ToggleConfig
+
+ENABLED = ToggleConfig(enabled=True)
 
 
-def test_get_instructions_path():
-    path = _get_source_instructions_path("microsoftInternal-NAV")
-    assert path.exists(), f"Instruction file should exist: {path}"
-    assert path.name == "microsoftInternal-NAV"
+@pytest.fixture
+def source_dir(tmp_path: Path) -> Path:
+    source = tmp_path / "profile"
+    (source / "instructions").mkdir(parents=True)
+    (source / INSTRUCTION_SOURCE_FILE).write_text("# Repo instructions", encoding="utf-8")
+    (source / "instructions" / "al.instructions.md").write_text("# AL rules", encoding="utf-8")
+    (source / "agents").mkdir()
+    (source / "agents" / "al-dev.agent.md").write_text("# AL developer", encoding="utf-8")
+    return source
 
 
-def test_setup_custom_instructions():
-    instructions_source = _get_source_instructions_path("microsoftInternal-NAV")
+@pytest.fixture
+def target_dir(tmp_path: Path) -> Path:
+    return tmp_path / "repo" / ".github"
 
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=RepoGroundedEntry)
-        entry.customization_profile = "microsoftInternal-NAV"
-        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
 
-        # Setup instructions
-        result = setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.COPILOT)
-        assert result is True
+def test_shipped_profile_exists():
+    assert instructions_profile_dir("microsoftInternal-NAV").is_dir()
 
-        # Verify
-        target_path = repo_path / ".github"
-        assert target_path.exists(), ".github directory should be created"
 
-        # Verify files were copied (AGENTS.md gets renamed to agent-specific filename)
-        source_naming = INSTRUCTION_SOURCE_FILE
-        for item in instructions_source.iterdir():
-            target_item = target_path / AgentHarness.COPILOT.instruction_filename if item.name == source_naming else target_path / item.name
-            assert target_item.exists(), f"{target_item} should exist"
+def test_instructions_are_copied_with_the_agent_specific_file_name(source_dir, target_dir):
+    assert setup_instructions_from_config(ENABLED, source_dir, target_dir, "CLAUDE.md") is True
 
-            # Verify file content matches
-            if item.is_file():
-                assert target_item.read_text() == item.read_text(), f"Content mismatch for {item.name}"
-            elif item.is_dir():
-                # For directories, verify all files match recursively
-                for source_file in item.rglob("*"):
-                    if source_file.is_file():
-                        target_file = target_item / source_file.relative_to(item)
-                        assert target_file.exists(), f"{target_file} should exist"
-                        assert target_file.read_text(encoding="utf-8") == source_file.read_text(encoding="utf-8"), f"Content mismatch for {target_file}"
+    assert (target_dir / "CLAUDE.md").read_text(encoding="utf-8") == "# Repo instructions"
+    assert not (target_dir / INSTRUCTION_SOURCE_FILE).exists()
+    assert (target_dir / "instructions" / "al.instructions.md").read_text(encoding="utf-8") == "# AL rules"
+
+
+def test_instructions_replace_the_existing_target(source_dir, target_dir):
+    target_dir.mkdir(parents=True)
+    (target_dir / "old.md").write_text("stale", encoding="utf-8")
+    (target_dir / "copilot-instructions.md").write_text("stale", encoding="utf-8")
+
+    setup_instructions_from_config(ENABLED, source_dir, target_dir, "copilot-instructions.md")
+
+    assert not (target_dir / "old.md").exists()
+    assert (target_dir / "copilot-instructions.md").read_text(encoding="utf-8") == "# Repo instructions"
+
+
+def test_disabled_instructions_leave_the_target_untouched(tmp_path, target_dir):
+    assert setup_instructions_from_config(ToggleConfig(), tmp_path / "missing", target_dir, "CLAUDE.md") is False
+    assert not target_dir.exists()
+
+
+def test_enabled_instructions_require_the_source_folder(tmp_path, target_dir):
+    with pytest.raises(FileNotFoundError, match="missing"):
+        setup_instructions_from_config(ENABLED, tmp_path / "missing", target_dir, "CLAUDE.md")
+
+
+def test_custom_agents_are_copied_and_named(source_dir, target_dir):
+    agent = setup_custom_agent(CustomAgentsConfig(enabled=True, name="al-dev"), source_dir, target_dir)
+
+    assert agent == "al-dev"
+    assert (target_dir / "agents" / "al-dev.agent.md").is_file()
+
+
+def test_disabled_custom_agents_are_not_copied(source_dir, target_dir):
+    assert setup_custom_agent(CustomAgentsConfig(name="al-dev"), source_dir, target_dir) is None
+    assert not target_dir.exists()
 
 
 def test_repo_grounded_profile_is_derived_from_repo():
@@ -76,166 +86,3 @@ def test_every_category_entry_class_names_a_customization_profile():
     for category in EvaluationCategory:
         entry = category.entry_class.model_construct(repo="microsoft/BCApps")
         assert entry.customization_profile, f"{category} has no customization profile"
-
-
-def test_nonexistent_instructions():
-    with pytest.raises(FileNotFoundError, match="nonexistent-repo"):
-        _get_source_instructions_path("nonexistent-repo")
-
-
-def test_setup_custom_agent():
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=RepoGroundedEntry)
-        entry.customization_profile = "microsoftInternal-NAV"
-        config = AgentConfig.model_validate(
-            {
-                "agents": {
-                    "enabled": True,
-                    "name": "extensibility-request-advisor",
-                }
-            }
-        )
-
-        result = setup_custom_agent(
-            config,
-            entry,
-            repo_path,
-            harness=AgentHarness.COPILOT,
-        )
-
-        agents_dir = repo_path / ".github" / "agents"
-        assert result == "extensibility-request-advisor"
-        assert (agents_dir / "extensibility-request-advisor.agent.md").exists()
-
-
-def test_custom_agent_disabled():
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=RepoGroundedEntry)
-        entry.customization_profile = "microsoftInternal-NAV"
-        config = AgentConfig.model_validate(
-            {
-                "agents": {
-                    "enabled": False,
-                    "name": "extensibility-request-advisor",
-                }
-            }
-        )
-
-        result = setup_custom_agent(
-            config,
-            entry,
-            repo_path,
-            harness=AgentHarness.COPILOT,
-        )
-
-        assert result is None
-        assert not (repo_path / ".github" / "agents").exists()
-
-
-def test_overwrite_existing_instructions():
-    instructions_source = _get_source_instructions_path("microsoftInternal-NAV")
-
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=RepoGroundedEntry)
-        entry.customization_profile = "microsoftInternal-NAV"
-        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
-
-        # Create initial instruction file with different content
-        github_dir = repo_path / ".github"
-        github_dir.mkdir(parents=True, exist_ok=True)
-        target_path = github_dir / AgentHarness.COPILOT.instruction_filename
-        original_content = "# Original instructions\nThis should be overwritten"
-        target_path.write_text(original_content)
-
-        # Setup instructions (should overwrite)
-        setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.COPILOT)
-
-        # Verify file was overwritten
-        assert target_path.exists(), "Instruction file should exist"
-        new_content = target_path.read_text(encoding="utf-8")
-        assert new_content != original_content, "Content should be overwritten"
-        source_file = instructions_source / INSTRUCTION_SOURCE_FILE
-        assert new_content == source_file.read_text(encoding="utf-8"), "Content should match source"
-
-
-def test_path_specific_instructions_removed_before_copy():
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=RepoGroundedEntry)
-        entry.customization_profile = "microsoftInternal-NAV"
-        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
-
-        # Create existing .github directory with old files
-        github_dir = repo_path / ".github"
-        github_dir.mkdir(parents=True, exist_ok=True)
-        old_file = github_dir / "old.md"
-        old_file.write_text("# Old instruction that should be removed")
-
-        # Setup instructions (should remove existing .github and copy new one)
-        setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.COPILOT)
-
-        # Verify old file was removed
-        assert not (github_dir / "old.md").exists(), "Old file should be removed"
-        # Verify new structure was copied
-        assert github_dir.exists(), ".github directory should exist after setup"
-        assert (github_dir / AgentHarness.COPILOT.instruction_filename).exists(), "Main instruction file should exist"
-
-
-def test_no_path_specific_instructions_warning():
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=RepoGroundedEntry)
-        entry.customization_profile = "microsoftInternal-NAV"
-        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
-
-        # Setup instructions
-        setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.COPILOT)
-
-        # Verify repository-level instructions were created
-        github_dir = repo_path / ".github"
-        assert github_dir.exists(), ".github directory should be created"
-        assert (github_dir / AgentHarness.COPILOT.instruction_filename).exists(), "Main instruction file should exist"
-
-
-def test_empty_instructions_folder_warning():
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=RepoGroundedEntry)
-        entry.customization_profile = "microsoftInternal-NAV"
-        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
-
-        # Setup instructions
-        setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.COPILOT)
-
-        # Verify .github directory was created
-        github_dir = repo_path / ".github"
-        assert github_dir.exists(), ".github directory should be created"
-        assert (github_dir / AgentHarness.COPILOT.instruction_filename).exists(), "Main instruction file should exist"
-
-
-def test_claude_instructions_renamed():
-    instructions_source = _get_source_instructions_path("microsoftInternal-NAV")
-
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=RepoGroundedEntry)
-        entry.customization_profile = "microsoftInternal-NAV"
-        config = AgentConfig.model_validate({"instructions": {"enabled": True}})
-
-        result = setup_instructions_from_config(config, entry, repo_path, harness=AgentHarness.CLAUDE)
-        assert result is True
-
-        claude_dir = repo_path / ".claude"
-        assert claude_dir.exists(), ".claude directory should be created"
-
-        # AGENTS.md should be renamed to CLAUDE.md
-        assert not (claude_dir / INSTRUCTION_SOURCE_FILE).exists(), "Source file should be renamed"
-        claude_md = claude_dir / AgentHarness.CLAUDE.instruction_filename
-        assert claude_md.exists(), "CLAUDE.md should exist"
-
-        # Content should match the original source file
-        source_content = (instructions_source / INSTRUCTION_SOURCE_FILE).read_text(encoding="utf-8")
-        assert claude_md.read_text(encoding="utf-8") == source_content, "CLAUDE.md content should match source"

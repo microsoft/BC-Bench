@@ -7,6 +7,7 @@ from bcbench_core.agent.copilot import CopilotProcessError, CopilotTimeoutError
 
 from bcbench.agent.copilot.agent import run_copilot_agent
 from bcbench.exceptions import AgentTimeoutError
+from bcbench.operations import instructions_profile_dir
 from bcbench.types import AgentConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 from tests.conftest import create_dataset_entry
 
@@ -210,8 +211,25 @@ def test_copilot_sets_up_the_session_from_the_given_agent_config(configured_copi
         mocks["resolve_config_plugins"].return_value = []
         run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, agent_config, repo_path.parent / "plugins")
 
-    for name in helpers:
+    for name in ("build_prompt", "build_mcp_config", "resolve_config_plugins"):
         assert agent_config in mocks[name].call_args.args, name
+    assert agent_config.instructions in mocks["setup_instructions_from_config"].call_args.args
+    assert agent_config.skills in mocks["setup_agent_skills"].call_args.args
+    assert agent_config.agents in mocks["setup_custom_agent"].call_args.args
+
+
+def test_copilot_sets_up_customizations_from_the_entry_profile_into_github(configured_copilot_run):
+    repo_path, output_dir, _, _ = configured_copilot_run
+    helpers = ["setup_instructions_from_config", "setup_agent_skills", "setup_custom_agent"]
+
+    with patch.multiple("bcbench.agent.copilot.agent", **dict.fromkeys(helpers, DEFAULT)) as mocks:
+        mocks["setup_custom_agent"].return_value = None
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig(), repo_path.parent / "plugins")
+
+    profile_dir = instructions_profile_dir(create_dataset_entry().customization_profile)
+    for name in helpers:
+        assert mocks[name].call_args.args[1:3] == (profile_dir, repo_path / ".github"), name
+    assert mocks["setup_instructions_from_config"].call_args.args[3] == "copilot-instructions.md"
 
 
 def test_copilot_keeps_plugins_in_the_given_plugin_root(configured_copilot_run):

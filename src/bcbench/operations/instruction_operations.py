@@ -2,82 +2,66 @@ import logging
 from pathlib import Path
 from shutil import copytree, rmtree
 
-from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.dataset_entry import WORKSPACE_PROBLEM_DIR, RepoGroundedEntry
 from bcbench.paths import AGENT_SHARE_DIR
-from bcbench.types import AgentConfig, AgentHarness
+from bcbench.types import CustomAgentsConfig, ToggleConfig
 
 logger = logging.getLogger(__name__)
 
 INSTRUCTION_SOURCE_FILE = "AGENTS.md"
 
 
-def setup_instructions_from_config(agent_config: AgentConfig, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
-    """
-    Setup custom instructions from config if enabled.
+def instructions_profile_dir(profile: str) -> Path:
+    """Shipped instructions, skills and custom agents for a customization profile, shared by Copilot and Claude."""
+    return AGENT_SHARE_DIR / "instructions" / profile
 
-    Args:
-        agent_config: Parsed agent configuration
-        entry: Dataset entry naming the customization profile to apply
-        repo_path: Path to repository where instructions will be copied
-        harness: Agent harness (Copilot or Claude)
+
+def setup_instructions_from_config(config: ToggleConfig, source_dir: Path, target_dir: Path, instruction_filename: str) -> bool:
+    """Replace ``target_dir`` with a copy of ``source_dir`` when enabled.
+
+    The canonical ``AGENTS.md`` is renamed to ``instruction_filename``, the file the agent reads.
 
     Returns:
-        True if instructions are enabled, False otherwise
+        Whether instructions are enabled.
     """
-    instructions_enabled: bool = agent_config.instructions.enabled
+    if not config.enabled:
+        return False
 
-    if instructions_enabled:
-        source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
-        target_dir: Path = harness.get_target_dir(repo_path)
+    require_dir(source_dir)
+    if target_dir.exists():
+        rmtree(target_dir)
+    copytree(source_dir, target_dir)
 
-        logger.info(f"Setting up custom instructions for profile: {entry.customization_profile}")
-        if target_dir.exists():
-            rmtree(target_dir)
-        copytree(source_instructions, target_dir)
+    canonical = target_dir / INSTRUCTION_SOURCE_FILE
+    expected = target_dir / instruction_filename
+    if canonical.exists() and canonical != expected:
+        canonical.rename(expected)
+        logger.info(f"Renamed {canonical.name} -> {expected.name}")
 
-        # Rename canonical instruction file to agent-specific name
-        canonical = target_dir / INSTRUCTION_SOURCE_FILE
-        expected = target_dir / harness.instruction_filename
-        if canonical.exists() and canonical != expected:
-            canonical.rename(expected)
-            logger.info(f"Renamed {canonical.name} -> {expected.name}")
-
-        logger.info(f"{target_dir.name} dir is overwritten with {source_instructions}")
-
-    return instructions_enabled
+    logger.info(f"{target_dir} is overwritten with {source_dir}")
+    return True
 
 
-def setup_custom_agent(agent_config: AgentConfig, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> str | None:
+def setup_custom_agent(config: CustomAgentsConfig, source_dir: Path, target_dir: Path) -> str | None:
+    """Copy ``source_dir/agents`` into ``target_dir/agents`` when enabled.
+
+    Returns:
+        The custom agent to run, or None when custom agents are disabled.
     """
-    Setup custom agents in the repository if available.
-    """
-    if agent_config.agents.enabled:
-        source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
-        target_dir: Path = harness.get_target_dir(repo_path)
-        copytree(source_instructions / "agents", target_dir / "agents", dirs_exist_ok=True)
+    if not config.enabled:
+        return None
 
-        logger.info(f"Custom agents are set up from {source_instructions / 'agents'}")
-        return agent_config.agents.name
+    source_agents = source_dir / "agents"
+    require_dir(source_agents)
+    copytree(source_agents, target_dir / "agents", dirs_exist_ok=True)
 
-    return None
+    logger.info(f"Custom agents are set up from {source_agents}")
+    return config.name
 
 
-def _get_source_instructions_path(profile: str) -> Path:
-    """
-    Get path to the source instruction folder for an instruction profile.
-
-    Instructions are stored in shared/instructions/ and used by both Copilot and Claude.
-
-    Raises:
-        FileNotFoundError: If instruction file doesn't exist
-    """
-    instructions_path = AGENT_SHARE_DIR / "instructions" / profile
-
-    if not instructions_path.exists():
-        raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for profile: {profile}")
-
-    return instructions_path
+def require_dir(path: Path) -> None:
+    if not path.is_dir():
+        raise FileNotFoundError(f"Folder not found: {path}")
 
 
 def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> None:
