@@ -31,7 +31,8 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
-from bcbench.evaluate import AgentRunner, EvaluationPipeline
+from bcbench.dataset.codereview import CodeReviewEntry
+from bcbench.evaluate import AgentRunner, CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -100,7 +101,7 @@ def evaluate_copilot(
         tier=tier,
     )
 
-    pipeline = category.pipeline
+    pipeline = category.pipeline(agent_config)
     pipeline.execute(
         context,
         lambda ctx: run_copilot_agent(
@@ -175,7 +176,7 @@ def evaluate_claude_code(
         tier=tier,
     )
 
-    pipeline = category.pipeline
+    pipeline = category.pipeline(agent_config)
     pipeline.execute(
         context,
         lambda ctx: run_claude_code(
@@ -214,7 +215,7 @@ def evaluate_pr_review(
     To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path(), entry_id=entry_id)[0]
+    entry = CodeReviewEntry.load(category.dataset_path(), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
@@ -230,7 +231,7 @@ def evaluate_pr_review(
         category=category,
     )
 
-    category.pipeline.execute(
+    CodeReviewPipeline().execute(
         context,
         lambda ctx: run_pr_review_agent(
             entry=ctx.entry,
@@ -283,8 +284,9 @@ def evaluate_bcal(
         tier=tier,
     )
 
+    pipeline = NL2ALPipeline()
     try:
-        category.pipeline.execute(
+        pipeline.execute(
             context,
             lambda ctx: run_bcal_agent(
                 entry=cast(NL2ALEntry, ctx.entry),
@@ -294,7 +296,7 @@ def evaluate_bcal(
         )
     except AgentError as exc:
         result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
-        category.pipeline.save_result(context, result)
+        pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
         raise typer.Exit(code=1) from exc
 

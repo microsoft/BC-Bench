@@ -13,7 +13,7 @@ from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
 
@@ -130,7 +130,7 @@ def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
 def test_al_evaluation_pipelines_pass_recommended_diff_exclusions(tmp_path, category):
     entry = category.entry_class.model_validate(_entry_for_category(category).model_dump())
     ctx = create_evaluation_context(tmp_path, entry=entry, category=category)
-    pipeline = category.pipeline
+    pipeline = category.pipeline(AgentConfig())
     module = type(pipeline).__module__
 
     with (
@@ -160,3 +160,25 @@ class TestMockPipelineCoversAllCategories:
         results = [BaseEvaluationResult.from_json(json.loads(line)) for line in result_file.read_text(encoding="utf-8").splitlines()]
         assert {r.category for r in results} == {category}
         assert all(r.instance_id == entry.instance_id for r in results)
+
+
+@pytest.mark.parametrize(
+    ("input_mode", "applies_gold_patch", "copies_problem_statement"),
+    [("problem-statement", False, True), ("gold-patch", True, False), ("both", True, True)],
+)
+def test_test_generation_workspace_follows_the_given_agent_config(tmp_path, input_mode, applies_gold_patch, copies_problem_statement):
+    entry = EvaluationCategory.TEST_GENERATION.entry_class.model_validate(create_dataset_entry().model_dump())
+    agent_config = AgentConfig.model_validate({"prompt": {"test-generation-input": input_mode}})
+    pipeline = EvaluationCategory.TEST_GENERATION.pipeline(agent_config)
+    module = type(pipeline).__module__
+
+    with (
+        patch(f"{module}.setup_repo_prebuild"),
+        patch(f"{module}.set_runtime_version"),
+        patch(f"{module}.apply_patch") as apply_patch,
+        patch(f"{module}.copy_problem_statement_folder") as copy_problem_statement,
+    ):
+        pipeline.setup_workspace(entry, tmp_path)
+
+    assert apply_patch.called is applies_gold_patch
+    assert copy_problem_statement.called is copies_problem_statement

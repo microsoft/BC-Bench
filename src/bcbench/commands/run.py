@@ -26,6 +26,8 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
+from bcbench.dataset.codereview import CodeReviewEntry
+from bcbench.evaluate import CodeReviewPipeline, NL2ALPipeline
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory
 
@@ -77,7 +79,7 @@ def run_copilot(
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     agent_config = AgentConfig.from_file(config_path)
-    category.pipeline.setup_workspace(entry, repo_path)
+    category.pipeline(agent_config).setup_workspace(entry, repo_path)
 
     run_copilot_agent(
         entry=entry,
@@ -132,7 +134,7 @@ def run_claude(
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     agent_config = AgentConfig.from_file(config_path)
-    category.pipeline.setup_workspace(entry, repo_path)
+    category.pipeline(agent_config).setup_workspace(entry, repo_path)
 
     run_claude_code(
         entry=entry,
@@ -168,8 +170,8 @@ def run_pr_review(
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path(), entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
+    entry = CodeReviewEntry.load(category.dataset_path(), entry_id=entry_id)[0]
+    CodeReviewPipeline().setup_workspace(entry, repo_path)
 
     run_pr_review_agent(
         entry=entry,
@@ -200,7 +202,7 @@ def run_bcal(
     """
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
-    category.pipeline.setup_workspace(entry, repo_path)
+    NL2ALPipeline().setup_workspace(entry, repo_path)
 
     run_bcal_agent(
         entry=entry,

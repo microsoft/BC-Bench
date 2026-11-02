@@ -130,7 +130,7 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     with (
         patch.object(EvaluationCategory, "dataset_path", return_value=tmp_path / "nl2al.jsonl"),
         patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
-        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+        patch.object(evaluate_commands, "NL2ALPipeline", return_value=Pipeline()),
         patch.object(evaluate_commands, "get_bcal_version", return_value="18.0.1.2-beta"),
     ):
         evaluate_commands.evaluate_bcal(
@@ -182,7 +182,7 @@ def agent_command_category(tmp_path):
     return entry, SimpleNamespace(
         dataset_path=lambda _tier=None: tmp_path / "dataset.jsonl",
         entry_class=EntryClass,
-        pipeline=Pipeline(),
+        pipeline=lambda _agent_config: Pipeline(),
         requires_container=False,
     )
 
