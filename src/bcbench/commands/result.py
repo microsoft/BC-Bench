@@ -2,6 +2,7 @@ import json
 import logging
 import re
 from collections import defaultdict
+from collections.abc import Hashable
 from pathlib import Path
 from typing import Annotated
 
@@ -84,7 +85,7 @@ def result_summarize(
 
 
 def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[LeaderboardAggregate]:
-    grouped: defaultdict[tuple[str | None, ...], list[EvaluationResultSummary]] = defaultdict(list)
+    grouped: defaultdict[tuple[Hashable, ...], list[EvaluationResultSummary]] = defaultdict(list)
     for run in runs:
         grouped[run.combination_key()].append(run)
     return [group[0].category.aggregate_class.from_runs(group) for group in grouped.values()]
