@@ -1,3 +1,4 @@
+import json
 import logging
 import random
 from pathlib import Path
@@ -30,6 +31,7 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
+from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -39,6 +41,80 @@ logger = logging.getLogger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
+
+
+@evaluate_app.command("pr-review-voting-plan")
+def voting_plan(phase: str = "smoke") -> None:
+    from bcbench.evaluate import review_voting as voting
+
+    if phase not in ("smoke", "full"):
+        raise typer.BadParameter("phase must be smoke or full")
+    typer.echo(json.dumps(voting.plan(EvaluationCategory.CODE_REVIEW.dataset_path, phase)))
+
+
+@evaluate_app.command("pr-review-voting-summary")
+def voting_summary(input_dir: Annotated[Path, typer.Option()], output_dir: Annotated[Path, typer.Option()], phase: str = "smoke") -> None:
+    from bcbench.evaluate import review_voting as voting
+
+    if phase not in ("smoke", "full"):
+        raise typer.BadParameter("phase must be smoke or full")
+    selection = voting.plan(EvaluationCategory.CODE_REVIEW.dataset_path, phase)
+    summary = voting.summarize(selection, input_dir)
+    voting.save(output_dir / "summary.json", summary)
+    typer.echo(f"Baseline scored: {summary['baseline_scored']}; paired: {summary['paired']}; selected: {len(selection['selected'])}")
+    if not summary["operational_success"] or (phase == "smoke" and not summary["smoke_gate_passed"]):
+        raise typer.Exit(1)
+
+
+@evaluate_app.command("pr-review-voting-export")
+def voting_export(output_dir: Annotated[Path, typer.Option()]) -> None:
+    from bcbench.evaluate import review_voting as voting
+
+    if output_dir.is_dir():
+        for path in output_dir.iterdir():
+            if path.is_dir():
+                voting.export_interrupted(path)
+
+
+@evaluate_app.command("pr-review-voting")
+def evaluate_pr_review_voting(
+    entry_id: Annotated[str, typer.Argument()],
+    engine_path: Annotated[Path, typer.Option()],
+    repo_path: Annotated[Path, typer.Option()],
+    output_dir: Annotated[Path, typer.Option()],
+    phase: str = "smoke",
+) -> None:
+    from bcbench.evaluate import review_voting as voting
+
+    if phase not in ("smoke", "full"):
+        raise typer.BadParameter("phase must be smoke or full")
+    selection = voting.plan(EvaluationCategory.CODE_REVIEW.dataset_path, phase)
+    if entry_id not in selection["selected"]:
+        raise typer.BadParameter("Entry is not in this phase's frozen selection")
+    if get_pr_review_version(engine_path) != voting.ENGINE:
+        raise typer.BadParameter("Engine identity differs from the approved experiment")
+    observed = voting.checked_command(["copilot", "--no-auto-update", "--version"])
+    if f"GitHub Copilot CLI {voting.CLI}." not in observed.splitlines():
+        raise typer.BadParameter("Copilot CLI version differs")
+    entry = CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path, entry_id=entry_id)[0]
+
+    def baseline(folder: Path) -> None:
+        metrics, _ = run_pr_review_agent(
+            entry,
+            voting.ROOT_MODEL,
+            EvaluationCategory.CODE_REVIEW,
+            repo_path,
+            folder,
+            engine_path=engine_path,
+            min_severity="Medium",
+            leaf_model=voting.LEAF_MODEL,
+            cli_version=voting.CLI,
+        )
+        voting.save(folder / "metrics.json", metrics.model_dump(mode="json"))
+
+    result = voting.run_entry(entry, repo_path, output_dir / entry_id, baseline)
+    if not result["operational_success"]:
+        raise typer.Exit(1)
 
 
 @evaluate_app.command("copilot")
