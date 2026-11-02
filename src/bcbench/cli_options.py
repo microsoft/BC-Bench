@@ -27,7 +27,7 @@ PRReviewEnginePath = Annotated[
 
 OutputDir = Annotated[Path, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)]
 
-AgentConfigPath = Annotated[Path, typer.Option("--agent-config", help="Agent config file (prompts, instructions, skills, plugins, MCP)", exists=True, dir_okay=False, readable=True)]
+AgentConfigPath = Annotated[Path, typer.Option("--config", help="Agent config file (prompts, instructions, skills, plugins, MCP)", exists=True, dir_okay=False, readable=True)]
 
 RunId = Annotated[str, typer.Option(envvar="GITHUB_RUN_ID", help="Unique identifier for this evaluation run")]
 

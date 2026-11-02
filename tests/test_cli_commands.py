@@ -234,8 +234,8 @@ def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_cat
 )
 def test_agent_commands_pass_the_given_agent_config(tmp_path, agent_command_category, commands, command_name, agent_name, extra_args):
     entry, category = agent_command_category
-    agent_config_path = tmp_path / "agent-config.yaml"
-    agent_config_path.write_text("instructions:\n  enabled: true\n", encoding="utf-8")
+    config_path = tmp_path / "agent-config.yaml"
+    config_path.write_text("instructions:\n  enabled: true\n", encoding="utf-8")
 
     with (
         patch.object(commands, agent_name) as run_agent,
@@ -247,7 +247,7 @@ def test_agent_commands_pass_the_given_agent_config(tmp_path, agent_command_cate
             category=category,
             repo_path=tmp_path / "repo",
             output_dir=tmp_path / "results",
-            agent_config_path=agent_config_path,
+            config_path=config_path,
             **extra_args,
         )
 

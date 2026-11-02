@@ -29,7 +29,7 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 
 Note: `instructions.enabled: true` is a superset — you don't also need to enable `skills` or `agents` to get them. Use `skills`/`agents` when you want to isolate the effect of just that piece.
 
-For local `bcbench run` and `bcbench evaluate` runs with Copilot or Claude, `--agent-config <file>` uses another config file in place of the shipped one.
+For local `bcbench run` and `bcbench evaluate` runs with Copilot or Claude, `--config <file>` uses another config file in place of the shipped one.
 
 ### Custom instructions / skills / custom agents
 

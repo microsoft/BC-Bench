@@ -62,7 +62,7 @@ def evaluate_copilot(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
-    agent_config_path: AgentConfigPath = SHARED_CONFIG_FILE,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -83,7 +83,7 @@ def evaluate_copilot(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
-    agent_config = AgentConfig.from_file(agent_config_path)
+    agent_config = AgentConfig.from_file(config_path)
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -137,7 +137,7 @@ def evaluate_claude_code(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
-    agent_config_path: AgentConfigPath = SHARED_CONFIG_FILE,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Evaluate Claude Code on single dataset entry.
@@ -158,7 +158,7 @@ def evaluate_claude_code(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
-    agent_config = AgentConfig.from_file(agent_config_path)
+    agent_config = AgentConfig.from_file(config_path)
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")

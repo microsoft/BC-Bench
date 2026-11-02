@@ -53,7 +53,7 @@ def run_copilot(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
-    agent_config_path: AgentConfigPath = SHARED_CONFIG_FILE,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Run GitHub Copilot CLI on a single entry to generate the category output.
@@ -76,7 +76,7 @@ def run_copilot(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
-    agent_config = AgentConfig.from_file(agent_config_path)
+    agent_config = AgentConfig.from_file(config_path)
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_copilot_agent(
@@ -108,7 +108,7 @@ def run_claude(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
-    agent_config_path: AgentConfigPath = SHARED_CONFIG_FILE,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Run Claude Code on a single entry to generate the category output.
@@ -131,7 +131,7 @@ def run_claude(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
-    agent_config = AgentConfig.from_file(agent_config_path)
+    agent_config = AgentConfig.from_file(config_path)
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_claude_code(
