@@ -44,6 +44,21 @@ on:
         required: false
         type: string
         default: ""
+      run-id-suffix:
+        description: "Suffix that separates repeated evaluations within one workflow run (e.g. -r2)"
+        required: false
+        type: string
+        default: ""
+      run-name-suffix:
+        description: "Text appended to the bc-eval run name"
+        required: false
+        type: string
+        default: ""
+      extra-tags:
+        description: "Comma-separated bc-eval tags added to the run"
+        required: false
+        type: string
+        default: ""
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
@@ -64,6 +79,9 @@ jobs:
       EVALUATION_AGENT: ${{ inputs.agent }}
       EVALUATION_MODEL: ${{ inputs.model }}
       EVALUATION_GIT_REF: ${{ inputs.git-ref || github.ref_name }}
+      RESULT_RUN_ID: ${{ github.run_id }}${{ inputs.run-id-suffix }}
+      RUN_NAME_SUFFIX: ${{ inputs.run-name-suffix }}
+      EXTRA_TAGS: ${{ inputs.extra-tags }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,13 +96,13 @@ jobs:
           merge-multiple: true
 
       - name: Summarize evaluation results
-        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "$EVALUATION_GIT_REF"
+        run: uv run bcbench result summarize --run-id "$RESULT_RUN_ID" --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "$EVALUATION_GIT_REF"
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: evaluation-summary
-          path: ${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}
+          name: evaluation-summary${{ inputs.run-id-suffix }}
+          path: ${{ inputs.results-dir }}/${{ env.RESULT_RUN_ID }}/${{ env.SUMMARY_OUTPUT_FILE }}
           if-no-files-found: error
           retention-days: ${{ inputs.mock && 1 || 30 }}
 
@@ -121,6 +139,10 @@ jobs:
           if [[ "$EVALUATION_TIER" != "gold" ]]; then
             RUN_NAME="${RUN_NAME} [${EVALUATION_TIER}]"
           fi
+          RUN_NAME="${RUN_NAME}${RUN_NAME_SUFFIX}"
+          if [[ -n "$EXTRA_TAGS" ]]; then
+            RUN_TAGS="${RUN_TAGS},${EXTRA_TAGS}"
+          fi
 
           bceval metrics calculate \
             --feature-name "BC-Bench" \
@@ -128,7 +150,7 @@ jobs:
             --eval-run-name "$RUN_NAME" \
             --tags "$RUN_TAGS" \
             --source "${{ github.sha }}" \
-            --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
+            --input-file "${{ inputs.results-dir }}/${RESULT_RUN_ID}/${{ env.BCEVAL_RESULT_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
             --evaluators "${{ steps.bceval.outputs.evaluators }}" \
             --core-score "${{ steps.bceval.outputs.core_score }}" \
@@ -166,7 +188,7 @@ jobs:
             git checkout -b "$branchName" origin/main
           fi
 
-          uv run bcbench result update "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}"
+          uv run bcbench result update "${{ inputs.results-dir }}/${RESULT_RUN_ID}/${{ env.SUMMARY_OUTPUT_FILE }}"
 
           git add docs/_data/${{ inputs.category }}.json
           git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }}) - Run ${{ github.run_id }}"

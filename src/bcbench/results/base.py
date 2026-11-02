@@ -23,6 +23,10 @@ class BaseEvaluationResult(BaseModel):
     category: EvaluationCategory
     tier: DatasetTier = DatasetTier.GOLD
     agent_version: str | None = None
+    cohort_name: str | None = None
+    cohort_sha256: str | None = None
+    repetition_index: int | None = None
+    repetition_count: int | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
     bcal_failure: BCalScenarioFailure | None = None
@@ -53,12 +57,31 @@ class BaseEvaluationResult(BaseModel):
             "tier": context.tier,
             "agent_name": context.agent_name,
             "agent_version": context.agent_version,
+            "cohort_name": context.cohort_name,
+            "cohort_sha256": context.cohort_sha256,
+            "repetition_index": context.repetition_index,
+            "repetition_count": context.repetition_count,
             "execution_identity": context.execution_identity,
             "evidence": context.evidence,
             "bcal_failure": context.bcal_failure,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }
+
+    @model_validator(mode="after")
+    def validate_cohort_metadata(self) -> Self:
+        if (self.cohort_name is None) != (self.cohort_sha256 is None):
+            raise ValueError("cohort_name and cohort_sha256 must be provided together")
+        if (self.repetition_index is None) != (self.repetition_count is None):
+            raise ValueError("repetition_index and repetition_count must be provided together")
+        if self.repetition_index is not None and self.repetition_count is not None:
+            if self.repetition_count < 1:
+                raise ValueError("repetition_count must be at least 1")
+            if not 1 <= self.repetition_index <= self.repetition_count:
+                raise ValueError("repetition_index must be between 1 and repetition_count")
+        if self.cohort_name is not None and self.repetition_index is None:
+            raise ValueError("cohort results must record repetition metadata")
+        return self
 
     @classmethod
     def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:

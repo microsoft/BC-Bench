@@ -276,6 +276,10 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    cohort_name: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_NAME", help="Selected evaluation cohort name")] = None,
+    cohort_sha256: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_SHA256", help="SHA-256 of the selected evaluation cohort manifest")] = None,
+    repetition_index: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_INDEX", help="One-based repetition index")] = None,
+    repetition_count: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_COUNT", help="Total independent repetitions")] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -283,6 +287,15 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
+    if (cohort_name is None) != (cohort_sha256 is None):
+        raise typer.BadParameter("cohort name and SHA-256 must be provided together")
+    if (repetition_index is None) != (repetition_count is None):
+        raise typer.BadParameter("repetition index and count must be provided together")
+    if repetition_index is not None and repetition_count is not None and (repetition_count < 1 or not 1 <= repetition_index <= repetition_count):
+        raise typer.BadParameter("repetition index must be between 1 and repetition count")
+    if cohort_name is not None and repetition_index is None:
+        raise typer.BadParameter("cohort evaluations must include repetition metadata")
+
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
@@ -302,6 +315,10 @@ def evaluate_bcal(
         agent_version=get_bcal_version(),
         category=category,
         tier=tier,
+        cohort_name=cohort_name,
+        cohort_sha256=cohort_sha256,
+        repetition_index=repetition_index,
+        repetition_count=repetition_count,
     )
 
     try:
