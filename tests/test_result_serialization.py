@@ -5,7 +5,7 @@ from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import AgentHarness, BCalCompilationEvent, BCalExecutionFacts, BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
@@ -78,6 +78,17 @@ class TestCategorySerialization:
         result = BaseEvaluationResult.from_json(payload)
 
         assert result.category == EvaluationCategory.TEST_GENERATION
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"id": "nl2al__case", "output": "diff", "context": {"contractVersion": "1.0"}, "metadata": {}},
+            {"Id": "nl2al__case", "Output": "diff", "Context": {"contractVersion": "1.0"}, "Metadata": {}},
+        ],
+    )
+    def test_published_bceval_row_is_rejected_as_raw_result(self, payload):
+        with pytest.raises(ValueError, match="Published bc-eval rows are not raw BC-Bench result JSONL"):
+            BaseEvaluationResult.from_json(payload)
 
     def test_round_trip_bug_fix(self, tmp_path):
         original = create_bugfix_result(instance_id="round-trip-test", project="test-project", model="test-model", agent_name="test-agent")
@@ -233,6 +244,44 @@ class TestCategorySerialization:
         assert loaded.bcal_failure == failure
         assert loaded.output == sample_result_bug_fix.output
         assert loaded.error_message == sample_result_bug_fix.error_message
+
+    def test_bcal_execution_facts_round_trip(self, tmp_path, sample_result_bug_fix):
+        identity = BCalExecutionIdentity(
+            productVersion="1.2.3",
+            sourceCommitSha="050e84b25a0890d532a52433a3256c4183e81c7e",
+            buildConfiguration="Release",
+            scenarioContractVersion="1.0",
+            evidenceContractVersion="1.0",
+        )
+        facts = BCalExecutionFacts(
+            execution_identity=identity,
+            scenario_completed=True,
+            scenario_step_status="succeeded",
+            step_compile_succeeded=True,
+            compile_succeeded=True,
+            compile_evidence_source="scenario_step",
+            compilation_events=(
+                BCalCompilationEvent(
+                    sequence=33,
+                    type="compilation_outcome",
+                    scenarioStepId="benchmark-prompt",
+                    iteration=6,
+                    callId="call-compile",
+                    operation="compile",
+                    status="succeeded",
+                    succeeded=True,
+                ),
+            ),
+            evidence_status="present",
+            trace_truncated=False,
+        )
+        sample_result_bug_fix.execution_facts = facts
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert loaded.execution_facts == facts
 
     def test_tool_usage_saves_as_dict(self, tmp_path):
         tool_usage = {"bash": 5, "view": 3, "search": 2}
