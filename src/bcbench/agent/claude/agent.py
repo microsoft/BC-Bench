@@ -19,7 +19,6 @@ from bcbench.agent.shared import (
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
@@ -35,6 +34,7 @@ def run_claude_code(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
+    agent_config: AgentConfig,
     runtime: AgentRuntimeConfig | None = None,
     timeout: int = 60 * 60,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -43,18 +43,16 @@ def run_claude_code(
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used
     """
-    claude_config = AgentConfig.from_file(SHARED_CONFIG_FILE)
-
     claude_cmd = shutil.which("claude")
     if not claude_cmd:
         raise AgentError("Claude Code not found in PATH. Please ensure it is installed and available.")
 
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=bool(runtime and runtime.al_mcp))
+    prompt: str = build_prompt(entry, repo_path, agent_config, category, al_mcp=bool(runtime and runtime.al_mcp))
     bc_gateway = start_bc_mcp_gateway(runtime)
     mcp_config_json, mcp_server_names = build_mcp_config(
-        claude_config,
+        agent_config,
         entry,
         repo_path,
         runtime=runtime,
@@ -67,10 +65,10 @@ def run_claude_code(
         AgentHarness.CLAUDE,
         runtime=runtime,
     )
-    instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
+    instructions_enabled: bool = setup_instructions_from_config(agent_config, entry, repo_path, harness=AgentHarness.CLAUDE)
+    skills_enabled: bool = setup_agent_skills(agent_config, entry, repo_path, harness=AgentHarness.CLAUDE)
+    custom_agent: str | None = setup_custom_agent(agent_config, entry, repo_path, harness=AgentHarness.CLAUDE)
+    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(agent_config, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,

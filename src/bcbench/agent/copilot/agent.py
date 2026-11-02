@@ -17,7 +17,6 @@ from bcbench.agent.shared import (
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
@@ -29,6 +28,7 @@ def run_copilot_agent(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
+    agent_config: AgentConfig,
     runtime: AgentRuntimeConfig | None = None,
     timeout: int = 60 * 60,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -37,14 +37,12 @@ def run_copilot_agent(
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
     """
-    copilot_config = AgentConfig.from_file(SHARED_CONFIG_FILE)
-
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=bool(runtime and runtime.al_mcp))
+    prompt: str = build_prompt(entry, repo_path, agent_config, category, al_mcp=bool(runtime and runtime.al_mcp))
     bc_gateway = start_bc_mcp_gateway(runtime)
     mcp_config_json, mcp_server_names = build_mcp_config(
-        copilot_config,
+        agent_config,
         entry,
         repo_path,
         runtime=runtime,
@@ -57,10 +55,10 @@ def run_copilot_agent(
         AgentHarness.COPILOT,
         runtime=runtime,
     )
-    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
+    instructions_enabled: bool = setup_instructions_from_config(agent_config, entry, repo_path, harness=AgentHarness.COPILOT)
+    skills_enabled: bool = setup_agent_skills(agent_config, entry, repo_path, harness=AgentHarness.COPILOT)
+    custom_agent: str | None = setup_custom_agent(agent_config, entry, repo_path, harness=AgentHarness.COPILOT)
+    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(agent_config, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,

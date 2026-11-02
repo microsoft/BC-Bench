@@ -32,8 +32,9 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
+from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentHarness, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentConfig, AgentHarness, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -80,6 +81,7 @@ def evaluate_copilot(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    agent_config = AgentConfig.from_file(SHARED_CONFIG_FILE)
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -105,6 +107,7 @@ def evaluate_copilot(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
+            agent_config=agent_config,
             runtime=runtime,
         ),
     )
@@ -152,6 +155,7 @@ def evaluate_claude_code(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    agent_config = AgentConfig.from_file(SHARED_CONFIG_FILE)
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
@@ -177,6 +181,7 @@ def evaluate_claude_code(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
+            agent_config=agent_config,
             runtime=runtime,
         ),
     )

@@ -25,7 +25,8 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.types import DatasetTier, EvaluationCategory
+from bcbench.paths import SHARED_CONFIG_FILE
+from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -73,6 +74,7 @@ def run_copilot(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    agent_config = AgentConfig.from_file(SHARED_CONFIG_FILE)
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_copilot_agent(
@@ -81,6 +83,7 @@ def run_copilot(
         model=model,
         category=category,
         output_dir=output_dir,
+        agent_config=agent_config,
         runtime=runtime,
     )
 
@@ -125,6 +128,7 @@ def run_claude(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    agent_config = AgentConfig.from_file(SHARED_CONFIG_FILE)
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_claude_code(
@@ -133,6 +137,7 @@ def run_claude(
         model=model,
         category=category,
         output_dir=output_dir,
+        agent_config=agent_config,
         runtime=runtime,
     )
 

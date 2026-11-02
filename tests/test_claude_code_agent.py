@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bcbench.agent.claude.agent import run_claude_code
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import create_dataset_entry
 
 
@@ -40,6 +40,7 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
             category=EvaluationCategory.BUG_FIX,
             repo_path=repo_path,
             output_dir=output_dir,
+            agent_config=AgentConfig(),
         )
 
     assert mock_run.call_args.args[0] == [
