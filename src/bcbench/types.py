@@ -343,7 +343,7 @@ class NL2ALDataset(StrEnum):
 
     @property
     def version(self) -> str:
-        return "2026-10-14.candidate-v2"
+        return "2026-10-14.candidate-v2.bcbench-1"
 
 
 class EvaluationCategory(StrEnum):

@@ -5,7 +5,7 @@ BC-Bench exposes two reviewed single-turn NL2AL panels for BCAL evaluation:
 | Selection | Entries | Purpose |
 |---|---:|---|
 | `gold` | 110 | Default benchmark panel |
-| `challenge` | 65 | Harder held-out panel |
+| `challenge` | 66 | Harder held-out panel |
 
 The **Evaluation with bcal** workflow defaults to `gold` for both scheduled and manual runs. Manual runs can select either panel from the `dataset` input. The selected panel is included in the workflow run name, concurrency group, bc-eval run name, and bc-eval tags.
 
@@ -66,6 +66,27 @@ Treat the committed JSONL files as vendored data:
 4. Run the NL2AL panel and BCAL workflow tests.
 
 The synchronization date is provenance, not a guarantee that the snapshot is current. When BC-DeveloperExperience has newer merged dataset changes, refresh BC-Bench before starting an evaluation intended to include them.
+
+### BC-Bench-local additions
+
+Entries added directly in BC-Bench, before they exist upstream, are listed under `bcbench_additions` in the manifest and mark the version with a `.bcbench-<n>` suffix so results are never pooled with the pure upstream snapshot. Upstream them to BC-DeveloperExperience before the next synchronization so the next sync does not drop them.
+
+`nl2al__collected-sales-operations-control-tower-1` is an open-ended challenge using a planner's original Sales & Operations Control Tower prompt verbatim. Its assertions are generic (no object or file names) and require:
+
+- a genuine terminal completion in the BCal scenario evidence, not a safety/iteration-limit interruption, an unsupported blocked or discussion-only handover, or a completion claim contradicted by the completion review
+- a successful compile after the last source mutation
+- real netting of open sales demand against inventory and open supply documents, with allocation across competing demand
+- prioritization from planner-maintainable business rules, side-effect-free what-if simulation, and impact on service level, profitability and working capital
+- planner-facing recommendations, honest AI labeling, and no credit for manufactured progress such as health/version utility objects
+
+Evaluate it alone with the `sales-operations-control-tower` cohort:
+
+```powershell
+gh workflow run bcal-evaluation.yml -R microsoft/BC-Bench `
+  -f dataset=challenge `
+  -f cohort=sales-operations-control-tower `
+  -f test-run=false
+```
 
 ## BCAL package version
 

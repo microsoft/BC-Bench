@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-14.candidate-v2",
+  "version": "2026-10-14.candidate-v2.bcbench-1",
   "source_canonical_sha256": "0ede70dad4fd466d180f252d758411cd378d78d6495d321801123c41dc5a1041",
   "source": {
     "name": "BC-DeveloperExperience",
@@ -16,8 +16,8 @@
     },
     "challenge": {
       "file": "nl2al_challenge.jsonl",
-      "count": 65,
-      "sha256": "8563f49db15fa3fc90f466e677109944a83e5ddcbe99024ec5ff5588e47cdd36",
+      "count": 66,
+      "sha256": "c740c5e6e49322b7d4150ebe1974ff774c93bb239ecf4d108c469ea0564955ff",
       "evaluation_scope": "single_turn"
     },
     "multiturn": {
@@ -32,5 +32,13 @@
     "count": 7,
     "sha256": "6c9a2e0d5e0d008146ef03d97fc720e2772f91b072538b2eadf8d5cb52fb5fcd",
     "reason": "Requires explicit active-page context and/or ask_user interaction mappings; not selected by the current runner."
-  }
+  },
+  "bcbench_additions": [
+    {
+      "panel": "challenge",
+      "instance_id": "nl2al__collected-sales-operations-control-tower-1",
+      "added_at": "2026-11-02",
+      "reason": "Open-ended Sales & Operations Control Tower regression for safety-limit termination, uncompiled trailing edits, false completion and manufactured progress."
+    }
+  ]
 }
