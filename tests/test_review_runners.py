@@ -96,6 +96,7 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
     assert agent_runner.call_args.kwargs["leaf_model"] == "gpt-5.6-luna"
     assert agent_runner.call_args.kwargs["engine_path"] == tmp_path
     assert agent_runner.call_args.kwargs["agent_version"] == "a" * 40
+    assert agent_runner.call_args.kwargs["definition_id"] == "pr-review-production-sol-luna-serial-v1"
     get_version.assert_called_once_with(tmp_path)
 
 

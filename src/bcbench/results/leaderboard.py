@@ -4,12 +4,13 @@ from abc import ABC
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal, override
+from typing import Any, Literal, Self, override
 
 from bcbench_core.scoring import pass_hat_k
 from bcbench_core.stats import bootstrap_ci
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from bcbench.agent.pr_review.definitions import validate_pr_review_definition_metadata
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
@@ -186,6 +187,17 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     token_coverage_rate: float | None = None
     credit_coverage_rate: float | None = None
     usage_complete_rate: float | None = None
+    cli_timeout_minutes: int | None = None
+    minimum_severity: Literal["Critical", "High", "Medium", "Low"] | None = None
+    agent_minimum_severity: Literal["Critical", "High", "Medium", "Low"] | None = None
+    review_source: Literal["pr", "local"] | None = None
+    definition_id: str | None = None
+    definition_name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_definition(self) -> Self:
+        validate_pr_review_definition_metadata(self.definition_id, self.definition_name)
+        return self
 
     @classmethod
     @override
@@ -206,6 +218,12 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
             "max_leaf_concurrency": first_run.max_leaf_concurrency,
             "bcquality_source_snapshot": first_run.bcquality_source_snapshot,
             "review_process_count": first_run.review_process_count,
+            "cli_timeout_minutes": first_run.cli_timeout_minutes,
+            "minimum_severity": first_run.minimum_severity,
+            "agent_minimum_severity": first_run.agent_minimum_severity,
+            "review_source": first_run.review_source,
+            "definition_id": first_run.definition_id,
+            "definition_name": first_run.definition_name,
         }
 
     @classmethod

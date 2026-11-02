@@ -23,6 +23,12 @@ Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py).
 
 Keep dataset entry classes and result classes focused on typed data. Put category-specific behavior in the pipeline.
 
+### Named definitions
+
+Standard single-model agents are identified by the shared `model` field. A composed runner may additionally expose a category-owned named definition when its category can validate the complete configuration from runtime evidence. Keep that optional `definition_id` and display name in the category's result, summary, and aggregate models; do not add a universal profile or definition object to shared base result, summary, aggregate, or metric schemas.
+
+The `code-review` category demonstrates this boundary for BC PR Review. Its release-owned registry accepts a definition only when root and leaf models, scheduling, engine and CLI pins, BCQuality provenance, and recorded review policy all match. The normal [Code Review dashboard](docs/code-review.md) displays the definition when present and otherwise falls back to `model`; the [Advanced Metrics view](docs/code-review-details.md) is the detailed provenance surface. Other categories, including BCal scenarios and checkpointed bug-fix lifecycles, may opt in later through their own category-owned metadata without changing shared schemas.
+
 ## Checklist
 
 Use the existing implementations as examples: `bug-fix` and `test-generation` for execution-based categories, `code-review` and `nl2al` for judge-based ones.
