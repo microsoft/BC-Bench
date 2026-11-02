@@ -111,6 +111,7 @@ def evaluate_copilot(
             model=ctx.model,
             output_dir=ctx.result_dir,
             agent_config=agent_config,
+            plugin_root=_config.paths.plugin_root,
             runtime=runtime,
         ),
     )
@@ -186,6 +187,7 @@ def evaluate_claude_code(
             model=ctx.model,
             output_dir=ctx.result_dir,
             agent_config=agent_config,
+            plugin_root=_config.paths.plugin_root,
             runtime=runtime,
         ),
     )

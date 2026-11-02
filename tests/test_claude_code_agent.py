@@ -41,6 +41,7 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
             repo_path=repo_path,
             output_dir=output_dir,
             agent_config=AgentConfig(),
+            plugin_root=tmp_path / "plugins",
         )
 
     assert mock_run.call_args.args[0] == [

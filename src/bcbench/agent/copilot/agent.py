@@ -29,6 +29,7 @@ def run_copilot_agent(
     repo_path: Path,
     output_dir: Path,
     agent_config: AgentConfig,
+    plugin_root: Path,
     runtime: AgentRuntimeConfig | None = None,
     timeout: int = 60 * 60,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -53,12 +54,13 @@ def run_copilot_agent(
         category,
         repo_path,
         AgentHarness.COPILOT,
+        plugin_root,
         runtime=runtime,
     )
     instructions_enabled: bool = setup_instructions_from_config(agent_config, entry, repo_path, harness=AgentHarness.COPILOT)
     skills_enabled: bool = setup_agent_skills(agent_config, entry, repo_path, harness=AgentHarness.COPILOT)
     custom_agent: str | None = setup_custom_agent(agent_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(agent_config, allow_copilot_manifest=True)
+    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(agent_config, plugin_root, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,

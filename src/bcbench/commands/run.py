@@ -88,6 +88,7 @@ def run_copilot(
         category=category,
         output_dir=output_dir,
         agent_config=agent_config,
+        plugin_root=_config.paths.plugin_root,
         runtime=runtime,
     )
 
@@ -143,6 +144,7 @@ def run_claude(
         category=category,
         output_dir=output_dir,
         agent_config=agent_config,
+        plugin_root=_config.paths.plugin_root,
         runtime=runtime,
     )
 
