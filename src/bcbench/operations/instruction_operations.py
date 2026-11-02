@@ -3,7 +3,7 @@ from pathlib import Path
 from shutil import copytree, rmtree
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.dataset.dataset_entry import RepoGroundedEntry
+from bcbench.dataset.dataset_entry import WORKSPACE_PROBLEM_DIR, RepoGroundedEntry
 from bcbench.paths import AGENT_SHARE_DIR
 from bcbench.types import AgentConfig, AgentHarness
 
@@ -91,7 +91,7 @@ def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> 
         repo_path: Path to testbed repository where folder will be copied
     """
     source_dir: Path = entry.problem_statement_dir
-    dest_dir: Path = repo_path / entry.WORKSPACE_PROBLEM_DIR
+    dest_dir: Path = repo_path / WORKSPACE_PROBLEM_DIR
 
     if dest_dir.exists():
         rmtree(dest_dir)

@@ -19,6 +19,7 @@ from bcbench.agent.shared import (
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
+from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = logging.getLogger(__name__)
@@ -42,8 +43,7 @@ def run_claude_code(
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used
     """
-    config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
-    claude_config = AgentConfig.from_file(config_file)
+    claude_config = AgentConfig.from_file(SHARED_CONFIG_FILE)
 
     claude_cmd = shutil.which("claude")
     if not claude_cmd:
