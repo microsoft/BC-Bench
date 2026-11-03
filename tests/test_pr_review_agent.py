@@ -4,10 +4,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.harness import AgentRequest
 from bcbench_core.exceptions import AgentError
 
-from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
-from bcbench.types import EvaluationCategory, PRReviewMetrics
+from bcbench.agent.pr_review.agent import PRReviewHarness, _prepare_bcquality_root, _resolve_pr_review_root, _write_review_json
+from bcbench.types import PRReviewMetrics
 from tests.conftest import create_codereview_entry
 
 
@@ -163,14 +164,8 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[10.0, 12.5]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
     ):
-        result = run_pr_review_agent(
-            entry=entry,
-            model="gpt-5.6-luna",
-            category=EvaluationCategory.CODE_REVIEW,
-            repo_path=tmp_path / "repo",
-            output_dir=Path("output"),
-            engine_path=tmp_path / "engine",
-        )
+        harness = PRReviewHarness(model="gpt-5.6-luna", engine_path=tmp_path / "engine")
+        result = harness.run(AgentRequest(task=entry, work_dir=tmp_path / "repo", output_dir=Path("output")))
 
     metrics = result.metrics
     assert isinstance(metrics, PRReviewMetrics)

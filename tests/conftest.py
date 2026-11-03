@@ -7,13 +7,14 @@ meeting all Pydantic validation requirements.
 
 import json
 from collections.abc import Generator
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, cast, override
 from unittest.mock import patch
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from bcbench_core.dataset import TestEntry
@@ -79,6 +80,21 @@ def create_dataset_entry(
         fail_to_pass=fail_to_pass,
         pass_to_pass=pass_to_pass,
     )
+
+
+@dataclass
+class StubHarness(Harness[BaseDatasetEntry, AgentHarness]):
+    result: AgentResult = field(default_factory=AgentResult)
+    requests: list[AgentRequest[BaseDatasetEntry]] = field(default_factory=list)
+
+    @override
+    def identity(self) -> AgentIdentity[AgentHarness]:
+        return AgentIdentity[AgentHarness](harness=AgentHarness.COPILOT, version="1.0.0", model="test-model")
+
+    @override
+    def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
+        self.requests.append(request)
+        return self.result
 
 
 def create_evaluation_context[EntryT: BaseDatasetEntry](

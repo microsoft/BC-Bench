@@ -13,10 +13,10 @@ from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.evaluate.base import AgentHarnessFor, EvaluationPipeline
 from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentConfig, EvaluationCategory, EvaluationContext
-from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
+from tests.conftest import StubHarness, create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
 
 class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
@@ -36,11 +36,11 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
         self.setup_called = True
 
     @override
-    def run_agent(self, context: EvaluationContext[E], agent_runner: AgentRunner[E]) -> None:
+    def run_agent(self, context: EvaluationContext[E], harness: AgentHarnessFor[E]) -> None:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
-        result = agent_runner(context)
+        result = harness.run(context.agent_request())
         context.metrics, context.experiment = result.metrics, result.experiment
 
     @override
@@ -50,8 +50,8 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
             raise self.raise_in_evaluate
 
 
-def _noop_runner(_ctx: EvaluationContext[BugFixEntry]) -> AgentResult:
-    return AgentResult(metrics=AgentMetrics(execution_time=1.0), experiment=ExperimentConfiguration())
+def _noop_harness() -> StubHarness:
+    return StubHarness(AgentResult(metrics=AgentMetrics(execution_time=1.0), experiment=ExperimentConfiguration()))
 
 
 def _read_only_result[E: BaseDatasetEntry](ctx: EvaluationContext[E]) -> BaseEvaluationResult:
@@ -67,7 +67,7 @@ class TestExecuteHappyPath:
         ctx = create_evaluation_context(tmp_path)
         pipeline = _StubPipeline[BugFixEntry]()
 
-        pipeline.execute(ctx, _noop_runner)
+        pipeline.execute(ctx, _noop_harness())
 
         assert pipeline.setup_called
         assert pipeline.run_agent_called
@@ -81,7 +81,7 @@ class TestExecuteAgentTimeout:
         timeout_config = ExperimentConfiguration(custom_instructions=True)
         pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config))
 
-        pipeline.execute(ctx, _noop_runner)
+        pipeline.execute(ctx, _noop_harness())
 
         assert pipeline.evaluate_called is False
         result = _read_only_result(ctx)
@@ -95,7 +95,7 @@ class TestExecuteAgentTimeout:
         ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
         pipeline = _StubPipeline[NL2ALEntry](raise_in_run_agent=AgentTimeoutError("test timeout"))
 
-        pipeline.execute(ctx, lambda _: AgentResult())
+        pipeline.execute(ctx, StubHarness())
 
         result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
         payload = json.loads(result_file.read_text(encoding="utf-8"))
@@ -112,7 +112,7 @@ class TestExecuteEvaluateError:
         pipeline = _StubPipeline[BugFixEntry](raise_in_evaluate=RuntimeError("infra blew up"))
 
         with pytest.raises(RuntimeError, match="infra blew up"):
-            pipeline.execute(ctx, _noop_runner)
+            pipeline.execute(ctx, _noop_harness())
 
 
 def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:

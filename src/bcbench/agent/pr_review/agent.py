@@ -17,21 +17,21 @@ import re
 import shutil
 import subprocess
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 
 import yaml
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentResult
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from bcbench_core.git import commit_changes, has_changes, init_repo
 
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
-from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.paths import SHARED_CONFIG_FILE
-from bcbench.types import EvaluationCategory, PRReviewMetrics
+from bcbench.types import AgentHarness, PRReviewMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -153,84 +153,85 @@ def _write_review_json(output_dir: Path, repo_path: Path) -> int:
     return len(comments)
 
 
-def run_pr_review_agent(
-    entry: BaseDatasetEntry,
-    model: str,
-    category: EvaluationCategory,
-    repo_path: Path,
-    output_dir: Path,
-    engine_path: Path | None = None,
-    min_severity: str | None = None,
-    timeout: int = 60 * 60,
-) -> AgentResult:
-    """Run the engine's complete local review pipeline and write review.json.
+@dataclass(frozen=True)
+class PRReviewHarness(Harness[CodeReviewEntry, AgentHarness]):
+    """The production BC-ALAgents review engine, run in local mode on code-review entries.
 
-    Separate from run_copilot_agent by design: this spawns the PROD BC-ALAgents
-    PowerShell orchestrator (Copilot is spawned inside the engine, not here), so it
-    owns none of the copilot-harness prompt/MCP/LSP wiring and takes engine-specific
-    inputs (BC-ALAgents source, min severity) for the code-review category only.
+    Separate from CopilotHarness by design: this spawns the PROD BC-ALAgents PowerShell
+    orchestrator (Copilot is spawned inside the engine, not here), so it owns none of the
+    copilot-harness prompt/MCP/LSP wiring and takes engine-specific inputs instead.
     """
-    if category is not EvaluationCategory.CODE_REVIEW:
-        raise AgentError(f"The engine agent only supports the code-review category, got {category.value}.")
-    if not isinstance(entry, CodeReviewEntry):
-        raise AgentError(f"The engine agent requires a CodeReviewEntry, got {type(entry).__name__}.")
 
-    repo_path = repo_path.resolve()
-    output_dir = output_dir.resolve()
-    settings = _load_pr_review_settings()
-    engine_root = _resolve_pr_review_root(engine_path)
-    pwsh = _resolve_pwsh()
-    severity = min_severity or settings["min_severity"]
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Running BC-ALAgents review engine on: {entry.instance_id}")
+    model: str
+    engine_path: Path | None = None
+    min_severity: str | None = None
+    timeout: int = 60 * 60
 
-    _commit_patch_as_head(repo_path)
-    trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
-    bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
+    @override
+    def identity(self) -> AgentIdentity[AgentHarness]:
+        return AgentIdentity[AgentHarness](harness=AgentHarness.PR_REVIEW, version=get_pr_review_version(self.engine_path), model=self.model)
 
-    engine = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
-    env = {
-        **_environment_without_bcquality_overrides(),
-        "REVIEW_SOURCE": "local",
-        "REVIEW_PHASE": "all",
-        "BASE_REF": entry.base_commit,
-        "REVIEW_TARGET_WORKSPACE": str(repo_path),
-        "REVIEW_WORKSPACE": str(trusted_workspace),
-        "REVIEW_OUTPUT_DIR": str(output_dir),
-        "BCQUALITY_ROOT": str(bcquality_root),
-        "GITHUB_REPOSITORY": entry.repo,
-        "COPILOT_MODEL": model,
-        "AGENT_MINIMUM_SEVERITY": severity,
-    }
+    @override
+    def run(self, request: AgentRequest[CodeReviewEntry], /) -> AgentResult:
+        """Run the engine's complete local review pipeline and write review.json."""
+        entry, repo_path, output_dir, timeout = request.task, request.work_dir, request.output_dir, request.timeout or self.timeout
+        model, engine_path, min_severity = self.model, self.engine_path, self.min_severity
+        repo_path = repo_path.resolve()
+        output_dir = output_dir.resolve()
+        settings = _load_pr_review_settings()
+        engine_root = _resolve_pr_review_root(engine_path)
+        pwsh = _resolve_pwsh()
+        severity = min_severity or settings["min_severity"]
+        output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Running BC-ALAgents review engine on: {entry.instance_id}")
 
-    config = ExperimentConfiguration()
+        _commit_patch_as_head(repo_path)
+        trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
+        bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
 
-    start = time.monotonic()
-    try:
-        result = subprocess.run(
-            [pwsh, "-NoProfile", "-File", str(engine)],
-            cwd=str(repo_path),
-            env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=timeout,
-            check=True,
-        )
-        logger.debug(f"Engine stdout:\n{result.stdout}")
-        if result.stderr:
-            logger.debug(f"Engine stderr:\n{result.stderr}")
-        count = _write_review_json(output_dir, repo_path)
-        logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
-    except subprocess.TimeoutExpired:
-        logger.exception(f"Engine review timed out after {timeout} seconds")
-        metrics = PRReviewMetrics(execution_time=timeout)
-        raise AgentTimeoutError("Engine review timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"Engine review failed (exit {e.returncode}):\n{e.stdout}\n{e.stderr}")
-        raise AgentError(f"Engine review execution failed: {e}") from None
-    except Exception:
-        logger.exception("Unexpected error running engine review")
-        raise
-    else:
-        return AgentResult(metrics=build_pr_review_metrics(output_dir, time.monotonic() - start), experiment=config)
+        engine = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
+        env = {
+            **_environment_without_bcquality_overrides(),
+            "REVIEW_SOURCE": "local",
+            "REVIEW_PHASE": "all",
+            "BASE_REF": entry.base_commit,
+            "REVIEW_TARGET_WORKSPACE": str(repo_path),
+            "REVIEW_WORKSPACE": str(trusted_workspace),
+            "REVIEW_OUTPUT_DIR": str(output_dir),
+            "BCQUALITY_ROOT": str(bcquality_root),
+            "GITHUB_REPOSITORY": entry.repo,
+            "COPILOT_MODEL": model,
+            "AGENT_MINIMUM_SEVERITY": severity,
+        }
+
+        config = ExperimentConfiguration()
+
+        start = time.monotonic()
+        try:
+            result = subprocess.run(
+                [pwsh, "-NoProfile", "-File", str(engine)],
+                cwd=str(repo_path),
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=timeout,
+                check=True,
+            )
+            logger.debug(f"Engine stdout:\n{result.stdout}")
+            if result.stderr:
+                logger.debug(f"Engine stderr:\n{result.stderr}")
+            count = _write_review_json(output_dir, repo_path)
+            logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
+        except subprocess.TimeoutExpired:
+            logger.exception(f"Engine review timed out after {timeout} seconds")
+            metrics = PRReviewMetrics(execution_time=timeout)
+            raise AgentTimeoutError("Engine review timed out", metrics=metrics, config=config) from None
+        except subprocess.CalledProcessError as e:
+            logger.exception(f"Engine review failed (exit {e.returncode}):\n{e.stdout}\n{e.stderr}")
+            raise AgentError(f"Engine review execution failed: {e}") from None
+        except Exception:
+            logger.exception("Unexpected error running engine review")
+            raise
+        else:
+            return AgentResult(metrics=build_pr_review_metrics(output_dir, time.monotonic() - start), experiment=config)

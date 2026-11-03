@@ -10,7 +10,7 @@ from bcbench_core.projects import categorize_projects
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.dataset import TestGenEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.evaluate.base import AgentHarnessFor, EvaluationPipeline
 from bcbench.exceptions import NoTestsExtractedError
 from bcbench.github_actions import github_log_group
 from bcbench.operations import copy_problem_statement_folder, extract_tests_from_patch, setup_repo_prebuild
@@ -65,9 +65,9 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         set_runtime_version(context.repo_path, context.entry.project_paths)
 
     @override
-    def run_agent(self, context: EvaluationContext[TestGenEntry], agent_runner: AgentRunner[TestGenEntry]) -> None:
+    def run_agent(self, context: EvaluationContext[TestGenEntry], harness: AgentHarnessFor[TestGenEntry]) -> None:
         with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
-            result = agent_runner(context)
+            result = harness.run(context.agent_request())
             context.metrics, context.experiment = result.metrics, result.experiment
 
     @override

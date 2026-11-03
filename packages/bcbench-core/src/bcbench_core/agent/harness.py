@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Generic, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
@@ -27,9 +27,13 @@ class AgentIdentity[N: str = str](BaseModel):
     model: str | None = None
 
 
+# Covariant, so a harness for any entry (Harness[BaseEntry]) also runs specific entries (Harness[SubEntry])
+T_co = TypeVar("T_co", covariant=True)
+
+
 @dataclass(frozen=True)
-class AgentRequest[T]:
-    task: T
+class AgentRequest(Generic[T_co]):  # noqa: UP046 - PEP 695 cannot declare variance, and ty infers frozen dataclass fields as invariant
+    task: T_co
     # The agent's workspace: a prepared repository, or an empty directory for answer-only tasks
     work_dir: Path
     # Receives logs and raw captures

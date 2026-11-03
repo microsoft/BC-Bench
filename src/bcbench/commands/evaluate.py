@@ -5,12 +5,12 @@ from typing import Annotated, cast, override
 
 import typer
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentResult
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
 
-from bcbench.agent import BCalBackendConfig, CopilotHarness, get_bcal_version, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, BCalHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
 from bcbench.cli_options import (
     AgentConfigPath,
     ClaudeCodeModel,
@@ -33,7 +33,7 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.evaluate import AgentRunner, CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline, harness_runner
+from bcbench.evaluate import AgentHarnessFor, CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -102,7 +102,7 @@ def evaluate_copilot(
     )
 
     pipeline = category.pipeline(agent_config)
-    pipeline.execute(context, harness_runner(harness))
+    pipeline.execute(context, harness)
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -149,6 +149,7 @@ def evaluate_claude_code(
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     agent_config = AgentConfig.from_file(config_path)
+    harness = ClaudeHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
@@ -158,25 +159,13 @@ def evaluate_claude_code(
         repo_path=repo_path,
         result_dir=run_dir,
         container=runtime.container if runtime else None,
-        agent=AgentIdentity[AgentHarness](harness=AgentHarness.CLAUDE, version=get_claude_version(), model=model),
+        agent=harness.identity(),
         category=category,
         tier=tier,
     )
 
     pipeline = category.pipeline(agent_config)
-    pipeline.execute(
-        context,
-        lambda ctx: run_claude_code(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=model,
-            output_dir=ctx.result_dir,
-            agent_config=agent_config,
-            plugin_root=_config.paths.plugin_root,
-            runtime=runtime,
-        ),
-    )
+    pipeline.execute(context, harness)
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -204,6 +193,7 @@ def evaluate_pr_review(
     """
     category = EvaluationCategory.CODE_REVIEW
     entry = CodeReviewEntry.load(category.dataset_path(), entry_id=entry_id)[0]
+    harness = PRReviewHarness(model=model, engine_path=engine_path)
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
@@ -213,21 +203,11 @@ def evaluate_pr_review(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        agent=AgentIdentity[AgentHarness](harness=AgentHarness.PR_REVIEW, version=get_pr_review_version(engine_path), model=model),
+        agent=harness.identity(),
         category=category,
     )
 
-    CodeReviewPipeline().execute(
-        context,
-        lambda ctx: run_pr_review_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=model,
-            output_dir=ctx.result_dir,
-            engine_path=engine_path,
-        ),
-    )
+    CodeReviewPipeline().execute(context, harness)
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -251,10 +231,7 @@ def evaluate_bcal(
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
     run_dir = prepare_run_dir(output_dir, run_id)
-    backend_config = BCalBackendConfig(
-        command=llm_command,
-        model=llm_model,
-    )
+    harness = BCalHarness(BCalBackendConfig(command=llm_command, model=llm_model))
 
     logger.info(f"Running evaluation on entry {entry_id} with BCal")
 
@@ -263,21 +240,14 @@ def evaluate_bcal(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        agent=AgentIdentity[AgentHarness](harness=AgentHarness.BCAL, version=get_bcal_version(), model=llm_model or "external-command"),
+        agent=harness.identity(),
         category=category,
         tier=tier,
     )
 
     pipeline = NL2ALPipeline()
     try:
-        pipeline.execute(
-            context,
-            lambda ctx: run_bcal_agent(
-                entry=cast(NL2ALEntry, ctx.entry),
-                repo_path=ctx.repo_path,
-                backend_config=backend_config,
-            ),
-        )
+        pipeline.execute(context, harness)
     except AgentError as exc:
         result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
         pipeline.save_result(context, result)
@@ -333,16 +303,26 @@ def evaluate_mock(
         entry=entry,
         repo_path=Path(),
         result_dir=run_dir,
-        agent=AgentIdentity[AgentHarness](harness=AgentHarness.MOCK, version="mock", model="mock-model"),
+        agent=MockHarness().identity(),
         category=category,
         tier=tier,
     )
 
     pipeline = MockEvaluationPipeline()
-    pipeline.execute(context, lambda _ctx: AgentResult())
+    pipeline.execute(context, MockHarness())
 
     logger.info("Mock evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
+
+
+class MockHarness(Harness[BaseDatasetEntry, AgentHarness]):
+    @override
+    def identity(self) -> AgentIdentity[AgentHarness]:
+        return AgentIdentity[AgentHarness](harness=AgentHarness.MOCK, version="mock", model="mock-model")
+
+    @override
+    def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
+        return AgentResult()
 
 
 class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
@@ -361,7 +341,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         logger.info("Mock pipeline: Skipping setup")
 
     @override
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], agent_runner: AgentRunner[BaseDatasetEntry]) -> None:
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarnessFor[BaseDatasetEntry]) -> None:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 
