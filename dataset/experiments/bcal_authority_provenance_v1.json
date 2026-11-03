@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "name": "bcal-authority-provenance-v1",
+  "repeat_count": 2,
+  "authority": {
+    "category": "bcal-scenario",
+    "entries": [
+      "bcal-scenario__authority-direct-and-corrected-scope-1",
+      "bcal-scenario__authority-rejected-permission-1",
+      "bcal-scenario__authority-retained-intent-1",
+      "bcal-scenario__authority-untrusted-evidence-1"
+    ]
+  },
+  "ordinary_quality": {
+    "category": "nl2al",
+    "dataset_file": "dataset/nl2al.jsonl",
+    "expected_entry_count": 110
+  },
+  "excluded_entries": [
+    {
+      "instance_id": "nl2al__collected-sales-operations-control-tower-1",
+      "reason": "Investigated separately because its timeout is not an authority-contract signal.",
+      "include_in_promotion_scoring": false
+    }
+  ],
+  "accepted_baseline_reference": {
+    "bcal_version": "30.0.44.65502-beta",
+    "model": "gpt-55-chat",
+    "repeat_scores": [
+      "103/110",
+      "103/110"
+    ],
+    "github_run_id": "40399204122"
+  }
+}

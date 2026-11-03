@@ -400,3 +400,33 @@ def test_bcal_workflow_accepts_both_advanced_categories():
     assert '- "bcal-feature"' in workflow
     assert "--category \"${{ inputs.category || 'bcal-scenario' }}\"" in workflow
     assert "path: ${{ env.EVALUATION_RESULTS_DIR }}/**" in workflow
+
+
+def test_authority_experiment_selector_excludes_control_tower():
+    selector_path = Path("dataset/experiments/bcal_authority_provenance_v1.json")
+    selector = json.loads(selector_path.read_text(encoding="utf-8"))
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    scenario_ids = {entry.instance_id for entry in scenarios}
+    gold_ids = {json.loads(line)["instance_id"] for line in Path(selector["ordinary_quality"]["dataset_file"]).read_text(encoding="utf-8").splitlines() if line.strip()}
+    excluded = {entry["instance_id"] for entry in selector["excluded_entries"]}
+    control_tower = "nl2al__collected-sales-operations-control-tower-1"
+
+    assert selector["repeat_count"] == 2
+    assert set(selector["authority"]["entries"]) <= scenario_ids
+    assert len(selector["authority"]["entries"]) == 4
+    assert len(gold_ids) == selector["ordinary_quality"]["expected_entry_count"] == 110
+    assert excluded == {control_tower}
+    assert control_tower not in selector["authority"]["entries"]
+    assert control_tower not in gold_ids
+    assert selector["excluded_entries"][0]["include_in_promotion_scoring"] is False
+
+
+def test_authority_experiment_runner_uses_one_shared_selector():
+    script = Path("scripts/Run-BCalAuthorityExperiment.ps1").read_text(encoding="utf-8")
+
+    assert "bcal_authority_provenance_v1.json" in script
+    assert "$entries = @($entries | Where-Object { $_ -notin $excludedEntries })" in script
+    assert '"selection.json"' in script
+    assert "promotion_entries = $entries" in script
+    assert "foreach ($repeat in 1..$config.repeat_count)" in script
+    assert "& python -m uv run bcbench evaluate bcal" in script
