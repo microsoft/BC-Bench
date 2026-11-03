@@ -6,14 +6,15 @@ from typing import override
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentConfig, EvaluationCategory, EvaluationContext
 from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
 

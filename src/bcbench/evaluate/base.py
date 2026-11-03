@@ -5,13 +5,14 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Protocol
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentTimeoutError
 from bcbench.results import BaseEvaluationResult
 from bcbench.results.base import RESULT_FILE_SUFFIX
-from bcbench.types import EvaluationContext, ExperimentConfiguration
+from bcbench.types import EvaluationContext
 
 logger = logging.getLogger(__name__)
 

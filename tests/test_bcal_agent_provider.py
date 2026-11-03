@@ -7,11 +7,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from bcbench_core.exceptions import AgentError
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
-from bcbench.exceptions import AgentTimeoutError
 from tests.conftest import create_nl2al_entry
 
 

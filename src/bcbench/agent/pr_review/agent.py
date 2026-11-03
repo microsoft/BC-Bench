@@ -21,16 +21,16 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from bcbench_core.exceptions import AgentError
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from bcbench_core.git import commit_changes, has_changes, init_repo
 
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.exceptions import AgentTimeoutError
 from bcbench.paths import SHARED_CONFIG_FILE
-from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import EvaluationCategory, PRReviewMetrics
 
 logger = logging.getLogger(__name__)
 

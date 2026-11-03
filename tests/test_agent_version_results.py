@@ -3,14 +3,15 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.commands.result import _rebuild_aggregates, result_update
-from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory
 from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context
 
 
