@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 from io import BytesIO
 from pathlib import Path
@@ -452,6 +453,67 @@ def test_authority_experiment_runner_uses_one_shared_selector():
     assert "BCAL_LLM_COMMAND for the fixed external-command backend" in script
     assert "symbols under $symbolRoot" in script
     assert "--repo-path $workspace" in script
-    assert "--run-id $entry" in script
+    assert "--run-id $entry" not in script
+    assert '$aggregateRun = Join-Path $runOutput "bcal_test_run"' in script
+    assert '$caseOutput = Join-Path $OutputDir "case-results\\$Variant-$Lane-r$repeat\\$entry"' in script
+    assert '"Publish-BCalCaseResults.ps1"' in script
     assert "foreach ($repeat in 1..$config.repeat_count)" in script
     assert "& python -m uv run bcbench evaluate bcal" in script
+
+
+def test_authority_experiment_publishes_all_case_results(tmp_path: Path):
+    powershell = shutil.which("pwsh") or shutil.which("powershell")
+    if powershell is None:
+        pytest.skip("PowerShell is required to exercise the experiment result publisher.")
+
+    publisher = Path(__file__).parents[1] / "scripts" / "Publish-BCalCaseResults.ps1"
+    aggregate = tmp_path / "variant-authority-r1" / "bcal_test_run"
+    entries = ("authority-case-1", "authority-case-2")
+
+    for entry in entries:
+        case_run = tmp_path / "case-results" / entry / "bcal_test_run"
+        artifacts = case_run / "artifacts"
+        artifacts.mkdir(parents=True)
+        (case_run / f"{entry}.jsonl").write_text(f'{{"instance_id":"{entry}"}}\n')
+        (artifacts / f"{entry}-workspace.zip").write_bytes(entry.encode())
+
+        subprocess.run(
+            [
+                powershell,
+                "-NoProfile",
+                "-File",
+                str(publisher),
+                "-CaseRun",
+                str(case_run),
+                "-AggregateRun",
+                str(aggregate),
+                "-Entry",
+                entry,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    assert sorted(path.name for path in aggregate.glob("*.jsonl")) == [f"{entry}.jsonl" for entry in entries]
+    assert sorted(path.name for path in (aggregate / "artifacts").glob("*.zip")) == [f"{entry}-workspace.zip" for entry in entries]
+
+    duplicate = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-File",
+            str(publisher),
+            "-CaseRun",
+            str(tmp_path / "case-results" / entries[0] / "bcal_test_run"),
+            "-AggregateRun",
+            str(aggregate),
+            "-Entry",
+            entries[0],
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert duplicate.returncode != 0
+    assert "BCal experiment output collision" in duplicate.stderr
