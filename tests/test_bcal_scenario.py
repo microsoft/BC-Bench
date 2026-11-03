@@ -111,6 +111,15 @@ def scenario_result_payload(*, completed: bool = True) -> dict:
     }
 
 
+def test_scenario_result_accepts_null_interaction_choices():
+    payload = scenario_result_payload()
+    payload["interactions"][0]["request"]["choices"] = None
+
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    assert result.interactions[0].request.choices == []
+
+
 def test_execution_manifest_redacts_hidden_evaluation(tmp_path: Path):
     entry = create_bcal_scenario_entry()
     path = tmp_path / "execution.json"
