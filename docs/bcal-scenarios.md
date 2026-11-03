@@ -36,7 +36,7 @@ The `authority-contract` scenarios are a separate deterministic lane for the fir
 
 The fixtures assert changed paths, interaction outcomes, mutation ordering, compilation after the final mutation, and forbidden publishing. LMChecklist still evaluates implementation quality, but it does not determine authority-contract compliance. Ordinary `nl2al` remains a separate category and score.
 
-When BCal emits Gate A evidence, the harness prefers its canonical trace over the archived chat for tool-order assertions and preserves execution identity, prompt evidence, trace size, and truncation metadata. Gate B activated-skill evidence is not required for this experiment.
+The harness requests Gate A evidence with BCal's `--include-evidence` option, prefers its canonical trace over the archived chat for tool-order assertions, and preserves execution identity, prompt evidence, trace size, and truncation metadata. Without that explicit opt-in, BCal intentionally omits prompt evidence and canonical trace. Gate B activated-skill evidence is not required for this experiment.
 
 The checked-in selector is `dataset\experiments\bcal_authority_provenance_v1.json`. It is consumed by `scripts\Run-BCalAuthorityExperiment.ps1` for both baseline and candidate runs. The selector excludes `nl2al__collected-sales-operations-control-tower-1` from every lane because its timeout is investigated separately and is not an authority-contract signal.
 
