@@ -33,7 +33,7 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.evaluate import AgentHarnessFor, CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
+from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -341,7 +341,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         logger.info("Mock pipeline: Skipping setup")
 
     @override
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarnessFor[BaseDatasetEntry]) -> None:
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: Harness[BaseDatasetEntry, AgentHarness]) -> None:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 

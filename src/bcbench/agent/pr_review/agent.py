@@ -174,7 +174,8 @@ class PRReviewHarness(Harness[CodeReviewEntry, AgentHarness]):
     @override
     def run(self, request: AgentRequest[CodeReviewEntry], /) -> AgentResult:
         """Run the engine's complete local review pipeline and write review.json."""
-        entry, repo_path, output_dir, timeout = request.task, request.work_dir, request.output_dir, request.timeout or self.timeout
+        entry, repo_path, output_dir = request.task, request.work_dir, request.output_dir
+        timeout = request.timeout or self.timeout
         model, engine_path, min_severity = self.model, self.engine_path, self.min_severity
         repo_path = repo_path.resolve()
         output_dir = output_dir.resolve()

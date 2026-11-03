@@ -136,7 +136,8 @@ class BCalHarness(Harness[NL2ALEntry, AgentHarness]):
 
     @override
     def run(self, request: AgentRequest[NL2ALEntry], /) -> AgentResult:
-        entry, repo_path, timeout, backend_config = request.task, request.work_dir, request.timeout or self.timeout, self.backend_config
+        entry, repo_path, backend_config = request.task, request.work_dir, self.backend_config
+        timeout = request.timeout or self.timeout
         logger.info(f"Running bcal CLI on: {entry.instance_id}")
 
         # The .alpackages dir is created by the NL2AL pipeline setup step

@@ -12,12 +12,14 @@ import logging
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import Harness
+
 from bcbench.dataset import ExtRequestTriageEntry
-from bcbench.evaluate.base import AgentHarnessFor, EvaluationPipeline
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.github_actions import github_log_group
 from bcbench.operations import setup_repo_prebuild
 from bcbench.results.base import JudgeBasedEvaluationResult
-from bcbench.types import EvaluationContext
+from bcbench.types import AgentHarness, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ class ExtRequestTriagePipeline(EvaluationPipeline[ExtRequestTriageEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def run_agent(self, context: EvaluationContext[ExtRequestTriageEntry], harness: AgentHarnessFor[ExtRequestTriageEntry]) -> None:
+    def run_agent(self, context: EvaluationContext[ExtRequestTriageEntry], harness: Harness[ExtRequestTriageEntry, AgentHarness]) -> None:
         with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
             result = harness.run(context.agent_request())
             context.metrics, context.experiment = result.metrics, result.experiment

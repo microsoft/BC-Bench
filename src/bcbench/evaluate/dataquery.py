@@ -5,14 +5,15 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import Harness
 from bcbench_core.filesystem import clear_directory
 
 from bcbench.dataset import DataQueryEntry
-from bcbench.evaluate.base import AgentHarnessFor, EvaluationPipeline
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.github_actions import github_log_group
 from bcbench.results.base import ExecutionBasedEvaluationResult
-from bcbench.types import EvaluationContext
+from bcbench.types import AgentHarness, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def run_agent(self, context: EvaluationContext[DataQueryEntry], harness: AgentHarnessFor[DataQueryEntry]) -> None:
+    def run_agent(self, context: EvaluationContext[DataQueryEntry], harness: Harness[DataQueryEntry, AgentHarness]) -> None:
         with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
             result = harness.run(context.agent_request())
             context.metrics, context.experiment = result.metrics, result.experiment

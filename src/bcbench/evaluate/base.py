@@ -14,10 +14,7 @@ from bcbench.types import AgentHarness, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["AgentHarnessFor", "EvaluationPipeline"]
-
-# A harness that can run entries of type E, identified by a BC-Bench harness name
-type AgentHarnessFor[E: BaseDatasetEntry] = Harness[E, AgentHarness]
+__all__ = ["EvaluationPipeline"]
 
 
 class EvaluationPipeline[E: BaseDatasetEntry](ABC):
@@ -48,7 +45,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def run_agent(self, context: EvaluationContext[E], harness: AgentHarnessFor[E]) -> None:
+    def run_agent(self, context: EvaluationContext[E], harness: Harness[E, AgentHarness]) -> None:
         """Run the agent and capture metrics.
 
         Args:
@@ -77,7 +74,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     def execute(
         self,
         context: EvaluationContext[E],
-        harness: AgentHarnessFor[E],
+        harness: Harness[E, AgentHarness],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 
