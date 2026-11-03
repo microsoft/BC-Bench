@@ -631,7 +631,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     result_dir: Path
 
     # The agent under evaluation, resolved before running
-    agent: AgentIdentity
+    agent: AgentIdentity[AgentHarness]
 
     # Evaluation category
     category: EvaluationCategory

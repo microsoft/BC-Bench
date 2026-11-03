@@ -17,12 +17,15 @@ from bcbench_core.agent.metrics import AgentMetrics
 __all__ = ["AgentIdentity", "AgentRequest", "AgentResult", "Harness"]
 
 
-class AgentIdentity(BaseModel):
-    """What is being evaluated, resolved before any task runs."""
+class AgentIdentity[N: str = str](BaseModel):
+    """What is being evaluated, resolved before any task runs.
+
+    ``N`` lets applications type the harness name, e.g. with their own ``StrEnum`` of harnesses.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    harness: str
+    harness: N
     # CLI version, engine commit, or hosted agent version
     version: str
     # Configured model; None when the harness pins or delegates model selection
@@ -52,13 +55,13 @@ class AgentResult:
     observed_model: str | None = None
 
 
-class Harness[T](Protocol):
-    """Runs an agent on tasks of type ``T``.
+class Harness[T, N: str = str](Protocol):
+    """Runs an agent on tasks of type ``T``, identified by a harness name of type ``N``.
 
     ``identity`` checks the harness is usable and raises ``AgentError`` otherwise. ``run`` raises
     ``AgentTimeoutError`` when the timeout is exceeded and ``AgentError`` for any other failure.
     """
 
-    def identity(self) -> AgentIdentity: ...
+    def identity(self) -> AgentIdentity[N]: ...
 
     def run(self, request: AgentRequest[T], /) -> AgentResult: ...

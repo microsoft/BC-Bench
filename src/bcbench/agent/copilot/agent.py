@@ -3,11 +3,12 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import override
 
 from bcbench_core.agent.copilot import CopilotOptions, CopilotTimeoutError, get_copilot_version, invoke_copilot
 from bcbench_core.agent.customization import setup_custom_agent, setup_instructions, setup_skills
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.agent.shared import (
@@ -24,11 +25,9 @@ from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, Evaluat
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = 60 * 60
-
 
 @dataclass(frozen=True)
-class CopilotHarness:
+class CopilotHarness(Harness[BaseDatasetEntry, AgentHarness]):
     """GitHub Copilot CLI on any category, customized through the agent config."""
 
     model: str
@@ -36,10 +35,13 @@ class CopilotHarness:
     agent_config: AgentConfig
     plugin_root: Path
     runtime: AgentRuntimeConfig | None = None
+    timeout: int = 60 * 60
 
-    def identity(self) -> AgentIdentity:
-        return AgentIdentity(harness=AgentHarness.COPILOT, version=get_copilot_version(), model=self.model)
+    @override
+    def identity(self) -> AgentIdentity[AgentHarness]:
+        return AgentIdentity[AgentHarness](harness=AgentHarness.COPILOT, version=get_copilot_version(), model=self.model)
 
+    @override
     def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
         entry, repo_path, output_dir = request.task, request.work_dir, request.output_dir
         agent_config, category, runtime, plugin_root = self.agent_config, self.category, self.runtime, self.plugin_root
@@ -99,7 +101,7 @@ class CopilotHarness:
                 prompt=prompt,
                 model=self.model,
                 work_dir=repo_path,
-                timeout=request.timeout or DEFAULT_TIMEOUT,
+                timeout=request.timeout or self.timeout,
                 env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
                 options=options,
             )

@@ -11,7 +11,7 @@ from bcbench_core.exceptions import AgentTimeoutError
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results import BaseEvaluationResult
 from bcbench.results.base import RESULT_FILE_SUFFIX
-from bcbench.types import EvaluationContext
+from bcbench.types import AgentHarness, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class AgentRunner[E: BaseDatasetEntry](Protocol):
     def __call__(self, context: EvaluationContext[E], /) -> AgentResult: ...
 
 
-def harness_runner[E: BaseDatasetEntry](harness: Harness[E]) -> AgentRunner[E]:
+def harness_runner[E: BaseDatasetEntry](harness: Harness[E, AgentHarness]) -> AgentRunner[E]:
     """Adapt ``harness`` to the pipelines' ``AgentRunner`` until every harness implements ``Harness``."""
 
     def run(context: EvaluationContext[E], /) -> AgentResult:

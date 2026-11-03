@@ -88,7 +88,7 @@ class TestGoldRowsEmptyGuard:
             repo_path=tmp_path / "repo",
             result_dir=tmp_path / "results",
             container=ContainerConfig("bcbench", "admin", "secret", company="CRONUS"),
-            agent=AgentIdentity(harness=AgentHarness.COPILOT, version="1.0.0", model="test-model"),
+            agent=AgentIdentity[AgentHarness](harness=AgentHarness.COPILOT, version="1.0.0", model="test-model"),
             category=EvaluationCategory.DATA_QUERY,
         )
 

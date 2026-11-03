@@ -99,7 +99,7 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
         container=ContainerConfig(name=container_name, username=username, password=password, company="CRONUS"),
-        agent=AgentIdentity(harness=agent_name, version=agent_version, model=model),
+        agent=AgentIdentity[AgentHarness](harness=agent_name, version=agent_version, model=model),
         category=category,
     )
 
@@ -219,7 +219,7 @@ def create_codereview_result(
         repo_path=Path(),
         result_dir=Path(),
         container=ContainerConfig(name="t", username="t", password="t", company="CRONUS"),
-        agent=AgentIdentity(harness=agent_name, version="1.0.0", model=model),
+        agent=AgentIdentity[AgentHarness](harness=agent_name, version="1.0.0", model=model),
         category=EvaluationCategory.CODE_REVIEW,
     )
     context.metrics = metrics

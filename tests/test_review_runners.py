@@ -62,7 +62,7 @@ def test_generic_evaluate_commands_use_code_review_pipeline(tmp_path: Path, comm
         )
 
     assert len(contexts) == 1
-    assert contexts[0].agent.harness == agent_name
+    assert contexts[0].agent.harness is agent_name
     assert contexts[0].agent.version == "1.2.3"
     assert contexts[0].category is EvaluationCategory.CODE_REVIEW
 
@@ -94,7 +94,7 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
 
     assert result.exit_code == 0, result.exception
     assert len(contexts) == 1
-    assert contexts[0].agent.harness == AgentHarness.PR_REVIEW
+    assert contexts[0].agent.harness is AgentHarness.PR_REVIEW
     assert contexts[0].agent.version == "a" * 40
     assert contexts[0].category is EvaluationCategory.CODE_REVIEW
     assert contexts[0].agent.model == "gpt-5.6-luna"

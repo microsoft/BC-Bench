@@ -158,7 +158,7 @@ def evaluate_claude_code(
         repo_path=repo_path,
         result_dir=run_dir,
         container=runtime.container if runtime else None,
-        agent=AgentIdentity(harness=AgentHarness.CLAUDE, version=get_claude_version(), model=model),
+        agent=AgentIdentity[AgentHarness](harness=AgentHarness.CLAUDE, version=get_claude_version(), model=model),
         category=category,
         tier=tier,
     )
@@ -213,7 +213,7 @@ def evaluate_pr_review(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        agent=AgentIdentity(harness=AgentHarness.PR_REVIEW, version=get_pr_review_version(engine_path), model=model),
+        agent=AgentIdentity[AgentHarness](harness=AgentHarness.PR_REVIEW, version=get_pr_review_version(engine_path), model=model),
         category=category,
     )
 
@@ -263,7 +263,7 @@ def evaluate_bcal(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        agent=AgentIdentity(harness=AgentHarness.BCAL, version=get_bcal_version(), model=llm_model or "external-command"),
+        agent=AgentIdentity[AgentHarness](harness=AgentHarness.BCAL, version=get_bcal_version(), model=llm_model or "external-command"),
         category=category,
         tier=tier,
     )
@@ -333,7 +333,7 @@ def evaluate_mock(
         entry=entry,
         repo_path=Path(),
         result_dir=run_dir,
-        agent=AgentIdentity(harness=AgentHarness.MOCK, version="mock", model="mock-model"),
+        agent=AgentIdentity[AgentHarness](harness=AgentHarness.MOCK, version="mock", model="mock-model"),
         category=category,
         tier=tier,
     )
