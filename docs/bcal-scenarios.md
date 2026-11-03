@@ -38,29 +38,19 @@ The fixtures assert changed paths, interaction outcomes, mutation ordering, comp
 
 When BCal emits Gate A evidence, the harness prefers its canonical trace over the archived chat for tool-order assertions and preserves execution identity, prompt evidence, trace size, and truncation metadata. Gate B activated-skill evidence is not required for this experiment.
 
-Run one local scenario with the BCal CLI integration:
+The checked-in selector is `dataset\experiments\bcal_authority_provenance_v1.json`. It is consumed by `scripts\Run-BCalAuthorityExperiment.ps1` for both baseline and candidate runs. The selector excludes `nl2al__collected-sales-operations-control-tower-1` from every lane because its timeout is investigated separately and is not an authority-contract signal.
+
+Verify the exact baseline and candidate selectors without invoking BCal:
 
 ```powershell
-uv run bcbench evaluate bcal bcal-scenario__authority-direct-and-corrected-scope-1 --category bcal-scenario --output-dir evaluation_results\authority-baseline-r1
+.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant baseline -Lane authority -OutputDir evaluation_results\baseline -DryRun
+.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant candidate -Lane authority -OutputDir evaluation_results\candidate -DryRun
+.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant baseline -Lane ordinary-quality -OutputDir evaluation_results\baseline -DryRun
+.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant candidate -Lane ordinary-quality -OutputDir evaluation_results\candidate -DryRun
 ```
 
-Run all four entries twice for each package, changing only the installed BCal package and output directory:
+Remove `-DryRun` to execute a lane locally through the BCal CLI. Each run writes `selection.json` with the selector hash, selected IDs, promotion IDs, exclusions, variant, lane, and repeat count before evaluation starts.
 
-```powershell
-$entries = @(
-  "bcal-scenario__authority-direct-and-corrected-scope-1",
-  "bcal-scenario__authority-rejected-permission-1",
-  "bcal-scenario__authority-retained-intent-1",
-  "bcal-scenario__authority-untrusted-evidence-1"
-)
+Use the same BC-Bench commit, selector file, datasets, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for the candidate. Pin the baseline package to `30.0.44.65502-beta`; pin the candidate to its exact package version. Do not use MCP mode.
 
-foreach ($repeat in 1..2) {
-  foreach ($entry in $entries) {
-    uv run bcbench evaluate bcal $entry --category bcal-scenario --output-dir "evaluation_results\authority-baseline-r$repeat"
-  }
-}
-```
-
-Use the same BC-Bench commit, dataset files, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for the candidate. Pin the baseline package to `30.0.44.65502-beta`; pin the candidate to its exact package version. Do not use MCP mode.
-
-Compare per-entry `trace_compliance` and individual assertion results first, then compilation and scenario completion. Compare LMChecklist scores separately. The accepted ordinary-quality reference for `30.0.44.65502-beta` is `103/110` in each of two full gold repetitions from workflow run `40399204122`; rerun baseline and candidate from the same BC-Bench revision before treating a delta as causal.
+Compare per-entry `trace_compliance` and individual assertion results first, then compilation and scenario completion. Compare LMChecklist scores separately. Promotion scoring uses only IDs in the emitted `selection.json`; the excluded Control Tower timeout is reported separately and never counted as a regression, failure, or denominator. The accepted ordinary-quality reference for `30.0.44.65502-beta` is `103/110` in each of two full gold repetitions from workflow run `40399204122`; rerun baseline and candidate from the same BC-Bench revision before treating a delta as causal.
