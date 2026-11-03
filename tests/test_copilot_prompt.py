@@ -2,8 +2,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bcbench.agent.shared import build_prompt
-from bcbench.config import get_config
 from bcbench.dataset.codereview import CodeReviewEntry
+from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import create_dataset_entry, create_ext_advisor_entry, create_problem_statement_dir
 
@@ -145,8 +145,7 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
 
 
 def test_build_prompt_code_review_enforces_review_json_contract(tmp_path: Path):
-    config_path = get_config().paths.agent_share_dir / "config.yaml"
-    config = AgentConfig.from_file(config_path)
+    config = AgentConfig.from_file(SHARED_CONFIG_FILE)
     entry = CodeReviewEntry.model_construct(project_paths=[], patch="diff --git a/src/Foo.al b/src/Foo.al")
 
     prompt = build_prompt(entry, tmp_path, config, EvaluationCategory.CODE_REVIEW)
@@ -162,8 +161,7 @@ def test_build_prompt_code_review_enforces_review_json_contract(tmp_path: Path):
 
 
 def test_build_prompt_ext_advisor_delegates_to_custom_agent(tmp_path: Path):
-    config_path = get_config().paths.agent_share_dir / "config.yaml"
-    config = AgentConfig.from_file(config_path)
+    config = AgentConfig.from_file(SHARED_CONFIG_FILE)
 
     prompt = build_prompt(
         create_ext_advisor_entry(),

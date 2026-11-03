@@ -3,15 +3,14 @@
 import pytest
 from bcbench_core.exceptions import EmptyDiffError
 
-from bcbench.config import get_config
 from bcbench.evaluate.nl2al import NL2ALPipeline
-from bcbench.results.base import JudgeBasedEvaluationResult
+from bcbench.results.base import RESULT_FILE_SUFFIX, JudgeBasedEvaluationResult
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_evaluation_context, create_nl2al_entry
 
 
 def _read_only_result(ctx) -> JudgeBasedEvaluationResult:
-    result_file = ctx.result_dir / f"{ctx.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result_file = ctx.result_dir / f"{ctx.entry.instance_id}{RESULT_FILE_SUFFIX}"
     lines = result_file.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1, f"Expected one persisted result, got {len(lines)}: {lines}"
     return JudgeBasedEvaluationResult.model_validate_json(lines[0])

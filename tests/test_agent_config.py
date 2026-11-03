@@ -1,12 +1,12 @@
 import pytest
 from pydantic import ValidationError
 
-from bcbench.config import get_config
+from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.types import AgentConfig
 
 
 def test_shipped_config_is_valid():
-    AgentConfig.from_file(get_config().paths.agent_share_dir / "config.yaml")
+    AgentConfig.from_file(SHARED_CONFIG_FILE)
 
 
 def test_absent_sections_are_disabled():

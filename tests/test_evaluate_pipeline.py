@@ -9,11 +9,10 @@ import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.commands.evaluate import MockEvaluationPipeline
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
-from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import EvaluationCategory, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
@@ -53,7 +52,7 @@ def _noop_runner(_ctx: EvaluationContext[BugFixEntry]) -> tuple[AgentMetrics | N
 
 
 def _read_only_result[E: BaseDatasetEntry](ctx: EvaluationContext[E]) -> BaseEvaluationResult:
-    result_file = ctx.result_dir / f"{ctx.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result_file = ctx.result_dir / f"{ctx.entry.instance_id}{RESULT_FILE_SUFFIX}"
     payload = result_file.read_text(encoding="utf-8").strip().splitlines()
     assert len(payload) == 1, f"Expected one persisted result, got {len(payload)}: {payload}"
 
@@ -95,7 +94,7 @@ class TestExecuteAgentTimeout:
 
         pipeline.execute(ctx, lambda _: (None, None))
 
-        result_file = ctx.result_dir / f"{entry.instance_id}{get_config().file_patterns.result_pattern}"
+        result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
         payload = json.loads(result_file.read_text(encoding="utf-8"))
         assert payload["judge_model"] == EvaluationCategory.NL2AL.judge_model
 
@@ -157,7 +156,7 @@ class TestMockPipelineCoversAllCategories:
             with patch("bcbench.commands.evaluate.random.choice", pick):
                 pipeline.evaluate(ctx)
 
-        result_file = ctx.result_dir / f"{entry.instance_id}{get_config().file_patterns.result_pattern}"
+        result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
         results = [BaseEvaluationResult.from_json(json.loads(line)) for line in result_file.read_text(encoding="utf-8").splitlines()]
         assert {r.category for r in results} == {category}
         assert all(r.instance_id == entry.instance_id for r in results)
