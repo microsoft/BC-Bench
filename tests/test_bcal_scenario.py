@@ -412,6 +412,15 @@ def test_authority_experiment_selector_excludes_control_tower():
     control_tower = "nl2al__collected-sales-operations-control-tower-1"
 
     assert selector["repeat_count"] == 2
+    assert selector["packages"]["baseline"]["installed_identity"] == "30.0.44.65502+bdc5dc2be9bd7b59eaa1f16592604590be9621bf"
+    assert selector["packages"]["candidate"]["installed_identity"] == "30.0.45.46749+30d9e59980a978c19b4a7569fb521ce644255a53"
+    assert selector["packages"]["candidate"]["nupkg_sha256"] == "2b5eb42e42f6a40e7447f67d741adac924379606c90240051acd445715eb99d6"
+    assert selector["execution"] == {
+        "backend": "external-command",
+        "model": "gpt-55-chat",
+        "bc_version": "28.0",
+        "symbol_cache": "C:\\bcartifacts.cache",
+    }
     assert set(selector["authority"]["entries"]) <= scenario_ids
     assert len(selector["authority"]["entries"]) == 4
     assert len(gold_ids) == selector["ordinary_quality"]["expected_entry_count"] == 110
@@ -428,5 +437,9 @@ def test_authority_experiment_runner_uses_one_shared_selector():
     assert "$entries = @($entries | Where-Object { $_ -notin $excludedEntries })" in script
     assert '"selection.json"' in script
     assert "promotion_entries = $entries" in script
+    assert "Expected BCal identity" in script
+    assert '$env:PATH = "$ToolPath;$env:PATH"' in script
+    assert "BCAL_LLM_COMMAND for the fixed external-command backend" in script
+    assert "symbols under $symbolRoot" in script
     assert "foreach ($repeat in 1..$config.repeat_count)" in script
     assert "& python -m uv run bcbench evaluate bcal" in script

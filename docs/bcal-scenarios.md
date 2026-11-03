@@ -43,14 +43,16 @@ The checked-in selector is `dataset\experiments\bcal_authority_provenance_v1.jso
 Verify the exact baseline and candidate selectors without invoking BCal:
 
 ```powershell
-.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant baseline -Lane authority -OutputDir evaluation_results\baseline -DryRun
-.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant candidate -Lane authority -OutputDir evaluation_results\candidate -DryRun
-.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant baseline -Lane ordinary-quality -OutputDir evaluation_results\baseline -DryRun
-.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant candidate -Lane ordinary-quality -OutputDir evaluation_results\candidate -DryRun
+.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant baseline -Lane authority -OutputDir evaluation_results\baseline -ToolPath <baseline-tool-dir> -DryRun
+.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant candidate -Lane authority -OutputDir evaluation_results\candidate -ToolPath <candidate-tool-dir> -DryRun
+.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant baseline -Lane ordinary-quality -OutputDir evaluation_results\baseline -ToolPath <baseline-tool-dir> -DryRun
+.\scripts\Run-BCalAuthorityExperiment.ps1 -Variant candidate -Lane ordinary-quality -OutputDir evaluation_results\candidate -ToolPath <candidate-tool-dir> -DryRun
 ```
 
-Remove `-DryRun` to execute a lane locally through the BCal CLI. Each run writes `selection.json` with the selector hash, selected IDs, promotion IDs, exclusions, variant, lane, and repeat count before evaluation starts.
+Remove `-DryRun` to execute a lane locally through the BCal CLI. The runner rejects a tool directory whose `bcal --version` identity does not exactly match the selected manifest package. Each run writes `selection.json` with the selector hash, exact package identity, selected IDs, promotion IDs, exclusions, variant, lane, and repeat count before evaluation starts.
 
 Use the same BC-Bench commit, selector file, datasets, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for the candidate. Pin the baseline package to `30.0.44.65502-beta`; pin the candidate to its exact package version. Do not use MCP mode.
+
+The runner preflights the fixed external-command backend (`BCAL_LLM_COMMAND`, `BCAL_LLM_MODEL=gpt-55-chat`) and BC 28 symbols under `C:\bcartifacts.cache` before creating a result directory. It does not read, print, or persist backend credentials.
 
 Compare per-entry `trace_compliance` and individual assertion results first, then compilation and scenario completion. Compare LMChecklist scores separately. Promotion scoring uses only IDs in the emitted `selection.json`; the excluded Control Tower timeout is reported separately and never counted as a regression, failure, or denominator. The accepted ordinary-quality reference for `30.0.44.65502-beta` is `103/110` in each of two full gold repetitions from workflow run `40399204122`; rerun baseline and candidate from the same BC-Bench revision before treating a delta as causal.

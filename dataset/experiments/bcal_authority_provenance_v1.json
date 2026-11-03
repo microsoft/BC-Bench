@@ -2,6 +2,30 @@
   "schema_version": 1,
   "name": "bcal-authority-provenance-v1",
   "repeat_count": 2,
+  "packages": {
+    "baseline": {
+      "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+      "package_version": "30.0.44.65502-beta",
+      "installed_identity": "30.0.44.65502+bdc5dc2be9bd7b59eaa1f16592604590be9621bf",
+      "source_commit_sha": "bdc5dc2be9bd7b59eaa1f16592604590be9621bf",
+      "source": "DynamicsSMBTest"
+    },
+    "candidate": {
+      "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+      "package_version": "30.0.45.46749-beta",
+      "installed_identity": "30.0.45.46749+30d9e59980a978c19b4a7569fb521ce644255a53",
+      "source_commit_sha": "30d9e59980a978c19b4a7569fb521ce644255a53",
+      "nupkg_file": "Microsoft.BusinessCentral.BCal.CLI.30.0.45.46749-beta.nupkg",
+      "nupkg_sha256": "2b5eb42e42f6a40e7447f67d741adac924379606c90240051acd445715eb99d6",
+      "source": "BC-DeveloperExperience#8977"
+    }
+  },
+  "execution": {
+    "backend": "external-command",
+    "model": "gpt-55-chat",
+    "bc_version": "28.0",
+    "symbol_cache": "C:\\bcartifacts.cache"
+  },
   "authority": {
     "category": "bcal-scenario",
     "entries": [
