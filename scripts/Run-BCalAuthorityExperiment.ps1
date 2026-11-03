@@ -106,11 +106,17 @@ $selection | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 -Path (Join-Pa
 $env:PATH = "$ToolPath;$env:PATH"
 foreach ($repeat in 1..$config.repeat_count) {
     $runOutput = Join-Path $OutputDir "$Variant-$Lane-r$repeat"
+    $aggregateRun = Join-Path $runOutput "bcal_test_run"
+    New-Item -ItemType Directory -Force -Path $aggregateRun | Out-Null
     foreach ($entry in $entries) {
         $workspace = Join-Path $OutputDir "workspaces\$Variant-$Lane-r$repeat\$entry"
-        & python -m uv run bcbench evaluate bcal $entry --category $category --repo-path $workspace --output-dir $runOutput --run-id $entry
+        $caseOutput = Join-Path $OutputDir "case-results\$Variant-$Lane-r$repeat\$entry"
+        & python -m uv run bcbench evaluate bcal $entry --category $category --repo-path $workspace --output-dir $caseOutput
         if ($LASTEXITCODE -ne 0) {
             throw "BCal evaluation failed for $entry in repetition $repeat."
         }
+
+        $caseRun = Join-Path $caseOutput "bcal_test_run"
+        & (Join-Path $PSScriptRoot "Publish-BCalCaseResults.ps1") -CaseRun $caseRun -AggregateRun $aggregateRun -Entry $entry
     }
 }
