@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-14.candidate-v2.bcbench-1",
+  "version": "2026-10-14.candidate-v2.bcbench-2",
   "source_canonical_sha256": "0ede70dad4fd466d180f252d758411cd378d78d6495d321801123c41dc5a1041",
   "source": {
     "name": "BC-DeveloperExperience",
@@ -17,7 +17,7 @@
     "challenge": {
       "file": "nl2al_challenge.jsonl",
       "count": 66,
-      "sha256": "c740c5e6e49322b7d4150ebe1974ff774c93bb239ecf4d108c469ea0564955ff",
+      "sha256": "83c6384b7eb448c862868e979614cce7d15f18432f31ebba5a60e81afde62e84",
       "evaluation_scope": "single_turn"
     },
     "multiturn": {

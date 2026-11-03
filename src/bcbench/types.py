@@ -119,7 +119,7 @@ class BCalExecutionIdentity(BaseModel):
     source_commit_sha: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{7,64}$")] | None = Field(alias="sourceCommitSha")
     build_configuration: str = Field(alias="buildConfiguration")
     scenario_contract_version: Literal["1.0"] = Field(alias="scenarioContractVersion")
-    evidence_contract_version: Literal["1.0"] = Field(alias="evidenceContractVersion")
+    evidence_contract_version: Literal["1.0", "1.1"] = Field(alias="evidenceContractVersion")
 
 
 class BCalScenarioFailure(BaseModel):
@@ -343,7 +343,7 @@ class NL2ALDataset(StrEnum):
 
     @property
     def version(self) -> str:
-        return "2026-10-14.candidate-v2.bcbench-1"
+        return "2026-10-14.candidate-v2.bcbench-2"
 
 
 class EvaluationCategory(StrEnum):
@@ -799,7 +799,11 @@ class EvaluationContext[E: BaseDatasetEntry]:
     completion_review_model: str | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
+    outcome: dict[str, Any] | None = None
     bcal_failure: BCalScenarioFailure | None = None
+    bcal_raw_result: str | None = None
+    # Work produced before an agent timeout, kept on the timeout result row
+    partial_output: str = ""
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

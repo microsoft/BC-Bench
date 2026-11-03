@@ -73,7 +73,7 @@ Entries added directly in BC-Bench, before they exist upstream, are listed under
 
 `nl2al__collected-sales-operations-control-tower-1` is an open-ended challenge using a planner's original Sales & Operations Control Tower prompt verbatim. Its assertions are generic (no object or file names) and require:
 
-- a genuine terminal completion in the BCal scenario evidence, not a safety/iteration-limit interruption, an unsupported blocked or discussion-only handover, or a completion claim contradicted by the completion review
+- a genuine terminal completion: `outcome.workStatus` is `completed` with no terminal `interruptionReason` and no `turn_interrupted` trace event, not a safety/iteration-limit interruption, an unsupported blocked or discussion-only handover, or a completion claim contradicted by the completion review
 - a successful compile after the last source mutation
 - real netting of open sales demand against inventory and open supply documents, with allocation across competing demand
 - prioritization from planner-maintainable business rules, side-effect-free what-if simulation, and impact on service level, profitability and working capital
@@ -87,6 +87,18 @@ gh workflow run bcal-evaluation.yml -R microsoft/BC-Bench `
   -f cohort=sales-operations-control-tower `
   -f test-run=false
 ```
+
+The entry sets `bcal_timeout_minutes: 75` so BCal can reach its own terminal state (for example `absolute_safety_limit` or `no_progress`) before the harness kills it.
+
+## BCal execution timeout
+
+The BCal execution budget resolves in this order: the workflow input `bcal-timeout-minutes` (or `bcbench evaluate bcal --timeout-minutes` / `BCAL_TIMEOUT_MINUTES`), then the entry's `bcal_timeout_minutes`, then the 25-minute default. The workflow derives the "Run BCal" step timeout from the resolved value plus a 5-minute grace period (`bcbench dataset bcal-timeout <entry> --dataset <panel>` prints it), so the harness timeout fires first and still saves a result row. A timed-out row is marked `timeout: true` and keeps the generated workspace diff plus any `outcome` and `evidence` salvaged from a partial result file.
+
+## Scenario evidence and outcome contracts
+
+BC-Bench accepts BCal results with `evidenceContractVersion` `1.0` or `1.1`. Contract 1.1 adds canonical `turn_interrupted` trace events and an `outcome` envelope (outcome contract 1.0) beside `evidence`, which records `workStatus`, step counts, terminal plan lifecycle, validation and deployment state, interruption reason, and export and archive status. The `outcome` is persisted in raw results. When present, the judge context becomes `{"outcome": ..., "evidence": ...}`, and bc-eval metadata includes `bcal_work_status`, `bcal_interruption_reason`, `bcal_plan_lifecycle`, and `bcal_validation_state`. Historical 1.0 rows have no `outcome`, and their context stays the plain evidence.
+
+If a result file is not valid JSON or violates the supported contracts, the run still fails, but the row keeps the salvaged `outcome`, `evidence`, failure, execution metrics, the generated diff, and the raw result JSON (`bcal_raw_result`, truncated to 64 KiB).
 
 ## BCAL package version
 

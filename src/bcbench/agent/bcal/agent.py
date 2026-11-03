@@ -1,5 +1,7 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+from __future__ import annotations
+
 import json
 import logging
 import shutil
@@ -23,6 +25,8 @@ _config = get_config()
 
 _BCAL_TOOL = "bcal"
 _BCAL_COMPLETION_REVIEW_MODEL_OPTION = "--completion-review-deployment"
+_BENCHMARK_STEP_ID = "benchmark-prompt"
+_RAW_RESULT_LIMIT = 64 * 1024
 
 
 class BCalBackendConfig(BaseModel):
@@ -83,17 +87,85 @@ class _BCalScenarioResult(BaseModel):
     schema_version: Literal["1.0"] = Field(alias="schemaVersion")
     execution_identity: BCalExecutionIdentity = Field(alias="executionIdentity")
     evidence: dict[str, Any] | None = None
+    # Outcome contract 1.0 envelope, emitted beside evidence contract 1.1; absent for historical 1.0 results.
+    outcome: dict[str, Any] | None = None
     completed: bool
     steps: list[_BCalScenarioStepResult] = Field(min_length=1)
     export: _BCalOutputStatus | None = None
     session_archive: _BCalOutputStatus | None = Field(default=None, alias="sessionArchive")
     failure: BCalScenarioFailure | None = None
 
+    @property
+    def benchmark_failure(self) -> BCalScenarioFailure | None:
+        benchmark_step = next((step for step in self.steps if step.id == _BENCHMARK_STEP_ID), None)
+        return self.failure or (benchmark_step.failure if benchmark_step else None)
+
+
+@dataclass(frozen=True)
+class BCalResultDiagnostics:
+    """Whatever could be recovered from a BCal result file, even when it violates the supported contract."""
+
+    execution_identity: BCalExecutionIdentity | None = None
+    evidence: dict[str, Any] | None = None
+    outcome: dict[str, Any] | None = None
+    failure: BCalScenarioFailure | None = None
+    raw_result: str | None = None
+
+    @classmethod
+    def from_scenario_result(cls, result: _BCalScenarioResult) -> BCalResultDiagnostics:
+        return cls(
+            execution_identity=result.execution_identity,
+            evidence=result.evidence,
+            outcome=result.outcome,
+            failure=result.benchmark_failure,
+        )
+
+    @classmethod
+    def salvage(cls, raw_text: str) -> BCalResultDiagnostics:
+        raw_result = _bound_raw_result(raw_text)
+        try:
+            payload = json.loads(raw_text)
+        except json.JSONDecodeError:
+            return cls(raw_result=raw_result)
+        if not isinstance(payload, dict):
+            return cls(raw_result=raw_result)
+
+        steps = payload.get("steps")
+        benchmark_step = (
+            next(
+                (step for step in steps if isinstance(step, dict) and step.get("id") == _BENCHMARK_STEP_ID),
+                None,
+            )
+            if isinstance(steps, list)
+            else None
+        )
+        return cls(
+            execution_identity=_validate_or_none(BCalExecutionIdentity, payload.get("executionIdentity")),
+            evidence=_dict_or_none(payload.get("evidence")),
+            outcome=_dict_or_none(payload.get("outcome")),
+            failure=_validate_or_none(BCalScenarioFailure, payload.get("failure")) or _validate_or_none(BCalScenarioFailure, benchmark_step.get("failure") if benchmark_step else None),
+            raw_result=raw_result,
+        )
+
 
 class BCalScenarioError(AgentError):
-    def __init__(self, message: str, scenario_result: _BCalScenarioResult | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        scenario_result: _BCalScenarioResult | None = None,
+        diagnostics: BCalResultDiagnostics | None = None,
+        metrics: AgentMetrics | None = None,
+    ) -> None:
         self.scenario_result = scenario_result
+        self.diagnostics = diagnostics or (BCalResultDiagnostics.from_scenario_result(scenario_result) if scenario_result else BCalResultDiagnostics())
+        self.metrics = metrics
         super().__init__(message)
+
+
+class BCalTimeoutError(AgentTimeoutError):
+    def __init__(self, message: str, diagnostics: BCalResultDiagnostics, metrics: AgentMetrics) -> None:
+        self.diagnostics = diagnostics
+        super().__init__(message, metrics=metrics, config=ExperimentConfiguration())
 
 
 @dataclass(frozen=True)
@@ -102,6 +174,34 @@ class BCalRunResult:
     experiment: ExperimentConfiguration
     execution_identity: BCalExecutionIdentity
     evidence: dict[str, Any] | None
+    outcome: dict[str, Any] | None = None
+
+
+def _bound_raw_result(raw_text: str) -> str:
+    if len(raw_text) <= _RAW_RESULT_LIMIT:
+        return raw_text
+    return f"{raw_text[:_RAW_RESULT_LIMIT]}\n...[truncated {len(raw_text) - _RAW_RESULT_LIMIT} characters]"
+
+
+def _dict_or_none(value: object) -> dict[str, Any] | None:
+    return value if isinstance(value, dict) else None
+
+
+def _validate_or_none[M: BaseModel](model: type[M], value: object) -> M | None:
+    if value is None:
+        return None
+    try:
+        return model.model_validate(value)
+    except ValidationError:
+        return None
+
+
+def resolve_bcal_timeout_seconds(entry: NL2ALEntry, override_minutes: int | None = None) -> int:
+    if override_minutes is not None:
+        return override_minutes * 60
+    if entry.bcal_timeout_minutes is not None:
+        return entry.bcal_timeout_minutes * 60
+    return _config.timeout.bcal_execution
 
 
 def _resolve_bcal_executable() -> str:
@@ -195,19 +295,40 @@ def _parse_scenario_result(path: Path) -> _BCalScenarioResult:
         raise AgentError(f"BCal did not create the scenario result file: {path}")
 
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raw_text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
         raise AgentError(f"BCal scenario result is not valid UTF-8 JSON: {path}: {exc}") from exc
+
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise BCalScenarioError(
+            f"BCal scenario result is not valid UTF-8 JSON: {path}: {exc}",
+            diagnostics=BCalResultDiagnostics.salvage(raw_text),
+        ) from exc
 
     try:
         result = _BCalScenarioResult.model_validate(payload)
     except ValidationError as exc:
-        raise AgentError(f"BCal scenario result is incompatible with contract 1.0: {exc}") from exc
+        raise BCalScenarioError(
+            f"BCal scenario result is incompatible with the supported contracts (scenario 1.0, evidence 1.0/1.1): {exc}",
+            diagnostics=BCalResultDiagnostics.salvage(raw_text),
+        ) from exc
 
-    matching_steps = [step for step in result.steps if step.id == "benchmark-prompt"]
+    matching_steps = [step for step in result.steps if step.id == _BENCHMARK_STEP_ID]
     if len(matching_steps) != 1:
-        raise AgentError("BCal scenario result must contain exactly one 'benchmark-prompt' step")
+        raise BCalScenarioError(
+            f"BCal scenario result must contain exactly one '{_BENCHMARK_STEP_ID}' step",
+            diagnostics=BCalResultDiagnostics.salvage(raw_text),
+        )
     return result
+
+
+def _salvage_result_file(path: Path) -> BCalResultDiagnostics:
+    try:
+        return BCalResultDiagnostics.salvage(path.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return BCalResultDiagnostics()
 
 
 def _format_failure(failure: BCalScenarioFailure | None) -> str:
@@ -241,17 +362,21 @@ def _format_output_status(status: _BCalOutputStatus | None) -> str:
 def _scenario_failure_message(
     exc: subprocess.CalledProcessError,
     result_path: Path,
-) -> tuple[str, _BCalScenarioResult | None]:
+) -> tuple[str, _BCalScenarioResult | None, BCalResultDiagnostics | None]:
     sections = [f"BCal scenario exited with status {exc.returncode}"]
     scenario_result: _BCalScenarioResult | None = None
+    diagnostics: BCalResultDiagnostics | None = None
 
     if result_path.exists():
         try:
             scenario_result = _parse_scenario_result(result_path)
+        except BCalScenarioError as parse_error:
+            sections.append(f"Scenario result: {parse_error}")
+            diagnostics = parse_error.diagnostics
         except AgentError as parse_error:
             sections.append(f"Scenario result: {parse_error}")
         else:
-            benchmark_steps = [step for step in scenario_result.steps if step.id == "benchmark-prompt"]
+            benchmark_steps = [step for step in scenario_result.steps if step.id == _BENCHMARK_STEP_ID]
             step_failure = benchmark_steps[0].failure if benchmark_steps else None
             sections.extend(
                 [
@@ -271,15 +396,17 @@ def _scenario_failure_message(
         sections.append(f"stdout:\n{stdout}")
     if stderr:
         sections.append(f"stderr:\n{stderr}")
-    return "\n".join(sections), scenario_result
+    return "\n".join(sections), scenario_result, diagnostics
 
 
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
     backend_config: BCalBackendConfig,
+    timeout_seconds: int | None = None,
 ) -> BCalRunResult:
     logger.info(f"Running bcal CLI on: {entry.instance_id}")
+    timeout = timeout_seconds if timeout_seconds is not None else resolve_bcal_timeout_seconds(entry)
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
     project_name: str = entry.project_paths[0]
@@ -290,6 +417,7 @@ def run_bcal_agent(
     export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
 
     logger.info(f"Export folder: {export_folder}")
+    logger.info(f"BCal timeout: {timeout} seconds")
     logger.debug(f"Package cache path: {package_cache_path}")
     logger.debug(f"Using prompt:\n{entry.get_task()}")
 
@@ -310,19 +438,33 @@ def run_bcal_agent(
             try:
                 subprocess.run(
                     cmd_args,
-                    timeout=_config.timeout.bcal_execution,
+                    timeout=timeout,
                     capture_output=True,
                     text=True,
                     encoding="utf-8",
                     errors="replace",
                     check=True,
                 )
+            except subprocess.TimeoutExpired as exc:
+                diagnostics = _salvage_result_file(result_path) if result_path.exists() else BCalResultDiagnostics()
+                details = "\n".join(filter(None, (_process_output(exc.stdout)[-4000:], _process_output(exc.stderr)[-4000:])))
+                logger.exception(f"bcal CLI timed out after {timeout} seconds; partial result {'preserved' if diagnostics.raw_result else 'not created'}\n{details}")
+                raise BCalTimeoutError(
+                    f"bcal CLI timed out after {timeout} seconds",
+                    diagnostics=diagnostics,
+                    metrics=AgentMetrics(execution_time=timeout),
+                ) from None
             except subprocess.CalledProcessError as exc:
-                message, scenario_result = _scenario_failure_message(exc, result_path)
+                metrics = AgentMetrics(execution_time=time.monotonic() - start)
+                message, scenario_result, diagnostics = _scenario_failure_message(exc, result_path)
                 logger.exception(message)
-                raise BCalScenarioError(message, scenario_result=scenario_result) from None
-            scenario_result = _parse_scenario_result(result_path)
-        execution_time = time.monotonic() - start
+                raise BCalScenarioError(message, scenario_result=scenario_result, diagnostics=diagnostics, metrics=metrics) from None
+            execution_time = time.monotonic() - start
+            try:
+                scenario_result = _parse_scenario_result(result_path)
+            except BCalScenarioError as exc:
+                exc.metrics = AgentMetrics(execution_time=execution_time)
+                raise
 
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
         return BCalRunResult(
@@ -330,12 +472,11 @@ def run_bcal_agent(
             experiment=ExperimentConfiguration(),
             execution_identity=scenario_result.execution_identity,
             evidence=scenario_result.evidence,
+            outcome=scenario_result.outcome,
         )
-    except subprocess.TimeoutExpired:
-        logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
-        raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
     except AgentError:
+        raise
+    except AgentTimeoutError:
         raise
     except Exception:
         logger.exception("Unexpected error running bcal CLI")

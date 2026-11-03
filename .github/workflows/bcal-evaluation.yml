@@ -58,6 +58,11 @@ on:
         required: false
         default: 1
         type: number
+      bcal-timeout-minutes:
+        description: "BCal execution budget in minutes for every entry; leave empty to use each entry's bcal_timeout_minutes or the 25-minute default"
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "0 3 * * 0"
 
@@ -263,6 +268,18 @@ jobs:
         shell: pwsh
         run: uv run bcbench dataset version "$env:INSTANCE_ID" --category nl2al --dataset "$env:NL2AL_DATASET" --github-output version
 
+      - name: Resolve BCal timeout
+        id: bcal-timeout
+        shell: pwsh
+        env:
+          BCAL_TIMEOUT_OVERRIDE: ${{ inputs.bcal-timeout-minutes }}
+        run: |
+          $timeoutArgs = @("run", "bcbench", "dataset", "bcal-timeout", "$env:INSTANCE_ID", "--dataset", "$env:NL2AL_DATASET", "--github-output")
+          if (-not [string]::IsNullOrWhiteSpace($env:BCAL_TIMEOUT_OVERRIDE)) {
+            $timeoutArgs += @("--override-minutes", "$env:BCAL_TIMEOUT_OVERRIDE")
+          }
+          uv @timeoutArgs
+
       # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
         id: bccache
@@ -306,8 +323,9 @@ jobs:
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\llm-api-cert.pfx", [Convert]::FromBase64String($b64))
 
       - name: Run BCal for entry ${{ matrix.entry }}
-        timeout-minutes: 28
+        timeout-minutes: ${{ fromJSON(steps.bcal-timeout.outputs.step-timeout-minutes) }}
         env:
+          BCAL_TIMEOUT_MINUTES: ${{ steps.bcal-timeout.outputs.bcal-timeout-minutes }}
           BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
           BCAL_COMPLETION_REVIEW_MODEL: ${{ inputs.completion-review-model || '' }}
           BCAL_PACKAGE_VERSION: ${{ steps.install-bcal.outputs.version }}

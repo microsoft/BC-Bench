@@ -183,6 +183,8 @@ class NL2ALEntry(BaseDatasetEntry):
     page: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./]*$")]
     audience: Literal["Business", "Technical", "Both"]
     language: str = "en-US"
+    # BC-Bench-local override for entries whose BCal run legitimately needs longer than the default budget.
+    bcal_timeout_minutes: Annotated[int, Field(ge=1, le=300)] | None = None
 
     @property
     @override

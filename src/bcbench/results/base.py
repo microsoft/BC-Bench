@@ -33,7 +33,9 @@ class BaseEvaluationResult(BaseModel):
     completion_review_model: str | None = None
     execution_identity: BCalExecutionIdentity | None = None
     evidence: dict[str, Any] | None = None
+    outcome: dict[str, Any] | None = None
     bcal_failure: BCalScenarioFailure | None = None
+    bcal_raw_result: str | None = None
 
     timeout: bool = False
 
@@ -71,7 +73,9 @@ class BaseEvaluationResult(BaseModel):
             "completion_review_model": context.completion_review_model,
             "execution_identity": context.execution_identity,
             "evidence": context.evidence,
+            "outcome": context.outcome,
             "bcal_failure": context.bcal_failure,
+            "bcal_raw_result": context.bcal_raw_result,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }
@@ -93,7 +97,7 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:
-        return cls(**cls._base_fields(context), timeout=True, error_message="Agent timed out")
+        return cls(**cls._base_fields(context), output=context.partial_output, timeout=True, error_message="Agent timed out")
 
     def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file

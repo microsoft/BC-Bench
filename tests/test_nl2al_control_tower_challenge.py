@@ -20,7 +20,7 @@ CONTROL_TOWER_PROMPT = (
 
 # Each requirement must be covered by at least one critical assertion containing all listed terms.
 CRITICAL_REQUIREMENTS = {
-    "genuine terminal completion": ["safety", "discussion-only", "blocker", "completion review"],
+    "genuine terminal completion": ["workstatus is completed", "interruptionreason", "turn_interrupted", "safety", "discussion-only", "blocker", "completion review"],
     "compiles after last mutation": ["compiles", "last source mutation"],
     "real demand-vs-supply netting": ["open sales demand", "inventory", "supply document", "heuristic"],
     "cross-demand allocation": ["allocated", "competing open demand"],
@@ -82,13 +82,14 @@ def test_control_tower_cohort_selects_only_the_new_challenge(challenge_path):
     assert resolved.cohort.entries == [CONTROL_TOWER_ID]
 
 
-def _export(control_tower, challenge_path, tmp_path, *, evidence, failure=None, error_message=None):
+def _export(control_tower, challenge_path, tmp_path, *, evidence, failure=None, error_message=None, outcome=None):
     context = create_evaluation_context(tmp_path, entry=control_tower, category=EvaluationCategory.NL2AL, agent_name=AgentHarness.BCAL)
     context.dataset = NL2ALDataset.CHALLENGE
     context.dataset_version = NL2ALDataset.CHALLENGE.version
     context.dataset_sha256 = sha256(challenge_path.read_bytes()).hexdigest()
     context.evidence = evidence
     context.bcal_failure = failure
+    context.outcome = outcome
     output = "diff --git a/Planner.al b/Planner.al"
     result = JudgeBasedEvaluationResult.create_failure(context, output, error_message) if error_message else JudgeBasedEvaluationResult.create_raw(context, output)
 
@@ -120,3 +121,18 @@ def test_safety_limit_interruption_is_exported_as_incomplete_failure(control_tow
     assert row["metadata"]["bcal_failure_code"] == "incomplete_execution"
     assert row["metadata"]["bcal_terminal_reason"] == "interrupted_before_finalization"
     assert row["metadata"]["error_message"] == "BCal scenario exited with status 1"
+
+
+def test_control_tower_budget_lets_bcal_reach_its_own_terminal_state(control_tower):
+    assert control_tower.bcal_timeout_minutes == 75
+
+
+def test_outcome_envelope_reaches_judge_beside_evidence(control_tower, challenge_path, tmp_path):
+    evidence = {"contractVersion": "1.1", "trace": {"events": [{"type": "turn_interrupted", "reason": "no_progress"}]}}
+    outcome = {"contractVersion": "1.0", "workStatus": "no_progress", "scenarioCompleted": False, "terminalStep": {"id": "benchmark-prompt", "interruptionReason": "NoProgress"}}
+
+    row = _export(control_tower, challenge_path, tmp_path, evidence=evidence, outcome=outcome)
+
+    assert row["context"] == {"outcome": outcome, "evidence": evidence}
+    assert row["metadata"]["bcal_work_status"] == "no_progress"
+    assert row["metadata"]["bcal_interruption_reason"] == "NoProgress"

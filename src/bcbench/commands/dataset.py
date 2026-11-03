@@ -2,10 +2,12 @@
 
 import json
 import logging
+import math
 from typing import Annotated
 
 import typer
 
+from bcbench.agent.bcal import resolve_bcal_timeout_seconds
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry, evaluation_cohort_path, load_evaluation_cohort
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
@@ -214,6 +216,26 @@ def version(
     print(entry.environment_setup_version)
     if github_output:
         write_step_outputs({github_output: entry.environment_setup_version, "dataset-path": str(dataset_path)})
+
+
+# Headroom for in-step work around the BCal process (package-cache setup, diff, result save) so a BCal timeout is handled before CI kills the step.
+_BCAL_STEP_GRACE_MINUTES = 5
+
+
+@dataset_app.command("bcal-timeout")
+def bcal_timeout(
+    entry_id: Annotated[str, typer.Argument(help="NL2AL entry ID to resolve the BCal timeout for")],
+    dataset: Annotated[NL2ALDataset, typer.Option(help="NL2AL dataset panel: gold or challenge")] = NL2ALDataset.GOLD,
+    override_minutes: Annotated[int | None, typer.Option(min=1, max=300, help="Run-level override; wins over the entry setting")] = None,
+    github_output: Annotated[bool, typer.Option(help="Write bcal-timeout-minutes and step-timeout-minutes to GITHUB_OUTPUT")] = False,
+) -> None:
+    """Print the effective BCal execution timeout in minutes (run override, then entry, then default)."""
+    dataset_path = EvaluationCategory.NL2AL.dataset_path_for(dataset)
+    entry = NL2ALEntry.load(dataset_path, entry_id=entry_id)[0]
+    minutes = math.ceil(resolve_bcal_timeout_seconds(entry, override_minutes) / 60)
+    print(minutes)
+    if github_output:
+        write_step_outputs({"bcal-timeout-minutes": str(minutes), "step-timeout-minutes": str(minutes + _BCAL_STEP_GRACE_MINUTES)})
 
 
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
