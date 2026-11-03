@@ -20,9 +20,22 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $ConfigPath = Join-Path $repoRoot "dataset\experiments\bcal_authority_provenance_v1.json"
 $config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
-$githubLogin = (& gh auth status --hostname github.com --active --json hosts --jq '.hosts."github.com"[] | select(.active).login' 2>$null | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $githubLogin -ne $config.github_identity) {
-    throw "BC-Bench repository operations require the '$($config.github_identity)' GitHub identity; active identity is '$githubLogin'."
+$githubHost = $config.github.host
+$githubRepository = $config.github.repository
+& gh auth status --hostname $githubHost --active 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw "BC-Bench repository operations require an active authenticated $githubHost account."
+}
+$previousGitHubHost = $env:GH_HOST
+try {
+    $env:GH_HOST = $githubHost
+    $accessibleRepository = (& gh repo view $githubRepository --json nameWithOwner --jq .nameWithOwner 2>$null | Out-String).Trim()
+}
+finally {
+    $env:GH_HOST = $previousGitHubHost
+}
+if ($LASTEXITCODE -ne 0 -or $accessibleRepository -ne $githubRepository) {
+    throw "The active $githubHost account cannot access $githubRepository. GHE accounts are not accepted."
 }
 $excludedEntries = @($config.excluded_entries.instance_id)
 $package = $config.packages.$Variant
@@ -66,7 +79,7 @@ if ($Lane -eq "ordinary-quality" -and $entries.Count -ne $config.ordinary_qualit
 $selection = [ordered]@{
     schema_version = $config.schema_version
     experiment = $config.name
-    github_identity = $config.github_identity
+    github = $config.github
     config_sha256 = (Get-FileHash -Algorithm SHA256 -Path $ConfigPath).Hash.ToLowerInvariant()
     variant = $Variant
     package = $package

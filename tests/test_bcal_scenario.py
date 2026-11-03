@@ -420,7 +420,7 @@ def test_authority_experiment_selector_excludes_control_tower():
     excluded = {entry["instance_id"] for entry in selector["excluded_entries"]}
     control_tower = "nl2al__collected-sales-operations-control-tower-1"
 
-    assert selector["github_identity"] == "esbenk"
+    assert selector["github"] == {"host": "github.com", "repository": "microsoft/BC-Bench"}
     assert selector["repeat_count"] == 2
     assert selector["packages"]["baseline"]["installed_identity"] == "30.0.44.65502+bdc5dc2be9bd7b59eaa1f16592604590be9621bf"
     assert selector["packages"]["candidate"]["installed_identity"] == "30.0.45.46749+30d9e59980a978c19b4a7569fb521ce644255a53"
@@ -451,8 +451,10 @@ def test_authority_experiment_runner_uses_one_shared_selector():
     assert "promotion_entries = $entries" in script
     assert "Expected BCal identity" in script
     assert '$env:PATH = "$ToolPath;$env:PATH"' in script
-    assert "gh auth status --hostname github.com --active --json hosts" in script
-    assert "BC-Bench repository operations require" in script
+    assert "gh auth status --hostname $githubHost --active" in script
+    assert "$env:GH_HOST = $githubHost" in script
+    assert "gh repo view $githubRepository --json nameWithOwner" in script
+    assert "GHE accounts are not accepted" in script
     assert "BCAL_LLM_COMMAND for the fixed external-command backend" in script
     assert "symbols under $symbolRoot" in script
     assert "--repo-path $workspace" in script

@@ -53,7 +53,7 @@ Remove `-DryRun` to execute a lane locally through the BCal CLI. The runner reje
 
 Use the same BC-Bench commit, selector file, datasets, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for the candidate. Pin the baseline package to `30.0.44.65502-beta`; pin the candidate to its exact package version. Do not use MCP mode.
 
-All GitHub operations for this experiment, including PR inspection, workflow dispatch, run monitoring, and artifact download, must use the `esbenk` identity. Do not fall back to another configured account. The runner checks the locally active `github.com` account from `gh auth status` before dry-run or execution.
+All GitHub operations for this experiment, including PR inspection, workflow dispatch, run monitoring, and artifact download, must use an authenticated `github.com` account with access to `microsoft/BC-Bench`. Do not use or fall back to a `microsoft.ghe.com` or other GHE account. The runner explicitly checks the `github.com` authentication and repository access before dry-run or execution.
 
 The runner also preflights the accepted external-command backend (`bc-eval==0.6.1`, `src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py`, `BCAL_LLM_MODEL=gpt-55-chat`) and BC 28 symbols under `C:\bcartifacts.cache` before creating a result directory. It does not read, print, or persist backend credentials.
 
