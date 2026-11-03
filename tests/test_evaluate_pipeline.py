@@ -50,7 +50,7 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
             raise self.raise_in_evaluate
 
 
-def _noop_harness() -> StubHarness:
+def _noop_harness() -> StubHarness[BugFixEntry]:
     return StubHarness(AgentResult(metrics=AgentMetrics(execution_time=1.0), experiment=ExperimentConfiguration()))
 
 

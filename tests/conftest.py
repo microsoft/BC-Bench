@@ -83,16 +83,16 @@ def create_dataset_entry(
 
 
 @dataclass
-class StubHarness(Harness[BaseDatasetEntry, AgentHarness]):
+class StubHarness[E: BaseDatasetEntry](Harness[E, AgentHarness]):
     result: AgentResult = field(default_factory=AgentResult)
-    requests: list[AgentRequest[BaseDatasetEntry]] = field(default_factory=list)
+    requests: list[AgentRequest[E]] = field(default_factory=list)
 
     @override
     def identity(self) -> AgentIdentity[AgentHarness]:
         return AgentIdentity[AgentHarness](harness=AgentHarness.COPILOT, version="1.0.0", model="test-model")
 
     @override
-    def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
+    def run(self, request: AgentRequest[E], /) -> AgentResult:
         self.requests.append(request)
         return self.result
 
