@@ -1,7 +1,10 @@
 {
   "schema_version": 1,
   "name": "bcal-authority-provenance-v1",
-  "github_identity": "esbenk",
+  "github": {
+    "host": "github.com",
+    "repository": "microsoft/BC-Bench"
+  },
   "repeat_count": 2,
   "packages": {
     "baseline": {
