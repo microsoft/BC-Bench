@@ -21,10 +21,6 @@ The import and environment rules are enforced by ruff (`banned-api` in [`pyproje
 - For Copilot invocation: an installed and authenticated [GitHub Copilot CLI](https://github.com/github/copilot-cli).
 - For BC container operations: PowerShell 7 with the latest [BcContainerHelper](https://github.com/microsoft/navcontainerhelper) module. The PowerShell modules ship in [`src/bcbench_core/powershell`](src/bcbench_core/powershell).
 
-## Agent harnesses
-
-[`bcbench_core.agent.harness`](src/bcbench_core/agent/harness.py) defines the harness-neutral contract. A `Harness[T]` reports its `AgentIdentity` before any run and turns an `AgentRequest[T]` into an `AgentResult`. Output is a final response or changes left in the workspace. Applications construct harnesses with their own configuration and pass them to evaluation pipelines, which depend only on this contract.
-
 ## Logging
 
 Modules log through `logging.getLogger(__name__)` and never configure logging on import. Applications call `bcbench_core.logs.setup_logging` once from their entry point.

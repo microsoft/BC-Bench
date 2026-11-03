@@ -1,15 +1,10 @@
-"""Harness-neutral contract between evaluation applications and the agents they run.
-
-A harness wraps one way of producing an answer (a CLI agent, a review engine, a hosted agent).
-Applications construct harnesses with harness-specific configuration and only use this contract,
-so evaluation pipelines never depend on a concrete harness.
-"""
+"""Harness-neutral contract between evaluation pipelines and the agents they run."""
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
@@ -30,8 +25,6 @@ class AgentIdentity[N: str = str](BaseModel):
     version: str
     # Configured model; None when the harness pins or delegates model selection
     model: str | None = None
-    # Further pins needed to reproduce a run, e.g. a knowledge-base commit or a definition hash
-    provenance: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -51,8 +44,6 @@ class AgentResult:
     response: str | None = None
     metrics: AgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
-    # Model reported by the agent, when it differs from or replaces the configured one
-    observed_model: str | None = None
 
 
 class Harness[T, N: str = str](Protocol):
