@@ -5,7 +5,9 @@ from pathlib import Path
 
 from bcbench_core.agent.copilot import CopilotOptions, CopilotTimeoutError, invoke_copilot
 from bcbench_core.agent.customization import setup_custom_agent, setup_instructions, setup_skills
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.agent.shared import (
     agent_subprocess_env,
@@ -16,9 +18,8 @@ from bcbench.agent.shared import (
     start_bc_mcp_gateway,
 )
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import instructions_profile_dir
-from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, PluginConfig
 
 logger = logging.getLogger(__name__)
 

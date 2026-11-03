@@ -4,11 +4,12 @@ from unittest.mock import DEFAULT, Mock, patch
 
 import pytest
 from bcbench_core.agent.copilot import CopilotProcessError, CopilotTimeoutError
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.agent.copilot.agent import run_copilot_agent
-from bcbench.exceptions import AgentTimeoutError
 from bcbench.operations import instructions_profile_dir
-from bcbench.types import AgentConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentConfig, EvaluationCategory, PluginConfig
 from tests.conftest import create_dataset_entry
 
 

@@ -5,6 +5,7 @@ from typing import Annotated, cast, override
 
 import typer
 from bcbench_core.agent.copilot import get_copilot_version
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
@@ -36,7 +37,7 @@ from bcbench.evaluate import AgentRunner, CodeReviewPipeline, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentConfig, AgentHarness, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentConfig, AgentHarness, DatasetTier, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
 _config = get_config()

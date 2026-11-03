@@ -5,10 +5,11 @@ import logging
 from pathlib import Path
 from typing import Any, Self, cast, override
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from pydantic import BaseModel, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
 

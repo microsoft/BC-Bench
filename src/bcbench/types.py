@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 import yaml
 from bcbench_core.agent.customization import CustomAgentsConfig, ToggleConfig
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
@@ -35,7 +36,6 @@ __all__ = [
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
-    "ExperimentConfiguration",
     "HttpMcpServer",
     "JudgeCalibrationReport",
     "McpServerConfig",
@@ -96,42 +96,6 @@ class AgentMetricsContract:
     def __post_init__(self) -> None:
         if unknown_fields := self.required_fields - self.metrics_type.model_fields.keys():
             raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
-
-
-class ExperimentConfiguration(BaseModel):
-    """Configuration for agent experiment execution.
-
-    This encapsulates experiment-related configuration that agents use,
-    making it easier to add new configuration options without changing function signatures.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    # MCP server names used in experiment (if any)
-    mcp_servers: list[str] | None = None
-
-    # Whether the AL LSP server was enabled for this experiment
-    al_lsp_enabled: bool = False
-
-    # Custom instructions enabled in experiment
-    custom_instructions: bool = False
-
-    # Skills enabled in experiment
-    skills_enabled: bool = False
-
-    # Custom agent name used in experiment (if any)
-    custom_agent: str | None = None
-
-    # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
-    plugins: list[str] | None = None
-
-    def is_empty(self) -> bool:
-        """Check if this configuration has all default/empty values.
-
-        An empty configuration means no special experiment settings were used.
-        This is useful for comparing with None (no experiment) vs default experiment.
-        """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
