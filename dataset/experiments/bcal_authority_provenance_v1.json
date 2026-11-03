@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "name": "bcal-authority-provenance-v1",
+  "github_identity": "esbenk",
   "repeat_count": 2,
   "packages": {
     "baseline": {

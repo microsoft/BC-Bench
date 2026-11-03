@@ -20,6 +20,10 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $ConfigPath = Join-Path $repoRoot "dataset\experiments\bcal_authority_provenance_v1.json"
 $config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
+$githubLogin = (& gh auth status --hostname github.com --active --json hosts --jq '.hosts."github.com"[] | select(.active).login' 2>$null | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $githubLogin -ne $config.github_identity) {
+    throw "BC-Bench repository operations require the '$($config.github_identity)' GitHub identity; active identity is '$githubLogin'."
+}
 $excludedEntries = @($config.excluded_entries.instance_id)
 $package = $config.packages.$Variant
 $bcal = Join-Path $ToolPath "bcal.exe"
@@ -62,6 +66,7 @@ if ($Lane -eq "ordinary-quality" -and $entries.Count -ne $config.ordinary_qualit
 $selection = [ordered]@{
     schema_version = $config.schema_version
     experiment = $config.name
+    github_identity = $config.github_identity
     config_sha256 = (Get-FileHash -Algorithm SHA256 -Path $ConfigPath).Hash.ToLowerInvariant()
     variant = $Variant
     package = $package
