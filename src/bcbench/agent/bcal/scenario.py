@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Annotated, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from bcbench.agent.bcal.agent import BCalBackendConfig, _process_output, _resolve_bcal_executable
 from bcbench.config import get_config
@@ -103,6 +103,11 @@ class BCalInteractionRequest(BaseModel):
     recommended_choice_index: int | None = Field(default=None, alias="recommendedChoiceIndex")
     minimum: float | None = None
     maximum: float | None = None
+
+    @field_validator("choices", mode="before")
+    @classmethod
+    def normalize_absent_choices(cls, value: object) -> object:
+        return [] if value is None else value
 
 
 class BCalInteractionRecord(BaseModel):

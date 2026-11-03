@@ -160,6 +160,22 @@ def test_llm_api_bridge_accepts_windows_utf8_bom():
     assert bc_eval_llm_api_bridge._load_request(stream) == request
 
 
+@pytest.mark.parametrize(
+    ("choices", "expected"),
+    [
+        (None, []),
+        (["Use an interface", "Use a codeunit"], ["Use an interface", "Use a codeunit"]),
+    ],
+)
+def test_scenario_result_normalizes_interaction_choices(choices: list[str] | None, expected: list[str]):
+    payload = scenario_result_payload()
+    payload["interactions"][0]["request"]["choices"] = choices
+
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    assert result.interactions[0].request.choices == expected
+
+
 def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
     entry = create_bcal_scenario_entry()
     (tmp_path / ".bcal-symbols" / ".alpackages").mkdir(parents=True)
