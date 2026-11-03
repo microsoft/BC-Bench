@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 import time
 from pathlib import Path
 from typing import Annotated, Literal, cast
 
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME
+from bcbench_core.exceptions import AgentError
 from pydantic import BaseModel, ConfigDict, Field
 
 from bcbench.agent.bcal.agent import BCalBackendConfig, _process_output, _resolve_bcal_executable
 from bcbench.config import get_config
 from bcbench.dataset import BCalScenarioEntry
-from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.logger import get_logger
+from bcbench.exceptions import AgentTimeoutError
 from bcbench.types import AgentMetrics, ExperimentConfiguration
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 SCENARIO_MANIFEST = "execution.json"
@@ -211,7 +213,7 @@ def run_bcal_scenario(
     repo_path: Path,
     backend_config: BCalBackendConfig,
 ) -> tuple[AgentMetrics, ExperimentConfiguration]:
-    package_cache_path = repo_path / SCENARIO_SYMBOL_DIR / _config.file_patterns.alpackages_dirname
+    package_cache_path = repo_path / SCENARIO_SYMBOL_DIR / ALPACKAGES_DIRNAME
     if not package_cache_path.exists():
         raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 

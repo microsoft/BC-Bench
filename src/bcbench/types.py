@@ -258,6 +258,7 @@ class EvaluationCategory(StrEnum):
     TEST_GENERATION = "test-generation"
     CODE_REVIEW = "code-review"
     NL2AL = "nl2al"
+    BCAL_SCENARIO = "bcal-scenario"
     DATA_QUERY = "data-query"
     # Single-shot proxy for the interactive advisor: classify, assess feasibility, and draft an issue.
     EXT_REQUEST_ADVISOR = "extensibility-request-advisor"
@@ -284,6 +285,8 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "codereview.jsonl"
             case EvaluationCategory.NL2AL:
                 return get_config().paths.dataset_dir / "nl2al.jsonl"
+            case EvaluationCategory.BCAL_SCENARIO:
+                return get_config().paths.dataset_dir / "bcal_scenario.jsonl"
             case EvaluationCategory.DATA_QUERY:
                 return get_config().paths.dataset_dir / "dataquery.jsonl"
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
@@ -297,7 +300,7 @@ class EvaluationCategory(StrEnum):
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
+        from bcbench.dataset import BCalScenarioEntry, BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -308,6 +311,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewEntry
             case EvaluationCategory.NL2AL:
                 return NL2ALEntry
+            case EvaluationCategory.BCAL_SCENARIO:
+                return BCalScenarioEntry
             case EvaluationCategory.DATA_QUERY:
                 return DataQueryEntry
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
@@ -322,6 +327,7 @@ class EvaluationCategory(StrEnum):
     @property
     def result_class(self) -> type[BaseEvaluationResult]:
         from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+        from bcbench.results.bcal_scenario import BCalScenarioEvaluationResult
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.codereview import CodeReviewResult
         from bcbench.results.testgeneration import TestGenerationResult
@@ -335,6 +341,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResult
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResult
+            case EvaluationCategory.BCAL_SCENARIO:
+                return BCalScenarioEvaluationResult
             case EvaluationCategory.DATA_QUERY:
                 return ExecutionBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
@@ -361,6 +369,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResultSummary
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResultSummary
+            case EvaluationCategory.BCAL_SCENARIO:
+                return JudgeBasedEvaluationResultSummary
             case EvaluationCategory.DATA_QUERY:
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
@@ -386,6 +396,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewLeaderboardAggregate
             case EvaluationCategory.NL2AL:
                 return JudgeBasedLeaderboardAggregate
+            case EvaluationCategory.BCAL_SCENARIO:
+                return JudgeBasedLeaderboardAggregate
             case EvaluationCategory.DATA_QUERY:
                 return ExecutionBasedLeaderboardAggregate
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
@@ -400,6 +412,7 @@ class EvaluationCategory(StrEnum):
     @property
     def pipeline(self) -> EvaluationPipeline[Any]:
         from bcbench.evaluate import (
+            BCalScenarioPipeline,
             BugFixPipeline,
             CodeReviewPipeline,
             DataQueryPipeline,
@@ -419,6 +432,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewPipeline()
             case EvaluationCategory.NL2AL:
                 return NL2ALPipeline()
+            case EvaluationCategory.BCAL_SCENARIO:
+                return BCalScenarioPipeline()
             case EvaluationCategory.DATA_QUERY:
                 return DataQueryPipeline()
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
@@ -441,7 +456,7 @@ class EvaluationCategory(StrEnum):
                 return None
             case EvaluationCategory.CODE_REVIEW:
                 return judge.code_review_model
-            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.NL2AL | EvaluationCategory.BCAL_SCENARIO | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return judge.lm_checklist_model
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -462,6 +477,8 @@ class EvaluationCategory(StrEnum):
                 return ["precision_score", "recall_score", "f1_score", "valid_review_output"]
             case EvaluationCategory.NL2AL:
                 return ["lm_checklist"]
+            case EvaluationCategory.BCAL_SCENARIO:
+                return ["lm_checklist", "scenario_completion_rate", "independent_build_rate", "trace_compliance_rate"]
             case EvaluationCategory.DATA_QUERY:
                 return ["resolution_rate", "build_rate"]
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
@@ -481,7 +498,7 @@ class EvaluationCategory(StrEnum):
                 return "ResolutionRate"
             case EvaluationCategory.CODE_REVIEW:
                 return "F1Score"
-            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.NL2AL | EvaluationCategory.BCAL_SCENARIO | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "test_passed"
             case EvaluationCategory.DATA_QUERY:
                 return "ResolutionRate"
@@ -494,7 +511,7 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return True
-            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.BCAL_SCENARIO | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return False
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -511,6 +528,7 @@ class EvaluationCategory(StrEnum):
                 | EvaluationCategory.TEST_GENERATION
                 | EvaluationCategory.CODE_REVIEW
                 | EvaluationCategory.NL2AL
+                | EvaluationCategory.BCAL_SCENARIO
                 | EvaluationCategory.EXT_REQUEST_ADVISOR
                 | EvaluationCategory.EXT_REQUEST_IMPLEMENT
                 | EvaluationCategory.EXT_REQUEST_TRIAGE
@@ -537,7 +555,7 @@ class EvaluationCategory(StrEnum):
                 return "GitHub-BCBench"
             case EvaluationCategory.CODE_REVIEW | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "ubuntu-latest"
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.BCAL_SCENARIO:
                 return "windows-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")

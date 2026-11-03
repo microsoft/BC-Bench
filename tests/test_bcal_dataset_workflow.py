@@ -41,21 +41,23 @@ def test_bcal_threads_selected_tier_through_every_job():
     assert workflow["env"]["TIER"] == SELECTED_TIER
     assert workflow["jobs"]["get-entries"]["with"]["tier"] == SELECTED_TIER
     assert workflow["jobs"]["summarize-results"]["with"]["tier"] == SELECTED_TIER
-    assert '--category nl2al --tier "$env:TIER" --github-output version' in text
-    assert 'evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER"' in text
+    assert '"${{ inputs.category || \'bcal-scenario\' }}" -eq "nl2al"' in text
+    assert '$arguments += @("--tier", "$env:TIER")' in text
 
 
 def test_bcal_downloads_symbols_from_the_selected_tier():
     step = _step(_workflow("bcal-evaluation.yml"), "evaluate-with-bcal", "Download BC Application symbols")
 
-    assert '-Category nl2al -Tier "$env:TIER"' in step["run"]
+    assert '$arguments.Tier = "$env:TIER"' in step["run"]
+    assert '.\\scripts\\Download-BCSymbols.ps1 @arguments' in step["run"]
 
 
 def test_bcal_run_identity_includes_tier_and_package_selection():
     workflow = _workflow("bcal-evaluation.yml")
 
     run_name = workflow["run-name"]
-    assert f"BCal {SELECTED_TIER}" in run_name
+    assert "inputs.category" in run_name
+    assert SELECTED_TIER in run_name
     assert "inputs.publish-source-run-id" in run_name
     assert "${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }}" in run_name
     concurrency = workflow["concurrency"]["group"]
@@ -136,3 +138,19 @@ def test_bcal_cohort_and_repetition_contract_reaches_matrix_and_results():
     assert evaluate["strategy"]["matrix"]["repetition"] == "${{ fromJson(needs.get-entries.outputs.repetitions) }}"
     assert run_step["env"]["BCBENCH_COHORT_NAME"] == "${{ needs.get-entries.outputs.cohort-name }}"
     assert run_step["env"]["BCBENCH_REPETITION_INDEX"] == "${{ (inputs.cohort != '' || inputs.repeat-count > 1) && matrix.repetition || '' }}"
+
+
+def test_bcal_authority_dispatch_selects_only_manifest_cases():
+    workflow = _workflow("bcal-evaluation.yml")
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    get_entries = workflow["jobs"]["get-entries"]["with"]
+    get_entries_workflow = _workflow_text("get-entries.yml")
+
+    assert inputs["category"]["default"] == "bcal-scenario"
+    assert inputs["category"]["options"] == ["bcal-scenario", "nl2al"]
+    assert inputs["authority-only"]["default"] is True
+    assert get_entries["category"] == "${{ inputs.category || 'bcal-scenario' }}"
+    assert get_entries["authority-only"] == "${{ inputs.authority-only || false }}"
+    assert ".authority.entries" in get_entries_workflow
+    assert "authority provenance manifest must select exactly four entries" in get_entries_workflow
+    assert "authority-only requires category bcal-scenario" in get_entries_workflow

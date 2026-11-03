@@ -35,6 +35,11 @@ on:
         required: false
         type: string
         default: "1"
+      authority-only:
+        description: Select the authority entries from the checked-in authority provenance manifest
+        required: false
+        type: boolean
+        default: false
     outputs:
       entries:
         description: JSON array of dataset entries
@@ -91,7 +96,32 @@ jobs:
         env:
           COHORT: ${{ inputs.cohort }}
           REPEAT_COUNT: ${{ inputs.repeat-count }}
+          AUTHORITY_ONLY: ${{ inputs.authority-only }}
         run: |
+          if [[ "$AUTHORITY_ONLY" == "true" ]]; then
+            if [[ "${{ inputs.category }}" != "bcal-scenario" ]]; then
+              echo "::error::authority-only requires category bcal-scenario."
+              exit 1
+            fi
+            entries="$(jq -c '.authority.entries' dataset/experiments/bcal_authority_provenance_v1.json)"
+            if [[ "$(jq 'length' <<<"$entries")" -ne 4 ]]; then
+              echo "::error::authority provenance manifest must select exactly four entries."
+              exit 1
+            fi
+            available="$(uv run bcbench dataset list --category bcal-scenario 2>/dev/null | sed -n 's/^  - //p' | jq -Rsc 'split("\n") | map(select(length > 0))')"
+            missing="$(jq -cn --argjson requested "$entries" --argjson available "$available" '$requested - $available')"
+            if [[ "$(jq 'length' <<<"$missing")" -ne 0 ]]; then
+              echo "::error::authority provenance manifest contains unavailable entries: $missing"
+              exit 1
+            fi
+            echo "entries=$entries" >> "$GITHUB_OUTPUT"
+            echo "cohort-name=" >> "$GITHUB_OUTPUT"
+            echo "cohort-sha256=" >> "$GITHUB_OUTPUT"
+            echo "repetition-count=$REPEAT_COUNT" >> "$GITHUB_OUTPUT"
+            jq -cn --argjson count "$REPEAT_COUNT" '[range(1; $count + 1)]' | sed 's/^/repetitions=/' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           cmd="uv run bcbench dataset list --category ${{ inputs.category }} --tier ${{ inputs.tier }} --github-output entries"
 
           if [[ -n "$COHORT" ]]; then

@@ -1,7 +1,7 @@
 import logging
 import random
 from pathlib import Path
-from typing import Annotated, cast, override
+from typing import Annotated, override
 
 import typer
 from bcbench_core.agent.copilot import get_copilot_version
@@ -9,7 +9,7 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
 
-from bcbench.agent import BCalBackendConfig, get_bcal_version, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, get_bcal_version, get_claude_version, get_pr_review_version, run_bcal_agent, run_bcal_scenario, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -29,7 +29,7 @@ from bcbench.cli_options import (
     resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, NL2ALEntry, evaluation_cohort_path, load_evaluation_cohort
+from bcbench.dataset import BaseDatasetEntry, BCalScenarioEntry, NL2ALEntry, evaluation_cohort_path, load_evaluation_cohort
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -39,6 +39,17 @@ logger = logging.getLogger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
+
+
+def _run_bcal_compatible_entry(
+    context: EvaluationContext[BaseDatasetEntry],
+    backend_config: BCalBackendConfig,
+) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]:
+    if isinstance(context.entry, NL2ALEntry):
+        return run_bcal_agent(entry=context.entry, repo_path=context.repo_path, backend_config=backend_config)
+    if isinstance(context.entry, BCalScenarioEntry):
+        return run_bcal_scenario(entry=context.entry, repo_path=context.repo_path, backend_config=backend_config)
+    raise TypeError(f"Unsupported BCal entry type: {type(context.entry).__name__}")
 
 
 @evaluate_app.command("copilot")
@@ -241,6 +252,7 @@ def evaluate_pr_review(
 @evaluate_app.command("bcal")
 def evaluate_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    category: EvaluationCategoryOption = EvaluationCategory.NL2AL,
     tier: TierOption = DatasetTier.GOLD,
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -257,13 +269,19 @@ def evaluate_bcal(
     bcal_variant_patch_sha: Annotated[str | None, typer.Option(envvar="BCAL_VARIANT_PATCH_SHA", help="BCal variant patch SHA")] = None,
 ) -> None:
     """
-    Evaluate BCal dotnet tool on single nl2al dataset entry.
+    Evaluate BCal dotnet tool on a BCal-compatible dataset entry.
 
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
-    category = EvaluationCategory.NL2AL
+    compatible_categories = {EvaluationCategory.NL2AL, EvaluationCategory.BCAL_SCENARIO}
+    if category not in compatible_categories:
+        raise typer.BadParameter(
+            f"BCal only supports categories: {', '.join(sorted(item.value for item in compatible_categories))}",
+            param_hint="--category",
+        )
+
     dataset_path = category.dataset_path(tier)
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(dataset_path, entry_id=entry_id)[0])
+    entry = category.entry_class.load(dataset_path, entry_id=entry_id)[0]
     cohort_applicability: list[str] | None = None
     cohort_role = None
     cohort_notes = None
@@ -276,6 +294,8 @@ def evaluate_bcal(
         raise typer.BadParameter("repetition index must be between 1 and repetition count")
     if cohort_name is not None and repetition_index is None:
         raise typer.BadParameter("cohort evaluations must include repetition metadata")
+    if cohort_name is not None and category is not EvaluationCategory.NL2AL:
+        raise typer.BadParameter("cohort metadata is only supported for the nl2al category")
     if cohort_name is not None and cohort_sha256 is not None:
         available_entries = category.entry_class.load(dataset_path)
         try:
@@ -333,13 +353,11 @@ def evaluate_bcal(
     try:
         category.pipeline.execute(
             context,
-            lambda ctx: run_bcal_agent(
-                entry=cast(NL2ALEntry, ctx.entry),
-                repo_path=ctx.repo_path,
-                backend_config=backend_config,
-            ),
+            lambda ctx: _run_bcal_compatible_entry(ctx, backend_config),
         )
     except AgentError as exc:
+        if category is not EvaluationCategory.NL2AL:
+            raise
         result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
         category.pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)

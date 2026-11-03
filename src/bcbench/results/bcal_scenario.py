@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Literal, Self, override
 
 from pydantic import BaseModel, ConfigDict
 
+from bcbench.dataset import BCalScenarioEntry
 from bcbench.results.base import JudgeScoredEvaluationResult
 from bcbench.types import EvaluationContext
 
@@ -43,7 +44,8 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
     canonical_trace: dict[str, object] | None = None
 
     @classmethod
-    def create_agent_timeout_failure(cls, context: EvaluationContext) -> Self:
+    @override
+    def create_agent_timeout_failure(cls, context: EvaluationContext[BCalScenarioEntry]) -> Self:
         return cls(
             **cls._base_fields(context),
             timeout=True,
@@ -55,7 +57,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
     @classmethod
     def create(
         cls,
-        context: EvaluationContext,
+        context: EvaluationContext[BCalScenarioEntry],
         *,
         output: str,
         scenario_completed: bool,
@@ -82,6 +84,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         )
 
     @property
+    @override
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"
@@ -92,6 +95,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         return "Failed"
 
     @property
+    @override
     def category_metrics(self) -> dict[str, int | float | bool]:
         metrics: dict[str, int | float | bool] = {
             "scenario_completed": self.scenario_completed,
@@ -105,6 +109,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         return metrics
 
     @property
+    @override
     def export_metadata(self) -> dict[str, str | int | float | bool | None]:
         execution_identity = self.execution_identity or {}
         prompt_evidence = self.prompt_evidence or {}

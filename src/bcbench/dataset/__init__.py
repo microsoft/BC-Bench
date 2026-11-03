@@ -1,5 +1,17 @@
 """Dataset module for querying, validating and analyzing dataset entries."""
 
+from bcbench.dataset.bcal_scenario import (
+    BCalEvaluationContract,
+    BCalInteractionMatch,
+    BCalInteractionResponse,
+    BCalInteractionRule,
+    BCalPlanActionStep,
+    BCalRuntimeVerification,
+    BCalScenarioEntry,
+    BCalSessionConfiguration,
+    BCalTraceAssertion,
+    BCalUserStep,
+)
 from bcbench.dataset.codereview import ArticleId, CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.cohort import EvaluationCohort, EvaluationCohortEntry, ResolvedEvaluationCohort, evaluation_cohort_path, load_evaluation_cohort
 from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, DataQueryEntry, NL2ALEntry, RepoGroundedEntry, TestGenEntry
@@ -7,6 +19,16 @@ from bcbench.dataset.extensibility_request import ExtRequestAdvisorEntry, ExtReq
 
 __all__ = [
     "ArticleId",
+    "BCalEvaluationContract",
+    "BCalInteractionMatch",
+    "BCalInteractionResponse",
+    "BCalInteractionRule",
+    "BCalPlanActionStep",
+    "BCalRuntimeVerification",
+    "BCalScenarioEntry",
+    "BCalSessionConfiguration",
+    "BCalTraceAssertion",
+    "BCalUserStep",
     "BaseDatasetEntry",
     "BugFixEntry",
     "CodeReviewEntry",

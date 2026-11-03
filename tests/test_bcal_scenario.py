@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.exceptions import AgentError
 from pydantic import ValidationError
 
 import bcbench.evaluate.bcal_scenario as scenario_evaluation
@@ -13,9 +14,8 @@ from bcbench.agent.bcal import BCalBackendConfig, bc_eval_llm_api_bridge
 from bcbench.agent.bcal import scenario as bcal_scenario
 from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.bcal_scenario import evaluate_trace
-from bcbench.exceptions import AgentError
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
-from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory
+from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory
 from tests.conftest import create_evaluation_context
 
 
@@ -178,7 +178,7 @@ def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
         metrics, _ = bcal_scenario.run_bcal_scenario(
             entry,
             tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py", model="gpt-5"),
+            BCalBackendConfig(command="python bridge.py", model="gpt-5"),
         )
 
     assert captured[captured.index("--scenario") + 1].endswith("execution.json")
@@ -202,7 +202,7 @@ def test_nonzero_exit_without_result_is_harness_failure(tmp_path: Path):
         bcal_scenario.run_bcal_scenario(
             entry,
             tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            BCalBackendConfig(command="python bridge.py"),
         )
 
 
@@ -224,7 +224,7 @@ def test_export_failure_in_structured_result_is_harness_failure(tmp_path: Path):
         bcal_scenario.run_bcal_scenario(
             entry,
             tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            BCalBackendConfig(command="python bridge.py"),
         )
 
 
@@ -305,8 +305,7 @@ def test_changed_paths_and_rejected_interactions_are_behavioral_assertions():
 
 
 def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
-    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
-    features = BCalScenarioEntry.load(EvaluationCategory.BCAL_FEATURE.dataset_path)
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path())
 
     scenario_ids = {entry.instance_id for entry in scenarios}
     assert {
@@ -319,11 +318,6 @@ def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
         "bcal-scenario__authority-retained-intent-1",
         "bcal-scenario__authority-untrusted-evidence-1",
     } < scenario_ids
-    assert [entry.instance_id for entry in features] == ["bcal-feature__warehouse-inventory-risk-1"]
-    assert len(features[0].evaluation.artifact_assertions) >= 12
-    assert features[0].session.publish == "never"
-    assert features[0].evaluation.runtime_verification is None
-    assert any(assertion["text"].startswith("Forbidden behavior is absent:") for assertion in features[0].get_expected_output()["assertions"])
     authority_entries = [entry for entry in scenarios if entry.metadata.area == "authority-contract"]
     assert all(entry.workspace_files for entry in authority_entries)
     assert any(len(entry.steps) >= 12 for entry in authority_entries)
@@ -402,19 +396,18 @@ def test_structured_result_exports_gate_a_metadata(tmp_path: Path):
     assert result.export_metadata["canonical_trace_truncated"] is False
 
 
-def test_bcal_workflow_accepts_both_advanced_categories():
+def test_bcal_workflow_accepts_authority_scenarios():
     workflow = Path(".github/workflows/bcal-evaluation.yml").read_text(encoding="utf-8")
 
-    assert '- "bcal-scenario"' in workflow
-    assert '- "bcal-feature"' in workflow
-    assert "--category \"${{ inputs.category || 'bcal-scenario' }}\"" in workflow
+    assert "- bcal-scenario" in workflow
+    assert "\"${{ inputs.category || 'bcal-scenario' }}\"" in workflow
     assert "path: ${{ env.EVALUATION_RESULTS_DIR }}/**" in workflow
 
 
 def test_authority_experiment_selector_excludes_control_tower():
     selector_path = Path("dataset/experiments/bcal_authority_provenance_v1.json")
     selector = json.loads(selector_path.read_text(encoding="utf-8"))
-    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path())
     scenario_ids = {entry.instance_id for entry in scenarios}
     gold_ids = {json.loads(line)["instance_id"] for line in Path(selector["ordinary_quality"]["dataset_file"]).read_text(encoding="utf-8").splitlines() if line.strip()}
     excluded = {entry["instance_id"] for entry in selector["excluded_entries"]}

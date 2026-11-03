@@ -1,23 +1,25 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
 import zipfile
 from pathlib import Path
-from typing import cast
+from typing import cast, override
+
+from bcbench_core.artifacts import copy_symbol_apps
 
 from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_RESULT, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult, load_scenario_result, resolve_session_chat
 from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
-from bcbench.operations import bootstrap_app_json, copy_symbol_apps
+from bcbench.operations import bootstrap_app_json
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationContext
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _MUTATION_TOOLS = frozenset({"write_file", "edit_file", "create_file", "apply_patch", "replace_text", "patch_text"})
 _TEXT_EXTENSIONS = frozenset({".al", ".json", ".md", ".txt", ".xml", ".yml", ".yaml", ".ps1", ".toml"})
@@ -327,6 +329,7 @@ def _archive_workspace(entry: BCalScenarioEntry, app_folder: Path, result_dir: P
 
 
 class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
+    @override
     def setup_workspace(self, entry: BCalScenarioEntry, repo_path: Path) -> None:
         if repo_path.exists():
             shutil.rmtree(repo_path)
@@ -341,13 +344,16 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
         (repo_path / ".gitignore").write_text(".bcal-symbols/\n**/.alpackages/\n**/.bcbench-build/\n", encoding="utf-8")
         _git_init_and_commit(repo_path)
 
+    @override
     def setup(self, context: EvaluationContext[BCalScenarioEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
 
+    @override
     def run_agent(self, context: EvaluationContext[BCalScenarioEntry], agent_runner: AgentRunner[BCalScenarioEntry]) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
+    @override
     def evaluate(self, context: EvaluationContext[BCalScenarioEntry]) -> None:
         result = load_scenario_result(context.repo_path / SCENARIO_RESULT)
         chat_path = resolve_session_chat(result, context.repo_path)
