@@ -1,5 +1,6 @@
 import json
 import subprocess
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 import bcbench.evaluate.bcal_scenario as scenario_evaluation
-from bcbench.agent.bcal import BCalBackendConfig
+from bcbench.agent.bcal import BCalBackendConfig, bc_eval_llm_api_bridge
 from bcbench.agent.bcal import scenario as bcal_scenario
 from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.bcal_scenario import evaluate_trace
@@ -149,6 +150,13 @@ def test_scenario_schema_rejects_workspace_path_traversal(path: str):
 
     with pytest.raises(ValidationError, match="stay within the exported app folder"):
         BCalScenarioEntry.model_validate(payload)
+
+
+def test_llm_api_bridge_accepts_windows_utf8_bom():
+    request = {"model": "gpt-55-chat", "messages": [{"role": "user", "content": "hello"}]}
+    stream = BytesIO(b"\xef\xbb\xbf" + json.dumps(request).encode())
+
+    assert bc_eval_llm_api_bridge._load_request(stream) == request
 
 
 def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
@@ -418,6 +426,8 @@ def test_authority_experiment_selector_excludes_control_tower():
     assert selector["execution"] == {
         "backend": "external-command",
         "model": "gpt-55-chat",
+        "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
+        "bridge_package": "bc-eval==0.6.1",
         "bc_version": "28.0",
         "symbol_cache": "C:\\bcartifacts.cache",
     }
@@ -441,5 +451,7 @@ def test_authority_experiment_runner_uses_one_shared_selector():
     assert '$env:PATH = "$ToolPath;$env:PATH"' in script
     assert "BCAL_LLM_COMMAND for the fixed external-command backend" in script
     assert "symbols under $symbolRoot" in script
+    assert "--repo-path $workspace" in script
+    assert "--run-id $entry" in script
     assert "foreach ($repeat in 1..$config.repeat_count)" in script
     assert "& python -m uv run bcbench evaluate bcal" in script

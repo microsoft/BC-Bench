@@ -83,6 +83,9 @@ $missingPrerequisites = @()
 if ([string]::IsNullOrWhiteSpace($env:BCAL_LLM_COMMAND)) {
     $missingPrerequisites += "BCAL_LLM_COMMAND for the fixed external-command backend"
 }
+elseif ($env:BCAL_LLM_COMMAND -notlike "*$($config.execution.bridge.Replace('/', '\'))") {
+    $missingPrerequisites += "BCAL_LLM_COMMAND ending in $($config.execution.bridge)"
+}
 if ($env:BCAL_LLM_MODEL -ne $config.execution.model) {
     $missingPrerequisites += "BCAL_LLM_MODEL=$($config.execution.model)"
 }
@@ -104,7 +107,8 @@ $env:PATH = "$ToolPath;$env:PATH"
 foreach ($repeat in 1..$config.repeat_count) {
     $runOutput = Join-Path $OutputDir "$Variant-$Lane-r$repeat"
     foreach ($entry in $entries) {
-        & python -m uv run bcbench evaluate bcal $entry --category $category --output-dir $runOutput
+        $workspace = Join-Path $OutputDir "workspaces\$Variant-$Lane-r$repeat\$entry"
+        & python -m uv run bcbench evaluate bcal $entry --category $category --repo-path $workspace --output-dir $runOutput --run-id $entry
         if ($LASTEXITCODE -ne 0) {
             throw "BCal evaluation failed for $entry in repetition $repeat."
         }
