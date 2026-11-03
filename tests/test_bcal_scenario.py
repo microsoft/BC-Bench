@@ -199,6 +199,7 @@ def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
 
     assert captured[captured.index("--scenario") + 1].endswith("execution.json")
     assert captured[captured.index("--result") + 1].endswith("evaluation-run.json")
+    assert "--include-evidence" in captured
     assert captured[captured.index("--exportfolder") + 1].endswith("app")
     assert metrics.prompt_tokens == 10
     assert metrics.completion_tokens == 20

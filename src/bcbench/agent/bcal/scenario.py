@@ -234,6 +234,7 @@ def run_bcal_scenario(
         str(scenario_path),
         "--result",
         str(result_path),
+        "--include-evidence",
         "--exportfolder",
         str(export_folder),
         f"--packagecachepath={package_cache_path}",
