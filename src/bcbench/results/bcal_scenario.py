@@ -8,6 +8,10 @@ from bcbench.results.base import JudgeScoredEvaluationResult
 from bcbench.types import EvaluationContext
 
 
+def _metadata_scalar(value: object) -> str | int | float | bool | None:
+    return value if isinstance(value, str | int | float | bool) else None
+
+
 class IndependentBuildResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -34,6 +38,9 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
     trace_assertions: list[TraceAssertionResult]
     runtime_status: Literal["passed", "failed", "not_run"] | None = None
     harness_failure: bool = False
+    execution_identity: dict[str, object] | None = None
+    prompt_evidence: dict[str, object] | None = None
+    canonical_trace: dict[str, object] | None = None
 
     @classmethod
     def create_agent_timeout_failure(cls, context: EvaluationContext) -> Self:
@@ -55,6 +62,9 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         independent_build: IndependentBuildResult,
         trace_assertions: list[TraceAssertionResult],
         runtime_status: Literal["passed", "failed", "not_run"] | None,
+        execution_identity: dict[str, object] | None = None,
+        prompt_evidence: dict[str, object] | None = None,
+        canonical_trace: dict[str, object] | None = None,
         error_message: str | None = None,
     ) -> Self:
         return cls(
@@ -66,6 +76,9 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
             trace_compliance=all(assertion.passed for assertion in trace_assertions),
             trace_assertions=trace_assertions,
             runtime_status=runtime_status,
+            execution_identity=execution_identity,
+            prompt_evidence=prompt_evidence,
+            canonical_trace=canonical_trace,
         )
 
     @property
@@ -93,9 +106,21 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
 
     @property
     def export_metadata(self) -> dict[str, str | int | float | bool | None]:
-        return {
-            **super().export_metadata,
-            "independent_build_status": self.independent_build.status,
-            "runtime_status": self.runtime_status,
-            "harness_failure": self.harness_failure,
-        }
+        execution_identity = self.execution_identity or {}
+        prompt_evidence = self.prompt_evidence or {}
+        canonical_trace = self.canonical_trace or {}
+        compositions = prompt_evidence.get("compositions")
+        uses = prompt_evidence.get("uses")
+        events = canonical_trace.get("events")
+        metadata: dict[str, str | int | float | bool | None] = {key: _metadata_scalar(value) for key, value in super().export_metadata.items()}
+        metadata["independent_build_status"] = self.independent_build.status
+        metadata["runtime_status"] = self.runtime_status
+        metadata["harness_failure"] = self.harness_failure
+        metadata["bcal_product_version"] = _metadata_scalar(execution_identity.get("productVersion"))
+        metadata["bcal_source_commit_sha"] = _metadata_scalar(execution_identity.get("sourceCommitSha"))
+        metadata["bcal_evidence_contract_version"] = _metadata_scalar(execution_identity.get("evidenceContractVersion"))
+        metadata["prompt_composition_count"] = len(compositions) if isinstance(compositions, list) else None
+        metadata["prompt_use_count"] = len(uses) if isinstance(uses, list) else None
+        metadata["canonical_trace_event_count"] = len(events) if isinstance(events, list) else None
+        metadata["canonical_trace_truncated"] = _metadata_scalar(canonical_trace.get("truncated"))
+        return metadata

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
@@ -99,6 +100,8 @@ class BCalTraceAssertion(BaseModel):
         "plan_lifecycle",
         "no_mutation_before_step",
         "mutation_after_step",
+        "changed_paths",
+        "interaction_rejected",
     ]
     tool: str | None = None
     before: str | None = None
@@ -106,6 +109,7 @@ class BCalTraceAssertion(BaseModel):
     interaction_id: str | None = None
     step_id: str | None = None
     expected: str | bool | None = None
+    paths: list[str] | None = None
 
     @model_validator(mode="after")
     def validate_type_fields(self) -> Self:
@@ -117,6 +121,8 @@ class BCalTraceAssertion(BaseModel):
             "plan_lifecycle": ("step_id", "expected"),
             "no_mutation_before_step": ("step_id",),
             "mutation_after_step": ("step_id",),
+            "changed_paths": ("paths",),
+            "interaction_rejected": ("interaction_id",),
         }
         missing = [name for name in required_fields.get(self.type, ()) if getattr(self, name) is None]
         if missing:
@@ -145,10 +151,16 @@ class BCalScenarioEntry(BaseDatasetEntry):
     session: BCalSessionConfiguration
     steps: Annotated[list[BCalScenarioStep], Field(min_length=1)]
     interactions: list[BCalInteractionRule] = Field(default_factory=list)
+    workspace_files: dict[str, str] = Field(default_factory=dict)
     evaluation: BCalEvaluationContract
 
     @model_validator(mode="after")
-    def validate_interaction_defaults(self) -> Self:
+    def validate_scenario(self) -> Self:
+        for path in self.workspace_files:
+            relative_path = PurePosixPath(path)
+            windows_path = PureWindowsPath(path)
+            if "\\" in path or relative_path.is_absolute() or windows_path.is_absolute() or ".." in relative_path.parts or not relative_path.name:
+                raise ValueError(f"workspace_files path must stay within the exported app folder: {path}")
         if not self.interactions:
             return self
         default_indices = [index for index, rule in enumerate(self.interactions) if rule.match.default]

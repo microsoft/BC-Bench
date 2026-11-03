@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -157,6 +157,9 @@ class BCalScenarioRunResult(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: Literal["1.0"] = Field(alias="schemaVersion")
+    execution_identity: dict[str, object] | None = Field(default=None, alias="executionIdentity")
+    evidence: dict[str, object] | None = None
+    outcome: dict[str, object] | None = None
     completed: bool
     steps: list[BCalStepResult]
     interactions: list[BCalInteractionRecord]
@@ -165,6 +168,16 @@ class BCalScenarioRunResult(BaseModel):
     export: BCalExportResult
     session_archive: BCalSessionArchiveResult = Field(alias="sessionArchive")
     failure: BCalFailure | None = None
+
+    @property
+    def prompt_evidence(self) -> dict[str, object] | None:
+        value = self.evidence.get("promptEvidence") if self.evidence else None
+        return cast(dict[str, object], value) if isinstance(value, dict) else None
+
+    @property
+    def canonical_trace(self) -> dict[str, object] | None:
+        value = self.evidence.get("trace") if self.evidence else None
+        return cast(dict[str, object], value) if isinstance(value, dict) else None
 
 
 def write_execution_manifest(entry: BCalScenarioEntry, path: Path) -> None:
