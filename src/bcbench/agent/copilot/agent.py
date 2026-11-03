@@ -101,7 +101,7 @@ class CopilotHarness(Harness[BaseDatasetEntry, AgentHarness]):
                 prompt=prompt,
                 model=self.model,
                 work_dir=repo_path,
-                timeout=request.timeout or self.timeout,
+                timeout=self.timeout if request.timeout is None else request.timeout,
                 env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
                 options=options,
             )
