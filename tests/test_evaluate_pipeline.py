@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentTimeoutError
 
@@ -39,7 +40,8 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
-        context.metrics, context.experiment = agent_runner(context)
+        result = agent_runner(context)
+        context.metrics, context.experiment = result.metrics, result.experiment
 
     @override
     def evaluate(self, context: EvaluationContext[E]) -> None:
@@ -48,8 +50,8 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
             raise self.raise_in_evaluate
 
 
-def _noop_runner(_ctx: EvaluationContext[BugFixEntry]) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]:
-    return AgentMetrics(execution_time=1.0), ExperimentConfiguration()
+def _noop_runner(_ctx: EvaluationContext[BugFixEntry]) -> AgentResult:
+    return AgentResult(metrics=AgentMetrics(execution_time=1.0), experiment=ExperimentConfiguration())
 
 
 def _read_only_result[E: BaseDatasetEntry](ctx: EvaluationContext[E]) -> BaseEvaluationResult:
@@ -93,7 +95,7 @@ class TestExecuteAgentTimeout:
         ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
         pipeline = _StubPipeline[NL2ALEntry](raise_in_run_agent=AgentTimeoutError("test timeout"))
 
-        pipeline.execute(ctx, lambda _: (None, None))
+        pipeline.execute(ctx, lambda _: AgentResult())
 
         result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
         payload = json.loads(result_file.read_text(encoding="utf-8"))

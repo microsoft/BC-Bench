@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
@@ -124,7 +125,7 @@ def run_bcal_agent(
     repo_path: Path,
     backend_config: BCalBackendConfig,
     timeout: int = 25 * 60,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
+) -> AgentResult:
     logger.info(f"Running bcal CLI on: {entry.instance_id}")
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
@@ -151,7 +152,7 @@ def run_bcal_agent(
         execution_time = time.monotonic() - start
 
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
-        return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
+        return AgentResult(metrics=AgentMetrics(execution_time=execution_time), experiment=ExperimentConfiguration())
     except subprocess.TimeoutExpired:
         logger.exception(f"bcal CLI timed out after {timeout} seconds")
         metrics = AgentMetrics(execution_time=timeout)

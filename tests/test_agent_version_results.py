@@ -17,9 +17,7 @@ from tests.conftest import create_bugfix_result, create_codereview_result, creat
 
 @pytest.mark.parametrize("version", ["1.2.3", "a" * 40, None])
 def test_agent_version_round_trips_through_results_and_summaries(tmp_path: Path, version: str | None) -> None:
-    context = create_evaluation_context(tmp_path)
-    context.agent_version = version
-    result = BugFixResult.create_success(context, "patch")
+    result = BugFixResult.create_success(create_evaluation_context(tmp_path), "patch").model_copy(update={"agent_version": version})
     result.save(tmp_path, "result.jsonl")
     restored = BaseEvaluationResult.from_json(json.loads((tmp_path / "result.jsonl").read_text()))
     summary = EvaluationResultSummary.from_results([restored], "run")
@@ -32,8 +30,7 @@ def test_agent_version_round_trips_through_results_and_summaries(tmp_path: Path,
 
 
 def test_timeout_result_keeps_version_resolved_before_execution(tmp_path: Path) -> None:
-    context = create_evaluation_context(tmp_path)
-    context.agent_version = "1.2.3"
+    context = create_evaluation_context(tmp_path, agent_version="1.2.3")
     pipeline = context.category.pipeline(AgentConfig())
     with (
         patch.object(type(pipeline), "setup"),

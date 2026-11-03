@@ -1,6 +1,7 @@
 """Tests for NL2ALPipeline.evaluate() — empty-diff handling is nl2al-specific."""
 
 import pytest
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.exceptions import EmptyDiffError
 
 from bcbench.evaluate.nl2al import NL2ALPipeline
@@ -85,7 +86,7 @@ class TestNL2ALRunAgentSingleAttempt:
 
         def agent_runner(_ctx):
             agent_calls["n"] += 1
-            return (None, None)
+            return AgentResult()
 
         reset_calls = {"n": 0}
         monkeypatch.setattr(pipeline, "setup_workspace", lambda *_args, **_kw: reset_calls.__setitem__("n", reset_calls["n"] + 1))

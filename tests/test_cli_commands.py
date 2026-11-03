@@ -142,8 +142,8 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             llm_model=llm_model,
         )
 
-    assert captured["context"].model == expected_model
-    assert captured["context"].agent_version == "18.0.1.2-beta"
+    assert captured["context"].agent.model == expected_model
+    assert captured["context"].agent.version == "18.0.1.2-beta"
 
 
 def _option_names(command: click.Command) -> set[str]:
@@ -190,9 +190,9 @@ def agent_command_category(tmp_path):
 @pytest.mark.parametrize(
     ("commands", "command_name", "agent_name", "extra_args"),
     [
-        (run_commands, "run_copilot", "run_copilot_agent", {}),
+        (run_commands, "run_copilot", "CopilotHarness", {}),
         (run_commands, "run_claude", "run_claude_code", {}),
-        (evaluate_commands, "evaluate_copilot", "run_copilot_agent", {"run_id": "test-run"}),
+        (evaluate_commands, "evaluate_copilot", "CopilotHarness", {"run_id": "test-run"}),
         (evaluate_commands, "evaluate_claude_code", "run_claude_code", {"run_id": "test-run"}),
     ],
 )
@@ -201,7 +201,6 @@ def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_cat
 
     with (
         patch.object(commands, agent_name) as run_agent,
-        patch.object(evaluate_commands, "get_copilot_version", return_value="1.2.3"),
         patch.object(evaluate_commands, "get_claude_version", return_value="1.2.3"),
     ):
         getattr(commands, command_name)(
@@ -226,9 +225,9 @@ def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_cat
 @pytest.mark.parametrize(
     ("commands", "command_name", "agent_name", "extra_args"),
     [
-        (run_commands, "run_copilot", "run_copilot_agent", {}),
+        (run_commands, "run_copilot", "CopilotHarness", {}),
         (run_commands, "run_claude", "run_claude_code", {}),
-        (evaluate_commands, "evaluate_copilot", "run_copilot_agent", {"run_id": "test-run"}),
+        (evaluate_commands, "evaluate_copilot", "CopilotHarness", {"run_id": "test-run"}),
         (evaluate_commands, "evaluate_claude_code", "run_claude_code", {"run_id": "test-run"}),
     ],
 )
@@ -239,7 +238,6 @@ def test_agent_commands_pass_the_given_agent_config(tmp_path, agent_command_cate
 
     with (
         patch.object(commands, agent_name) as run_agent,
-        patch.object(evaluate_commands, "get_copilot_version", return_value="1.2.3"),
         patch.object(evaluate_commands, "get_claude_version", return_value="1.2.3"),
     ):
         getattr(commands, command_name)(
@@ -324,7 +322,7 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
     with (
         patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
         patch.object(EvaluationCategory, "dataset_path", return_value=dataset_path),
-        patch.object(evaluate_commands, "get_copilot_version", side_effect=AssertionError("Must use artifact version")),
+        patch("bcbench.agent.copilot.agent.get_copilot_version", side_effect=AssertionError("Must use artifact version")),
         patch.object(evaluate_commands, "get_claude_version", side_effect=AssertionError("Must use artifact version")),
         patch.object(evaluate_commands, "get_pr_review_version", side_effect=AssertionError("Must use artifact version")),
     ):

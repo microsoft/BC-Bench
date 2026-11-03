@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentIdentity
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from bcbench_core.dataset import TestEntry
@@ -85,6 +86,7 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
     entry: EntryT | None = None,
     agent_name: AgentHarness = AgentHarness.COPILOT,
     model: str = "test-model",
+    agent_version: str = "1.0.0",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
     container_name: str = "test-container",
     password: str = "test-password",
@@ -97,8 +99,7 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
         container=ContainerConfig(name=container_name, username=username, password=password, company="CRONUS"),
-        agent_name=agent_name,
-        model=model,
+        agent=AgentIdentity[AgentHarness](harness=agent_name, version=agent_version, model=model),
         category=category,
     )
 
@@ -218,8 +219,7 @@ def create_codereview_result(
         repo_path=Path(),
         result_dir=Path(),
         container=ContainerConfig(name="t", username="t", password="t", company="CRONUS"),
-        agent_name=agent_name,
-        model=model,
+        agent=AgentIdentity[AgentHarness](harness=agent_name, version="1.0.0", model=model),
         category=EvaluationCategory.CODE_REVIEW,
     )
     context.metrics = metrics

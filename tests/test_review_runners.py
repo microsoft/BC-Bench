@@ -12,21 +12,27 @@ from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.types import AgentHarness, EvaluationCategory
 
 
-@pytest.mark.parametrize(
-    ("command", "runner_name"),
-    [
-        (run_commands.run_copilot, "run_copilot_agent"),
-        (run_commands.run_claude, "run_claude_code"),
-    ],
-)
-def test_generic_run_commands_accept_code_review(tmp_path: Path, command, runner_name: str) -> None:
+def test_copilot_run_command_accepts_code_review(tmp_path: Path) -> None:
     entry = object()
     with (
         patch.object(CodeReviewEntry, "load", return_value=[entry]),
         patch.object(CodeReviewPipeline, "setup_workspace"),
-        patch.object(run_commands, runner_name) as agent_runner,
+        patch.object(run_commands, "CopilotHarness") as harness,
     ):
-        command("synthetic__style-018", EvaluationCategory.CODE_REVIEW, repo_path=tmp_path, output_dir=tmp_path / "out")
+        run_commands.run_copilot("synthetic__style-018", EvaluationCategory.CODE_REVIEW, repo_path=tmp_path, output_dir=tmp_path / "out")
+
+    assert harness.call_args.kwargs["category"] is EvaluationCategory.CODE_REVIEW
+    assert harness.return_value.run.call_args.args[0].task is entry
+
+
+def test_claude_run_command_accepts_code_review(tmp_path: Path) -> None:
+    entry = object()
+    with (
+        patch.object(CodeReviewEntry, "load", return_value=[entry]),
+        patch.object(CodeReviewPipeline, "setup_workspace"),
+        patch.object(run_commands, "run_claude_code") as agent_runner,
+    ):
+        run_commands.run_claude("synthetic__style-018", EvaluationCategory.CODE_REVIEW, repo_path=tmp_path, output_dir=tmp_path / "out")
 
     assert agent_runner.call_args.kwargs["entry"] is entry
     assert agent_runner.call_args.kwargs["category"] is EvaluationCategory.CODE_REVIEW
@@ -44,7 +50,7 @@ def test_generic_evaluate_commands_use_code_review_pipeline(tmp_path: Path, comm
     with (
         patch.object(CodeReviewEntry, "load", return_value=[object()]),
         patch.object(CodeReviewPipeline, "execute", side_effect=lambda context, runner: contexts.append(context)),
-        patch.object(evaluate_commands, "get_copilot_version", return_value="1.2.3"),
+        patch("bcbench.agent.copilot.agent.get_copilot_version", return_value="1.2.3"),
         patch.object(evaluate_commands, "get_claude_version", return_value="1.2.3"),
     ):
         command(
@@ -56,8 +62,8 @@ def test_generic_evaluate_commands_use_code_review_pipeline(tmp_path: Path, comm
         )
 
     assert len(contexts) == 1
-    assert contexts[0].agent_name is agent_name
-    assert contexts[0].agent_version == "1.2.3"
+    assert contexts[0].agent.harness is agent_name
+    assert contexts[0].agent.version == "1.2.3"
     assert contexts[0].category is EvaluationCategory.CODE_REVIEW
 
 
@@ -88,10 +94,10 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
 
     assert result.exit_code == 0, result.exception
     assert len(contexts) == 1
-    assert contexts[0].agent_name is AgentHarness.PR_REVIEW
-    assert contexts[0].agent_version == "a" * 40
+    assert contexts[0].agent.harness is AgentHarness.PR_REVIEW
+    assert contexts[0].agent.version == "a" * 40
     assert contexts[0].category is EvaluationCategory.CODE_REVIEW
-    assert contexts[0].model == "gpt-5.6-luna"
+    assert contexts[0].agent.model == "gpt-5.6-luna"
     assert agent_runner.call_args.kwargs["engine_path"] == tmp_path
     get_version.assert_called_once_with(tmp_path)
 
