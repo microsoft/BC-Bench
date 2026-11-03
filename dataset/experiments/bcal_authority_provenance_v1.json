@@ -23,6 +23,8 @@
   "execution": {
     "backend": "external-command",
     "model": "gpt-55-chat",
+    "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
+    "bridge_package": "bc-eval==0.6.1",
     "bc_version": "28.0",
     "symbol_cache": "C:\\bcartifacts.cache"
   },
