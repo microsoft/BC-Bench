@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 import yaml
+from bcbench_core.agent.customization import CustomAgentsConfig, ToggleConfig
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
@@ -604,16 +605,6 @@ class McpConfig(BaseModel):
             if server.name == BC_MCP_SERVER_NAME and not isinstance(server, HttpMcpServer):
                 raise ValueError(f"MCP server '{BC_MCP_SERVER_NAME}' must be of type 'http'")
         return self
-
-
-class ToggleConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    enabled: StrictBool = False
-
-
-class CustomAgentsConfig(ToggleConfig):
-    name: str | None = None
 
 
 class AgentConfig(BaseModel):
