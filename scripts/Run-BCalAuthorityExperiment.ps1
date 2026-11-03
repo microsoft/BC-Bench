@@ -10,6 +10,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $OutputDir,
 
+    [Parameter(Mandatory = $true)]
+    [string] $ToolPath,
+
     [switch] $DryRun
 )
 
@@ -18,6 +21,18 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $ConfigPath = Join-Path $repoRoot "dataset\experiments\bcal_authority_provenance_v1.json"
 $config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
 $excludedEntries = @($config.excluded_entries.instance_id)
+$package = $config.packages.$Variant
+$bcal = Join-Path $ToolPath "bcal.exe"
+if (-not (Test-Path -LiteralPath $bcal)) {
+    throw "BCal executable not found at $bcal."
+}
+$installedIdentity = (& $bcal --version 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "BCal version check failed for $bcal."
+}
+if ($installedIdentity -ne $package.installed_identity) {
+    throw "Expected BCal identity '$($package.installed_identity)', found '$installedIdentity'."
+}
 
 if ($Lane -eq "authority") {
     $category = $config.authority.category
@@ -49,6 +64,8 @@ $selection = [ordered]@{
     experiment = $config.name
     config_sha256 = (Get-FileHash -Algorithm SHA256 -Path $ConfigPath).Hash.ToLowerInvariant()
     variant = $Variant
+    package = $package
+    execution = $config.execution
     lane = $Lane
     category = $category
     repeat_count = $config.repeat_count
@@ -62,9 +79,28 @@ if ($DryRun) {
     exit 0
 }
 
+$missingPrerequisites = @()
+if ([string]::IsNullOrWhiteSpace($env:BCAL_LLM_COMMAND)) {
+    $missingPrerequisites += "BCAL_LLM_COMMAND for the fixed external-command backend"
+}
+if ($env:BCAL_LLM_MODEL -ne $config.execution.model) {
+    $missingPrerequisites += "BCAL_LLM_MODEL=$($config.execution.model)"
+}
+$symbolRoot = Join-Path $config.execution.symbol_cache "sandbox"
+$symbolVersion = Get-ChildItem -Path $symbolRoot -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like "$($config.execution.bc_version)*" } |
+    Select-Object -First 1
+if (-not $symbolVersion -or -not (Get-ChildItem -Path $symbolVersion.FullName -Recurse -Filter *.app -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+    $missingPrerequisites += "BC $($config.execution.bc_version) symbols under $symbolRoot"
+}
+if ($missingPrerequisites) {
+    throw "Missing authority experiment prerequisites: $($missingPrerequisites -join '; ')."
+}
+
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $selection | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 -Path (Join-Path $OutputDir "selection.json")
 
+$env:PATH = "$ToolPath;$env:PATH"
 foreach ($repeat in 1..$config.repeat_count) {
     $runOutput = Join-Path $OutputDir "$Variant-$Lane-r$repeat"
     foreach ($entry in $entries) {
