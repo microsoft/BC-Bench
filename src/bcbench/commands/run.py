@@ -6,7 +6,7 @@ from typing import Annotated, cast
 import typer
 from bcbench_core.agent.harness import AgentRequest
 
-from bcbench.agent import BCalBackendConfig, CopilotHarness, run_bcal_agent, run_claude_code, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, BCalHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
 from bcbench.cli_options import (
     AgentConfigPath,
     ClaudeCodeModel,
@@ -130,16 +130,8 @@ def run_claude(
     agent_config = AgentConfig.from_file(config_path)
     category.pipeline(agent_config).setup_workspace(entry, repo_path)
 
-    run_claude_code(
-        entry=entry,
-        repo_path=repo_path,
-        model=model,
-        category=category,
-        output_dir=output_dir,
-        agent_config=agent_config,
-        plugin_root=_config.paths.plugin_root,
-        runtime=runtime,
-    )
+    harness = ClaudeHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir))
 
 
 @run_app.command("pr-review")
@@ -168,15 +160,8 @@ def run_pr_review(
     entry = CodeReviewEntry.load(category.dataset_path(), entry_id=entry_id)[0]
     CodeReviewPipeline().setup_workspace(entry, repo_path)
 
-    run_pr_review_agent(
-        entry=entry,
-        model=model,
-        repo_path=repo_path,
-        category=category,
-        output_dir=output_dir,
-        engine_path=engine_path,
-        min_severity=min_severity,
-    )
+    harness = PRReviewHarness(model=model, engine_path=engine_path, min_severity=min_severity)
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir))
 
 
 @run_app.command("bcal")
@@ -199,11 +184,5 @@ def run_bcal(
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
     NL2ALPipeline().setup_workspace(entry, repo_path)
 
-    run_bcal_agent(
-        entry=entry,
-        repo_path=repo_path,
-        backend_config=BCalBackendConfig(
-            command=llm_command,
-            model=llm_model,
-        ),
-    )
+    harness = BCalHarness(BCalBackendConfig(command=llm_command, model=llm_model))
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=repo_path))

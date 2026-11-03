@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 import yaml
 from bcbench_core.agent.customization import CustomAgentsConfig, ToggleConfig
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
@@ -650,3 +650,6 @@ class EvaluationContext[E: BaseDatasetEntry]:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
+
+    def agent_request(self) -> AgentRequest[E]:
+        return AgentRequest(task=self.entry, work_dir=self.repo_path, output_dir=self.result_dir)

@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import Harness
 from bcbench_core.bc import build_and_publish_projects, run_test_suite
 from bcbench_core.dataset import TestEntry
 from bcbench_core.exceptions import BuildError, TestExecutionError
@@ -10,13 +11,13 @@ from bcbench_core.projects import categorize_projects
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.dataset import TestGenEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import NoTestsExtractedError
 from bcbench.github_actions import github_log_group
 from bcbench.operations import copy_problem_statement_folder, extract_tests_from_patch, setup_repo_prebuild
 from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationContext, TestGenerationInput
+from bcbench.types import AgentHarness, EvaluationContext, TestGenerationInput
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +66,9 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         set_runtime_version(context.repo_path, context.entry.project_paths)
 
     @override
-    def run_agent(self, context: EvaluationContext[TestGenEntry], agent_runner: AgentRunner[TestGenEntry]) -> None:
+    def run_agent(self, context: EvaluationContext[TestGenEntry], harness: Harness[TestGenEntry, AgentHarness]) -> None:
         with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
-            result = agent_runner(context)
+            result = harness.run(context.agent_request())
             context.metrics, context.experiment = result.metrics, result.experiment
 
     @override

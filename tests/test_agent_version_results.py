@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
@@ -12,7 +12,7 @@ from bcbench.results.bugfix import BugFixResult
 from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
 from bcbench.results.summary import EvaluationResultSummary
 from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory
-from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context
+from tests.conftest import StubHarness, create_bugfix_result, create_codereview_result, create_evaluation_context
 
 
 @pytest.mark.parametrize("version", ["1.2.3", "a" * 40, None])
@@ -36,7 +36,7 @@ def test_timeout_result_keeps_version_resolved_before_execution(tmp_path: Path) 
         patch.object(type(pipeline), "setup"),
         patch.object(type(pipeline), "run_agent", side_effect=AgentTimeoutError("timeout")),
     ):
-        pipeline.execute(context, Mock())
+        pipeline.execute(context, StubHarness())
 
     saved = next(context.result_dir.glob("*.jsonl"))
     result = BaseEvaluationResult.from_json(json.loads(saved.read_text()))

@@ -3,9 +3,8 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Protocol
 
-from bcbench_core.agent.harness import AgentRequest, AgentResult, Harness
+from bcbench_core.agent.harness import Harness
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.dataset import BaseDatasetEntry
@@ -15,20 +14,7 @@ from bcbench.types import AgentHarness, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["AgentRunner", "EvaluationPipeline", "harness_runner"]
-
-
-class AgentRunner[E: BaseDatasetEntry](Protocol):
-    def __call__(self, context: EvaluationContext[E], /) -> AgentResult: ...
-
-
-def harness_runner[E: BaseDatasetEntry](harness: Harness[E, AgentHarness]) -> AgentRunner[E]:
-    """Adapt ``harness`` to the pipelines' ``AgentRunner`` until every harness implements ``Harness``."""
-
-    def run(context: EvaluationContext[E], /) -> AgentResult:
-        return harness.run(AgentRequest(task=context.entry, work_dir=context.repo_path, output_dir=context.result_dir))
-
-    return run
+__all__ = ["EvaluationPipeline"]
 
 
 class EvaluationPipeline[E: BaseDatasetEntry](ABC):
@@ -59,12 +45,12 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def run_agent(self, context: EvaluationContext[E], agent_runner: AgentRunner[E]) -> None:
+    def run_agent(self, context: EvaluationContext[E], harness: Harness[E, AgentHarness]) -> None:
         """Run the agent and capture metrics.
 
         Args:
             context: Evaluation context with configuration
-            agent_runner: Function that runs the specific agent
+            harness: The agent harness to run
 
         Raises:
             Exception: If agent execution fails
@@ -88,7 +74,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     def execute(
         self,
         context: EvaluationContext[E],
-        agent_runner: AgentRunner[E],
+        harness: Harness[E, AgentHarness],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 
@@ -97,12 +83,12 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
 
         Args:
             context: Evaluation context with configuration
-            agent_runner: Function that runs the specific agent and returns (AgentMetrics, ExperimentConfiguration)
+            harness: The agent harness to run
         """
         self.setup(context)
 
         try:
-            self.run_agent(context, agent_runner)
+            self.run_agent(context, harness)
         except AgentTimeoutError as e:
             context.metrics = e.metrics
             context.experiment = e.config

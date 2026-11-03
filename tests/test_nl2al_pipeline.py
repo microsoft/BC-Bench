@@ -1,13 +1,12 @@
 """Tests for NL2ALPipeline.evaluate() — empty-diff handling is nl2al-specific."""
 
 import pytest
-from bcbench_core.agent.harness import AgentResult
 from bcbench_core.exceptions import EmptyDiffError
 
 from bcbench.evaluate.nl2al import NL2ALPipeline
 from bcbench.results.base import RESULT_FILE_SUFFIX, JudgeBasedEvaluationResult
 from bcbench.types import EvaluationCategory
-from tests.conftest import create_evaluation_context, create_nl2al_entry
+from tests.conftest import StubHarness, create_evaluation_context, create_nl2al_entry
 
 
 def _read_only_result(ctx) -> JudgeBasedEvaluationResult:
@@ -82,17 +81,13 @@ class TestNL2ALRunAgentSingleAttempt:
         ctx = _nl2al_context(tmp_path)
         pipeline = NL2ALPipeline()
 
-        agent_calls = {"n": 0}
-
-        def agent_runner(_ctx):
-            agent_calls["n"] += 1
-            return AgentResult()
+        harness = StubHarness()
 
         reset_calls = {"n": 0}
         monkeypatch.setattr(pipeline, "setup_workspace", lambda *_args, **_kw: reset_calls.__setitem__("n", reset_calls["n"] + 1))
         monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", _throw(AssertionError("run_agent must not stage diffs or retry when retries are disabled")))
 
-        pipeline.run_agent(ctx, agent_runner)
+        pipeline.run_agent(ctx, harness)
 
-        assert agent_calls["n"] == 1
+        assert len(harness.requests) == 1
         assert reset_calls["n"] == 0
