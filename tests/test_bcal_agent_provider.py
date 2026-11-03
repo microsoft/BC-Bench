@@ -318,7 +318,7 @@ class TestRunBcalAgent:
         with (
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=lambda args, **_: _write_result_from_args(args, schema_version="2.0")),
-            pytest.raises(AgentError, match=r"incompatible with contract 1\.0"),
+            pytest.raises(AgentError, match=r"incompatible with the supported contracts"),
         ):
             bcal_agent.run_bcal_agent(
                 entry=create_nl2al_entry(),
@@ -478,7 +478,7 @@ class TestRunBcalAgent:
         generated_patch = 'diff --git a/src/Generated.al b/src/Generated.al\n+pageextension 50100 Generated extends "Customer Card"'
 
         with patch.object(evaluate, "stage_and_get_diff", return_value=generated_patch) as get_diff:
-            output = evaluate._get_incomplete_bcal_output(context)
+            output = evaluate._get_preserved_bcal_output(context)
 
         assert output == generated_patch
         get_diff.assert_called_once_with(workspace, exclude=("**/app.json", "*.docx", "*.md"))
@@ -499,7 +499,7 @@ class TestRunBcalAgent:
         )
 
         with patch.object(evaluate, "stage_and_get_diff", side_effect=evaluate.EmptyDiffError):
-            assert evaluate._get_incomplete_bcal_output(context) == ""
+            assert evaluate._get_preserved_bcal_output(context) == ""
 
     def test_non_incomplete_failure_does_not_collect_generated_patch(self, workspace: Path, tmp_path: Path):
         context = EvaluationContext(
@@ -513,7 +513,7 @@ class TestRunBcalAgent:
         )
 
         with patch.object(evaluate, "stage_and_get_diff") as get_diff:
-            assert evaluate._get_incomplete_bcal_output(context) == ""
+            assert evaluate._get_preserved_bcal_output(context) == ""
 
         get_diff.assert_not_called()
 

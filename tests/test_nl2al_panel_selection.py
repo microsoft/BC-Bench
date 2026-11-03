@@ -38,7 +38,7 @@ def _result_for(entry: NL2ALEntry, panel: NL2ALDataset, path, tmp_path):
     return context, JudgeBasedEvaluationResult.create_raw(context, "generated AL")
 
 
-@pytest.mark.parametrize(("panel", "count"), [(NL2ALDataset.GOLD, 110), (NL2ALDataset.CHALLENGE, 65)])
+@pytest.mark.parametrize(("panel", "count"), [(NL2ALDataset.GOLD, 110), (NL2ALDataset.CHALLENGE, 66)])
 def test_committed_panels_have_reviewed_single_turn_identity(panel, count):
     path = EvaluationCategory.NL2AL.dataset_path_for(panel)
     entries = NL2ALEntry.load(path)
@@ -81,7 +81,7 @@ def test_cli_selects_challenge_for_listing_view_and_version(tmp_path, monkeypatc
     )
 
     assert listed.exit_code == 0, listed.output
-    assert "Found 65 entry(ies)" in listed.output
+    assert "Found 66 entry(ies)" in listed.output
     assert entry.instance_id in listed.output
     assert viewed.exit_code == 0, viewed.output
     assert entry.metadata.family is not None

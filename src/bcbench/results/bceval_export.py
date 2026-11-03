@@ -16,6 +16,26 @@ from bcbench.types import BCalPackageProvenance, EvaluationCategory, ExpectedOut
 logger = logging.getLogger(__name__)
 
 
+def _judge_context(result: BaseEvaluationResult) -> dict[str, Any] | str:
+    # Evidence 1.1 results carry a runner-owned outcome envelope; the judge needs it beside the trace to see workStatus and interruption reason directly.
+    if result.outcome is not None:
+        return {"outcome": result.outcome, "evidence": result.evidence}
+    return result.evidence if result.evidence is not None else ""
+
+
+def _outcome_metadata(outcome: dict[str, Any] | None) -> dict[str, Any]:
+    terminal_step = outcome.get("terminalStep") if outcome else None
+    terminal_step = terminal_step if isinstance(terminal_step, dict) else {}
+    return {
+        "bcal_outcome_contract_version": outcome.get("contractVersion") if outcome else None,
+        "bcal_work_status": outcome.get("workStatus") if outcome else None,
+        "bcal_scenario_completed": outcome.get("scenarioCompleted") if outcome else None,
+        "bcal_interruption_reason": terminal_step.get("interruptionReason"),
+        "bcal_plan_lifecycle": terminal_step.get("planLifecycle"),
+        "bcal_validation_state": terminal_step.get("validationState"),
+    }
+
+
 def _experiment_metadata(
     experiment: ExperimentConfiguration | None,
     bcal_package: BCalPackageProvenance | None,
@@ -152,6 +172,8 @@ def write_bceval_results(
             "bcal_failure_step_id": result.bcal_failure.step_id if result.bcal_failure else None,
             "bcal_failure_retryable": result.bcal_failure.retryable if result.bcal_failure else None,
             "bcal_terminal_reason": result.bcal_failure.message if result.bcal_failure and result.bcal_failure.code == "incomplete_execution" else None,
+            **_outcome_metadata(result.outcome),
+            "bcal_raw_result_preserved": result.bcal_raw_result is not None,
             "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
             **_experiment_metadata(result.experiment, result.bcal_package, git_ref, benchmark_version),
         }
@@ -162,7 +184,7 @@ def write_bceval_results(
                 "input": task_input,
                 "expected": expected,
                 "output": result.output,
-                "context": result.evidence if result.evidence is not None else "",
+                "context": _judge_context(result),
                 "metadata": metadata,
                 "tags": tags,
             }

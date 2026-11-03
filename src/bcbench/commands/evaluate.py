@@ -11,6 +11,7 @@ from bcbench_core.git import stage_and_get_diff
 from pydantic import ValidationError
 
 from bcbench.agent import BCalBackendConfig, BCalScenarioError, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent.bcal import BCalResultDiagnostics, BCalTimeoutError, resolve_bcal_timeout_seconds
 from bcbench.agent.bcal.version import get_bcal_version, verify_bcal_version
 from bcbench.cli_options import (
     ClaudeCodeModel,
@@ -52,28 +53,49 @@ _config = get_config()
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
 
 
-def _run_bcal_for_evaluation(context: EvaluationContext[NL2ALEntry], backend_config: BCalBackendConfig) -> tuple[AgentMetrics, ExperimentConfiguration]:
+def _apply_bcal_diagnostics(context: EvaluationContext[NL2ALEntry], diagnostics: BCalResultDiagnostics) -> None:
+    context.execution_identity = diagnostics.execution_identity or context.execution_identity
+    context.evidence = diagnostics.evidence
+    context.outcome = diagnostics.outcome
+    context.bcal_failure = diagnostics.failure
+    context.bcal_raw_result = diagnostics.raw_result
+
+
+def _run_bcal_for_evaluation(
+    context: EvaluationContext[NL2ALEntry],
+    backend_config: BCalBackendConfig,
+    timeout_minutes: int | None = None,
+) -> tuple[AgentMetrics, ExperimentConfiguration]:
     try:
         run_result = run_bcal_agent(
             entry=context.entry,
             repo_path=context.repo_path,
             backend_config=backend_config,
+            timeout_seconds=resolve_bcal_timeout_seconds(context.entry, timeout_minutes),
         )
     except BCalScenarioError as exc:
-        if exc.scenario_result is not None:
-            context.execution_identity = exc.scenario_result.execution_identity
-            context.evidence = exc.scenario_result.evidence
-            benchmark_step = next((step for step in exc.scenario_result.steps if step.id == "benchmark-prompt"), None)
-            context.bcal_failure = exc.scenario_result.failure or (benchmark_step.failure if benchmark_step else None)
+        _apply_bcal_diagnostics(context, exc.diagnostics)
+        context.metrics = exc.metrics or context.metrics
+        raise
+    except BCalTimeoutError as exc:
+        _apply_bcal_diagnostics(context, exc.diagnostics)
+        context.partial_output = _collect_generated_patch(context)
         raise
     context.execution_identity = run_result.execution_identity
     context.evidence = run_result.evidence
+    context.outcome = run_result.outcome
     return run_result.metrics, run_result.experiment
 
 
-def _get_incomplete_bcal_output(context: EvaluationContext[NL2ALEntry]) -> str:
-    if context.bcal_failure is None or context.bcal_failure.code != "incomplete_execution":
+def _get_preserved_bcal_output(context: EvaluationContext[NL2ALEntry]) -> str:
+    # Score what BCal generated when it stopped early or when its result file could not be read under the supported contract.
+    incomplete = context.bcal_failure is not None and context.bcal_failure.code == "incomplete_execution"
+    if not incomplete and context.bcal_raw_result is None:
         return ""
+    return _collect_generated_patch(context)
+
+
+def _collect_generated_patch(context: EvaluationContext[NL2ALEntry]) -> str:
     try:
         return stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
     except EmptyDiffError:
@@ -299,6 +321,10 @@ def evaluate_bcal(
     cohort_sha256: Annotated[str | None, typer.Option(envvar="BCBENCH_COHORT_SHA256", help="SHA-256 of the selected evaluation cohort manifest")] = None,
     repetition_index: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_INDEX", help="One-based repetition index")] = None,
     repetition_count: Annotated[int | None, typer.Option(envvar="BCBENCH_REPETITION_COUNT", help="Total independent repetitions")] = None,
+    timeout_minutes: Annotated[
+        int | None,
+        typer.Option("--timeout-minutes", envvar="BCAL_TIMEOUT_MINUTES", min=1, max=300, help="BCal execution budget; overrides the entry's bcal_timeout_minutes and the default"),
+    ] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -355,12 +381,12 @@ def evaluate_bcal(
         verify_bcal_version(context.agent_version, bcal_version)
         category.pipeline.execute(
             context,
-            lambda ctx: _run_bcal_for_evaluation(cast(EvaluationContext[NL2ALEntry], ctx), backend_config),
+            lambda ctx: _run_bcal_for_evaluation(cast(EvaluationContext[NL2ALEntry], ctx), backend_config, timeout_minutes),
         )
     except AgentError as exc:
         result = JudgeBasedEvaluationResult.create_failure(
             context,
-            output=_get_incomplete_bcal_output(context),
+            output=_get_preserved_bcal_output(context),
             error_message=str(exc),
         )
         category.pipeline.save_result(context, result)
