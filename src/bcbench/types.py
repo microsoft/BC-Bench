@@ -397,8 +397,7 @@ class EvaluationCategory(StrEnum):
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
-    @property
-    def pipeline(self) -> EvaluationPipeline[Any]:
+    def pipeline(self, agent_config: AgentConfig) -> EvaluationPipeline[Any]:
         from bcbench.evaluate import (
             BugFixPipeline,
             CodeReviewPipeline,
@@ -414,7 +413,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.BUG_FIX:
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationPipeline()
+                return TestGenerationPipeline(agent_config.prompt.test_generation_input)
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewPipeline()
             case EvaluationCategory.NL2AL:

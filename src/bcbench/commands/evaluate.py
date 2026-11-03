@@ -11,6 +11,7 @@ from bcbench_core.filesystem import prepare_run_dir
 
 from bcbench.agent import BCalBackendConfig, get_bcal_version, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
+    AgentConfigPath,
     ClaudeCodeModel,
     ContainerCompany,
     ContainerMcpUrl,
@@ -30,10 +31,12 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
-from bcbench.evaluate import AgentRunner, EvaluationPipeline
+from bcbench.dataset.codereview import CodeReviewEntry
+from bcbench.evaluate import AgentRunner, CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
+from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentHarness, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentConfig, AgentHarness, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -60,6 +63,7 @@ def evaluate_copilot(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -80,6 +84,7 @@ def evaluate_copilot(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    agent_config = AgentConfig.from_file(config_path)
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -96,7 +101,7 @@ def evaluate_copilot(
         tier=tier,
     )
 
-    pipeline = category.pipeline
+    pipeline = category.pipeline(agent_config)
     pipeline.execute(
         context,
         lambda ctx: run_copilot_agent(
@@ -105,6 +110,7 @@ def evaluate_copilot(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
+            agent_config=agent_config,
             runtime=runtime,
         ),
     )
@@ -132,6 +138,7 @@ def evaluate_claude_code(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Evaluate Claude Code on single dataset entry.
@@ -152,6 +159,7 @@ def evaluate_claude_code(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    agent_config = AgentConfig.from_file(config_path)
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
@@ -168,7 +176,7 @@ def evaluate_claude_code(
         tier=tier,
     )
 
-    pipeline = category.pipeline
+    pipeline = category.pipeline(agent_config)
     pipeline.execute(
         context,
         lambda ctx: run_claude_code(
@@ -177,6 +185,7 @@ def evaluate_claude_code(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
+            agent_config=agent_config,
             runtime=runtime,
         ),
     )
@@ -206,7 +215,7 @@ def evaluate_pr_review(
     To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path(), entry_id=entry_id)[0]
+    entry = CodeReviewEntry.load(category.dataset_path(), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
@@ -222,7 +231,7 @@ def evaluate_pr_review(
         category=category,
     )
 
-    category.pipeline.execute(
+    CodeReviewPipeline().execute(
         context,
         lambda ctx: run_pr_review_agent(
             entry=ctx.entry,
@@ -275,8 +284,9 @@ def evaluate_bcal(
         tier=tier,
     )
 
+    pipeline = NL2ALPipeline()
     try:
-        category.pipeline.execute(
+        pipeline.execute(
             context,
             lambda ctx: run_bcal_agent(
                 entry=cast(NL2ALEntry, ctx.entry),
@@ -286,7 +296,7 @@ def evaluate_bcal(
         )
     except AgentError as exc:
         result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
-        category.pipeline.save_result(context, result)
+        pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
         raise typer.Exit(code=1) from exc
 

@@ -6,7 +6,7 @@ from pydantic import TypeAdapter
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentHarness, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
+from bcbench.types import AgentConfig, AgentHarness, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
 
 
 def test_repository_harnesses_have_target_dir():
@@ -64,7 +64,7 @@ def test_pr_review_metrics_extend_generic_metrics():
 
 def test_all_categories_have_pipelines():
     for category in EvaluationCategory:
-        pipeline = category.pipeline
+        pipeline = category.pipeline(AgentConfig())
         assert pipeline is not None
 
 

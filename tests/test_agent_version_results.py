@@ -10,7 +10,7 @@ from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context
 
 
@@ -33,7 +33,7 @@ def test_agent_version_round_trips_through_results_and_summaries(tmp_path: Path,
 def test_timeout_result_keeps_version_resolved_before_execution(tmp_path: Path) -> None:
     context = create_evaluation_context(tmp_path)
     context.agent_version = "1.2.3"
-    pipeline = context.category.pipeline
+    pipeline = context.category.pipeline(AgentConfig())
     with (
         patch.object(type(pipeline), "setup"),
         patch.object(type(pipeline), "run_agent", side_effect=AgentTimeoutError("timeout")),
