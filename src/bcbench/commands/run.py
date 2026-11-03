@@ -1,7 +1,6 @@
 """CLI commands for running agents."""
 
 import logging
-import os
 from typing import Annotated, cast
 
 import typer
@@ -84,7 +83,7 @@ def run_copilot(
     category.pipeline(agent_config).setup_workspace(entry, repo_path)
 
     harness = CopilotHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
-    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir, env=os.environ))
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir))
 
 
 @run_app.command("claude")

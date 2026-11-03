@@ -142,8 +142,8 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             llm_model=llm_model,
         )
 
-    assert captured["context"].model == expected_model
-    assert captured["context"].agent_version == "18.0.1.2-beta"
+    assert captured["context"].agent.model == expected_model
+    assert captured["context"].agent.version == "18.0.1.2-beta"
 
 
 def _option_names(command: click.Command) -> set[str]:

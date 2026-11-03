@@ -1,4 +1,3 @@
-import os
 import subprocess
 from pathlib import Path
 from unittest.mock import DEFAULT, Mock, patch
@@ -27,7 +26,7 @@ def run_copilot_harness(
     timeout: int | None = None,
 ) -> AgentResult:
     harness = CopilotHarness(model=model, category=category, agent_config=agent_config, plugin_root=plugin_root)
-    return harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir, env=os.environ, timeout=timeout))
+    return harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir, timeout=timeout))
 
 
 def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Path, monkeypatch):

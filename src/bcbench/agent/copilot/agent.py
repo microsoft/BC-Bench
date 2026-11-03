@@ -100,7 +100,7 @@ class CopilotHarness:
                 model=self.model,
                 work_dir=repo_path,
                 timeout=request.timeout or DEFAULT_TIMEOUT,
-                env=agent_subprocess_env(base=request.env, pass_bc_credentials=category.pass_on_bc_container_credentials),
+                env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
                 options=options,
             )
             logger.info(f"Copilot CLI run complete for: {entry.instance_id}")

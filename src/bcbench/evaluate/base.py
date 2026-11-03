@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol
 
@@ -23,11 +22,11 @@ class AgentRunner[E: BaseDatasetEntry](Protocol):
     def __call__(self, context: EvaluationContext[E], /) -> AgentResult: ...
 
 
-def harness_runner[E: BaseDatasetEntry](harness: Harness[E], env: Mapping[str, str]) -> AgentRunner[E]:
-    """Run ``harness`` on the context's entry, in its repository, writing logs to its result directory."""
+def harness_runner[E: BaseDatasetEntry](harness: Harness[E]) -> AgentRunner[E]:
+    """Adapt ``harness`` to the pipelines' ``AgentRunner`` until every harness implements ``Harness``."""
 
     def run(context: EvaluationContext[E], /) -> AgentResult:
-        return harness.run(AgentRequest(task=context.entry, work_dir=context.repo_path, output_dir=context.result_dir, env=env))
+        return harness.run(AgentRequest(task=context.entry, work_dir=context.repo_path, output_dir=context.result_dir))
 
     return run
 

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 import yaml
 from bcbench_core.agent.customization import CustomAgentsConfig, ToggleConfig
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentIdentity
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
@@ -629,9 +630,8 @@ class EvaluationContext[E: BaseDatasetEntry]:
     repo_path: Path
     result_dir: Path
 
-    # Agent metadata
-    agent_name: AgentHarness
-    model: str
+    # The agent under evaluation, resolved before running
+    agent: AgentIdentity
 
     # Evaluation category
     category: EvaluationCategory
@@ -639,8 +639,6 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
-
-    agent_version: str | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

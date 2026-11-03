@@ -9,7 +9,7 @@ from bcbench_core.agent.experiment import ExperimentConfiguration
 from pydantic import BaseModel, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentHarness, AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
@@ -38,22 +38,23 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
-        metrics_contract = context.agent_name.metrics_contract
+        agent_name = AgentHarness(context.agent.harness)
+        metrics_contract = agent_name.metrics_contract
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
         elif type(context.metrics) is not metrics_contract.metrics_type:
-            raise TypeError(f"{context.agent_name} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
+            raise TypeError(f"{agent_name} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
         elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(context.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         return {
             "instance_id": context.entry.instance_id,
             "project": context.entry.extract_project_name(),
-            "model": context.model.replace(".", "-"),
+            "model": (context.agent.model or "").replace(".", "-"),
             "category": context.category,
             "tier": context.tier,
-            "agent_name": context.agent_name,
-            "agent_version": context.agent_version,
+            "agent_name": agent_name,
+            "agent_version": context.agent.version,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }

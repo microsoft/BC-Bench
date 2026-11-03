@@ -5,7 +5,6 @@ Applications construct harnesses with harness-specific configuration and only us
 so evaluation pipelines never depend on a concrete harness.
 """
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -39,8 +38,6 @@ class AgentRequest[T]:
     work_dir: Path
     # Receives logs and raw captures
     output_dir: Path
-    # Passed explicitly; harnesses never read the process environment
-    env: Mapping[str, str]
     # None uses the harness's default
     timeout: int | None = None
 

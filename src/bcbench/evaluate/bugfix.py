@@ -44,7 +44,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
 
     @override
     def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: AgentRunner[BugFixEntry]) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
+        with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
             result = agent_runner(context)
             context.metrics, context.experiment = result.metrics, result.experiment
 

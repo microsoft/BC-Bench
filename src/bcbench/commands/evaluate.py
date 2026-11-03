@@ -1,12 +1,11 @@
 import logging
-import os
 import random
 from pathlib import Path
 from typing import Annotated, cast, override
 
 import typer
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentResult
+from bcbench_core.agent.harness import AgentIdentity, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
@@ -88,7 +87,6 @@ def evaluate_copilot(
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     agent_config = AgentConfig.from_file(config_path)
     harness = CopilotHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
-    identity = harness.identity()
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -98,15 +96,13 @@ def evaluate_copilot(
         repo_path=repo_path,
         result_dir=run_dir,
         container=runtime.container if runtime else None,
-        model=model,
-        agent_name=AgentHarness.COPILOT,
-        agent_version=identity.version,
+        agent=harness.identity(),
         category=category,
         tier=tier,
     )
 
     pipeline = category.pipeline(agent_config)
-    pipeline.execute(context, harness_runner(harness, os.environ))
+    pipeline.execute(context, harness_runner(harness))
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -162,9 +158,7 @@ def evaluate_claude_code(
         repo_path=repo_path,
         result_dir=run_dir,
         container=runtime.container if runtime else None,
-        model=model,
-        agent_name=AgentHarness.CLAUDE,
-        agent_version=get_claude_version(),
+        agent=AgentIdentity(harness=AgentHarness.CLAUDE, version=get_claude_version(), model=model),
         category=category,
         tier=tier,
     )
@@ -176,7 +170,7 @@ def evaluate_claude_code(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
             category=category,
-            model=ctx.model,
+            model=model,
             output_dir=ctx.result_dir,
             agent_config=agent_config,
             plugin_root=_config.paths.plugin_root,
@@ -219,9 +213,7 @@ def evaluate_pr_review(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        model=model,
-        agent_name=AgentHarness.PR_REVIEW,
-        agent_version=get_pr_review_version(engine_path),
+        agent=AgentIdentity(harness=AgentHarness.PR_REVIEW, version=get_pr_review_version(engine_path), model=model),
         category=category,
     )
 
@@ -231,7 +223,7 @@ def evaluate_pr_review(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
             category=category,
-            model=ctx.model,
+            model=model,
             output_dir=ctx.result_dir,
             engine_path=engine_path,
         ),
@@ -271,9 +263,7 @@ def evaluate_bcal(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        model=llm_model or "external-command",
-        agent_name=AgentHarness.BCAL,
-        agent_version=get_bcal_version(),
+        agent=AgentIdentity(harness=AgentHarness.BCAL, version=get_bcal_version(), model=llm_model or "external-command"),
         category=category,
         tier=tier,
     )
@@ -343,8 +333,7 @@ def evaluate_mock(
         entry=entry,
         repo_path=Path(),
         result_dir=run_dir,
-        model="mock-model",
-        agent_name=AgentHarness.MOCK,
+        agent=AgentIdentity(harness=AgentHarness.MOCK, version="mock", model="mock-model"),
         category=category,
         tier=tier,
     )

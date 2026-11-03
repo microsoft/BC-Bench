@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from bcbench_core.agent.harness import AgentIdentity
 from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import BuildError
 
@@ -87,8 +88,7 @@ class TestGoldRowsEmptyGuard:
             repo_path=tmp_path / "repo",
             result_dir=tmp_path / "results",
             container=ContainerConfig("bcbench", "admin", "secret", company="CRONUS"),
-            model="test-model",
-            agent_name=AgentHarness.COPILOT,
+            agent=AgentIdentity(harness=AgentHarness.COPILOT, version="1.0.0", model="test-model"),
             category=EvaluationCategory.DATA_QUERY,
         )
 
