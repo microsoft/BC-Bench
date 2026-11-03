@@ -416,8 +416,8 @@ def test_authority_experiment_selector_excludes_control_tower():
     assert selector["github"] == {"host": "github.com", "repository": "microsoft/BC-Bench"}
     assert selector["repeat_count"] == 2
     assert selector["packages"]["baseline"]["installed_identity"] == "30.0.44.65502+bdc5dc2be9bd7b59eaa1f16592604590be9621bf"
-    assert selector["packages"]["candidate"]["installed_identity"] == "30.0.45.46749+30d9e59980a978c19b4a7569fb521ce644255a53"
-    assert selector["packages"]["candidate"]["nupkg_sha256"] == "2b5eb42e42f6a40e7447f67d741adac924379606c90240051acd445715eb99d6"
+    assert selector["packages"]["candidate"]["installed_identity"] == "30.0.45.48040+30d9e59980a978c19b4a7569fb521ce644255a53"
+    assert selector["packages"]["candidate"]["nupkg_sha256"] == "16334ec2785dddc982f6230bb2b06d4a5ee18ca04728fc4b2a627ab4d5dca32a"
     assert selector["execution"] == {
         "backend": "external-command",
         "model": "gpt-55-chat",
