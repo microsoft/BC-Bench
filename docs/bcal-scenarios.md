@@ -53,7 +53,9 @@ Remove `-DryRun` to execute a lane locally through the BCal CLI. The runner reje
 
 Use the same BC-Bench commit, selector file, datasets, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for the candidate. Pin the baseline package to `30.0.44.65502-beta`; pin the candidate to its exact package version. Do not use MCP mode.
 
-The runner preflights the accepted external-command backend (`bc-eval==0.6.1`, `src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py`, `BCAL_LLM_MODEL=gpt-55-chat`) and BC 28 symbols under `C:\bcartifacts.cache` before creating a result directory. It does not read, print, or persist backend credentials.
+All GitHub operations for this experiment, including PR inspection, workflow dispatch, run monitoring, and artifact download, must use the `esbenk` identity. Do not fall back to another configured account. The runner checks the locally active `github.com` account from `gh auth status` before dry-run or execution.
+
+The runner also preflights the accepted external-command backend (`bc-eval==0.6.1`, `src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py`, `BCAL_LLM_MODEL=gpt-55-chat`) and BC 28 symbols under `C:\bcartifacts.cache` before creating a result directory. It does not read, print, or persist backend credentials.
 
 Each case/repetition receives a separate Git workspace and staging result directory under the output directory so Windows file locks or run-directory cleanup from one BCal session cannot affect the next case. After each case completes, the runner collision-checks and copies its result and artifacts into the repetition's aggregate `bcal_test_run` directory. The four per-entry JSONL files therefore remain available at `<OutputDir>\<variant>-authority-rN\bcal_test_run\<instance-id>.jsonl`.
 
