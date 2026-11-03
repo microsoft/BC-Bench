@@ -50,7 +50,7 @@ class ClaudeHarness(Harness[BaseDatasetEntry, AgentHarness]):
     @override
     def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
         entry, repo_path = request.task, request.work_dir
-        timeout = request.timeout or self.timeout
+        timeout = self.timeout if request.timeout is None else request.timeout
         model, category, agent_config, plugin_root, runtime = self.model, self.category, self.agent_config, self.plugin_root, self.runtime
         claude_cmd = shutil.which("claude")
         if not claude_cmd:
