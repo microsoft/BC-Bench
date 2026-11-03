@@ -23,10 +23,10 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
         patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(None, None)),
         patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
         patch(
-            "bcbench.agent.claude.agent.setup_instructions_from_config",
+            "bcbench.agent.claude.agent.setup_instructions",
             return_value=False,
         ),
-        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_skills", return_value=False),
         patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
         patch(
