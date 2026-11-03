@@ -22,6 +22,7 @@ from typing import Any
 
 import yaml
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from bcbench_core.git import commit_changes, has_changes, init_repo
 
@@ -161,16 +162,13 @@ def run_pr_review_agent(
     engine_path: Path | None = None,
     min_severity: str | None = None,
     timeout: int = 60 * 60,
-) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
+) -> AgentResult:
     """Run the engine's complete local review pipeline and write review.json.
 
     Separate from run_copilot_agent by design: this spawns the PROD BC-ALAgents
     PowerShell orchestrator (Copilot is spawned inside the engine, not here), so it
     owns none of the copilot-harness prompt/MCP/LSP wiring and takes engine-specific
     inputs (BC-ALAgents source, min severity) for the code-review category only.
-
-    Returns:
-        Tuple of (PRReviewMetrics, ExperimentConfiguration).
     """
     if category is not EvaluationCategory.CODE_REVIEW:
         raise AgentError(f"The engine agent only supports the code-review category, got {category.value}.")
@@ -235,4 +233,4 @@ def run_pr_review_agent(
         logger.exception("Unexpected error running engine review")
         raise
     else:
-        return build_pr_review_metrics(output_dir, time.monotonic() - start), config
+        return AgentResult(metrics=build_pr_review_metrics(output_dir, time.monotonic() - start), experiment=config)

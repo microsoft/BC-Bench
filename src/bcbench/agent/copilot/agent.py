@@ -6,7 +6,7 @@ from pathlib import Path
 from bcbench_core.agent.copilot import CopilotOptions, CopilotTimeoutError, invoke_copilot
 from bcbench_core.agent.customization import setup_custom_agent, setup_instructions, setup_skills
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.agent.shared import (
@@ -34,12 +34,8 @@ def run_copilot_agent(
     plugin_root: Path,
     runtime: AgentRuntimeConfig | None = None,
     timeout: int = 60 * 60,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    """Run GitHub Copilot CLI agent on a single dataset entry.
-
-    Returns:
-        Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
-    """
+) -> AgentResult:
+    """Run GitHub Copilot CLI agent on a single dataset entry."""
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, agent_config, category, al_mcp=bool(runtime and runtime.al_mcp))
@@ -92,7 +88,7 @@ def run_copilot_agent(
             workspace_mcp=True,
         )
 
-        metrics, _ = invoke_copilot(
+        metrics, response = invoke_copilot(
             prompt=prompt,
             model=model,
             work_dir=repo_path,
@@ -104,7 +100,7 @@ def run_copilot_agent(
     except CopilotTimeoutError as exc:
         raise AgentTimeoutError("Copilot CLI timed out", metrics=exc.metrics, config=config) from exc
     else:
-        return metrics, config
+        return AgentResult(response=response, metrics=metrics, experiment=config)
     finally:
         if bc_gateway is not None:
             bc_gateway.stop()

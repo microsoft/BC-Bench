@@ -31,7 +31,8 @@ class ExtRequestAdvisorPipeline(EvaluationPipeline[ExtRequestAdvisorEntry]):
     @override
     def run_agent(self, context: EvaluationContext[ExtRequestAdvisorEntry], agent_runner: AgentRunner[ExtRequestAdvisorEntry]) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
+            result = agent_runner(context)
+            context.metrics, context.experiment = result.metrics, result.experiment
 
     @override
     def evaluate(self, context: EvaluationContext[ExtRequestAdvisorEntry]) -> None:

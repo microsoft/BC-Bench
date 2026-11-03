@@ -72,7 +72,8 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         # Single attempt — retries are disabled. An empty diff (the agent asked for clarification
         # instead of editing) is scored as a failure in evaluate(), not re-run.
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
+            result = agent_runner(context)
+            context.metrics, context.experiment = result.metrics, result.experiment
 
     @override
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:

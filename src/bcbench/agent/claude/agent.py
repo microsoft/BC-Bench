@@ -5,6 +5,7 @@ from pathlib import Path
 
 from bcbench_core.agent.customization import setup_custom_agent, setup_instructions, setup_skills
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
@@ -39,12 +40,8 @@ def run_claude_code(
     plugin_root: Path,
     runtime: AgentRuntimeConfig | None = None,
     timeout: int = 60 * 60,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    """Run Claude Code on a single dataset entry.
-
-    Returns:
-        Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used
-    """
+) -> AgentResult:
+    """Run Claude Code on a single dataset entry."""
     claude_cmd = shutil.which("claude")
     if not claude_cmd:
         raise AgentError("Claude Code not found in PATH. Please ensure it is installed and available.")
@@ -145,7 +142,7 @@ def run_claude_code(
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
-        metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
+        metrics, response = parse_stream_output(stdout.splitlines(), log_transcript=True)
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {timeout} seconds")
         metrics = AgentMetrics(execution_time=timeout)
@@ -157,7 +154,7 @@ def run_claude_code(
         logger.exception("Unexpected error running Claude Code")
         raise
     else:
-        return metrics, config
+        return AgentResult(response=response, metrics=metrics, experiment=config)
     finally:
         if bc_gateway is not None:
             bc_gateway.stop()

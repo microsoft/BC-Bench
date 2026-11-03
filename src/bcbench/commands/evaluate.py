@@ -6,6 +6,7 @@ from typing import Annotated, cast, override
 import typer
 from bcbench_core.agent.copilot import get_copilot_version
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
@@ -359,7 +360,7 @@ def evaluate_mock(
     )
 
     pipeline = MockEvaluationPipeline()
-    pipeline.execute(context, lambda ctx: (None, None))
+    pipeline.execute(context, lambda _ctx: AgentResult())
 
     logger.info("Mock evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")

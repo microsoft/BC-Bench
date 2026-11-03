@@ -30,13 +30,13 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
         patch("bcbench.agent.copilot.agent.setup_skills", return_value=False),
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
-        patch("bcbench_core.agent.copilot.agent.parse_output", return_value=(None, None)) as mock_parse_output,
+        patch("bcbench_core.agent.copilot.agent.parse_output", return_value=(None, "final answer")) as mock_parse_output,
         patch(
             "bcbench_core.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
         ) as mock_run,
     ):
-        run_copilot_agent(
+        result = run_copilot_agent(
             entry=create_dataset_entry(),
             model="copilot-test-model",
             category=EvaluationCategory.BUG_FIX,
@@ -46,6 +46,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
             plugin_root=tmp_path / "plugins",
         )
 
+    assert result.response == "final answer"
     assert mock_run.call_args.args[0] == [
         "copilot",
         "--output-format=json",
@@ -95,7 +96,7 @@ def test_copilot_session_options_preserve_plugin_order_and_explicit_directory_gr
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout='{"type":"result"}\n', stderr=""),
         ) as mock_run,
     ):
-        _, config = run_copilot_agent(
+        config = run_copilot_agent(
             entry=create_dataset_entry(),
             model="copilot-test-model",
             category=EvaluationCategory.BUG_FIX,
@@ -103,7 +104,7 @@ def test_copilot_session_options_preserve_plugin_order_and_explicit_directory_gr
             output_dir=output_dir,
             agent_config=AgentConfig(),
             plugin_root=tmp_path / "plugins",
-        )
+        ).experiment
 
     assert mock_run.call_args.args[0] == [
         "copilot",
@@ -121,6 +122,7 @@ def test_copilot_session_options_preserve_plugin_order_and_explicit_directory_gr
         "--agent=al-dev",
         "--prompt=do the task",
     ]
+    assert config is not None
     assert config.mcp_servers == ["probe"]
     assert config.al_lsp_enabled is lsp_enabled
     assert config.custom_instructions is True

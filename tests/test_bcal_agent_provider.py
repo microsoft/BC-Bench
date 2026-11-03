@@ -63,7 +63,7 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=fake_run),
         ):
-            metrics, _ = bcal_agent.run_bcal_agent(
+            result = bcal_agent.run_bcal_agent(
                 entry=entry,
                 repo_path=workspace,
                 backend_config=BCalBackendConfig(
@@ -72,7 +72,7 @@ class TestRunBcalAgent:
                 ),
             )
 
-        assert metrics is not None
+        assert result.metrics is not None
         args = captured["args"]
         assert "--deployment=gpt-5" in args
         assert "--llm-backend=external-command" in args
