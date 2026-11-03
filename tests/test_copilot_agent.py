@@ -41,6 +41,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
             repo_path=repo_path,
             output_dir=output_dir,
             agent_config=AgentConfig(),
+            plugin_root=tmp_path / "plugins",
         )
 
     assert mock_run.call_args.args[0] == [
@@ -99,6 +100,7 @@ def test_copilot_session_options_preserve_plugin_order_and_explicit_directory_gr
             repo_path=repo_path,
             output_dir=output_dir,
             agent_config=AgentConfig(),
+            plugin_root=tmp_path / "plugins",
         )
 
     assert mock_run.call_args.args[0] == [
@@ -157,7 +159,7 @@ def test_copilot_timeout_adapts_core_metrics_and_preserves_experiment_metadata(c
     run.side_effect = subprocess.TimeoutExpired(["copilot"], timeout)
 
     with pytest.raises(AgentTimeoutError, match="Copilot CLI timed out") as error:
-        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig(), timeout=timeout)
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig(), repo_path.parent / "plugins", timeout=timeout)
 
     assert error.value.metrics is not None
     assert error.value.metrics.execution_time == timeout
@@ -173,7 +175,7 @@ def test_copilot_process_errors_propagate_and_stop_gateway(configured_copilot_ru
     run.side_effect = failure
 
     with pytest.raises(CopilotProcessError) as error:
-        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig())
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig(), repo_path.parent / "plugins")
 
     assert error.value.__cause__ is failure
     gateway.stop.assert_called_once_with()
@@ -183,7 +185,7 @@ def test_missing_copilot_stops_gateway_without_invoking_a_process(configured_cop
     repo_path, output_dir, gateway, run = configured_copilot_run
 
     with patch("bcbench_core.agent.copilot.agent._find_copilot", return_value=None), pytest.raises(CopilotProcessError, match="not found"):
-        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig())
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig(), repo_path.parent / "plugins")
 
     run.assert_not_called()
     gateway.stop.assert_called_once_with()
@@ -192,7 +194,7 @@ def test_missing_copilot_stops_gateway_without_invoking_a_process(configured_cop
 def test_successful_copilot_run_stops_gateway(configured_copilot_run):
     repo_path, output_dir, gateway, _ = configured_copilot_run
 
-    run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig())
+    run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig(), repo_path.parent / "plugins")
 
     gateway.stop.assert_called_once_with()
 
@@ -206,7 +208,20 @@ def test_copilot_sets_up_the_session_from_the_given_agent_config(configured_copi
         mocks["build_mcp_config"].return_value = (None, None)
         mocks["setup_custom_agent"].return_value = None
         mocks["resolve_config_plugins"].return_value = []
-        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, agent_config)
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, agent_config, repo_path.parent / "plugins")
 
     for name in helpers:
         assert agent_config in mocks[name].call_args.args, name
+
+
+def test_copilot_keeps_plugins_in_the_given_plugin_root(configured_copilot_run):
+    repo_path, output_dir, _, _ = configured_copilot_run
+    plugin_root = repo_path.parent / "plugins"
+
+    with patch.multiple("bcbench.agent.copilot.agent", build_al_lsp_plugin=DEFAULT, resolve_config_plugins=DEFAULT) as mocks:
+        mocks["build_al_lsp_plugin"].return_value = None
+        mocks["resolve_config_plugins"].return_value = []
+        run_copilot_agent(create_dataset_entry(), "test-model", EvaluationCategory.BUG_FIX, repo_path, output_dir, AgentConfig(), plugin_root)
+
+    assert plugin_root in mocks["build_al_lsp_plugin"].call_args.args
+    assert plugin_root in mocks["resolve_config_plugins"].call_args.args

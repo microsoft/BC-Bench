@@ -81,6 +81,7 @@ def build_al_lsp_plugin(
     category: EvaluationCategory,
     repo_path: Path,
     harness: AgentHarness,
+    plugin_root: Path,
     runtime: AgentRuntimeConfig | None,
 ) -> Path | None:
     """Build a per-task AL-LSP plugin folder, return its path or None.
@@ -91,7 +92,7 @@ def build_al_lsp_plugin(
     ``.lsp.json`` differs (see :func:`_lsp_config_for`).
     """
     if runtime is None or not runtime.al_lsp:
-        remove_agent_plugin(_AL_LSP_PLUGIN_FOLDER)
+        remove_agent_plugin(plugin_root, _AL_LSP_PLUGIN_FOLDER)
         return None
 
     container: ContainerConfig = runtime.container
@@ -100,6 +101,6 @@ def build_al_lsp_plugin(
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
     lsp_config = _lsp_config_for(harness, args)
 
-    plugin_dir = write_agent_plugin(_AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
+    plugin_dir = write_agent_plugin(plugin_root, _AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
     logger.debug(f"AL LSP configuration for {harness.value}: {lsp_config}")
     return plugin_dir
