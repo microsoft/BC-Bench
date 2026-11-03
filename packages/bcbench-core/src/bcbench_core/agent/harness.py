@@ -8,14 +8,14 @@ so evaluation pipelines never depend on a concrete harness.
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
 
-__all__ = ["AgentIdentity", "AgentRequest", "AgentResult", "Harness", "TranscriptTurn"]
+__all__ = ["AgentIdentity", "AgentRequest", "AgentResult", "Harness"]
 
 
 class AgentIdentity(BaseModel):
@@ -30,13 +30,6 @@ class AgentIdentity(BaseModel):
     model: str | None = None
     # Further pins needed to reproduce a run, e.g. a knowledge-base commit or a definition hash
     provenance: dict[str, JsonValue] = Field(default_factory=dict)
-
-
-class TranscriptTurn(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    role: Literal["user", "assistant"]
-    content: str
 
 
 @dataclass(frozen=True)
@@ -56,7 +49,6 @@ class AgentRequest[T]:
 class AgentResult:
     # Final answer; None when the output is left in the workspace
     response: str | None = None
-    transcript: tuple[TranscriptTurn, ...] = ()
     metrics: AgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
     # Model reported by the agent, when it differs from or replaces the configured one

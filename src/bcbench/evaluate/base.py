@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol
 
-from bcbench_core.agent.harness import AgentResult
+from bcbench_core.agent.harness import AgentRequest, AgentResult, Harness
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.dataset import BaseDatasetEntry
@@ -15,11 +16,20 @@ from bcbench.types import EvaluationContext
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["AgentRunner", "EvaluationPipeline"]
+__all__ = ["AgentRunner", "EvaluationPipeline", "harness_runner"]
 
 
 class AgentRunner[E: BaseDatasetEntry](Protocol):
     def __call__(self, context: EvaluationContext[E], /) -> AgentResult: ...
+
+
+def harness_runner[E: BaseDatasetEntry](harness: Harness[E], env: Mapping[str, str]) -> AgentRunner[E]:
+    """Run ``harness`` on the context's entry, in its repository, writing logs to its result directory."""
+
+    def run(context: EvaluationContext[E], /) -> AgentResult:
+        return harness.run(AgentRequest(task=context.entry, work_dir=context.repo_path, output_dir=context.result_dir, env=env))
+
+    return run
 
 
 class EvaluationPipeline[E: BaseDatasetEntry](ABC):

@@ -1,11 +1,13 @@
 """CLI commands for running agents."""
 
 import logging
+import os
 from typing import Annotated, cast
 
 import typer
+from bcbench_core.agent.harness import AgentRequest
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, CopilotHarness, run_bcal_agent, run_claude_code, run_pr_review_agent
 from bcbench.cli_options import (
     AgentConfigPath,
     ClaudeCodeModel,
@@ -81,16 +83,8 @@ def run_copilot(
     agent_config = AgentConfig.from_file(config_path)
     category.pipeline(agent_config).setup_workspace(entry, repo_path)
 
-    run_copilot_agent(
-        entry=entry,
-        repo_path=repo_path,
-        model=model,
-        category=category,
-        output_dir=output_dir,
-        agent_config=agent_config,
-        plugin_root=_config.paths.plugin_root,
-        runtime=runtime,
-    )
+    harness = CopilotHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir, env=os.environ))
 
 
 @run_app.command("claude")

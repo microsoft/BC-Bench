@@ -23,7 +23,7 @@ The import and environment rules are enforced by ruff (`banned-api` in [`pyproje
 
 ## Agent harnesses
 
-[`bcbench_core.agent.harness`](src/bcbench_core/agent/harness.py) defines the harness-neutral contract. A `Harness[T]` reports its `AgentIdentity` before any run and turns an `AgentRequest[T]` into an `AgentResult`. Output is a final response, a transcript, or changes left in the workspace. Applications construct harnesses with their own configuration and pass them to evaluation pipelines, which depend only on this contract.
+[`bcbench_core.agent.harness`](src/bcbench_core/agent/harness.py) defines the harness-neutral contract. A `Harness[T]` reports its `AgentIdentity` before any run and turns an `AgentRequest[T]` into an `AgentResult`. Output is a final response or changes left in the workspace. Applications construct harnesses with their own configuration and pass them to evaluation pipelines, which depend only on this contract.
 
 ## Logging
 

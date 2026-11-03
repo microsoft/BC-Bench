@@ -1,17 +1,17 @@
 import logging
+import os
 import random
 from pathlib import Path
 from typing import Annotated, cast, override
 
 import typer
-from bcbench_core.agent.copilot import get_copilot_version
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
 
-from bcbench.agent import BCalBackendConfig, get_bcal_version, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, CopilotHarness, get_bcal_version, get_claude_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_pr_review_agent
 from bcbench.cli_options import (
     AgentConfigPath,
     ClaudeCodeModel,
@@ -34,7 +34,7 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.evaluate import AgentRunner, CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
+from bcbench.evaluate import AgentRunner, CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline, harness_runner
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -87,6 +87,8 @@ def evaluate_copilot(
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     agent_config = AgentConfig.from_file(config_path)
+    harness = CopilotHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
+    identity = harness.identity()
     run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -98,25 +100,13 @@ def evaluate_copilot(
         container=runtime.container if runtime else None,
         model=model,
         agent_name=AgentHarness.COPILOT,
-        agent_version=get_copilot_version(),
+        agent_version=identity.version,
         category=category,
         tier=tier,
     )
 
     pipeline = category.pipeline(agent_config)
-    pipeline.execute(
-        context,
-        lambda ctx: run_copilot_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            agent_config=agent_config,
-            plugin_root=_config.paths.plugin_root,
-            runtime=runtime,
-        ),
-    )
+    pipeline.execute(context, harness_runner(harness, os.environ))
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
