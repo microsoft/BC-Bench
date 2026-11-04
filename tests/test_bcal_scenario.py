@@ -253,20 +253,58 @@ def test_workspace_seed_receipt_matches_bcal_contract_fixture(tmp_path: Path):
     assert evidence.aggregate_sha256 == "6696e48b2ef443c68d67e0e04109ea4c1a6dac1b482672c3d142115eb102d0ae"
 
 
-def test_setup_workspace_seeds_deterministic_bootstrap_files(tmp_path: Path):
+def test_setup_workspace_is_identical_across_variants_and_repetitions(tmp_path: Path):
     entry = create_bcal_scenario_entry(
         workspace_files={"Seeded.al": "codeunit 50100 Seeded { }\n"},
     )
     pipeline = scenario_evaluation.BCalScenarioPipeline()
+    workspaces = [tmp_path / variant / f"r{repeat}" for variant in ("baseline", "candidate") for repeat in (1, 2)]
 
     with patch.object(scenario_evaluation, "copy_symbol_apps"):
-        pipeline.setup_workspace(entry, tmp_path / "workspace")
+        for workspace in workspaces:
+            pipeline.setup_workspace(entry, workspace)
+            (workspace / ".bcal-symbols" / ".alpackages").mkdir(parents=True)
 
-    app_folder = tmp_path / "workspace" / "app"
-    assert (app_folder / "Seeded.al").read_text(encoding="utf-8") == "codeunit 50100 Seeded { }\n"
-    assert (app_folder / ".vscode" / "launch.json").read_bytes() == b"{}\n"
-    assert (app_folder / ".vscode" / "settings.json").read_bytes() == b"{}\n"
-    assert bcal_scenario.workspace_seed_evidence(app_folder).file_count == 4
+    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess:
+        scenario_path = Path(args[args.index("--scenario") + 1])
+        seed_folder = scenario_path.parent / "app"
+        payload = scenario_result_payload()
+        payload["workspaceSeed"] = bcal_scenario.workspace_seed_evidence(seed_folder).model_dump(
+            mode="json",
+            by_alias=True,
+        )
+        Path(args[args.index("--result") + 1]).write_text(json.dumps(payload), encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    app_folders = [workspace / "app" for workspace in workspaces]
+    pre_model_files = [{path.relative_to(app_folder).as_posix(): path.read_bytes() for path in app_folder.rglob("*") if path.is_file()} for app_folder in app_folders]
+    app_json_bytes = [(app_folder / "app.json").read_bytes() for app_folder in app_folders]
+    seed_evidence = [bcal_scenario.workspace_seed_evidence(app_folder) for app_folder in app_folders]
+    manifest = json.loads(app_json_bytes[0])
+
+    with (
+        patch.object(bcal_scenario, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+        patch.object(subprocess, "run", side_effect=fake_run),
+    ):
+        for workspace in workspaces:
+            bcal_scenario.run_bcal_scenario(
+                entry,
+                workspace,
+                BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            )
+
+    exported_files = [{path.relative_to(app_folder).as_posix(): path.read_bytes() for path in app_folder.rglob("*") if path.is_file()} for app_folder in app_folders]
+    assert all(files == pre_model_files[0] for files in pre_model_files)
+    assert exported_files == pre_model_files
+    assert len(set(app_json_bytes)) == 1
+    assert manifest["id"] == "1c0b8d68-8570-542b-a0e7-e89b45d9d36d"
+    assert manifest["id"] == scenario_evaluation._scenario_app_id(entry.instance_id)
+    assert len({evidence.model_dump_json() for evidence in seed_evidence}) == 1
+    assert seed_evidence[0].file_count == 4
+    for app_folder in app_folders:
+        assert (app_folder / "Seeded.al").read_text(encoding="utf-8") == "codeunit 50100 Seeded { }\n"
+        assert (app_folder / ".vscode" / "launch.json").read_bytes() == b"{}\n"
+        assert (app_folder / ".vscode" / "settings.json").read_bytes() == b"{}\n"
 
 
 def test_run_scenario_rejects_seed_receipt_divergence(tmp_path: Path):
