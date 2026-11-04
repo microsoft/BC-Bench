@@ -40,6 +40,8 @@ The harness requests Gate A evidence with BCal's `--include-evidence` option, pr
 
 BCal scenario execution uses schema `1.1` and explicitly seeds the generated `app` fixture through workspace-seed contract `1.0` before service creation or the first model request. BC-Bench calculates the contract's privacy-safe, length-prefixed SHA-256 receipt from the exact fixture bytes immediately before invoking BCal and rejects a missing or mismatched returned receipt as a harness failure. The seed includes deterministic `app.json`, `.vscode\launch.json`, and `.vscode\settings.json` bytes, preventing BCal bootstrap generation from creating or changing those files in the exported evidence. Seed receipt count, bytes, and aggregate hash are preserved in result metadata.
 
+The generated `app.json` ID is UUIDv5-derived from the scenario instance ID under the fixed namespace name `https://github.com/microsoft/BC-Bench/bcal-scenario/<instance-id>`. The same case therefore has byte-identical protected bootstrap files and workspace-seed receipts across variants and repetitions.
+
 The checked-in selector is `dataset\experiments\bcal_authority_provenance_v1.json`. It is consumed by `scripts\Run-BCalAuthorityExperiment.ps1` for both baseline and candidate runs. The selector excludes `nl2al__collected-sales-operations-control-tower-1` from every lane because its timeout is investigated separately and is not an authority-contract signal.
 
 Verify the exact baseline and candidate selectors without invoking BCal:

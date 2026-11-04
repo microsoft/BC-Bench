@@ -7,6 +7,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 from typing import cast
+from uuid import NAMESPACE_URL, uuid5
 
 from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_RESULT, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult, load_scenario_result, resolve_session_chat
 from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
@@ -21,6 +22,10 @@ logger = get_logger(__name__)
 
 _MUTATION_TOOLS = frozenset({"write_file", "edit_file", "create_file", "apply_patch", "replace_text", "patch_text"})
 _TEXT_EXTENSIONS = frozenset({".al", ".json", ".md", ".txt", ".xml", ".yml", ".yaml", ".ps1", ".toml"})
+
+
+def _scenario_app_id(instance_id: str) -> str:
+    return str(uuid5(NAMESPACE_URL, f"https://github.com/microsoft/BC-Bench/bcal-scenario/{instance_id}"))
 
 
 def _git_init_and_commit(repo_path: Path) -> None:
@@ -333,7 +338,12 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
             shutil.rmtree(repo_path)
         app_folder = repo_path / SCENARIO_EXPORT_DIR
         app_folder.mkdir(parents=True)
-        bootstrap_app_json(app_folder, entry.instance_id, entry.environment_setup_version)
+        bootstrap_app_json(
+            app_folder,
+            entry.instance_id,
+            entry.environment_setup_version,
+            app_id=_scenario_app_id(entry.instance_id),
+        )
         for relative_path, content in entry.workspace_files.items():
             path = app_folder / Path(relative_path)
             path.parent.mkdir(parents=True, exist_ok=True)
