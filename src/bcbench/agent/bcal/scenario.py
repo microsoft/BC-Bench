@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import shutil
+import struct
 import subprocess
 import time
 from pathlib import Path
@@ -25,6 +27,8 @@ SCENARIO_MANIFEST = "execution.json"
 SCENARIO_RESULT = "evaluation-run.json"
 SCENARIO_EXPORT_DIR = "app"
 SCENARIO_SYMBOL_DIR = ".bcal-symbols"
+SCENARIO_CONTRACT_VERSION = "1.1"
+WORKSPACE_SEED_CONTRACT_VERSION = "1.0"
 
 
 class BCalToolUsage(BaseModel):
@@ -160,6 +164,24 @@ class BCalSessionArchiveResult(BaseModel):
     message: str | None = None
 
 
+class BCalWorkspaceSeedFileReceipt(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path_sha256: str = Field(alias="pathSha256")
+    content_sha256: str = Field(alias="contentSha256")
+    bytes: Annotated[int, Field(ge=0)]
+
+
+class BCalWorkspaceSeedEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    contract_version: Literal["1.0"] = Field(alias="contractVersion")
+    file_count: Annotated[int, Field(ge=0)] = Field(alias="fileCount")
+    aggregate_bytes: Annotated[int, Field(ge=0)] = Field(alias="aggregateBytes")
+    aggregate_sha256: str = Field(alias="aggregateSha256")
+    files: list[BCalWorkspaceSeedFileReceipt]
+
+
 class BCalScenarioRunResult(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -167,6 +189,7 @@ class BCalScenarioRunResult(BaseModel):
     execution_identity: dict[str, object] | None = Field(default=None, alias="executionIdentity")
     evidence: dict[str, object] | None = None
     outcome: dict[str, object] | None = None
+    workspace_seed: BCalWorkspaceSeedEvidence | None = Field(default=None, alias="workspaceSeed")
     completed: bool
     steps: list[BCalStepResult]
     interactions: list[BCalInteractionRecord]
@@ -187,10 +210,46 @@ class BCalScenarioRunResult(BaseModel):
         return cast(dict[str, object], value) if isinstance(value, dict) else None
 
 
+def workspace_seed_evidence(seed_folder: Path) -> BCalWorkspaceSeedEvidence:
+    aggregate = hashlib.sha256()
+    receipts: list[BCalWorkspaceSeedFileReceipt] = []
+    aggregate_bytes = 0
+    paths = sorted(
+        (path for path in seed_folder.rglob("*") if path.is_file()),
+        key=lambda path: path.relative_to(seed_folder).as_posix().encode("utf-16-be"),
+    )
+    for path in paths:
+        relative_path = path.relative_to(seed_folder).as_posix()
+        path_bytes = relative_path.encode()
+        content = path.read_bytes()
+        for value in (path_bytes, content):
+            aggregate.update(struct.pack(">I", len(value)))
+            aggregate.update(value)
+        aggregate_bytes += len(content)
+        receipts.append(
+            BCalWorkspaceSeedFileReceipt(
+                pathSha256=hashlib.sha256(path_bytes).hexdigest(),
+                contentSha256=hashlib.sha256(content).hexdigest(),
+                bytes=len(content),
+            )
+        )
+    return BCalWorkspaceSeedEvidence(
+        contractVersion=WORKSPACE_SEED_CONTRACT_VERSION,
+        fileCount=len(receipts),
+        aggregateBytes=aggregate_bytes,
+        aggregateSha256=aggregate.hexdigest(),
+        files=receipts,
+    )
+
+
 def write_execution_manifest(entry: BCalScenarioEntry, path: Path) -> None:
     manifest = {
-        "schemaVersion": "1.0",
+        "schemaVersion": SCENARIO_CONTRACT_VERSION,
         "session": entry.session.model_dump(mode="json", by_alias=True, exclude_none=True),
+        "workspaceSeed": {
+            "contractVersion": WORKSPACE_SEED_CONTRACT_VERSION,
+            "folder": f"./{SCENARIO_EXPORT_DIR}",
+        },
         "steps": [step.model_dump(mode="json", by_alias=True, exclude_none=True) for step in entry.steps],
         "interactions": [rule.model_dump(mode="json", by_alias=True, exclude_none=True) for rule in entry.interactions],
     }
@@ -227,6 +286,7 @@ def run_bcal_scenario(
     export_folder = repo_path / SCENARIO_EXPORT_DIR
     write_execution_manifest(entry, scenario_path)
     export_folder.mkdir(parents=True, exist_ok=True)
+    expected_seed = workspace_seed_evidence(export_folder)
 
     cmd_args = [
         _resolve_bcal_executable(),
@@ -270,6 +330,9 @@ def run_bcal_scenario(
     result = load_scenario_result(result_path)
     if harness_error := _harness_failure(result):
         raise AgentError(f"BCal scenario harness failure: {harness_error}")
+    if result.workspace_seed != expected_seed:
+        actual_hash = result.workspace_seed.aggregate_sha256 if result.workspace_seed else "missing"
+        raise AgentError(f"BCal scenario workspace seed receipt does not match the pre-run fixture snapshot: expected {expected_seed.aggregate_sha256}, got {actual_hash}")
 
     tool_usage: dict[str, int] = {}
     for usage in result.tool_usage:

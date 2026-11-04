@@ -40,6 +40,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
     runtime_status: Literal["passed", "failed", "not_run"] | None = None
     harness_failure: bool = False
     execution_identity: dict[str, object] | None = None
+    workspace_seed: dict[str, object] | None = None
     prompt_evidence: dict[str, object] | None = None
     canonical_trace: dict[str, object] | None = None
 
@@ -65,6 +66,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         trace_assertions: list[TraceAssertionResult],
         runtime_status: Literal["passed", "failed", "not_run"] | None,
         execution_identity: dict[str, object] | None = None,
+        workspace_seed: dict[str, object] | None = None,
         prompt_evidence: dict[str, object] | None = None,
         canonical_trace: dict[str, object] | None = None,
         error_message: str | None = None,
@@ -79,6 +81,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
             trace_assertions=trace_assertions,
             runtime_status=runtime_status,
             execution_identity=execution_identity,
+            workspace_seed=workspace_seed,
             prompt_evidence=prompt_evidence,
             canonical_trace=canonical_trace,
         )
@@ -112,6 +115,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
     @override
     def export_metadata(self) -> dict[str, str | int | float | bool | None]:
         execution_identity = self.execution_identity or {}
+        workspace_seed = self.workspace_seed or {}
         prompt_evidence = self.prompt_evidence or {}
         canonical_trace = self.canonical_trace or {}
         compositions = prompt_evidence.get("compositions")
@@ -124,6 +128,10 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         metadata["bcal_product_version"] = _metadata_scalar(execution_identity.get("productVersion"))
         metadata["bcal_source_commit_sha"] = _metadata_scalar(execution_identity.get("sourceCommitSha"))
         metadata["bcal_evidence_contract_version"] = _metadata_scalar(execution_identity.get("evidenceContractVersion"))
+        metadata["workspace_seed_contract_version"] = _metadata_scalar(workspace_seed.get("contractVersion"))
+        metadata["workspace_seed_file_count"] = _metadata_scalar(workspace_seed.get("fileCount"))
+        metadata["workspace_seed_aggregate_bytes"] = _metadata_scalar(workspace_seed.get("aggregateBytes"))
+        metadata["workspace_seed_aggregate_sha256"] = _metadata_scalar(workspace_seed.get("aggregateSha256"))
         metadata["prompt_composition_count"] = len(compositions) if isinstance(compositions, list) else None
         metadata["prompt_use_count"] = len(uses) if isinstance(uses, list) else None
         metadata["canonical_trace_event_count"] = len(events) if isinstance(events, list) else None

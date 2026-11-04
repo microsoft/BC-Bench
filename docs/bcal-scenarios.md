@@ -38,6 +38,8 @@ The fixtures assert changed paths, interaction outcomes, mutation ordering, comp
 
 The harness requests Gate A evidence with BCal's `--include-evidence` option, prefers its canonical trace over the archived chat for tool-order assertions, and preserves execution identity, prompt evidence, trace size, and truncation metadata. Without that explicit opt-in, BCal intentionally omits prompt evidence and canonical trace. Gate B activated-skill evidence is not required for this experiment.
 
+BCal scenario execution uses schema `1.1` and explicitly seeds the generated `app` fixture through workspace-seed contract `1.0` before service creation or the first model request. BC-Bench calculates the contract's privacy-safe, length-prefixed SHA-256 receipt from the exact fixture bytes immediately before invoking BCal and rejects a missing or mismatched returned receipt as a harness failure. The seed includes deterministic `app.json`, `.vscode\launch.json`, and `.vscode\settings.json` bytes, preventing BCal bootstrap generation from creating or changing those files in the exported evidence. Seed receipt count, bytes, and aggregate hash are preserved in result metadata.
+
 The checked-in selector is `dataset\experiments\bcal_authority_provenance_v1.json`. It is consumed by `scripts\Run-BCalAuthorityExperiment.ps1` for both baseline and candidate runs. The selector excludes `nl2al__collected-sales-operations-control-tower-1` from every lane because its timeout is investigated separately and is not an authority-contract signal.
 
 Verify the exact baseline and candidate selectors without invoking BCal:
@@ -49,9 +51,9 @@ Verify the exact baseline and candidate selectors without invoking BCal:
 .\scripts\Run-BCalAuthorityExperiment.ps1 -Variant candidate -Lane ordinary-quality -OutputDir evaluation_results\candidate -ToolPath <candidate-tool-dir> -DryRun
 ```
 
-Remove `-DryRun` to execute a lane locally through the BCal CLI. The runner rejects a tool directory whose `bcal --version` identity does not exactly match the selected manifest package. Each run writes `selection.json` with the selector hash, exact package identity, selected IDs, promotion IDs, exclusions, variant, lane, and repeat count before evaluation starts.
+Remove `-DryRun` to execute a lane locally through the BCal CLI. The runner rejects unpublished package entries and a tool directory whose `bcal --version` identity does not exactly match the selected manifest package. Each run writes `selection.json` with the selector hash, exact package identity, selected IDs, promotion IDs, exclusions, variant, lane, and repeat count before evaluation starts.
 
-Use the same BC-Bench commit, selector file, datasets, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for the candidate. Pin the baseline package to `30.0.44.65502-beta`; pin the candidate to its exact package version. Do not use MCP mode.
+Use the same BC-Bench commit, selector file, datasets, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for the candidate. The new baseline must be an infrastructure-only package built from bic/BC-DeveloperExperience#8982 commit `aca7b2569602e90ea23e0c5f0d866137be3429bc`; the candidate must use the identical infrastructure layer plus bic/BC-DeveloperExperience#8977 commit `30d9e59980a978c19b4a7569fb521ce644255a53`. Before execution, set each manifest package's published version, complete `bcal --version` identity, package source commit, patch ID, nupkg file name, and nupkg SHA-256, then set `published` to `true`. Do not reuse the historical unseeded packages and do not use MCP mode.
 
 All GitHub operations for this experiment, including PR inspection, workflow dispatch, run monitoring, and artifact download, must use an authenticated `github.com` account with access to `microsoft/BC-Bench`. Do not use or fall back to a `microsoft.ghe.com` or other GHE account. The runner explicitly checks the `github.com` authentication and repository access before dry-run or execution.
 
