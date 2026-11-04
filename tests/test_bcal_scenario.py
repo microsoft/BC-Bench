@@ -534,16 +534,23 @@ def test_authority_experiment_selector_excludes_control_tower():
     assert selector["schema_version"] == 2
     assert selector["repeat_count"] == 2
     for package in selector["packages"].values():
-        assert package["published"] is False
-        assert package["package_version"] is None
-        assert package["installed_identity"] is None
-        assert package["package_source_commit_sha"] is None
-        assert package["package_patch_id"] is None
-        assert package["nupkg_file"] is None
-        assert package["nupkg_sha256"] is None
+        assert package["published"] is True
+        assert package["feed"] == "DynamicsSMBTest@Local"
+        assert package["build_result"] == "succeeded"
         assert package["workspace_seed_source_commit_sha"] == "aca7b2569602e90ea23e0c5f0d866137be3429bc"
+        assert package["workspace_seed_patch_id"] == "f414195c40fcb01ed33eb65719cdbf26f4f976fb"
+    assert selector["packages"]["baseline"]["package_version"] == "30.0.45.51656-beta"
+    assert selector["packages"]["baseline"]["installed_identity"] == "30.0.45.51656+aca7b2569602e90ea23e0c5f0d866137be3429bc"
+    assert selector["packages"]["baseline"]["nupkg_sha256"] == "da2467cf85769435e3d58b9e5e880f1e3a5f44de911cdd0beba9086d712527dc"
+    assert selector["packages"]["baseline"]["build_id"] == 3000686
     assert selector["packages"]["baseline"]["authority_source_commit_sha"] is None
+    assert selector["packages"]["baseline"]["authority_patch_id"] is None
+    assert selector["packages"]["candidate"]["package_version"] == "30.0.45.51654-beta"
+    assert selector["packages"]["candidate"]["installed_identity"] == "30.0.45.51654+f772a9d1763acc05bb260e0fa885030b0b0cd2eb"
+    assert selector["packages"]["candidate"]["nupkg_sha256"] == "e2816e8aa27efdc8899605e14f024671f5699fec6e97c706d789f1a017567bfb"
+    assert selector["packages"]["candidate"]["build_id"] == 3000684
     assert selector["packages"]["candidate"]["authority_source_commit_sha"] == "30d9e59980a978c19b4a7569fb521ce644255a53"
+    assert selector["packages"]["candidate"]["authority_patch_id"] == "024053c4e6ed7911495de050ec5cb1d2252af07e"
     assert selector["execution"] == {
         "backend": "external-command",
         "model": "gpt-55-chat",
@@ -574,7 +581,11 @@ def test_authority_experiment_runner_uses_one_shared_selector():
     assert "Expected BCal identity" in script
     assert "workspace-seeding package is not published" in script
     assert "missing required immutable inputs" in script
-    assert '"package_source_commit_sha", "package_patch_id", "nupkg_file", "nupkg_sha256"' in script
+    assert '"workspace_seed_patch_id"' in script
+    assert "is not final-success" in script
+    assert "must pin the authority source commit and patch ID" in script
+    assert "Pinned BCal package archive" in script
+    assert "Expected BCal package SHA-256" in script
     assert '$env:PATH = "$ToolPath;$env:PATH"' in script
     assert "gh auth status --hostname $githubHost --active" in script
     assert "$env:GH_HOST = $githubHost" in script
