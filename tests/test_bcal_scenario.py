@@ -60,6 +60,13 @@ def create_bcal_scenario_entry(**overrides) -> BCalScenarioEntry:
 def scenario_result_payload(*, completed: bool = True) -> dict:
     return {
         "schemaVersion": "1.0",
+        "workspaceSeed": {
+            "contractVersion": "1.0",
+            "fileCount": 0,
+            "aggregateBytes": 0,
+            "aggregateSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "files": [],
+        },
         "completed": completed,
         "steps": [
             {
@@ -118,8 +125,9 @@ def test_execution_manifest_redacts_hidden_evaluation(tmp_path: Path):
     bcal_scenario.write_execution_manifest(entry, path)
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["schemaVersion"] == "1.0"
-    assert set(payload) == {"schemaVersion", "session", "steps", "interactions"}
+    assert payload["schemaVersion"] == "1.1"
+    assert set(payload) == {"schemaVersion", "session", "workspaceSeed", "steps", "interactions"}
+    assert payload["workspaceSeed"] == {"contractVersion": "1.0", "folder": "./app"}
     assert payload["session"]["review"] is True
     assert payload["interactions"][0]["response"]["selectedChoice"] == "Use an interface"
     assert "evaluation" not in path.read_text(encoding="utf-8")
@@ -179,12 +187,30 @@ def test_scenario_result_normalizes_interaction_choices(choices: list[str] | Non
 def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
     entry = create_bcal_scenario_entry()
     (tmp_path / ".bcal-symbols" / ".alpackages").mkdir(parents=True)
+    app_folder = tmp_path / "app"
+    (app_folder / ".vscode").mkdir(parents=True)
+    fixture_files = {
+        "app.json": b'{"name":"seeded"}\n',
+        ".vscode/launch.json": b"{}\n",
+        ".vscode/settings.json": b"{}\n",
+        "Seeded.al": b"codeunit 50100 Seeded { }\n",
+    }
+    for relative_path, content in fixture_files.items():
+        path = app_folder / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
     captured: list[str] = []
 
     def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess:
         captured.extend(args)
+        scenario_path = Path(args[args.index("--scenario") + 1])
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+        seed_folder = scenario_path.parent / scenario["workspaceSeed"]["folder"]
+        assert {path.relative_to(seed_folder).as_posix(): path.read_bytes() for path in seed_folder.rglob("*") if path.is_file()} == fixture_files
+        payload = scenario_result_payload()
+        payload["workspaceSeed"] = bcal_scenario.workspace_seed_evidence(seed_folder).model_dump(mode="json", by_alias=True)
         result_path = Path(args[args.index("--result") + 1])
-        result_path.write_text(json.dumps(scenario_result_payload()), encoding="utf-8")
+        result_path.write_text(json.dumps(payload), encoding="utf-8")
         return subprocess.CompletedProcess(args, 1, stdout="scenario failed after preserving result", stderr="")
 
     with (
@@ -205,6 +231,64 @@ def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
     assert metrics.completion_tokens == 20
     assert metrics.turn_count == 1
     assert metrics.tool_usage == {"write_file": 1}
+    assert {path.relative_to(app_folder).as_posix(): path.read_bytes() for path in app_folder.rglob("*") if path.is_file()} == fixture_files
+
+
+def test_workspace_seed_receipt_matches_bcal_contract_fixture(tmp_path: Path):
+    files = {
+        ".vscode/settings.json": b'{"seeded":true}',
+        "nested/Data.bin": bytes([0, 255, 1, 2]),
+        "src/Page.al": b"codeunit 50100 Seeded { }",
+    }
+    for relative_path, content in reversed(files.items()):
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    evidence = bcal_scenario.workspace_seed_evidence(tmp_path)
+
+    assert evidence.file_count == 3
+    assert evidence.aggregate_bytes == sum(map(len, files.values()))
+    assert evidence.aggregate_sha256 == "6696e48b2ef443c68d67e0e04109ea4c1a6dac1b482672c3d142115eb102d0ae"
+
+
+def test_setup_workspace_seeds_deterministic_bootstrap_files(tmp_path: Path):
+    entry = create_bcal_scenario_entry(
+        workspace_files={"Seeded.al": "codeunit 50100 Seeded { }\n"},
+    )
+    pipeline = scenario_evaluation.BCalScenarioPipeline()
+
+    with patch.object(scenario_evaluation, "copy_symbol_apps"):
+        pipeline.setup_workspace(entry, tmp_path / "workspace")
+
+    app_folder = tmp_path / "workspace" / "app"
+    assert (app_folder / "Seeded.al").read_text(encoding="utf-8") == "codeunit 50100 Seeded { }\n"
+    assert (app_folder / ".vscode" / "launch.json").read_bytes() == b"{}\n"
+    assert (app_folder / ".vscode" / "settings.json").read_bytes() == b"{}\n"
+    assert bcal_scenario.workspace_seed_evidence(app_folder).file_count == 4
+
+
+def test_run_scenario_rejects_seed_receipt_divergence(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    (tmp_path / ".bcal-symbols" / ".alpackages").mkdir(parents=True)
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "Seeded.al").write_text("codeunit 50100 Seeded { }\n", encoding="utf-8")
+
+    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess:
+        result_path = Path(args[args.index("--result") + 1])
+        result_path.write_text(json.dumps(scenario_result_payload()), encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    with (
+        patch.object(bcal_scenario, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+        patch.object(subprocess, "run", side_effect=fake_run),
+        pytest.raises(AgentError, match="workspace seed receipt does not match"),
+    ):
+        bcal_scenario.run_bcal_scenario(
+            entry,
+            tmp_path,
+            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+        )
 
 
 def test_nonzero_exit_without_result_is_harness_failure(tmp_path: Path):
@@ -408,11 +492,20 @@ def test_structured_result_exports_gate_a_metadata(tmp_path: Path):
             "sourceCommitSha": "0123456789abcdef",
             "evidenceContractVersion": "1.1",
         },
+        workspace_seed={
+            "contractVersion": "1.0",
+            "fileCount": 4,
+            "aggregateBytes": 1234,
+            "aggregateSha256": "a" * 64,
+        },
         prompt_evidence={"compositions": [{"id": "system"}], "uses": [{"id": "system"}, {"id": "user"}]},
         canonical_trace={"truncated": False, "events": [{"type": "tool_call"}]},
     )
 
     assert result.export_metadata["bcal_product_version"] == "30.0.44.65502-beta"
+    assert result.export_metadata["workspace_seed_file_count"] == 4
+    assert result.export_metadata["workspace_seed_aggregate_bytes"] == 1234
+    assert result.export_metadata["workspace_seed_aggregate_sha256"] == "a" * 64
     assert result.export_metadata["prompt_composition_count"] == 1
     assert result.export_metadata["prompt_use_count"] == 2
     assert result.export_metadata["canonical_trace_event_count"] == 1
@@ -438,10 +531,19 @@ def test_authority_experiment_selector_excludes_control_tower():
     control_tower = "nl2al__collected-sales-operations-control-tower-1"
 
     assert selector["github"] == {"host": "github.com", "repository": "microsoft/BC-Bench"}
+    assert selector["schema_version"] == 2
     assert selector["repeat_count"] == 2
-    assert selector["packages"]["baseline"]["installed_identity"] == "30.0.44.65502+bdc5dc2be9bd7b59eaa1f16592604590be9621bf"
-    assert selector["packages"]["candidate"]["installed_identity"] == "30.0.45.46749+30d9e59980a978c19b4a7569fb521ce644255a53"
-    assert selector["packages"]["candidate"]["nupkg_sha256"] == "2b5eb42e42f6a40e7447f67d741adac924379606c90240051acd445715eb99d6"
+    for package in selector["packages"].values():
+        assert package["published"] is False
+        assert package["package_version"] is None
+        assert package["installed_identity"] is None
+        assert package["package_source_commit_sha"] is None
+        assert package["package_patch_id"] is None
+        assert package["nupkg_file"] is None
+        assert package["nupkg_sha256"] is None
+        assert package["workspace_seed_source_commit_sha"] == "aca7b2569602e90ea23e0c5f0d866137be3429bc"
+    assert selector["packages"]["baseline"]["authority_source_commit_sha"] is None
+    assert selector["packages"]["candidate"]["authority_source_commit_sha"] == "30d9e59980a978c19b4a7569fb521ce644255a53"
     assert selector["execution"] == {
         "backend": "external-command",
         "model": "gpt-55-chat",
@@ -449,6 +551,9 @@ def test_authority_experiment_selector_excludes_control_tower():
         "bridge_package": "bc-eval==0.6.1",
         "bc_version": "28.0",
         "symbol_cache": "C:\\bcartifacts.cache",
+        "scenario_contract_version": "1.1",
+        "workspace_seed_contract_version": "1.0",
+        "require_workspace_seed_receipt": True,
     }
     assert set(selector["authority"]["entries"]) <= scenario_ids
     assert len(selector["authority"]["entries"]) == 4
@@ -467,6 +572,9 @@ def test_authority_experiment_runner_uses_one_shared_selector():
     assert '"selection.json"' in script
     assert "promotion_entries = $entries" in script
     assert "Expected BCal identity" in script
+    assert "workspace-seeding package is not published" in script
+    assert "missing required immutable inputs" in script
+    assert '"package_source_commit_sha", "package_patch_id", "nupkg_file", "nupkg_sha256"' in script
     assert '$env:PATH = "$ToolPath;$env:PATH"' in script
     assert "gh auth status --hostname $githubHost --active" in script
     assert "$env:GH_HOST = $githubHost" in script

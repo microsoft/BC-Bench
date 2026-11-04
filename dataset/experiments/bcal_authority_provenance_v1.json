@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "bcal-authority-provenance-v1",
   "github": {
     "host": "github.com",
@@ -9,19 +9,29 @@
   "packages": {
     "baseline": {
       "package_id": "Microsoft.BusinessCentral.BCal.CLI",
-      "package_version": "30.0.44.65502-beta",
-      "installed_identity": "30.0.44.65502+bdc5dc2be9bd7b59eaa1f16592604590be9621bf",
-      "source_commit_sha": "bdc5dc2be9bd7b59eaa1f16592604590be9621bf",
-      "source": "DynamicsSMBTest"
+      "published": false,
+      "package_version": null,
+      "installed_identity": null,
+      "package_source_commit_sha": null,
+      "package_patch_id": null,
+      "nupkg_file": null,
+      "nupkg_sha256": null,
+      "workspace_seed_source_commit_sha": "aca7b2569602e90ea23e0c5f0d866137be3429bc",
+      "authority_source_commit_sha": null,
+      "source": "bic/BC-DeveloperExperience#8982 infrastructure only"
     },
     "candidate": {
       "package_id": "Microsoft.BusinessCentral.BCal.CLI",
-      "package_version": "30.0.45.46749-beta",
-      "installed_identity": "30.0.45.46749+30d9e59980a978c19b4a7569fb521ce644255a53",
-      "source_commit_sha": "30d9e59980a978c19b4a7569fb521ce644255a53",
-      "nupkg_file": "Microsoft.BusinessCentral.BCal.CLI.30.0.45.46749-beta.nupkg",
-      "nupkg_sha256": "2b5eb42e42f6a40e7447f67d741adac924379606c90240051acd445715eb99d6",
-      "source": "BC-DeveloperExperience#8977"
+      "published": false,
+      "package_version": null,
+      "installed_identity": null,
+      "package_source_commit_sha": null,
+      "package_patch_id": null,
+      "nupkg_file": null,
+      "nupkg_sha256": null,
+      "workspace_seed_source_commit_sha": "aca7b2569602e90ea23e0c5f0d866137be3429bc",
+      "authority_source_commit_sha": "30d9e59980a978c19b4a7569fb521ce644255a53",
+      "source": "bic/BC-DeveloperExperience#8982 plus bic/BC-DeveloperExperience#8977"
     }
   },
   "execution": {
@@ -30,7 +40,10 @@
     "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
     "bridge_package": "bc-eval==0.6.1",
     "bc_version": "28.0",
-    "symbol_cache": "C:\\bcartifacts.cache"
+    "symbol_cache": "C:\\bcartifacts.cache",
+    "scenario_contract_version": "1.1",
+    "workspace_seed_contract_version": "1.0",
+    "require_workspace_seed_receipt": true
   },
   "authority": {
     "category": "bcal-scenario",

@@ -39,6 +39,14 @@ if ($LASTEXITCODE -ne 0 -or $accessibleRepository -ne $githubRepository) {
 }
 $excludedEntries = @($config.excluded_entries.instance_id)
 $package = $config.packages.$Variant
+if (-not $package.published) {
+    throw "The $Variant BCal workspace-seeding package is not published in the experiment manifest."
+}
+$requiredPackageFields = @("package_version", "installed_identity", "package_source_commit_sha", "package_patch_id", "nupkg_file", "nupkg_sha256")
+$missingPackageFields = @($requiredPackageFields | Where-Object { -not $package.$_ })
+if ($missingPackageFields.Count -ne 0) {
+    throw "The $Variant BCal package is missing required immutable inputs: $($missingPackageFields -join ', ')."
+}
 $bcal = Join-Path $ToolPath "bcal.exe"
 if (-not (Test-Path -LiteralPath $bcal)) {
     throw "BCal executable not found at $bcal."

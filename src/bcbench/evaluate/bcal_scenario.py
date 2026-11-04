@@ -299,6 +299,7 @@ def _create_scoring_packet(
         "task": entry.get_task(),
         "confirmedScriptedDecisions": _confirmed_decisions(result),
         "executionIdentity": result.execution_identity,
+        "workspaceSeed": (result.workspace_seed.model_dump(mode="json", by_alias=True) if result.workspace_seed else None),
         "promptEvidence": prompt_evidence if isinstance(prompt_evidence, dict) else None,
         "deterministicResult": {
             "scenarioCompleted": result.completed,
@@ -337,6 +338,10 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
             path = app_folder / Path(relative_path)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
+        vscode_folder = app_folder / ".vscode"
+        vscode_folder.mkdir()
+        for file_name in ("launch.json", "settings.json"):
+            (vscode_folder / file_name).write_bytes(b"{}\n")
         copy_symbol_apps(repo_path / SCENARIO_SYMBOL_DIR, entry.environment_setup_version)
         (repo_path / ".gitignore").write_text(".bcal-symbols/\n**/.alpackages/\n**/.bcbench-build/\n", encoding="utf-8")
         _git_init_and_commit(repo_path)
@@ -373,6 +378,7 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
             trace_assertions=trace,
             runtime_status=runtime_status,
             execution_identity=result.execution_identity,
+            workspace_seed=(result.workspace_seed.model_dump(mode="json", by_alias=True) if result.workspace_seed else None),
             prompt_evidence=result.prompt_evidence,
             canonical_trace=result.canonical_trace,
             error_message=error_message,
