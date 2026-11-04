@@ -290,7 +290,7 @@ def test_setup_workspace_is_identical_across_variants_and_repetitions(tmp_path: 
             bcal_scenario.run_bcal_scenario(
                 entry,
                 workspace,
-                BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+                BCalBackendConfig(command="python bridge.py"),
             )
 
     exported_files = [{path.relative_to(app_folder).as_posix(): path.read_bytes() for path in app_folder.rglob("*") if path.is_file()} for app_folder in app_folders]
