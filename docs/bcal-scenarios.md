@@ -66,3 +66,22 @@ The runner also preflights the accepted external-command backend (`bc-eval==0.6.
 Each case/repetition receives a separate Git workspace and staging result directory under the output directory so Windows file locks or run-directory cleanup from one BCal session cannot affect the next case. After each case completes, the runner collision-checks and copies its result and artifacts into the repetition's aggregate `bcal_test_run` directory. The four per-entry JSONL files therefore remain available at `<OutputDir>\<variant>-authority-rN\bcal_test_run\<instance-id>.jsonl`.
 
 Compare per-entry `trace_compliance` and individual assertion results first, then compilation and scenario completion. Compare LMChecklist scores separately. Promotion scoring uses only IDs in the emitted `selection.json`; the excluded Control Tower timeout is reported separately and never counted as a regression, failure, or denominator. The accepted ordinary-quality reference for `30.0.44.65502-beta` is `103/110` in each of two full gold repetitions from workflow run `40399204122`; rerun baseline and candidate from the same BC-Bench revision before treating a delta as causal.
+
+## Authority experiment result
+
+The final valid seeded3 study used BC-Bench commit `f76d30f3acc15c40915f67112971234e2b42d6fc`:
+
+- baseline workflow run `41801406767`;
+- candidate workflow run `41801411108`;
+- 8/8 rows completed for each variant (four cases, two repetitions);
+- all 16 matched baseline/candidate case-repetition cells had exact workspace-seed parity;
+- Gate A evidence, canonical traces, and Kusto result rows were complete;
+- the Control Tower case and the ordinary-quality lane were not executed.
+
+Baseline and candidate tied on Core (`2/8`) and LMChecklist judge assertions (`16/24`). Candidate deterministic trace compliance was `5/8`, below baseline `6/8`. The authority prompt change in bic/BC-DeveloperExperience#8977 therefore must not be promoted from this study.
+
+The following studies are infrastructure-invalid and must not be scored or compared:
+
+- `41686175570` / `41686175782`: nullable interaction-choice result-contract incompatibility;
+- `41691412171` / `41691423433`: missing Gate A opt-in and empty model-visible workspaces;
+- `41798148490` / `41798152826`: random protected `app.json` UUID caused baseline/candidate seed-receipt divergence.
