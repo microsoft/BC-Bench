@@ -19,6 +19,15 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $ConfigPath = Join-Path $repoRoot "dataset\experiments\bcal_authority_provenance_v1.json"
+$configRelativePath = [IO.Path]::GetRelativePath($repoRoot, $ConfigPath).Replace('\', '/')
+& git -C $repoRoot diff --quiet HEAD -- $configRelativePath
+if ($LASTEXITCODE -ne 0) {
+    throw "Experiment selector must match the checked-in HEAD version: $configRelativePath."
+}
+$configSha256 = (& python -c "import hashlib, subprocess, sys; print(hashlib.sha256(subprocess.check_output(['git', '-C', sys.argv[1], 'show', f'HEAD:{sys.argv[2]}'])).hexdigest())" $repoRoot $configRelativePath | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $configSha256 -notmatch '^[0-9a-f]{64}$') {
+    throw "Failed to calculate the checked-in experiment selector SHA-256."
+}
 $config = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
 $githubHost = $config.github.host
 $githubRepository = $config.github.repository
@@ -115,7 +124,7 @@ $selection = [ordered]@{
     schema_version = $config.schema_version
     experiment = $config.name
     github = $config.github
-    config_sha256 = (Get-FileHash -Algorithm SHA256 -Path $ConfigPath).Hash.ToLowerInvariant()
+    selector_git_blob_sha256 = $configSha256
     variant = $Variant
     package = $package
     execution = $config.execution
@@ -126,9 +135,18 @@ $selection = [ordered]@{
     promotion_entries = $entries
     excluded_entries = $config.excluded_entries
 }
+$selectionJson = (($selection | ConvertTo-Json -Depth 8) -replace "`r`n", "`n") + "`n"
+$selectionBytes = [Text.UTF8Encoding]::new($false).GetBytes($selectionJson)
+$selectionHash = [Security.Cryptography.SHA256]::Create()
+try {
+    $selectionArtifactSha256 = ([BitConverter]::ToString($selectionHash.ComputeHash($selectionBytes)) -replace "-", "").ToLowerInvariant()
+}
+finally {
+    $selectionHash.Dispose()
+}
 
 if ($DryRun) {
-    $selection | ConvertTo-Json -Depth 8
+    [Console]::Out.Write($selectionJson)
     exit 0
 }
 
@@ -154,7 +172,12 @@ if ($missingPrerequisites) {
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-$selection | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 -Path (Join-Path $OutputDir "selection.json")
+[IO.File]::WriteAllBytes((Join-Path $OutputDir "selection.json"), $selectionBytes)
+[IO.File]::WriteAllText(
+    (Join-Path $OutputDir "selection.sha256"),
+    "$selectionArtifactSha256  selection.json`n",
+    [Text.UTF8Encoding]::new($false)
+)
 
 $env:PATH = "$ToolPath;$env:PATH"
 foreach ($repeat in 1..$config.repeat_count) {
