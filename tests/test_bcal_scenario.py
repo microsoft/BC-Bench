@@ -287,7 +287,7 @@ def test_run_scenario_rejects_seed_receipt_divergence(tmp_path: Path):
         bcal_scenario.run_bcal_scenario(
             entry,
             tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            BCalBackendConfig(command="python bridge.py"),
         )
 
 
