@@ -1,3 +1,4 @@
+import hashlib
 import json
 import shutil
 import subprocess
@@ -564,10 +565,32 @@ def test_authority_experiment_selector_excludes_control_tower():
     assert selector["excluded_entries"][0]["include_in_promotion_scoring"] is False
 
 
+def test_authority_selector_hash_identifies_checked_in_git_blob():
+    selector_path = Path("dataset/experiments/bcal_authority_provenance_v1.json")
+    git_blob = subprocess.check_output(
+        ["git", "show", f"HEAD:{selector_path.as_posix()}"],
+    )
+    git_blob_sha256 = hashlib.sha256(git_blob).hexdigest()
+
+    assert git_blob_sha256 == "9b51c6e8fb3ffb2288021adff44de28e106da2b396cf10113fa460d8a93c76a3"
+    if b"\r\n" in selector_path.read_bytes():
+        assert hashlib.sha256(selector_path.read_bytes()).hexdigest() == "ba8b6a316bc31277527f68ab085e050d042e6e6f16640525feeb8c0868198b44"
+        assert hashlib.sha256(selector_path.read_bytes()).hexdigest() != git_blob_sha256
+
+
 def test_authority_experiment_runner_uses_one_shared_selector():
     script = Path("scripts/Run-BCalAuthorityExperiment.ps1").read_text(encoding="utf-8")
 
     assert "bcal_authority_provenance_v1.json" in script
+    assert "Experiment selector must match the checked-in HEAD version" in script
+    assert "subprocess.check_output(['git', '-C', sys.argv[1], 'show', f'HEAD:{sys.argv[2]}'])" in script
+    assert "selector_git_blob_sha256 = $configSha256" in script
+    assert "config_sha256 = $configSha256" not in script
+    assert "Get-FileHash -Algorithm SHA256 -Path $ConfigPath" not in script
+    assert "[Text.UTF8Encoding]::new($false).GetBytes($selectionJson)" in script
+    assert "[Console]::Out.Write($selectionJson)" in script
+    assert '"selection.sha256"' in script
+    assert '"$selectionArtifactSha256  selection.json`n"' in script
     assert "$entries = @($entries | Where-Object { $_ -notin $excludedEntries })" in script
     assert '"selection.json"' in script
     assert "promotion_entries = $entries" in script
