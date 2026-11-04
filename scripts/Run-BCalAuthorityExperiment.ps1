@@ -42,10 +42,26 @@ $package = $config.packages.$Variant
 if (-not $package.published) {
     throw "The $Variant BCal workspace-seeding package is not published in the experiment manifest."
 }
-$requiredPackageFields = @("package_version", "installed_identity", "package_source_commit_sha", "package_patch_id", "nupkg_file", "nupkg_sha256")
+$requiredPackageFields = @(
+    "package_version",
+    "installed_identity",
+    "package_source_commit_sha",
+    "workspace_seed_patch_id",
+    "nupkg_file",
+    "nupkg_sha256",
+    "feed",
+    "build_id",
+    "build_result"
+)
 $missingPackageFields = @($requiredPackageFields | Where-Object { -not $package.$_ })
 if ($missingPackageFields.Count -ne 0) {
     throw "The $Variant BCal package is missing required immutable inputs: $($missingPackageFields -join ', ')."
+}
+if ($package.build_result -ne "succeeded") {
+    throw "The $Variant BCal package build $($package.build_id) is not final-success: $($package.build_result)."
+}
+if ($Variant -eq "candidate" -and (-not $package.authority_source_commit_sha -or -not $package.authority_patch_id)) {
+    throw "The candidate BCal package must pin the authority source commit and patch ID."
 }
 $bcal = Join-Path $ToolPath "bcal.exe"
 if (-not (Test-Path -LiteralPath $bcal)) {
@@ -57,6 +73,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 if ($installedIdentity -ne $package.installed_identity) {
     throw "Expected BCal identity '$($package.installed_identity)', found '$installedIdentity'."
+}
+$packageArchives = @(
+    Get-ChildItem -LiteralPath $ToolPath -Recurse -File -Filter *.nupkg |
+        Where-Object { $_.Name -ieq $package.nupkg_file }
+)
+if ($packageArchives.Count -eq 0) {
+    throw "Pinned BCal package archive '$($package.nupkg_file)' was not found under $ToolPath."
+}
+$packageHashes = @($packageArchives | ForEach-Object { (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() } | Sort-Object -Unique)
+if ($packageHashes.Count -ne 1 -or $packageHashes[0] -ne $package.nupkg_sha256) {
+    throw "Expected BCal package SHA-256 '$($package.nupkg_sha256)', found '$($packageHashes -join ', ')'."
 }
 
 if ($Lane -eq "authority") {
