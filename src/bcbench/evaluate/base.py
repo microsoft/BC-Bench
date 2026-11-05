@@ -8,6 +8,7 @@ from bcbench_core.agent.harness import Harness
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.dataset import BaseDatasetEntry
+from bcbench.github_actions import github_log_group
 from bcbench.results import BaseEvaluationResult
 from bcbench.results.base import RESULT_FILE_SUFFIX
 from bcbench.types import AgentHarness, EvaluationContext
@@ -44,18 +45,10 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def run_agent(self, context: EvaluationContext[E], harness: Harness[E, AgentHarness]) -> None:
-        """Run the agent and capture metrics.
-
-        Args:
-            context: Evaluation context with configuration
-            harness: The agent harness to run
-
-        Raises:
-            Exception: If agent execution fails
-        """
-        raise NotImplementedError
+        with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
+            result = harness.run(context.agent_request())
+            context.metrics, context.experiment = result.metrics, result.experiment
 
     @abstractmethod
     def evaluate(self, context: EvaluationContext[E]) -> None:

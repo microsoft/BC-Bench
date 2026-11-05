@@ -7,7 +7,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
+from bcbench_core.agent.copilot import CopilotHarness
+from bcbench_core.agent.harness import AgentRequest
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.contamination.filepath_identification import (
@@ -31,14 +32,8 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
 
     logger.info("Running context-free filepath identification on %s (model=%s)", entry.instance_id, model)
     with tempfile.TemporaryDirectory(prefix="bcbench-fpid-") as tmp:
-        metrics, raw_output = invoke_copilot(
-            prompt=prompt,
-            model=model,
-            work_dir=Path(tmp),
-            timeout=timeout,
-            env=os.environ,
-            options=CopilotOptions(allow_all_tools=False),
-        )
+        result = CopilotHarness(model=model, env=os.environ, timeout=timeout).run(AgentRequest(task=prompt, work_dir=Path(tmp), output_dir=Path(tmp) / "logs"))
+    metrics, raw_output = result.metrics, result.response or ""
 
     gold_files: list[str] = extract_file_paths_from_patch(entry.patch)
     try:
