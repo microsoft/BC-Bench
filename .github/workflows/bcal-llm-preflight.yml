@@ -5,12 +5,11 @@ permissions:
   id-token: write
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       model:
         description: Exact external-command model alias
         required: true
-        default: gpt-55-chat
         type: string
 
 jobs:
