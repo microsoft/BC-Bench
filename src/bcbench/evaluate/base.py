@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from bcbench_core.agent.harness import Harness
+from bcbench_core.agent.harness import AgentResult, Harness
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.dataset import BaseDatasetEntry
@@ -47,7 +47,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
 
     def run_agent(self, context: EvaluationContext[E], harness: Harness[E, AgentHarness]) -> None:
         with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
-            result = harness.run(context.agent_request())
+            result: AgentResult = harness.run(context.agent_request())
             context.metrics, context.experiment = result.metrics, result.experiment
 
     @abstractmethod
