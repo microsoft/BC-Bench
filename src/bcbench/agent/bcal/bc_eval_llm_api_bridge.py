@@ -5,20 +5,87 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, cast
+from typing import TYPE_CHECKING, BinaryIO, Protocol, cast
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
 
 _CERT_FILE_ENV = "LLM_API_CERTIFICATE_FILE"
-
-# Separates the agent-under-test traffic from bc-eval's judge traffic (bc-eval's own agent host uses the same step).
 _TAXONOMY_INFERENCE_STEP = "HostAgent"
-
-# Reasoning effort (not all models support this parameter), different models might have different available values:
-# Set to None to omit the parameter entirely (lets the model/service use its own default).
 _DEFAULT_REASONING_EFFORT: str | None = None
+_STICKY_ROUTE_TICKET_HEADER = "x-sticky-route-session-ticket"
+
+
+class _RawResponse(Protocol):
+    @property
+    def headers(self) -> Mapping[str, str]: ...
+
+    def parse(self) -> object: ...
+
+
+class _RawCompletions(Protocol):
+    def create(self, **kwargs: object) -> object: ...
+
+
+class _CompletionMethod:
+    def __init__(self, create: Callable[..., object]) -> None:
+        self._create = create
+
+    def create(self, **kwargs: object) -> object:
+        return self._create(**kwargs)
+
+
+class StickyRouteSession:
+    def __init__(self) -> None:
+        self._tickets: dict[str, str] = {}
+
+    def create(self, completions: _RawCompletions, kwargs: dict[str, object]) -> object:
+        model = kwargs.get("model")
+        if not isinstance(model, str):
+            raise TypeError("Sticky-route requests require a string model.")
+
+        request = dict(kwargs)
+        ticket = self._tickets.get(model, "")
+        request["extra_headers"] = {
+            **cast(dict[str, str], request.get("extra_headers", {})),
+            _STICKY_ROUTE_TICKET_HEADER: ticket,
+        }
+        try:
+            response = cast(_RawResponse, completions.create(**request))
+        except Exception:
+            if ticket:
+                raise RuntimeError("LLM API rejected its response-derived sticky-route session ticket.") from None
+            raise
+
+        response_ticket = response.headers.get(_STICKY_ROUTE_TICKET_HEADER, "")
+        self._tickets[model] = response_ticket if isinstance(response_ticket, str) else ""
+        return response.parse()
+
+
+def install_sticky_route_compat() -> None:
+    from bc_eval.llm import llm_api
+
+    if getattr(llm_api.create_llm_api_client, "_bcbench_sticky_route_compat", False):
+        return
+
+    create_llm_api_client = llm_api.create_llm_api_client
+
+    def create_compatible_client(*args: object, **kwargs: object) -> object:
+        client = create_llm_api_client(*args, **kwargs)
+        completions = client.chat.completions
+        completion_method = _CompletionMethod(completions.with_raw_response.create)
+        sticky_route_session = StickyRouteSession()
+
+        def create(**request: object) -> object:
+            return sticky_route_session.create(completion_method, request)
+
+        completions.create = create
+        return client
+
+    create_compatible_client._bcbench_sticky_route_compat = True  # type: ignore[attr-defined]
+    llm_api.create_llm_api_client = create_compatible_client
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -44,16 +111,10 @@ def _load_request(input_stream: BinaryIO) -> dict[str, object]:
     request_raw = json.loads(input_stream.read().decode("utf-8-sig"))
     if not isinstance(request_raw, dict):
         raise TypeError("External AI request must be a JSON object.")
-
     return cast(dict[str, object], request_raw)
 
 
 def _local_certificate_credential(tenant_id: str, client_id: str) -> TokenCredential | None:
-    """Credential from a locally staged PFX, or None to let bc-eval sign through Key Vault.
-
-    The bridge is spawned once per agent turn, so bc-eval's default credential would hit Key Vault
-    and AAD on every turn; with N parallel jobs * M turns this rate-limits Key Vault.
-    """
     cert_path = os.environ.get(_CERT_FILE_ENV)
     if not cert_path:
         return None
@@ -64,8 +125,6 @@ def _local_certificate_credential(tenant_id: str, client_id: str) -> TokenCreden
 
     from azure.identity import CertificateCredential
 
-    # send_certificate_chain=True sends the x5c header (SNI auth), which the app registration
-    # validates against; without it AAD returns AADSTS700027.
     return CertificateCredential(
         tenant_id=tenant_id,
         client_id=client_id,
@@ -80,11 +139,11 @@ def main() -> int:
     messages = request.get("messages")
     if not isinstance(model, str):
         raise TypeError("External AI request requires a string model.")
-
     if not isinstance(messages, list):
         raise TypeError("External AI request requires a messages array.")
 
     try:
+        install_sticky_route_compat()
         from bc_eval.llm.llm_api import LlmApiSettings, create_llm_api_client
     except ImportError as exc:
         raise RuntimeError("bc-eval>=0.6.0 is required for the bcal LLM API bridge.") from exc

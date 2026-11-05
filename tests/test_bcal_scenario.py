@@ -683,7 +683,7 @@ def test_authority_experiment_selector_excludes_control_tower():
         "require_workspace_seed_receipt": True,
     }
     assert selector["calibration"] == {
-        "study_id": "bcal-authority-calibration-20261105",
+        "study_id": "bcal-authority-calibration-sticky1-20261105",
         "variant_id": "baseline",
         "common_base_sha": "1376d89652f8ca366dcf1f6fb0e1a43f671ec046",
         "variant_patch_sha": "no-patch",
