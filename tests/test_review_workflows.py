@@ -29,6 +29,8 @@ def test_bcal_llm_preflight_uses_exact_package_and_real_model_and_judge_paths() 
     assert "gpt-56-ceres" in workflow
     assert "bc_eval_llm_api_bridge.py" in workflow
     assert "install_sticky_route_compat" in workflow
+    assert "spec_from_file_location" in workflow
+    assert "PYTHONPATH" not in workflow
     assert "response.choices" in workflow
     assert "message.content" in workflow
     assert "Write-Output $response" not in workflow

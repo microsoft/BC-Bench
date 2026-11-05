@@ -55,12 +55,17 @@ jobs:
 
       - name: Request a real judge completion through the shared bc-eval client
         shell: pwsh
-        env:
-          PYTHONPATH: ${{ github.workspace }}\src
         run: |
           $script = @'
-          from bcbench.agent.bcal.bc_eval_llm_api_bridge import install_sticky_route_compat
-          install_sticky_route_compat()
+          import importlib.util
+          from pathlib import Path
+          bridge_path = Path("src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py")
+          spec = importlib.util.spec_from_file_location("bcbench_bcal_llm_api_bridge", bridge_path)
+          if spec is None or spec.loader is None:
+              raise RuntimeError("Could not load the BC-Bench LLM API compatibility module.")
+          bridge = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(bridge)
+          bridge.install_sticky_route_compat()
           from bc_eval.llm.llm_api import create_llm_api_client
           response = create_llm_api_client().chat.completions.create(
               model="gpt-56-ceres",
