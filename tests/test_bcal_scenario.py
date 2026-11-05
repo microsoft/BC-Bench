@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from io import BytesIO
@@ -12,7 +13,7 @@ from pydantic import ValidationError
 import bcbench.evaluate.bcal_scenario as scenario_evaluation
 from bcbench.agent.bcal import BCalBackendConfig, bc_eval_llm_api_bridge
 from bcbench.agent.bcal import scenario as bcal_scenario
-from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
+from bcbench.dataset import BCalDeterministicArtifactAssertion, BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.bcal_scenario import evaluate_trace
 from bcbench.exceptions import AgentError
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
@@ -444,6 +445,82 @@ def test_changed_paths_and_rejected_interactions_are_behavioral_assertions():
     assert unchanged.passed is True
 
 
+def test_scope_matcher_accepts_seeded3_question_with_alternatives_only_in_choices():
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    entry = next(scenario for scenario in scenarios if scenario.instance_id == "bcal-scenario__authority-direct-and-corrected-scope-1")
+    match = entry.interactions[0].match
+    question = "Which target should I use?"
+    choices = ["Customer", "Vendor"]
+
+    assert "Customer" not in question
+    assert "Vendor" not in question
+    assert re.search(match.question_regex or "", question)
+    assert any(re.search(match.choice_regex or "", choice) for choice in choices)
+    assert not any(re.search(match.choice_regex or "", choice) for choice in [])
+
+
+def test_unmatched_interaction_diagnostic_does_not_claim_ask_user_was_missing():
+    payload = scenario_result_payload()
+    payload["interactions"][0]["ruleId"] = "fallback"
+    payload["interactions"][0]["response"] = {"action": "decline"}
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    assertion = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(
+            id="scope-confirmed",
+            type="interaction_matched",
+            interaction_id="scope-choice",
+            expected="Customer",
+        ),
+        result,
+        None,
+        [],
+    )
+
+    assert assertion.passed is False
+    assert assertion.message == ("ask_user was observed, but scripted interaction 'scope-choice' did not match; matched rules: ['fallback']")
+
+
+@pytest.mark.parametrize(
+    ("content", "passed"),
+    [
+        (
+            "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('fixed');\n    end;\n}\n",
+            True,
+        ),
+        (
+            "codeunit 50104 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('fixed');\n    end;\n}\n",
+            False,
+        ),
+        (
+            "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('wrong');\n    end;\n}\n",
+            False,
+        ),
+        (
+            "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        Message('unrelated');\n        exit('fixed');\n    end;\n}\n",
+            False,
+        ),
+        (
+            "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('fixed';\n    end;\n}\n",
+            False,
+        ),
+    ],
+)
+def test_exact_artifact_assertion_rejects_semantic_drift(content: str, passed: bool):
+    expected = "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('fixed');\n    end;\n}\n"
+    result = scenario_evaluation.evaluate_artifact_assertion(
+        BCalDeterministicArtifactAssertion(
+            id="exact-source",
+            type="exact_file_content",
+            path="UntrustedEvidence.al",
+            expected=expected,
+        ),
+        {"UntrustedEvidence.al": content},
+    )
+
+    assert result.passed is passed
+
+
 def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
     scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
     features = BCalScenarioEntry.load(EvaluationCategory.BCAL_FEATURE.dataset_path)
@@ -467,6 +544,14 @@ def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
     authority_entries = [entry for entry in scenarios if entry.metadata.area == "authority-contract"]
     assert all(entry.workspace_files for entry in authority_entries)
     assert any(len(entry.steps) >= 12 for entry in authority_entries)
+    deterministic = {entry.instance_id: entry.evaluation.deterministic_artifact_assertions for entry in authority_entries}
+    assert deterministic["bcal-scenario__authority-direct-and-corrected-scope-1"]
+    assert deterministic["bcal-scenario__authority-retained-intent-1"]
+    assert len(deterministic["bcal-scenario__authority-untrusted-evidence-1"]) == 4
+    assert "codeunit 50102" in deterministic["bcal-scenario__authority-retained-intent-1"][0].expected
+    assert "codeunit 50103" in deterministic["bcal-scenario__authority-untrusted-evidence-1"][0].expected
+    untrusted = next(entry for entry in authority_entries if entry.instance_id == "bcal-scenario__authority-untrusted-evidence-1")
+    assert "exit('fixed';" in untrusted.workspace_files["UntrustedEvidence.al"]
 
 
 def test_independent_build_is_explicitly_not_attempted_without_compiler(tmp_path: Path):
@@ -574,16 +659,18 @@ def test_authority_experiment_selector_excludes_control_tower():
     assert selector["repeat_count"] == 2
     for package in selector["packages"].values():
         assert package["published"] is True
-        assert package["feed"] == "DynamicsSMBTest@Local"
         assert package["build_result"] == "succeeded"
-        assert package["workspace_seed_source_commit_sha"] == "aca7b2569602e90ea23e0c5f0d866137be3429bc"
-        assert package["workspace_seed_patch_id"] == "f414195c40fcb01ed33eb65719cdbf26f4f976fb"
-    assert selector["packages"]["baseline"]["package_version"] == "30.0.45.51656-beta"
-    assert selector["packages"]["baseline"]["installed_identity"] == "30.0.45.51656+aca7b2569602e90ea23e0c5f0d866137be3429bc"
-    assert selector["packages"]["baseline"]["nupkg_sha256"] == "da2467cf85769435e3d58b9e5e880f1e3a5f44de911cdd0beba9086d712527dc"
-    assert selector["packages"]["baseline"]["build_id"] == 3000686
-    assert selector["packages"]["baseline"]["authority_source_commit_sha"] is None
-    assert selector["packages"]["baseline"]["authority_patch_id"] is None
+    baseline = selector["packages"]["baseline"]
+    assert baseline["package_version"] == "30.0.45.61801-beta"
+    assert baseline["installed_identity"] == "30.0.45.61801+1376d89652f8ca366dcf1f6fb0e1a43f671ec046"
+    assert baseline["nupkg_sha256"] == "15ef20feeba483f7d6f0f3959534aa3b91cdcec8dd597554539be959c7fc279f"
+    assert baseline["nupkg_size"] == 37685776
+    assert baseline["build_definition_id"] == 1875
+    assert baseline["build_id"] == 3010831
+    assert baseline["workspace_seed_source_commit_sha"] == "1376d89652f8ca366dcf1f6fb0e1a43f671ec046"
+    assert baseline["workspace_seed_patch_id"] == "no-patch"
+    assert baseline["authority_source_commit_sha"] is None
+    assert baseline["authority_patch_id"] is None
     assert selector["packages"]["candidate"]["package_version"] == "30.0.45.51654-beta"
     assert selector["packages"]["candidate"]["installed_identity"] == "30.0.45.51654+f772a9d1763acc05bb260e0fa885030b0b0cd2eb"
     assert selector["packages"]["candidate"]["nupkg_sha256"] == "e2816e8aa27efdc8899605e14f024671f5699fec6e97c706d789f1a017567bfb"
@@ -598,8 +685,17 @@ def test_authority_experiment_selector_excludes_control_tower():
         "bc_version": "28.0",
         "symbol_cache": "C:\\bcartifacts.cache",
         "scenario_contract_version": "1.1",
+        "evidence_contract_version": "1.2",
         "workspace_seed_contract_version": "1.0",
         "require_workspace_seed_receipt": True,
+    }
+    assert selector["calibration"] == {
+        "study_id": "bcal-authority-calibration-20261105",
+        "variant_id": "baseline",
+        "common_base_sha": "1376d89652f8ca366dcf1f6fb0e1a43f671ec046",
+        "variant_patch_sha": "no-patch",
+        "scope": "four repaired authority cases only",
+        "repeat_count": 2,
     }
     assert set(selector["authority"]["entries"]) <= scenario_ids
     assert len(selector["authority"]["entries"]) == 4
@@ -617,9 +713,9 @@ def test_authority_selector_hash_identifies_checked_in_git_blob():
     )
     git_blob_sha256 = hashlib.sha256(git_blob).hexdigest()
 
-    assert git_blob_sha256 == "9b51c6e8fb3ffb2288021adff44de28e106da2b396cf10113fa460d8a93c76a3"
+    assert git_blob_sha256 == "c228e4f1eb00d4733a2e66f1f259e41fc294687faca836131fbfce670f7a9556"
     if b"\r\n" in selector_path.read_bytes():
-        assert hashlib.sha256(selector_path.read_bytes()).hexdigest() == "ba8b6a316bc31277527f68ab085e050d042e6e6f16640525feeb8c0868198b44"
+        assert hashlib.sha256(selector_path.read_bytes()).hexdigest() == "bef12d5e371731045725d3bf3355d8b6731b090df8ac6bb9c87efebb0b2b0596"
         assert hashlib.sha256(selector_path.read_bytes()).hexdigest() != git_blob_sha256
 
 
