@@ -13,7 +13,7 @@ from uuid import NAMESPACE_URL, uuid5
 from bcbench_core.artifacts import copy_symbol_apps
 
 from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_RESULT, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult, load_scenario_result, resolve_session_chat
-from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
+from bcbench.dataset import BCalDeterministicArtifactAssertion, BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
 from bcbench.operations import bootstrap_app_json
@@ -161,7 +161,12 @@ def evaluate_trace_assertion(
             before_positions = tool_positions.get(before, [])
             after_positions = tool_positions.get(after, [])
             passed = bool(before_positions and after_positions and min(before_positions) < min(after_positions))
-            message = f"Expected {before!r} before {after!r}"
+            if not before_positions:
+                message = f"Expected {before!r} before {after!r}, but {before!r} was not observed"
+            elif not after_positions:
+                message = f"Observed {before!r}, but {after!r} was not observed"
+            else:
+                message = f"Expected {before!r} before {after!r}"
         case "compile_after_final_mutation":
             mutation_steps = [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
             compile_steps = [index for index, step in enumerate(result.steps) if step.compile_succeeded is True]
@@ -173,7 +178,15 @@ def evaluate_trace_assertion(
             if passed and assertion.expected is not None:
                 response = records[-1].response or {}
                 passed = assertion.expected in (response.get("selectedChoice"), response.get("value"))
-            message = f"Expected interaction {assertion.interaction_id!r} to match"
+            if not records and result.interactions:
+                matched_rules = [record.rule_id for record in result.interactions if record.matched]
+                message = f"ask_user was observed, but scripted interaction {assertion.interaction_id!r} did not match; matched rules: {matched_rules!r}"
+            elif records and records[-1].failure:
+                message = f"Interaction {assertion.interaction_id!r} matched but acceptance failed: {records[-1].failure.message}"
+            elif records and assertion.expected is not None and not passed:
+                message = f"Interaction {assertion.interaction_id!r} did not accept expected value {assertion.expected!r}"
+            else:
+                message = f"Expected interaction {assertion.interaction_id!r} to match"
         case "interaction_rejected":
             records = [record for record in result.interactions if record.rule_id == assertion.interaction_id]
             response = records[-1].response if records else None
@@ -207,6 +220,21 @@ def evaluate_trace_assertion(
 
 def evaluate_trace(entry: BCalScenarioEntry, result: BCalScenarioRunResult, chat_path: Path | None, changed_paths: list[str] | None = None) -> list[TraceAssertionResult]:
     return [evaluate_trace_assertion(assertion, result, chat_path, changed_paths or []) for assertion in entry.evaluation.trace_assertions]
+
+
+def evaluate_artifact_assertion(
+    assertion: BCalDeterministicArtifactAssertion,
+    workspace: dict[str, str],
+) -> TraceAssertionResult:
+    actual = workspace.get(assertion.path)
+    passed = actual == assertion.expected
+    if actual is None:
+        message = f"Expected artifact {assertion.path!r} was not exported"
+    elif passed:
+        message = f"Artifact {assertion.path!r} exactly matched the hidden expected content"
+    else:
+        message = f"Artifact {assertion.path!r} differed from the hidden expected content"
+    return TraceAssertionResult(assertion_id=assertion.id, passed=passed, message=message)
 
 
 def _compile_exported_project(app_folder: Path, package_cache: Path) -> IndependentBuildResult:
@@ -381,7 +409,10 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
         )
         workspace = _textual_workspace(app_folder)
         diff, changed_paths = _export_diff(context.repo_path, app_folder)
-        trace = evaluate_trace(context.entry, result, chat_path, changed_paths)
+        trace = [
+            *evaluate_trace(context.entry, result, chat_path, changed_paths),
+            *(evaluate_artifact_assertion(assertion, workspace) for assertion in context.entry.evaluation.deterministic_artifact_assertions),
+        ]
         _archive_workspace(context.entry, app_folder, context.result_dir)
         output = _create_scoring_packet(context.entry, result, build, trace, workspace, diff, changed_paths)
         runtime_status = "not_run" if context.entry.evaluation.runtime_verification is not None else None

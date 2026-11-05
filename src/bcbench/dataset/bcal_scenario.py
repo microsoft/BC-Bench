@@ -137,11 +137,31 @@ class BCalRuntimeVerification(BaseModel):
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
 
 
+class BCalDeterministicArtifactAssertion(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: Annotated[str, Field(min_length=1)]
+    type: Literal["exact_file_content"]
+    path: Annotated[str, Field(min_length=1)]
+    expected: str
+
+    @model_validator(mode="after")
+    def validate_path(self) -> Self:
+        relative_path = PurePosixPath(self.path)
+        windows_path = PureWindowsPath(self.path)
+        if "\\" in self.path or relative_path.is_absolute() or windows_path.is_absolute() or ".." in relative_path.parts or not relative_path.name:
+            raise ValueError(f"deterministic artifact path must stay within the exported app folder: {self.path}")
+        return self
+
+
 class BCalEvaluationContract(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     compile_required: bool = True
     artifact_assertions: Annotated[list[ChecklistAssertion], Field(min_length=1)]
+    deterministic_artifact_assertions: list[BCalDeterministicArtifactAssertion] = Field(
+        default_factory=list,
+    )
     trace_assertions: list[BCalTraceAssertion] = Field(default_factory=list)
     forbidden_assertions: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     runtime_verification: BCalRuntimeVerification | None = None

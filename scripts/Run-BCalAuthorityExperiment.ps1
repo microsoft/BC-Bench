@@ -58,6 +58,7 @@ $requiredPackageFields = @(
     "workspace_seed_patch_id",
     "nupkg_file",
     "nupkg_sha256",
+    "nupkg_size",
     "feed",
     "build_id",
     "build_result"
@@ -94,6 +95,10 @@ $packageHashes = @($packageArchives | ForEach-Object { (Get-FileHash -Algorithm 
 if ($packageHashes.Count -ne 1 -or $packageHashes[0] -ne $package.nupkg_sha256) {
     throw "Expected BCal package SHA-256 '$($package.nupkg_sha256)', found '$($packageHashes -join ', ')'."
 }
+$packageSizes = @($packageArchives | ForEach-Object { $_.Length } | Sort-Object -Unique)
+if ($packageSizes.Count -ne 1 -or $packageSizes[0] -ne $package.nupkg_size) {
+    throw "Expected BCal package size '$($package.nupkg_size)', found '$($packageSizes -join ', ')'."
+}
 
 if ($Lane -eq "authority") {
     $category = $config.authority.category
@@ -128,6 +133,7 @@ $selection = [ordered]@{
     variant = $Variant
     package = $package
     execution = $config.execution
+    calibration = $config.calibration
     lane = $Lane
     category = $category
     repeat_count = $config.repeat_count

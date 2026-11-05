@@ -34,7 +34,7 @@ The `authority-contract` scenarios are a separate deterministic lane for the fir
 - prompt-like AL comments, captions, documentation, diagnostic text, and tool output that cannot broaden scope;
 - host profile, page, review, and publish settings that remain facts rather than user authorization.
 
-The fixtures assert changed paths, interaction outcomes, mutation ordering, compilation after the final mutation, and forbidden publishing. LMChecklist still evaluates implementation quality, but it does not determine authority-contract compliance. Ordinary `nl2al` remains a separate category and score.
+The fixtures assert changed paths, interaction outcomes, mutation ordering, compilation after the final mutation, forbidden publishing, and exact hidden artifact content. The exact artifact checks preserve object IDs and reject wrong return values, unrelated edits, unchanged broken source, or changes to evidence-only files without exposing expected content to BCal. LMChecklist still evaluates implementation quality, but it does not determine authority-contract compliance. Ordinary `nl2al` remains a separate category and score.
 
 The harness requests Gate A evidence with BCal's `--include-evidence` option, prefers its canonical trace over the archived chat for tool-order assertions, and preserves execution identity, prompt evidence, trace size, and truncation metadata. Without that explicit opt-in, BCal intentionally omits prompt evidence and canonical trace. Gate B activated-skill evidence is not required for this experiment.
 
@@ -57,7 +57,7 @@ Remove `-DryRun` to execute a lane locally through the BCal CLI. The runner requ
 
 The dry-run stdout and persisted `<OutputDir>\selection.json` use the same deterministic serialization: PowerShell `ConvertTo-Json -Depth 8`, LF line endings, one final LF, and UTF-8 without a BOM. An actual run also writes `<OutputDir>\selection.sha256` containing the SHA-256 of those exact `selection.json` bytes. Baseline and candidate selection artifact hashes differ because their `variant` and `package` fields differ; neither replaces `selector_git_blob_sha256`, which identifies the shared checked-in input manifest. The runner also rejects unpublished package entries and a tool directory whose `bcal --version` identity does not exactly match the selected manifest package.
 
-Use the same BC-Bench commit, selector file, datasets, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for the candidate. The baseline is the infrastructure-only package `30.0.45.51656-beta` from bic/BC-DeveloperExperience#8982 commit `aca7b2569602e90ea23e0c5f0d866137be3429bc`, build `3000686`. The candidate is `30.0.45.51654-beta` from combined commit `f772a9d1763acc05bb260e0fa885030b0b0cd2eb`, build `3000684`, containing the identical #8982 seed layer plus bic/BC-DeveloperExperience#8977 authority patch `024053c4e6ed7911495de050ec5cb1d2252af07e`. Both builds are final-success and both packages come from `DynamicsSMBTest@Local`. The runner verifies the complete `bcal --version` identity and the retained nupkg SHA-256 before dry-run or execution. Do not reuse the historical unseeded packages and do not use MCP mode.
+Use the same BC-Bench commit, selector file, datasets, `gpt-55-chat` deployment, backend settings, symbol cache, and two-repeat loop for paired experiments. The current baseline calibration pin is the immutable merged-master package `30.0.45.61801-beta`, ProductVersion `30.0.45.61801+1376d89652f8ca366dcf1f6fb0e1a43f671ec046`, IntegrationValidation build `3010831`, package SHA-256 `15ef20feeba483f7d6f0f3959534aa3b91cdcec8dd597554539be959c7fc279f`, with no authority prompt patch. The historical candidate package remains recorded only for the seeded3 study and must not be dispatched for baseline calibration. The runner verifies the complete `bcal --version` identity and retained nupkg SHA-256 before dry-run or execution. Do not use MCP mode.
 
 All GitHub operations for this experiment, including PR inspection, workflow dispatch, run monitoring, and artifact download, must use an authenticated `github.com` account with access to `microsoft/BC-Bench`. Do not use or fall back to a `microsoft.ghe.com` or other GHE account. The runner explicitly checks the `github.com` authentication and repository access before dry-run or execution.
 
@@ -66,3 +66,33 @@ The runner also preflights the accepted external-command backend (`bc-eval==0.6.
 Each case/repetition receives a separate Git workspace and staging result directory under the output directory so Windows file locks or run-directory cleanup from one BCal session cannot affect the next case. After each case completes, the runner collision-checks and copies its result and artifacts into the repetition's aggregate `bcal_test_run` directory. The four per-entry JSONL files therefore remain available at `<OutputDir>\<variant>-authority-rN\bcal_test_run\<instance-id>.jsonl`.
 
 Compare per-entry `trace_compliance` and individual assertion results first, then compilation and scenario completion. Compare LMChecklist scores separately. Promotion scoring uses only IDs in the emitted `selection.json`; the excluded Control Tower timeout is reported separately and never counted as a regression, failure, or denominator. The accepted ordinary-quality reference for `30.0.44.65502-beta` is `103/110` in each of two full gold repetitions from workflow run `40399204122`; rerun baseline and candidate from the same BC-Bench revision before treating a delta as causal.
+## Authority experiment result
+
+The final valid seeded3 study used BC-Bench commit `f76d30f3acc15c40915f67112971234e2b42d6fc`:
+
+- baseline workflow run `41801406767`;
+- candidate workflow run `41801411108`;
+- 8/8 rows completed for each variant (four cases, two repetitions);
+- all 16 matched baseline/candidate case-repetition cells had exact workspace-seed parity;
+- Gate A evidence, canonical traces, and Kusto result rows were complete;
+- the Control Tower case and the ordinary-quality lane were not executed.
+
+Baseline and candidate tied on Core (`2/8`) and LMChecklist judge assertions (`16/24`). Candidate deterministic trace compliance was `5/8`, below baseline `6/8`. The authority prompt change in bic/BC-DeveloperExperience#8977 therefore must not be promoted from this study.
+
+### Post-seeded3 calibration
+
+The seeded3 postmortem identified three suite defects rather than prompt effects:
+
+- the direct/corrected-scope interaction matcher required `Customer` or `Vendor` in the question text even when the alternatives appeared only in structured choices;
+- the old missing-semicolon fixture compiled unchanged, so it did not measure syntax repair;
+- judge wording alone could not prove that the intended object and only the intended bytes were preserved.
+
+The repaired matcher identifies the scope/target decision from question text and validates `Customer`/`Vendor` through the structured choices. The untrusted-evidence fixture now contains `exit('fixed';`, which the AL compiler rejects with `AL0104` until the exact one-character parenthesis repair is applied. Hidden exact-content assertions preserve object IDs `50102` and `50103`, require the intended return/syntax edits, and keep the evidence-only README, symbol metadata, and tool-output files unchanged. Interaction diagnostics now distinguish a missing `ask_user` call from an observed call that failed scripted matching or acceptance.
+
+The baseline-only calibration study is `bcal-authority-calibration-20261105/baseline`, common-base `1376d89652f8ca366dcf1f6fb0e1a43f671ec046`, variant patch `no-patch`, four authority cases, and two repetitions. It is not a prompt-promotion study and must not run a candidate, Control Tower, or ordinary-quality lane.
+
+The following studies are infrastructure-invalid and must not be scored or compared:
+
+- `41686175570` / `41686175782`: nullable interaction-choice result-contract incompatibility;
+- `41691412171` / `41691423433`: missing Gate A opt-in and empty model-visible workspaces;
+- `41798148490` / `41798152826`: random protected `app.json` UUID caused baseline/candidate seed-receipt divergence.
