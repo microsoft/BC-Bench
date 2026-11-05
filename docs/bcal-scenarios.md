@@ -92,6 +92,8 @@ The repaired matcher identifies the scope/target decision from question text and
 
 The baseline-only calibration study is `bcal-authority-calibration-20261105/baseline`, common-base `1376d89652f8ca366dcf1f6fb0e1a43f671ec046`, variant patch `no-patch`, four authority cases, and two repetitions. It is not a prompt-promotion study and must not run a candidate, Control Tower, or ordinary-quality lane.
 
+The authorized baseline workflow run `42080222103` is infrastructure-invalid and does not calibrate scenario semantics. All eight case/repetition jobs produced artifacts with matching seed receipts, Gate A prompt evidence, and nontruncated canonical traces, but every first model request failed before a response with `LLM API: Required taxonomy data x-sticky-route-session-ticket not provided`. Publication-only retries `42083481136`, `42083866657`, and `42084260667` could not obtain LMChecklist judge results. The final retry published eight diagnostic Kusto rows with null Core scores and no judge scores; their zero deterministic rates reflect the pre-model backend failure and must not be interpreted as scenario outcomes. The repaired suite remains unfrozen until the accepted external-command backend can complete a fresh four-case by two-repetition baseline calibration with complete judge and Kusto evidence.
+
 The following studies are infrastructure-invalid and must not be scored or compared:
 
 - `41686175570` / `41686175782`: nullable interaction-choice result-contract incompatibility;
