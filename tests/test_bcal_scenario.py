@@ -423,6 +423,25 @@ def test_trace_prefers_gate_a_canonical_trace(tmp_path: Path):
     assert result.canonical_trace == payload["evidence"]["trace"]
 
 
+def test_tool_order_treats_edit_file_as_workspace_mutation(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(scenario_result_payload())
+    chat = tmp_path / "chat.json"
+    chat.write_text(
+        json.dumps(
+            [
+                {"type": "tool_call", "toolName": "ask_user", "sequence": 1},
+                {"type": "tool_call", "toolName": "edit_file", "sequence": 2},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assertions = evaluate_trace(entry, result, chat)
+
+    assert all(assertion.passed for assertion in assertions)
+
+
 def test_changed_paths_and_rejected_interactions_are_behavioral_assertions():
     payload = scenario_result_payload()
     payload["interactions"][0]["response"] = {"action": "decline"}
