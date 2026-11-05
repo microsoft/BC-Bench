@@ -1,6 +1,7 @@
 """Dataset module for querying, validating and analyzing dataset entries."""
 
 from bcbench.dataset.bcal_scenario import (
+    BCalDeterministicArtifactAssertion,
     BCalEvaluationContract,
     BCalInteractionMatch,
     BCalInteractionResponse,
@@ -18,6 +19,7 @@ from bcbench.dataset.extensibility_request import ExtRequestAdvisorEntry, ExtReq
 
 __all__ = [
     "ArticleId",
+    "BCalDeterministicArtifactAssertion",
     "BCalEvaluationContract",
     "BCalInteractionMatch",
     "BCalInteractionResponse",

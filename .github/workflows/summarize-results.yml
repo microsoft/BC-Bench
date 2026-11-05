@@ -94,14 +94,20 @@ jobs:
           ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$ADO_TOKEN"
 
-          uv tool install bc-eval[capi]==0.3.14 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          if [[ "${{ inputs.category }}" == "bcal-scenario" ]]; then
+            uv pip install --python .venv/bin/python "bc-eval==0.6.1" --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+            BCEVAL=(uv run python -m bcbench.agent.bcal.bc_eval_cli)
+          else
+            uv tool install bc-eval[capi]==0.3.14 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+            BCEVAL=(bceval)
+          fi
 
           # Upload summary using bc-eval
           MODEL_TAG="${{ inputs.model }}"
           MODEL_TAG="${MODEL_TAG//./-}"
           BRANCH_TAG="${{ inputs.git-ref || github.ref_name }}"
           BRANCH_TAG="${BRANCH_TAG//./-}"
-          bceval metrics calculate \
+          "${BCEVAL[@]}" metrics calculate \
             --feature-name "BC-Bench" \
             --eval-suite-name "${{ inputs.category }}" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \

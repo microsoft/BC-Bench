@@ -1,0 +1,100 @@
+{
+  "schema_version": 2,
+  "name": "bcal-authority-provenance-v1",
+  "github": {
+    "host": "github.com",
+    "repository": "microsoft/BC-Bench"
+  },
+  "repeat_count": 2,
+  "packages": {
+    "baseline": {
+      "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+      "published": true,
+      "package_version": "30.0.45.61801-beta",
+      "installed_identity": "30.0.45.61801+1376d89652f8ca366dcf1f6fb0e1a43f671ec046",
+      "package_source_commit_sha": "1376d89652f8ca366dcf1f6fb0e1a43f671ec046",
+      "workspace_seed_patch_id": "no-patch",
+      "authority_patch_id": null,
+      "nupkg_file": "microsoft.businesscentral.bcal.cli.30.0.45.61801-beta.nupkg",
+      "nupkg_sha256": "15ef20feeba483f7d6f0f3959534aa3b91cdcec8dd597554539be959c7fc279f",
+      "nupkg_size": 37685776,
+      "feed": "https://pkgs.dev.azure.com/dynamicssmb2/_packaging/DynamicsSMBTest/nuget/v3/index.json",
+      "build_definition_id": 1875,
+      "build_id": 3010831,
+      "build_number": "30.0.45.61801",
+      "build_result": "succeeded",
+      "source_ref": "origin/master",
+      "workspace_seed_source_commit_sha": "1376d89652f8ca366dcf1f6fb0e1a43f671ec046",
+      "authority_source_commit_sha": null,
+      "source": "Merged master containing bic/BC-DeveloperExperience#8982; no authority prompt patch"
+    },
+    "candidate": {
+      "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+      "published": true,
+      "package_version": "30.0.45.51654-beta",
+      "installed_identity": "30.0.45.51654+f772a9d1763acc05bb260e0fa885030b0b0cd2eb",
+      "package_source_commit_sha": "f772a9d1763acc05bb260e0fa885030b0b0cd2eb",
+      "workspace_seed_patch_id": "f414195c40fcb01ed33eb65719cdbf26f4f976fb",
+      "authority_patch_id": "024053c4e6ed7911495de050ec5cb1d2252af07e",
+      "nupkg_file": "Microsoft.BusinessCentral.BCal.CLI.30.0.45.51654-beta.nupkg",
+      "nupkg_sha256": "e2816e8aa27efdc8899605e14f024671f5699fec6e97c706d789f1a017567bfb",
+      "nupkg_size": 37417130,
+      "feed": "DynamicsSMBTest@Local",
+      "build_id": 3000684,
+      "build_result": "succeeded",
+      "workspace_seed_source_commit_sha": "aca7b2569602e90ea23e0c5f0d866137be3429bc",
+      "authority_source_commit_sha": "30d9e59980a978c19b4a7569fb521ce644255a53",
+      "source": "bic/BC-DeveloperExperience#8982 plus bic/BC-DeveloperExperience#8977"
+    }
+  },
+  "execution": {
+    "backend": "external-command",
+    "model": "gpt-55-chat",
+    "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
+    "bridge_package": "bc-eval==0.6.1",
+    "bc_version": "28.0",
+    "symbol_cache": "C:\\bcartifacts.cache",
+    "scenario_contract_version": "1.1",
+    "evidence_contract_version": "1.2",
+    "workspace_seed_contract_version": "1.0",
+    "require_workspace_seed_receipt": true
+  },
+  "calibration": {
+    "study_id": "bcal-authority-calibration-20261105",
+    "variant_id": "baseline",
+    "common_base_sha": "1376d89652f8ca366dcf1f6fb0e1a43f671ec046",
+    "variant_patch_sha": "no-patch",
+    "scope": "four repaired authority cases only",
+    "repeat_count": 2
+  },
+  "authority": {
+    "category": "bcal-scenario",
+    "entries": [
+      "bcal-scenario__authority-direct-and-corrected-scope-1",
+      "bcal-scenario__authority-rejected-permission-1",
+      "bcal-scenario__authority-retained-intent-1",
+      "bcal-scenario__authority-untrusted-evidence-1"
+    ]
+  },
+  "ordinary_quality": {
+    "category": "nl2al",
+    "dataset_file": "dataset/nl2al.jsonl",
+    "expected_entry_count": 110
+  },
+  "excluded_entries": [
+    {
+      "instance_id": "nl2al__collected-sales-operations-control-tower-1",
+      "reason": "Investigated separately because its timeout is not an authority-contract signal.",
+      "include_in_promotion_scoring": false
+    }
+  ],
+  "accepted_baseline_reference": {
+    "bcal_version": "30.0.44.65502-beta",
+    "model": "gpt-55-chat",
+    "repeat_scores": [
+      "103/110",
+      "103/110"
+    ],
+    "github_run_id": "40399204122"
+  }
+}

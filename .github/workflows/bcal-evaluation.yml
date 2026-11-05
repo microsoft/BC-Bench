@@ -45,6 +45,11 @@ on:
         required: false
         default: true
         type: boolean
+      llm-preflight-only:
+        description: "Run real external-command model and judge preflights without selecting evaluation entries"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "0 3 * * 0"
 
@@ -57,7 +62,18 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
+  llm-preflight:
+    if: ${{ inputs.llm-preflight-only || false }}
+    uses: ./.github/workflows/bcal-llm-preflight.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      model: gpt-55-chat
+    secrets: inherit
+
   get-entries:
+    if: ${{ !(inputs.llm-preflight-only || false) }}
     uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run || false }}

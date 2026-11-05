@@ -20,6 +20,35 @@ def _workflow(name: str) -> str:
     return text
 
 
+def test_bcal_llm_preflight_uses_exact_package_and_real_model_and_judge_paths() -> None:
+    workflow = _workflow("bcal-llm-preflight.yml")
+    registered_workflow = _workflow("bcal-evaluation.yml")
+
+    assert '"bc-eval==0.6.1"' in workflow
+    assert "model: gpt-55-chat" in registered_workflow
+    assert "gpt-56-ceres" in workflow
+    assert "bc_eval_llm_api_bridge.py" in workflow
+    assert "install_sticky_route_compat" in workflow
+    assert "spec_from_file_location" in workflow
+    assert "PYTHONPATH" not in workflow
+    assert "response.choices" in workflow
+    assert "message.content" in workflow
+    assert "Write-Output $response" not in workflow
+    assert "llm-preflight-only:" in registered_workflow
+    assert "uses: ./.github/workflows/bcal-llm-preflight.yml" in registered_workflow
+    assert "if: ${{ !(inputs.llm-preflight-only || false) }}" in registered_workflow
+
+
+def test_bcal_scenario_judging_uses_shared_sticky_route_compat_only() -> None:
+    workflow = _workflow("summarize-results.yml")
+
+    assert 'if [[ "${{ inputs.category }}" == "bcal-scenario" ]]' in workflow
+    assert '"bc-eval==0.6.1"' in workflow
+    assert "python -m bcbench.agent.bcal.bc_eval_cli" in workflow
+    assert "bc-eval[capi]==0.3.14" in workflow
+    assert '"${BCEVAL[@]}" metrics calculate' in workflow
+
+
 def test_copilot_workflow_routes_code_review_through_copilot() -> None:
     workflow = _workflow("copilot-evaluation.yml")
 

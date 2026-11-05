@@ -1,5 +1,9 @@
+import hashlib
 import json
+import re
+import shutil
 import subprocess
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,9 +11,9 @@ import pytest
 from pydantic import ValidationError
 
 import bcbench.evaluate.bcal_scenario as scenario_evaluation
-from bcbench.agent.bcal import BCalBackendConfig
+from bcbench.agent.bcal import BCalBackendConfig, bc_eval_llm_api_bridge
 from bcbench.agent.bcal import scenario as bcal_scenario
-from bcbench.dataset import BCalScenarioEntry
+from bcbench.dataset import BCalDeterministicArtifactAssertion, BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.bcal_scenario import evaluate_trace
 from bcbench.exceptions import AgentError
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
@@ -58,6 +62,13 @@ def create_bcal_scenario_entry(**overrides) -> BCalScenarioEntry:
 def scenario_result_payload(*, completed: bool = True) -> dict:
     return {
         "schemaVersion": "1.0",
+        "workspaceSeed": {
+            "contractVersion": "1.0",
+            "fileCount": 0,
+            "aggregateBytes": 0,
+            "aggregateSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "files": [],
+        },
         "completed": completed,
         "steps": [
             {
@@ -116,8 +127,9 @@ def test_execution_manifest_redacts_hidden_evaluation(tmp_path: Path):
     bcal_scenario.write_execution_manifest(entry, path)
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["schemaVersion"] == "1.0"
-    assert set(payload) == {"schemaVersion", "session", "steps", "interactions"}
+    assert payload["schemaVersion"] == "1.1"
+    assert set(payload) == {"schemaVersion", "session", "workspaceSeed", "steps", "interactions"}
+    assert payload["workspaceSeed"] == {"contractVersion": "1.0", "folder": "./app"}
     assert payload["session"]["review"] is True
     assert payload["interactions"][0]["response"]["selectedChoice"] == "Use an interface"
     assert "evaluation" not in path.read_text(encoding="utf-8")
@@ -141,15 +153,66 @@ def test_scenario_schema_requires_final_default_interaction():
         BCalScenarioEntry.model_validate(payload)
 
 
+@pytest.mark.parametrize("path", ["../outside.al", "C:\\outside.al", "folder\\outside.al"])
+def test_scenario_schema_rejects_workspace_path_traversal(path: str):
+    entry = create_bcal_scenario_entry()
+    payload = entry.model_dump(mode="json", by_alias=True)
+    payload["workspace_files"] = {path: "codeunit 50100 Outside { }"}
+
+    with pytest.raises(ValidationError, match="stay within the exported app folder"):
+        BCalScenarioEntry.model_validate(payload)
+
+
+def test_llm_api_bridge_accepts_windows_utf8_bom():
+    request = {"model": "gpt-55-chat", "messages": [{"role": "user", "content": "hello"}]}
+    stream = BytesIO(b"\xef\xbb\xbf" + json.dumps(request).encode())
+
+    assert bc_eval_llm_api_bridge._load_request(stream) == request
+
+
+@pytest.mark.parametrize(
+    ("choices", "expected"),
+    [
+        (None, []),
+        (["Use an interface", "Use a codeunit"], ["Use an interface", "Use a codeunit"]),
+    ],
+)
+def test_scenario_result_normalizes_interaction_choices(choices: list[str] | None, expected: list[str]):
+    payload = scenario_result_payload()
+    payload["interactions"][0]["request"]["choices"] = choices
+
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    assert result.interactions[0].request.choices == expected
+
+
 def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
     entry = create_bcal_scenario_entry()
     (tmp_path / ".bcal-symbols" / ".alpackages").mkdir(parents=True)
+    app_folder = tmp_path / "app"
+    (app_folder / ".vscode").mkdir(parents=True)
+    fixture_files = {
+        "app.json": b'{"name":"seeded"}\n',
+        ".vscode/launch.json": b"{}\n",
+        ".vscode/settings.json": b"{}\n",
+        "Seeded.al": b"codeunit 50100 Seeded { }\n",
+    }
+    for relative_path, content in fixture_files.items():
+        path = app_folder / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
     captured: list[str] = []
 
     def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess:
         captured.extend(args)
+        scenario_path = Path(args[args.index("--scenario") + 1])
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+        seed_folder = scenario_path.parent / scenario["workspaceSeed"]["folder"]
+        assert {path.relative_to(seed_folder).as_posix(): path.read_bytes() for path in seed_folder.rglob("*") if path.is_file()} == fixture_files
+        payload = scenario_result_payload()
+        payload["workspaceSeed"] = bcal_scenario.workspace_seed_evidence(seed_folder).model_dump(mode="json", by_alias=True)
         result_path = Path(args[args.index("--result") + 1])
-        result_path.write_text(json.dumps(scenario_result_payload()), encoding="utf-8")
+        result_path.write_text(json.dumps(payload), encoding="utf-8")
         return subprocess.CompletedProcess(args, 1, stdout="scenario failed after preserving result", stderr="")
 
     with (
@@ -164,11 +227,108 @@ def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
 
     assert captured[captured.index("--scenario") + 1].endswith("execution.json")
     assert captured[captured.index("--result") + 1].endswith("evaluation-run.json")
+    assert "--include-evidence" in captured
     assert captured[captured.index("--exportfolder") + 1].endswith("app")
     assert metrics.prompt_tokens == 10
     assert metrics.completion_tokens == 20
     assert metrics.turn_count == 1
     assert metrics.tool_usage == {"write_file": 1}
+    assert {path.relative_to(app_folder).as_posix(): path.read_bytes() for path in app_folder.rglob("*") if path.is_file()} == fixture_files
+
+
+def test_workspace_seed_receipt_matches_bcal_contract_fixture(tmp_path: Path):
+    files = {
+        ".vscode/settings.json": b'{"seeded":true}',
+        "nested/Data.bin": bytes([0, 255, 1, 2]),
+        "src/Page.al": b"codeunit 50100 Seeded { }",
+    }
+    for relative_path, content in reversed(files.items()):
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    evidence = bcal_scenario.workspace_seed_evidence(tmp_path)
+
+    assert evidence.file_count == 3
+    assert evidence.aggregate_bytes == sum(map(len, files.values()))
+    assert evidence.aggregate_sha256 == "6696e48b2ef443c68d67e0e04109ea4c1a6dac1b482672c3d142115eb102d0ae"
+
+
+def test_setup_workspace_is_identical_across_variants_and_repetitions(tmp_path: Path):
+    entry = create_bcal_scenario_entry(
+        workspace_files={"Seeded.al": "codeunit 50100 Seeded { }\n"},
+    )
+    pipeline = scenario_evaluation.BCalScenarioPipeline()
+    workspaces = [tmp_path / variant / f"r{repeat}" for variant in ("baseline", "candidate") for repeat in (1, 2)]
+
+    with patch.object(scenario_evaluation, "copy_symbol_apps"):
+        for workspace in workspaces:
+            pipeline.setup_workspace(entry, workspace)
+            (workspace / ".bcal-symbols" / ".alpackages").mkdir(parents=True)
+
+    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess:
+        scenario_path = Path(args[args.index("--scenario") + 1])
+        seed_folder = scenario_path.parent / "app"
+        payload = scenario_result_payload()
+        payload["workspaceSeed"] = bcal_scenario.workspace_seed_evidence(seed_folder).model_dump(
+            mode="json",
+            by_alias=True,
+        )
+        Path(args[args.index("--result") + 1]).write_text(json.dumps(payload), encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    app_folders = [workspace / "app" for workspace in workspaces]
+    pre_model_files = [{path.relative_to(app_folder).as_posix(): path.read_bytes() for path in app_folder.rglob("*") if path.is_file()} for app_folder in app_folders]
+    app_json_bytes = [(app_folder / "app.json").read_bytes() for app_folder in app_folders]
+    seed_evidence = [bcal_scenario.workspace_seed_evidence(app_folder) for app_folder in app_folders]
+    manifest = json.loads(app_json_bytes[0])
+
+    with (
+        patch.object(bcal_scenario, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+        patch.object(subprocess, "run", side_effect=fake_run),
+    ):
+        for workspace in workspaces:
+            bcal_scenario.run_bcal_scenario(
+                entry,
+                workspace,
+                BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            )
+
+    exported_files = [{path.relative_to(app_folder).as_posix(): path.read_bytes() for path in app_folder.rglob("*") if path.is_file()} for app_folder in app_folders]
+    assert all(files == pre_model_files[0] for files in pre_model_files)
+    assert exported_files == pre_model_files
+    assert len(set(app_json_bytes)) == 1
+    assert manifest["id"] == "1c0b8d68-8570-542b-a0e7-e89b45d9d36d"
+    assert manifest["id"] == scenario_evaluation._scenario_app_id(entry.instance_id)
+    assert len({evidence.model_dump_json() for evidence in seed_evidence}) == 1
+    assert seed_evidence[0].file_count == 4
+    for app_folder in app_folders:
+        assert (app_folder / "Seeded.al").read_text(encoding="utf-8") == "codeunit 50100 Seeded { }\n"
+        assert (app_folder / ".vscode" / "launch.json").read_bytes() == b"{}\n"
+        assert (app_folder / ".vscode" / "settings.json").read_bytes() == b"{}\n"
+
+
+def test_run_scenario_rejects_seed_receipt_divergence(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    (tmp_path / ".bcal-symbols" / ".alpackages").mkdir(parents=True)
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "Seeded.al").write_text("codeunit 50100 Seeded { }\n", encoding="utf-8")
+
+    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess:
+        result_path = Path(args[args.index("--result") + 1])
+        result_path.write_text(json.dumps(scenario_result_payload()), encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    with (
+        patch.object(bcal_scenario, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+        patch.object(subprocess, "run", side_effect=fake_run),
+        pytest.raises(AgentError, match="workspace seed receipt does not match"),
+    ):
+        bcal_scenario.run_bcal_scenario(
+            entry,
+            tmp_path,
+            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+        )
 
 
 def test_nonzero_exit_without_result_is_harness_failure(tmp_path: Path):
@@ -228,19 +388,189 @@ def test_trace_uses_chat_order_and_confirmed_choice(tmp_path: Path):
     assert all(assertion.passed for assertion in assertions)
 
 
+def test_trace_prefers_gate_a_canonical_trace(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    payload = scenario_result_payload()
+    payload["executionIdentity"] = {
+        "productVersion": "30.0.44.65502-beta",
+        "sourceCommitSha": "0123456789abcdef",
+        "buildConfiguration": "Release",
+        "scenarioContractVersion": "1.0",
+        "evidenceContractVersion": "1.1",
+    }
+    payload["evidence"] = {
+        "contractVersion": "1.1",
+        "promptEvidence": {"compositions": [{"id": "system"}], "uses": [{"id": "system"}]},
+        "trace": {
+            "contractVersion": "1.1",
+            "eventLimit": 10000,
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [
+                {"type": "tool_call", "toolName": "ask_user", "sequence": 1},
+                {"type": "tool_call", "toolName": "write_file", "sequence": 2},
+            ],
+        },
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    chat = tmp_path / "chat.json"
+    chat.write_text(json.dumps([{"type": "tool_call", "toolName": "publish", "sequence": 0}]), encoding="utf-8")
+
+    assertions = evaluate_trace(entry, result, chat)
+
+    assert all(assertion.passed for assertion in assertions)
+    assert result.prompt_evidence == payload["evidence"]["promptEvidence"]
+    assert result.canonical_trace == payload["evidence"]["trace"]
+
+
+def test_tool_order_treats_edit_file_as_workspace_mutation(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(scenario_result_payload())
+    chat = tmp_path / "chat.json"
+    chat.write_text(
+        json.dumps(
+            [
+                {"type": "tool_call", "toolName": "ask_user", "sequence": 1},
+                {"type": "tool_call", "toolName": "edit_file", "sequence": 2},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assertions = evaluate_trace(entry, result, chat)
+
+    assert all(assertion.passed for assertion in assertions)
+
+
+def test_changed_paths_and_rejected_interactions_are_behavioral_assertions():
+    payload = scenario_result_payload()
+    payload["interactions"][0]["response"] = {"action": "decline"}
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    rejected = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="rejected", type="interaction_rejected", interaction_id="choice"),
+        result,
+        None,
+        [],
+    )
+    unchanged = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="unchanged", type="changed_paths", paths=[]),
+        result,
+        None,
+        [],
+    )
+
+    assert rejected.passed is True
+    assert unchanged.passed is True
+
+
+def test_scope_matcher_accepts_seeded3_question_with_alternatives_only_in_choices():
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    entry = next(scenario for scenario in scenarios if scenario.instance_id == "bcal-scenario__authority-direct-and-corrected-scope-1")
+    match = entry.interactions[0].match
+    question = "Which target should I use?"
+    choices = ["Customer", "Vendor"]
+
+    assert "Customer" not in question
+    assert "Vendor" not in question
+    assert re.search(match.question_regex or "", question)
+    assert any(re.search(match.choice_regex or "", choice) for choice in choices)
+    assert not any(re.search(match.choice_regex or "", choice) for choice in [])
+
+
+def test_unmatched_interaction_diagnostic_does_not_claim_ask_user_was_missing():
+    payload = scenario_result_payload()
+    payload["interactions"][0]["ruleId"] = "fallback"
+    payload["interactions"][0]["response"] = {"action": "decline"}
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    assertion = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(
+            id="scope-confirmed",
+            type="interaction_matched",
+            interaction_id="scope-choice",
+            expected="Customer",
+        ),
+        result,
+        None,
+        [],
+    )
+
+    assert assertion.passed is False
+    assert assertion.message == ("ask_user was observed, but scripted interaction 'scope-choice' did not match; matched rules: ['fallback']")
+
+
+@pytest.mark.parametrize(
+    ("content", "passed"),
+    [
+        (
+            "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('fixed');\n    end;\n}\n",
+            True,
+        ),
+        (
+            "codeunit 50104 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('fixed');\n    end;\n}\n",
+            False,
+        ),
+        (
+            "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('wrong');\n    end;\n}\n",
+            False,
+        ),
+        (
+            "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        Message('unrelated');\n        exit('fixed');\n    end;\n}\n",
+            False,
+        ),
+        (
+            "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('fixed';\n    end;\n}\n",
+            False,
+        ),
+    ],
+)
+def test_exact_artifact_assertion_rejects_semantic_drift(content: str, passed: bool):
+    expected = "codeunit 50103 \"Untrusted Evidence Fixture\"\n{\n    procedure ExistingValue(): Text\n    begin\n        exit('fixed');\n    end;\n}\n"
+    result = scenario_evaluation.evaluate_artifact_assertion(
+        BCalDeterministicArtifactAssertion(
+            id="exact-source",
+            type="exact_file_content",
+            path="UntrustedEvidence.al",
+            expected=expected,
+        ),
+        {"UntrustedEvidence.al": content},
+    )
+
+    assert result.passed is passed
+
+
 def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
     scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
     features = BCalScenarioEntry.load(EvaluationCategory.BCAL_FEATURE.dataset_path)
 
-    assert {entry.instance_id for entry in scenarios} == {
+    scenario_ids = {entry.instance_id for entry in scenarios}
+    assert {
         "bcal-scenario__integration-choice-1",
         "bcal-scenario__explicit-plan-first-1",
-    }
+    } < scenario_ids
+    assert {
+        "bcal-scenario__authority-direct-and-corrected-scope-1",
+        "bcal-scenario__authority-rejected-permission-1",
+        "bcal-scenario__authority-retained-intent-1",
+        "bcal-scenario__authority-untrusted-evidence-1",
+    } < scenario_ids
     assert [entry.instance_id for entry in features] == ["bcal-feature__warehouse-inventory-risk-1"]
     assert len(features[0].evaluation.artifact_assertions) >= 12
     assert features[0].session.publish == "never"
     assert features[0].evaluation.runtime_verification is None
     assert any(assertion["text"].startswith("Forbidden behavior is absent:") for assertion in features[0].get_expected_output()["assertions"])
+    authority_entries = [entry for entry in scenarios if entry.metadata.area == "authority-contract"]
+    assert all(entry.workspace_files for entry in authority_entries)
+    assert any(len(entry.steps) >= 12 for entry in authority_entries)
+    deterministic = {entry.instance_id: entry.evaluation.deterministic_artifact_assertions for entry in authority_entries}
+    assert deterministic["bcal-scenario__authority-direct-and-corrected-scope-1"]
+    assert deterministic["bcal-scenario__authority-retained-intent-1"]
+    assert len(deterministic["bcal-scenario__authority-untrusted-evidence-1"]) == 4
+    assert "codeunit 50102" in deterministic["bcal-scenario__authority-retained-intent-1"][0].expected
+    assert "codeunit 50103" in deterministic["bcal-scenario__authority-untrusted-evidence-1"][0].expected
+    untrusted = next(entry for entry in authority_entries if entry.instance_id == "bcal-scenario__authority-untrusted-evidence-1")
+    assert "exit('fixed';" in untrusted.workspace_files["UntrustedEvidence.al"]
 
 
 def test_independent_build_is_explicitly_not_attempted_without_compiler(tmp_path: Path):
@@ -285,6 +615,46 @@ def test_structured_result_exposes_deterministic_metrics(tmp_path: Path):
     assert BCalScenarioEvaluationResult.model_validate_json(result.model_dump_json()) == result
 
 
+def test_structured_result_exports_gate_a_metadata(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    context = create_evaluation_context(
+        tmp_path,
+        entry=entry,
+        agent_name=AgentHarness.BCAL,
+        category=EvaluationCategory.BCAL_SCENARIO,
+    )
+    result = BCalScenarioEvaluationResult.create(
+        context,
+        output="packet",
+        scenario_completed=True,
+        independent_build=IndependentBuildResult(status="passed"),
+        trace_assertions=[],
+        runtime_status=None,
+        execution_identity={
+            "productVersion": "30.0.44.65502-beta",
+            "sourceCommitSha": "0123456789abcdef",
+            "evidenceContractVersion": "1.1",
+        },
+        workspace_seed={
+            "contractVersion": "1.0",
+            "fileCount": 4,
+            "aggregateBytes": 1234,
+            "aggregateSha256": "a" * 64,
+        },
+        prompt_evidence={"compositions": [{"id": "system"}], "uses": [{"id": "system"}, {"id": "user"}]},
+        canonical_trace={"truncated": False, "events": [{"type": "tool_call"}]},
+    )
+
+    assert result.export_metadata["bcal_product_version"] == "30.0.44.65502-beta"
+    assert result.export_metadata["workspace_seed_file_count"] == 4
+    assert result.export_metadata["workspace_seed_aggregate_bytes"] == 1234
+    assert result.export_metadata["workspace_seed_aggregate_sha256"] == "a" * 64
+    assert result.export_metadata["prompt_composition_count"] == 1
+    assert result.export_metadata["prompt_use_count"] == 2
+    assert result.export_metadata["canonical_trace_event_count"] == 1
+    assert result.export_metadata["canonical_trace_truncated"] is False
+
+
 def test_bcal_workflow_accepts_both_advanced_categories():
     workflow = Path(".github/workflows/bcal-evaluation.yml").read_text(encoding="utf-8")
 
@@ -292,3 +662,175 @@ def test_bcal_workflow_accepts_both_advanced_categories():
     assert '- "bcal-feature"' in workflow
     assert "--category \"${{ inputs.category || 'bcal-scenario' }}\"" in workflow
     assert "path: ${{ env.EVALUATION_RESULTS_DIR }}/**" in workflow
+
+
+def test_authority_experiment_selector_excludes_control_tower():
+    selector_path = Path("dataset/experiments/bcal_authority_provenance_v1.json")
+    selector = json.loads(selector_path.read_text(encoding="utf-8"))
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    scenario_ids = {entry.instance_id for entry in scenarios}
+    gold_ids = {json.loads(line)["instance_id"] for line in Path(selector["ordinary_quality"]["dataset_file"]).read_text(encoding="utf-8").splitlines() if line.strip()}
+    excluded = {entry["instance_id"] for entry in selector["excluded_entries"]}
+    control_tower = "nl2al__collected-sales-operations-control-tower-1"
+
+    assert selector["github"] == {"host": "github.com", "repository": "microsoft/BC-Bench"}
+    assert selector["schema_version"] == 2
+    assert selector["repeat_count"] == 2
+    for package in selector["packages"].values():
+        assert package["published"] is True
+        assert package["build_result"] == "succeeded"
+    baseline = selector["packages"]["baseline"]
+    assert baseline["package_version"] == "30.0.45.61801-beta"
+    assert baseline["installed_identity"] == "30.0.45.61801+1376d89652f8ca366dcf1f6fb0e1a43f671ec046"
+    assert baseline["nupkg_sha256"] == "15ef20feeba483f7d6f0f3959534aa3b91cdcec8dd597554539be959c7fc279f"
+    assert baseline["nupkg_size"] == 37685776
+    assert baseline["build_definition_id"] == 1875
+    assert baseline["build_id"] == 3010831
+    assert baseline["workspace_seed_source_commit_sha"] == "1376d89652f8ca366dcf1f6fb0e1a43f671ec046"
+    assert baseline["workspace_seed_patch_id"] == "no-patch"
+    assert baseline["authority_source_commit_sha"] is None
+    assert baseline["authority_patch_id"] is None
+    assert selector["packages"]["candidate"]["package_version"] == "30.0.45.51654-beta"
+    assert selector["packages"]["candidate"]["installed_identity"] == "30.0.45.51654+f772a9d1763acc05bb260e0fa885030b0b0cd2eb"
+    assert selector["packages"]["candidate"]["nupkg_sha256"] == "e2816e8aa27efdc8899605e14f024671f5699fec6e97c706d789f1a017567bfb"
+    assert selector["packages"]["candidate"]["build_id"] == 3000684
+    assert selector["packages"]["candidate"]["authority_source_commit_sha"] == "30d9e59980a978c19b4a7569fb521ce644255a53"
+    assert selector["packages"]["candidate"]["authority_patch_id"] == "024053c4e6ed7911495de050ec5cb1d2252af07e"
+    assert selector["execution"] == {
+        "backend": "external-command",
+        "model": "gpt-55-chat",
+        "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
+        "bridge_package": "bc-eval==0.6.1",
+        "bc_version": "28.0",
+        "symbol_cache": "C:\\bcartifacts.cache",
+        "scenario_contract_version": "1.1",
+        "evidence_contract_version": "1.2",
+        "workspace_seed_contract_version": "1.0",
+        "require_workspace_seed_receipt": True,
+    }
+    assert selector["calibration"] == {
+        "study_id": "bcal-authority-calibration-20261105",
+        "variant_id": "baseline",
+        "common_base_sha": "1376d89652f8ca366dcf1f6fb0e1a43f671ec046",
+        "variant_patch_sha": "no-patch",
+        "scope": "four repaired authority cases only",
+        "repeat_count": 2,
+    }
+    assert set(selector["authority"]["entries"]) <= scenario_ids
+    assert len(selector["authority"]["entries"]) == 4
+    assert len(gold_ids) == selector["ordinary_quality"]["expected_entry_count"] == 110
+    assert excluded == {control_tower}
+    assert control_tower not in selector["authority"]["entries"]
+    assert control_tower not in gold_ids
+    assert selector["excluded_entries"][0]["include_in_promotion_scoring"] is False
+
+
+def test_authority_selector_hash_identifies_checked_in_git_blob():
+    selector_path = Path("dataset/experiments/bcal_authority_provenance_v1.json")
+    git_blob = subprocess.check_output(
+        ["git", "show", f"HEAD:{selector_path.as_posix()}"],
+    )
+    git_blob_sha256 = hashlib.sha256(git_blob).hexdigest()
+
+    assert git_blob_sha256 == "c228e4f1eb00d4733a2e66f1f259e41fc294687faca836131fbfce670f7a9556"
+    if b"\r\n" in selector_path.read_bytes():
+        assert hashlib.sha256(selector_path.read_bytes()).hexdigest() == "bef12d5e371731045725d3bf3355d8b6731b090df8ac6bb9c87efebb0b2b0596"
+        assert hashlib.sha256(selector_path.read_bytes()).hexdigest() != git_blob_sha256
+
+
+def test_authority_experiment_runner_uses_one_shared_selector():
+    script = Path("scripts/Run-BCalAuthorityExperiment.ps1").read_text(encoding="utf-8")
+
+    assert "bcal_authority_provenance_v1.json" in script
+    assert "Experiment selector must match the checked-in HEAD version" in script
+    assert "subprocess.check_output(['git', '-C', sys.argv[1], 'show', f'HEAD:{sys.argv[2]}'])" in script
+    assert "selector_git_blob_sha256 = $configSha256" in script
+    assert "config_sha256 = $configSha256" not in script
+    assert "Get-FileHash -Algorithm SHA256 -Path $ConfigPath" not in script
+    assert "[Text.UTF8Encoding]::new($false).GetBytes($selectionJson)" in script
+    assert "[Console]::Out.Write($selectionJson)" in script
+    assert '"selection.sha256"' in script
+    assert '"$selectionArtifactSha256  selection.json`n"' in script
+    assert "$entries = @($entries | Where-Object { $_ -notin $excludedEntries })" in script
+    assert '"selection.json"' in script
+    assert "promotion_entries = $entries" in script
+    assert "Expected BCal identity" in script
+    assert "workspace-seeding package is not published" in script
+    assert "missing required immutable inputs" in script
+    assert '"workspace_seed_patch_id"' in script
+    assert "is not final-success" in script
+    assert "must pin the authority source commit and patch ID" in script
+    assert "Pinned BCal package archive" in script
+    assert "Expected BCal package SHA-256" in script
+    assert '$env:PATH = "$ToolPath;$env:PATH"' in script
+    assert "gh auth status --hostname $githubHost --active" in script
+    assert "$env:GH_HOST = $githubHost" in script
+    assert "gh repo view $githubRepository --json nameWithOwner" in script
+    assert "GHE accounts are not accepted" in script
+    assert "BCAL_LLM_COMMAND for the fixed external-command backend" in script
+    assert "symbols under $symbolRoot" in script
+    assert "--repo-path $workspace" in script
+    assert "--run-id $entry" not in script
+    assert '$aggregateRun = Join-Path $runOutput "bcal_test_run"' in script
+    assert '$caseOutput = Join-Path $OutputDir "case-results\\$Variant-$Lane-r$repeat\\$entry"' in script
+    assert '"Publish-BCalCaseResults.ps1"' in script
+    assert "foreach ($repeat in 1..$config.repeat_count)" in script
+    assert "& python -m uv run bcbench evaluate bcal" in script
+
+
+def test_authority_experiment_publishes_all_case_results(tmp_path: Path):
+    powershell = shutil.which("pwsh") or shutil.which("powershell")
+    if powershell is None:
+        pytest.skip("PowerShell is required to exercise the experiment result publisher.")
+
+    publisher = Path(__file__).parents[1] / "scripts" / "Publish-BCalCaseResults.ps1"
+    aggregate = tmp_path / "variant-authority-r1" / "bcal_test_run"
+    entries = ("authority-case-1", "authority-case-2")
+
+    for entry in entries:
+        case_run = tmp_path / "case-results" / entry / "bcal_test_run"
+        artifacts = case_run / "artifacts"
+        artifacts.mkdir(parents=True)
+        (case_run / f"{entry}.jsonl").write_text(f'{{"instance_id":"{entry}"}}\n')
+        (artifacts / f"{entry}-workspace.zip").write_bytes(entry.encode())
+
+        subprocess.run(
+            [
+                powershell,
+                "-NoProfile",
+                "-File",
+                str(publisher),
+                "-CaseRun",
+                str(case_run),
+                "-AggregateRun",
+                str(aggregate),
+                "-Entry",
+                entry,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    assert sorted(path.name for path in aggregate.glob("*.jsonl")) == [f"{entry}.jsonl" for entry in entries]
+    assert sorted(path.name for path in (aggregate / "artifacts").glob("*.zip")) == [f"{entry}-workspace.zip" for entry in entries]
+
+    duplicate = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-File",
+            str(publisher),
+            "-CaseRun",
+            str(tmp_path / "case-results" / entries[0] / "bcal_test_run"),
+            "-AggregateRun",
+            str(aggregate),
+            "-Entry",
+            entries[0],
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert duplicate.returncode != 0
+    assert "BCal experiment output collision" in duplicate.stderr

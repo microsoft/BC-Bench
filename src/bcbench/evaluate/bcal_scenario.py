@@ -7,9 +7,10 @@ import subprocess
 import zipfile
 from pathlib import Path
 from typing import cast
+from uuid import NAMESPACE_URL, uuid5
 
 from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_RESULT, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult, load_scenario_result, resolve_session_chat
-from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
+from bcbench.dataset import BCalDeterministicArtifactAssertion, BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
@@ -21,6 +22,10 @@ logger = get_logger(__name__)
 
 _MUTATION_TOOLS = frozenset({"write_file", "edit_file", "create_file", "apply_patch", "replace_text", "patch_text"})
 _TEXT_EXTENSIONS = frozenset({".al", ".json", ".md", ".txt", ".xml", ".yml", ".yaml", ".ps1", ".toml"})
+
+
+def _scenario_app_id(instance_id: str) -> str:
+    return str(uuid5(NAMESPACE_URL, f"https://github.com/microsoft/BC-Bench/bcal-scenario/{instance_id}"))
 
 
 def _git_init_and_commit(repo_path: Path) -> None:
@@ -50,6 +55,46 @@ def _result_tool_events(result: BCalScenarioRunResult) -> list[tuple[float, str,
             if usage.started:
                 events.append((step_index * 1000 + tool_index, _normalize_tool(usage.name), step.id))
     events.extend((float(interaction.sequence), "ask_user", interaction.rule_id or "") for interaction in result.interactions if interaction.matched)
+    return events
+
+
+def _canonical_trace_events(result: BCalScenarioRunResult) -> list[tuple[float, str, str]]:
+    if not result.evidence:
+        return []
+    trace = result.evidence.get("trace")
+    if not isinstance(trace, dict):
+        return []
+    raw_events = cast(dict[str, object], trace).get("events")
+    if not isinstance(raw_events, list):
+        return []
+
+    events: list[tuple[float, str, str]] = []
+
+    def tool_name(record: dict[str, object]) -> str | None:
+        direct = record.get("toolName") or record.get("tool_name")
+        if isinstance(direct, str):
+            return direct
+        if "tool" in str(record.get("type", "")).lower():
+            name = record.get("name") or record.get("tool")
+            if isinstance(name, str):
+                return name
+        for child in record.values():
+            if isinstance(child, dict):
+                nested = tool_name(cast(dict[str, object], child))
+                if nested:
+                    return nested
+        return None
+
+    for index, value in enumerate(raw_events):
+        if not isinstance(value, dict):
+            continue
+        record = cast(dict[str, object], value)
+        name = tool_name(record)
+        if not name:
+            continue
+        raw_sequence = record.get("sequence", record.get("index", index))
+        position = float(raw_sequence) if isinstance(raw_sequence, int | float) else float(index)
+        events.append((position, _normalize_tool(name), str(record.get("stepId", ""))))
     return events
 
 
@@ -90,8 +135,9 @@ def evaluate_trace_assertion(
     assertion: BCalTraceAssertion,
     result: BCalScenarioRunResult,
     chat_path: Path | None,
+    changed_paths: list[str],
 ) -> TraceAssertionResult:
-    events = _chat_tool_events(chat_path) or _result_tool_events(result)
+    events = _canonical_trace_events(result) or _chat_tool_events(chat_path) or _result_tool_events(result)
     tool_positions: dict[str, list[float]] = {}
     for position, tool, _step_id in events:
         tool_positions.setdefault(tool, []).append(position)
@@ -111,9 +157,15 @@ def evaluate_trace_assertion(
             before = _normalize_tool(assertion.before or "")
             after = _normalize_tool(assertion.after or "")
             before_positions = tool_positions.get(before, [])
-            after_positions = tool_positions.get(after, [])
+            after_positions = [position for tool in _MUTATION_TOOLS for position in tool_positions.get(tool, [])] if after in _MUTATION_TOOLS else tool_positions.get(after, [])
+            after_description = "workspace mutation" if after in _MUTATION_TOOLS else repr(after)
             passed = bool(before_positions and after_positions and min(before_positions) < min(after_positions))
-            message = f"Expected {before!r} before {after!r}"
+            if not before_positions:
+                message = f"Expected {before!r} before {after_description}, but {before!r} was not observed"
+            elif not after_positions:
+                message = f"Observed {before!r}, but {after_description} was not observed"
+            else:
+                message = f"Expected {before!r} before {after_description}"
         case "compile_after_final_mutation":
             mutation_steps = [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
             compile_steps = [index for index, step in enumerate(result.steps) if step.compile_succeeded is True]
@@ -125,7 +177,21 @@ def evaluate_trace_assertion(
             if passed and assertion.expected is not None:
                 response = records[-1].response or {}
                 passed = assertion.expected in (response.get("selectedChoice"), response.get("value"))
-            message = f"Expected interaction {assertion.interaction_id!r} to match"
+            if not records and result.interactions:
+                matched_rules = [record.rule_id for record in result.interactions if record.matched]
+                message = f"ask_user was observed, but scripted interaction {assertion.interaction_id!r} did not match; matched rules: {matched_rules!r}"
+            elif records and records[-1].failure:
+                message = f"Interaction {assertion.interaction_id!r} matched but acceptance failed: {records[-1].failure.message}"
+            elif records and assertion.expected is not None and not passed:
+                message = f"Interaction {assertion.interaction_id!r} did not accept expected value {assertion.expected!r}"
+            else:
+                message = f"Expected interaction {assertion.interaction_id!r} to match"
+        case "interaction_rejected":
+            records = [record for record in result.interactions if record.rule_id == assertion.interaction_id]
+            response = records[-1].response if records else None
+            action = response.get("action") if response else None
+            passed = bool(records and records[-1].matched and records[-1].failure is None and action in {"decline", "cancel"})
+            message = f"Expected interaction {assertion.interaction_id!r} to be declined or cancelled, got {action!r}"
         case "plan_lifecycle":
             steps = [step for step in result.steps if step.id == assertion.step_id]
             actual = steps[-1].plan.lifecycle if steps and steps[-1].plan else None
@@ -141,14 +207,33 @@ def evaluate_trace_assertion(
             else:
                 passed = boundary is not None and any(index >= boundary for index in mutation_indices)
                 message = f"Expected workspace mutation after step {assertion.step_id!r}"
+        case "changed_paths":
+            expected_paths = sorted(assertion.paths or [])
+            passed = sorted(changed_paths) == expected_paths
+            message = f"Expected changed paths {expected_paths!r}, got {sorted(changed_paths)!r}"
         case _:
             message = f"Unsupported trace assertion type: {assertion.type}"
 
     return TraceAssertionResult(assertion_id=assertion.id, passed=passed, message=message)
 
 
-def evaluate_trace(entry: BCalScenarioEntry, result: BCalScenarioRunResult, chat_path: Path | None) -> list[TraceAssertionResult]:
-    return [evaluate_trace_assertion(assertion, result, chat_path) for assertion in entry.evaluation.trace_assertions]
+def evaluate_trace(entry: BCalScenarioEntry, result: BCalScenarioRunResult, chat_path: Path | None, changed_paths: list[str] | None = None) -> list[TraceAssertionResult]:
+    return [evaluate_trace_assertion(assertion, result, chat_path, changed_paths or []) for assertion in entry.evaluation.trace_assertions]
+
+
+def evaluate_artifact_assertion(
+    assertion: BCalDeterministicArtifactAssertion,
+    workspace: dict[str, str],
+) -> TraceAssertionResult:
+    actual = workspace.get(assertion.path)
+    passed = actual == assertion.expected
+    if actual is None:
+        message = f"Expected artifact {assertion.path!r} was not exported"
+    elif passed:
+        message = f"Artifact {assertion.path!r} exactly matched the hidden expected content"
+    else:
+        message = f"Artifact {assertion.path!r} differed from the hidden expected content"
+    return TraceAssertionResult(assertion_id=assertion.id, passed=passed, message=message)
 
 
 def _compile_exported_project(app_folder: Path, package_cache: Path) -> IndependentBuildResult:
@@ -195,7 +280,7 @@ def _textual_workspace(app_folder: Path) -> dict[str, str]:
     return workspace
 
 
-def _export_diff(repo_path: Path, app_folder: Path) -> str:
+def _export_diff(repo_path: Path, app_folder: Path) -> tuple[str, list[str]]:
     relative_app = app_folder.relative_to(repo_path)
     subprocess.run(["git", "add", "--", str(relative_app)], cwd=repo_path, capture_output=True, check=True)
     completed = subprocess.run(
@@ -207,7 +292,16 @@ def _export_diff(repo_path: Path, app_folder: Path) -> str:
         errors="replace",
         check=True,
     )
-    return completed.stdout
+    changed = subprocess.run(
+        ["git", "--no-pager", "diff", "--cached", "--name-only", "--", str(relative_app)],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    )
+    return completed.stdout, [path for path in changed.stdout.splitlines() if path]
 
 
 def _confirmed_decisions(result: BCalScenarioRunResult) -> list[dict[str, object]]:
@@ -230,10 +324,17 @@ def _create_scoring_packet(
     trace: list[TraceAssertionResult],
     workspace: dict[str, str],
     diff: str,
+    changed_paths: list[str],
 ) -> str:
+    evidence = result.evidence or {}
+    prompt_evidence = evidence.get("promptEvidence")
+    trace_evidence = evidence.get("trace")
     packet = {
         "task": entry.get_task(),
         "confirmedScriptedDecisions": _confirmed_decisions(result),
+        "executionIdentity": result.execution_identity,
+        "workspaceSeed": (result.workspace_seed.model_dump(mode="json", by_alias=True) if result.workspace_seed else None),
+        "promptEvidence": prompt_evidence if isinstance(prompt_evidence, dict) else None,
         "deterministicResult": {
             "scenarioCompleted": result.completed,
             "independentBuild": build.model_dump(mode="json"),
@@ -242,7 +343,9 @@ def _create_scoring_packet(
             "runnerFailure": result.failure.model_dump(mode="json", by_alias=True) if result.failure else None,
         },
         "traceSummary": [assertion.model_dump(mode="json") for assertion in trace],
+        "canonicalTrace": trace_evidence if isinstance(trace_evidence, dict) else None,
         "forbiddenAssertions": entry.evaluation.forbidden_assertions,
+        "changedPaths": changed_paths,
         "workspaceDiff": diff,
         "exportedWorkspace": workspace,
     }
@@ -264,7 +367,20 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
             shutil.rmtree(repo_path)
         app_folder = repo_path / SCENARIO_EXPORT_DIR
         app_folder.mkdir(parents=True)
-        bootstrap_app_json(app_folder, entry.instance_id, entry.environment_setup_version)
+        bootstrap_app_json(
+            app_folder,
+            entry.instance_id,
+            entry.environment_setup_version,
+            app_id=_scenario_app_id(entry.instance_id),
+        )
+        for relative_path, content in entry.workspace_files.items():
+            path = app_folder / Path(relative_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        vscode_folder = app_folder / ".vscode"
+        vscode_folder.mkdir()
+        for file_name in ("launch.json", "settings.json"):
+            (vscode_folder / file_name).write_bytes(b"{}\n")
         copy_symbol_apps(repo_path / SCENARIO_SYMBOL_DIR, entry.environment_setup_version)
         (repo_path / ".gitignore").write_text(".bcal-symbols/\n**/.alpackages/\n**/.bcbench-build/\n", encoding="utf-8")
         _git_init_and_commit(repo_path)
@@ -279,7 +395,6 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
     def evaluate(self, context: EvaluationContext[BCalScenarioEntry]) -> None:
         result = load_scenario_result(context.repo_path / SCENARIO_RESULT)
         chat_path = resolve_session_chat(result, context.repo_path)
-        trace = evaluate_trace(context.entry, result, chat_path)
         app_folder = context.repo_path / SCENARIO_EXPORT_DIR
         package_cache = context.repo_path / SCENARIO_SYMBOL_DIR / ".alpackages"
         build = (
@@ -288,9 +403,13 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
             else IndependentBuildResult(status="not_attempted", message="Compilation is not required by this entry")
         )
         workspace = _textual_workspace(app_folder)
-        diff = _export_diff(context.repo_path, app_folder)
+        diff, changed_paths = _export_diff(context.repo_path, app_folder)
+        trace = [
+            *evaluate_trace(context.entry, result, chat_path, changed_paths),
+            *(evaluate_artifact_assertion(assertion, workspace) for assertion in context.entry.evaluation.deterministic_artifact_assertions),
+        ]
         _archive_workspace(context.entry, app_folder, context.result_dir)
-        output = _create_scoring_packet(context.entry, result, build, trace, workspace, diff)
+        output = _create_scoring_packet(context.entry, result, build, trace, workspace, diff, changed_paths)
         runtime_status = "not_run" if context.entry.evaluation.runtime_verification is not None else None
         error_message = result.failure.message if result.failure else None
         evaluation_result = BCalScenarioEvaluationResult.create(
@@ -300,6 +419,10 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
             independent_build=build,
             trace_assertions=trace,
             runtime_status=runtime_status,
+            execution_identity=result.execution_identity,
+            workspace_seed=(result.workspace_seed.model_dump(mode="json", by_alias=True) if result.workspace_seed else None),
+            prompt_evidence=result.prompt_evidence,
+            canonical_trace=result.canonical_trace,
             error_message=error_message,
         )
         self.save_result(context, evaluation_result)
