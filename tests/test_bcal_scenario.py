@@ -423,6 +423,25 @@ def test_trace_prefers_gate_a_canonical_trace(tmp_path: Path):
     assert result.canonical_trace == payload["evidence"]["trace"]
 
 
+def test_tool_order_treats_edit_file_as_workspace_mutation(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(scenario_result_payload())
+    chat = tmp_path / "chat.json"
+    chat.write_text(
+        json.dumps(
+            [
+                {"type": "tool_call", "toolName": "ask_user", "sequence": 1},
+                {"type": "tool_call", "toolName": "edit_file", "sequence": 2},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assertions = evaluate_trace(entry, result, chat)
+
+    assert all(assertion.passed for assertion in assertions)
+
+
 def test_changed_paths_and_rejected_interactions_are_behavioral_assertions():
     payload = scenario_result_payload()
     payload["interactions"][0]["response"] = {"action": "decline"}
@@ -683,7 +702,7 @@ def test_authority_experiment_selector_excludes_control_tower():
         "require_workspace_seed_receipt": True,
     }
     assert selector["calibration"] == {
-        "study_id": "bcal-authority-calibration-sticky1-20261105",
+        "study_id": "bcal-authority-calibration-sticky2-20261105",
         "variant_id": "baseline",
         "common_base_sha": "1376d89652f8ca366dcf1f6fb0e1a43f671ec046",
         "variant_patch_sha": "no-patch",
@@ -706,7 +725,7 @@ def test_authority_selector_hash_identifies_checked_in_git_blob():
     )
     git_blob_sha256 = hashlib.sha256(git_blob).hexdigest()
 
-    assert git_blob_sha256 == "c228e4f1eb00d4733a2e66f1f259e41fc294687faca836131fbfce670f7a9556"
+    assert git_blob_sha256 == "e39263b4b8154c590dc47a3c57c9f725430ac2d76cd6ac883e38fb9ac7cff625"
     if b"\r\n" in selector_path.read_bytes():
         assert hashlib.sha256(selector_path.read_bytes()).hexdigest() == "bef12d5e371731045725d3bf3355d8b6731b090df8ac6bb9c87efebb0b2b0596"
         assert hashlib.sha256(selector_path.read_bytes()).hexdigest() != git_blob_sha256

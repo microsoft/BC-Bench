@@ -159,14 +159,15 @@ def evaluate_trace_assertion(
             before = _normalize_tool(assertion.before or "")
             after = _normalize_tool(assertion.after or "")
             before_positions = tool_positions.get(before, [])
-            after_positions = tool_positions.get(after, [])
+            after_positions = [position for tool in _MUTATION_TOOLS for position in tool_positions.get(tool, [])] if after in _MUTATION_TOOLS else tool_positions.get(after, [])
+            after_description = "workspace mutation" if after in _MUTATION_TOOLS else repr(after)
             passed = bool(before_positions and after_positions and min(before_positions) < min(after_positions))
             if not before_positions:
-                message = f"Expected {before!r} before {after!r}, but {before!r} was not observed"
+                message = f"Expected {before!r} before {after_description}, but {before!r} was not observed"
             elif not after_positions:
-                message = f"Observed {before!r}, but {after!r} was not observed"
+                message = f"Observed {before!r}, but {after_description} was not observed"
             else:
-                message = f"Expected {before!r} before {after!r}"
+                message = f"Expected {before!r} before {after_description}"
         case "compile_after_final_mutation":
             mutation_steps = [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
             compile_steps = [index for index, step in enumerate(result.steps) if step.compile_succeeded is True]
