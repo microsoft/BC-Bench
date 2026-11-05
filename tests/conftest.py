@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from bcbench_core.dataset import TestEntry
@@ -26,7 +26,7 @@ from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentHarness, ChecklistAssertion, EvaluationCategory, EvaluationContext
+from bcbench.types import ChecklistAssertion, EvaluationCategory, EvaluationContext, HarnessName
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -83,13 +83,13 @@ def create_dataset_entry(
 
 
 @dataclass
-class StubHarness[E: BaseDatasetEntry](Harness[E, AgentHarness]):
+class StubHarness[E: BaseDatasetEntry](AgentHarness[E, HarnessName]):
     result: AgentResult = field(default_factory=AgentResult)
     requests: list[AgentRequest[E]] = field(default_factory=list)
 
     @override
-    def identity(self) -> AgentIdentity[AgentHarness]:
-        return AgentIdentity[AgentHarness](harness=AgentHarness.COPILOT, version="1.0.0", model="test-model")
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.COPILOT, version="1.0.0", model="test-model")
 
     @override
     def run(self, request: AgentRequest[E], /) -> AgentResult:
@@ -100,7 +100,7 @@ class StubHarness[E: BaseDatasetEntry](Harness[E, AgentHarness]):
 def create_evaluation_context[EntryT: BaseDatasetEntry](
     tmp_path: Path,
     entry: EntryT | None = None,
-    agent_name: AgentHarness = AgentHarness.COPILOT,
+    agent_name: HarnessName = HarnessName.COPILOT,
     model: str = "test-model",
     agent_version: str = "1.0.0",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
@@ -115,7 +115,7 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
         container=ContainerConfig(name=container_name, username=username, password=password, company="CRONUS"),
-        agent=AgentIdentity[AgentHarness](harness=agent_name, version=agent_version, model=model),
+        agent=AgentIdentity[HarnessName](harness=agent_name, version=agent_version, model=model),
         category=category,
     )
 
@@ -213,7 +213,7 @@ def create_codereview_entry(
 def create_codereview_result(
     instance_id: str = VALID_INSTANCE_ID,
     model: str = "gpt-4o",
-    agent_name: AgentHarness = AgentHarness.COPILOT,
+    agent_name: HarnessName = HarnessName.COPILOT,
     output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
     expected_comments: list[ReviewComment] | None = None,
     metrics: AgentMetrics | None = None,
@@ -235,7 +235,7 @@ def create_codereview_result(
         repo_path=Path(),
         result_dir=Path(),
         container=ContainerConfig(name="t", username="t", password="t", company="CRONUS"),
-        agent=AgentIdentity[AgentHarness](harness=agent_name, version="1.0.0", model=model),
+        agent=AgentIdentity[HarnessName](harness=agent_name, version="1.0.0", model=model),
         category=EvaluationCategory.CODE_REVIEW,
     )
     context.metrics = metrics

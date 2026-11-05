@@ -7,14 +7,14 @@ from typing import override
 from bcbench_core.agent.copilot.agent import get_copilot_version, invoke_copilot
 from bcbench_core.agent.copilot.types import CopilotOptions, CopilotTimeoutError
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.exceptions import AgentTimeoutError
 
 __all__ = ["CopilotHarness"]
 
 
 @dataclass(frozen=True)
-class CopilotHarness[N: str = str](Harness[str, N]):
+class CopilotHarness[N: str = str](AgentHarness[str, N]):
     """Runs a prompt through Copilot CLI with fixed options; the task is the prompt itself.
 
     ``CopilotOptions()`` answers from the prompt alone (no tools, no custom instructions).

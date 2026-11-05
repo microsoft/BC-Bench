@@ -4,14 +4,14 @@ import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from bcbench_core.agent.harness import AgentResult, Harness
+from bcbench_core.agent.harness import AgentHarness, AgentResult
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.github_actions import github_log_group
 from bcbench.results import BaseEvaluationResult
 from bcbench.results.base import RESULT_FILE_SUFFIX
-from bcbench.types import AgentHarness, EvaluationContext
+from bcbench.types import EvaluationContext, HarnessName
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         """
         raise NotImplementedError
 
-    def run_agent(self, context: EvaluationContext[E], harness: Harness[E, AgentHarness]) -> None:
+    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> None:
         with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
             result: AgentResult = harness.run(context.agent_request())
             context.metrics, context.experiment = result.metrics, result.experiment
@@ -67,7 +67,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     def execute(
         self,
         context: EvaluationContext[E],
-        harness: Harness[E, AgentHarness],
+        harness: AgentHarness[E, HarnessName],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 

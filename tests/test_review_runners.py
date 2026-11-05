@@ -10,7 +10,7 @@ from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.types import AgentHarness, EvaluationCategory
+from bcbench.types import EvaluationCategory, HarnessName
 
 
 @pytest.mark.parametrize("harness_name", ["CopilotHarness", "ClaudeHarness"])
@@ -31,11 +31,11 @@ def test_generic_run_commands_accept_code_review(tmp_path: Path, harness_name: s
 @pytest.mark.parametrize(
     ("command", "agent_name"),
     [
-        (evaluate_commands.evaluate_copilot, AgentHarness.COPILOT),
-        (evaluate_commands.evaluate_claude_code, AgentHarness.CLAUDE),
+        (evaluate_commands.evaluate_copilot, HarnessName.COPILOT),
+        (evaluate_commands.evaluate_claude_code, HarnessName.CLAUDE),
     ],
 )
-def test_generic_evaluate_commands_use_code_review_pipeline(tmp_path: Path, command, agent_name: AgentHarness) -> None:
+def test_generic_evaluate_commands_use_code_review_pipeline(tmp_path: Path, command, agent_name: HarnessName) -> None:
     contexts = []
     with (
         patch.object(CodeReviewEntry, "load", return_value=[object()]),
@@ -84,7 +84,7 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
     assert result.exit_code == 0, result.exception
     [(context, harness)] = executions
     assert harness == PRReviewHarness(model="gpt-5.6-luna", engine_path=tmp_path)
-    assert context.agent.harness is AgentHarness.PR_REVIEW
+    assert context.agent.harness is HarnessName.PR_REVIEW
     assert context.agent.version == "a" * 40
     assert context.category is EvaluationCategory.CODE_REVIEW
     assert context.agent.model == "gpt-5.6-luna"

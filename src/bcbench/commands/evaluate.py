@@ -5,7 +5,7 @@ from typing import Annotated, cast, override
 
 import typer
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
@@ -37,7 +37,7 @@ from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline, NL2ALPipeli
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentConfig, AgentHarness, DatasetTier, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -315,10 +315,10 @@ def evaluate_mock(
     logger.info(f"Results saved to: {run_dir}")
 
 
-class MockHarness(Harness[BaseDatasetEntry, AgentHarness]):
+class MockHarness(AgentHarness[BaseDatasetEntry, HarnessName]):
     @override
-    def identity(self) -> AgentIdentity[AgentHarness]:
-        return AgentIdentity[AgentHarness](harness=AgentHarness.MOCK, version="mock", model="mock-model")
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.MOCK, version="mock", model="mock-model")
 
     @override
     def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
@@ -341,7 +341,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         logger.info("Mock pipeline: Skipping setup")
 
     @override
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: Harness[BaseDatasetEntry, AgentHarness]) -> None:
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarness[BaseDatasetEntry, HarnessName]) -> None:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 

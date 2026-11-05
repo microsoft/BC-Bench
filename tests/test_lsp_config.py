@@ -8,7 +8,7 @@ from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared.lsp import build_al_lsp_plugin
-from bcbench.types import AgentHarness, AgentRuntimeConfig, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, EvaluationCategory, HarnessName
 from tests.conftest import create_dataset_entry
 
 _PLUGIN_FOLDER = "al-lsp-plugin"
@@ -51,14 +51,14 @@ def _runtime(*, al_lsp: bool = True, container: ContainerConfig | None = None) -
     return AgentRuntimeConfig(container=container or ContainerConfig("test-container", "", "", "CRONUS"), al_lsp=al_lsp)
 
 
-def _build(entry, repo_path, harness: AgentHarness, runtime: AgentRuntimeConfig | None, plugin_root: Path):
+def _build(entry, repo_path, harness: HarnessName, runtime: AgentRuntimeConfig | None, plugin_root: Path):
     return build_al_lsp_plugin(entry, EvaluationCategory.BUG_FIX, repo_path, harness, plugin_root, runtime=runtime)
 
 
-@pytest.fixture(params=[AgentHarness.COPILOT, AgentHarness.CLAUDE], ids=lambda a: a.value)
-def harness(request: pytest.FixtureRequest) -> AgentHarness:
+@pytest.fixture(params=[HarnessName.COPILOT, HarnessName.CLAUDE], ids=lambda a: a.value)
+def harness(request: pytest.FixtureRequest) -> HarnessName:
     """Parametrize across both agents — every shared behavior gets tested twice."""
-    return AgentHarness(request.param)
+    return HarnessName(request.param)
 
 
 class TestSharedBehavior:
@@ -168,7 +168,7 @@ class TestAgentSpecificSchema:
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_copilot_uses_lspservers_wrapper_with_file_extensions(self, entry, repo_path, plugin_root):
-        _build(entry, repo_path, AgentHarness.COPILOT, _runtime(), plugin_root)
+        _build(entry, repo_path, HarnessName.COPILOT, _runtime(), plugin_root)
         config = _read_lsp(plugin_root)
         # Copilot: `lspServers` wrapper + `fileExtensions`.
         assert "lspServers" in config
@@ -177,7 +177,7 @@ class TestAgentSpecificSchema:
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_claude_uses_flat_schema_with_extension_to_language(self, entry, repo_path, plugin_root):
-        _build(entry, repo_path, AgentHarness.CLAUDE, _runtime(), plugin_root)
+        _build(entry, repo_path, HarnessName.CLAUDE, _runtime(), plugin_root)
         config = _read_lsp(plugin_root)
         # Claude: top-level server name (no wrapper) + `extensionToLanguage`.
         assert "lspServers" not in config

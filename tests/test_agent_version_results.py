@@ -11,7 +11,7 @@ from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory
+from bcbench.types import AgentConfig, EvaluationCategory, HarnessName
 from tests.conftest import StubHarness, create_bugfix_result, create_codereview_result, create_evaluation_context
 
 
@@ -54,7 +54,7 @@ def test_summary_uses_artifact_version_not_environment(monkeypatch: pytest.Monke
 
 def test_repeated_versions_aggregate_and_different_versions_stay_separate(tmp_path: Path) -> None:
     for index, version in enumerate(["a" * 40, "b" * 40, "a" * 40]):
-        result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW).model_copy(update={"agent_version": version})
+        result = create_codereview_result(agent_name=HarnessName.PR_REVIEW).model_copy(update={"agent_version": version})
         summary = EvaluationResultSummary.from_results([result], f"run-{index}")
         summary.save(tmp_path, "summary.json")
         result_update(tmp_path / "summary.json", leaderboard_dir=tmp_path, n=5)
@@ -78,7 +78,7 @@ def test_version_does_not_replace_existing_grouping_dimensions() -> None:
     first = EvaluationResultSummary.from_results([create_codereview_result().model_copy(update={"agent_version": "1.2.3"})], "run")
     variants = [
         first,
-        first.model_copy(update={"agent_name": AgentHarness.CLAUDE}),
+        first.model_copy(update={"agent_name": HarnessName.CLAUDE}),
         first.model_copy(update={"model": "different-model"}),
         first.model_copy(update={"experiment": ExperimentConfiguration(custom_instructions=True)}),
         first.model_copy(update={"benchmark_version": "different-benchmark"}),
