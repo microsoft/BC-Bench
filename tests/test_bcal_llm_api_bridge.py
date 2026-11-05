@@ -15,17 +15,15 @@ from bcbench.agent.bcal.bc_eval_llm_api_bridge import (
 
 
 @dataclass
-class _Response:
+class _RawResponse:
+    value: object
     headers: dict[str, str]
 
-
-class _ServiceError(Exception):
-    def __init__(self, message: str, headers: dict[str, str] | None = None) -> None:
-        super().__init__(message)
-        self.response = _Response(headers or {})
+    def parse(self) -> object:
+        return self.value
 
 
-class _Completions:
+class _RawCompletions:
     def __init__(self, outcomes: list[object]) -> None:
         self.outcomes = outcomes
         self.requests: list[dict[str, object]] = []
@@ -38,16 +36,17 @@ class _Completions:
         return outcome
 
 
-def _ticket_required(ticket: str | None = None) -> _ServiceError:
+def _response(value: object, ticket: str | None = None) -> _RawResponse:
     headers = {_STICKY_ROUTE_TICKET_HEADER: ticket} if ticket is not None else {}
-    return _ServiceError(
-        f"LLM API: Required taxonomy data {_STICKY_ROUTE_TICKET_HEADER} not provided.",
-        headers,
-    )
+    return _RawResponse(value, headers)
 
 
 def test_install_compat_wraps_initial_and_subsequent_requests(monkeypatch: pytest.MonkeyPatch):
-    completions = _Completions([_ticket_required("secret-ticket"), {"id": "first"}, {"id": "second"}])
+    raw_completions = _RawCompletions([_response({"id": "first"}, "secret-ticket"), _response({"id": "second"}, "updated-ticket")])
+    completions = SimpleNamespace(
+        create=lambda **kwargs: None,
+        with_raw_response=SimpleNamespace(create=raw_completions.create),
+    )
     client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
 
     def create_client(*args: object, **kwargs: object) -> Any:
@@ -65,48 +64,78 @@ def test_install_compat_wraps_initial_and_subsequent_requests(monkeypatch: pytes
 
     assert compatible_client.chat.completions.create(model="gpt") == {"id": "first"}
     assert compatible_client.chat.completions.create(model="gpt") == {"id": "second"}
-    assert completions.requests == [
-        {"model": "gpt"},
-        {"model": "gpt", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: "secret-ticket"}},
+    assert raw_completions.requests == [
+        {"model": "gpt", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: ""}},
         {"model": "gpt", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: "secret-ticket"}},
     ]
 
 
-def test_sticky_route_session_retries_with_response_ticket_and_reuses_it():
-    completions = _Completions([_ticket_required("secret-ticket"), {"id": "first"}, {"id": "second"}])
+def test_sticky_route_session_caches_tickets_per_model():
+    completions = _RawCompletions(
+        [
+            _response({"id": "first"}, "ticket-a"),
+            _response({"id": "other"}, "ticket-b"),
+            _response({"id": "second"}, "ticket-a2"),
+        ]
+    )
     session = StickyRouteSession()
 
-    assert session.create(completions, {"model": "gpt-55-chat"}) == {"id": "first"}
-    assert session.create(completions, {"model": "gpt-55-chat"}) == {"id": "second"}
-    assert _STICKY_ROUTE_TICKET_HEADER not in completions.requests[0].get("extra_headers", {})
-    assert completions.requests[1]["extra_headers"] == {_STICKY_ROUTE_TICKET_HEADER: "secret-ticket"}
-    assert completions.requests[2]["extra_headers"] == {_STICKY_ROUTE_TICKET_HEADER: "secret-ticket"}
+    assert session.create(completions, {"model": "model-a"}) == {"id": "first"}
+    assert session.create(completions, {"model": "model-b"}) == {"id": "other"}
+    assert session.create(completions, {"model": "model-a"}) == {"id": "second"}
+    assert completions.requests == [
+        {"model": "model-a", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: ""}},
+        {"model": "model-b", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: ""}},
+        {"model": "model-a", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: "ticket-a"}},
+    ]
 
 
-def test_sticky_route_session_fails_closed_when_service_returns_no_ticket():
+def test_sticky_route_session_defaults_missing_response_ticket_to_empty():
+    completions = _RawCompletions([_response({"id": "first"}), _response({"id": "second"})])
     session = StickyRouteSession()
 
-    with pytest.raises(RuntimeError, match="did not return one for retry") as raised:
-        session.create(_Completions([_ticket_required()]), {"model": "gpt-55-chat"})
+    session.create(completions, {"model": "gpt-55-chat"})
+    session.create(completions, {"model": "gpt-55-chat"})
 
-    assert "secret" not in str(raised.value)
+    assert completions.requests[0]["extra_headers"] == {_STICKY_ROUTE_TICKET_HEADER: ""}
+    assert completions.requests[1]["extra_headers"] == {_STICKY_ROUTE_TICKET_HEADER: ""}
 
 
-def test_sticky_route_session_does_not_handle_unrelated_bad_request():
+def test_sticky_route_session_preserves_other_request_headers():
+    completions = _RawCompletions([_response({"id": "first"})])
+
+    StickyRouteSession().create(
+        completions,
+        {"model": "gpt-55-chat", "extra_headers": {"x-existing": "value"}},
+    )
+
+    assert completions.requests[0]["extra_headers"] == {
+        "x-existing": "value",
+        _STICKY_ROUTE_TICKET_HEADER: "",
+    }
+
+
+def test_sticky_route_session_does_not_handle_unrelated_taxonomy_error():
+    error = ValueError("Invalid taxonomy agent.")
     session = StickyRouteSession()
-    error = _ServiceError("Invalid taxonomy agent.")
 
-    with pytest.raises(_ServiceError) as raised:
-        session.create(_Completions([error]), {"model": "gpt-55-chat"})
+    with pytest.raises(ValueError, match="Invalid taxonomy agent") as raised:
+        session.create(_RawCompletions([error]), {"model": "gpt-55-chat"})
 
     assert raised.value is error
 
 
 def test_sticky_route_session_suppresses_rejected_ticket_value():
-    completions = _Completions([_ticket_required("secret-ticket"), _ServiceError("invalid ticket: secret-ticket")])
+    completions = _RawCompletions([_response({"id": "first"}, "secret-ticket"), RuntimeError("invalid ticket: secret-ticket")])
     session = StickyRouteSession()
+    session.create(completions, {"model": "gpt-55-chat"})
 
     with pytest.raises(RuntimeError, match="rejected its response-derived") as raised:
         session.create(completions, {"model": "gpt-55-chat"})
 
     assert "secret-ticket" not in str(raised.value)
+
+
+def test_sticky_route_session_requires_model():
+    with pytest.raises(TypeError, match="string model"):
+        StickyRouteSession().create(_RawCompletions([]), {})

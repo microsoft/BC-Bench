@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Protocol, cast
 
@@ -16,10 +16,16 @@ _CERT_FILE_ENV = "LLM_API_CERTIFICATE_FILE"
 _TAXONOMY_INFERENCE_STEP = "HostAgent"
 _DEFAULT_REASONING_EFFORT: str | None = None
 _STICKY_ROUTE_TICKET_HEADER = "x-sticky-route-session-ticket"
-_STICKY_ROUTE_REQUIRED = f"Required taxonomy data {_STICKY_ROUTE_TICKET_HEADER} not provided"
 
 
-class _Completions(Protocol):
+class _RawResponse(Protocol):
+    @property
+    def headers(self) -> Mapping[str, str]: ...
+
+    def parse(self) -> object: ...
+
+
+class _RawCompletions(Protocol):
     def create(self, **kwargs: object) -> object: ...
 
 
@@ -33,33 +39,29 @@ class _CompletionMethod:
 
 class StickyRouteSession:
     def __init__(self) -> None:
-        self._ticket: str | None = None
+        self._tickets: dict[str, str] = {}
 
-    def create(self, completions: _Completions, kwargs: dict[str, object]) -> object:
+    def create(self, completions: _RawCompletions, kwargs: dict[str, object]) -> object:
+        model = kwargs.get("model")
+        if not isinstance(model, str):
+            raise TypeError("Sticky-route requests require a string model.")
+
         request = dict(kwargs)
-        if self._ticket is not None:
-            request["extra_headers"] = {_STICKY_ROUTE_TICKET_HEADER: self._ticket}
+        ticket = self._tickets.get(model, "")
+        request["extra_headers"] = {
+            **cast(dict[str, str], request.get("extra_headers", {})),
+            _STICKY_ROUTE_TICKET_HEADER: ticket,
+        }
         try:
-            return completions.create(**request)
-        except Exception as exc:
-            if self._ticket is not None:
+            response = cast(_RawResponse, completions.create(**request))
+        except Exception:
+            if ticket:
                 raise RuntimeError("LLM API rejected its response-derived sticky-route session ticket.") from None
-            if _STICKY_ROUTE_REQUIRED not in str(exc):
-                raise
+            raise
 
-            response = getattr(exc, "response", None)
-            headers = getattr(response, "headers", {})
-            ticket = headers.get(_STICKY_ROUTE_TICKET_HEADER) if hasattr(headers, "get") else None
-            if not isinstance(ticket, str) or not ticket:
-                raise RuntimeError("LLM API required a sticky-route session ticket but did not return one for retry.") from None
-
-            self._ticket = ticket
-            retry = dict(kwargs)
-            retry["extra_headers"] = {_STICKY_ROUTE_TICKET_HEADER: ticket}
-            try:
-                return completions.create(**retry)
-            except Exception:  # noqa: BLE001 - suppress a rejected ticket value from third-party error text
-                raise RuntimeError("LLM API rejected its response-derived sticky-route session ticket.") from None
+        response_ticket = response.headers.get(_STICKY_ROUTE_TICKET_HEADER, "")
+        self._tickets[model] = response_ticket if isinstance(response_ticket, str) else ""
+        return response.parse()
 
 
 def install_sticky_route_compat() -> None:
@@ -73,7 +75,7 @@ def install_sticky_route_compat() -> None:
     def create_compatible_client(*args: object, **kwargs: object) -> object:
         client = create_llm_api_client(*args, **kwargs)
         completions = client.chat.completions
-        completion_method = _CompletionMethod(completions.create)
+        completion_method = _CompletionMethod(completions.with_raw_response.create)
         sticky_route_session = StickyRouteSession()
 
         def create(**request: object) -> object:
