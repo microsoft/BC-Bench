@@ -446,7 +446,7 @@ def test_changed_paths_and_rejected_interactions_are_behavioral_assertions():
 
 
 def test_scope_matcher_accepts_seeded3_question_with_alternatives_only_in_choices():
-    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path())
     entry = next(scenario for scenario in scenarios if scenario.instance_id == "bcal-scenario__authority-direct-and-corrected-scope-1")
     match = entry.interactions[0].match
     question = "Which target should I use?"
