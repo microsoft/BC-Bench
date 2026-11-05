@@ -19,7 +19,7 @@ from bcbench.contamination.filepath_identification import (
 )
 from bcbench.dataset import BugFixEntry
 from bcbench.results.base import RESULT_FILE_SUFFIX
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentHarness, EvaluationCategory
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
 
     logger.info("Running context-free filepath identification on %s (model=%s)", entry.instance_id, model)
     with tempfile.TemporaryDirectory(prefix="bcbench-fpid-") as tmp:
-        result: AgentResult = CopilotHarness(model=model, env=os.environ, timeout=timeout).run(AgentRequest(task=prompt, work_dir=Path(tmp), output_dir=Path(tmp) / "logs"))
+        result: AgentResult = CopilotHarness(name=AgentHarness.COPILOT, model=model, env=os.environ, timeout=timeout).run(AgentRequest(task=prompt, work_dir=Path(tmp), output_dir=Path(tmp) / "logs"))
     metrics, raw_output = result.metrics, result.response or ""
 
     gold_files: list[str] = extract_file_paths_from_patch(entry.patch)

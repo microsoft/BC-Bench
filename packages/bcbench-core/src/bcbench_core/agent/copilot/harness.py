@@ -6,30 +6,33 @@ from typing import override
 
 from bcbench_core.agent.copilot.agent import get_copilot_version, invoke_copilot
 from bcbench_core.agent.copilot.types import CopilotOptions, CopilotTimeoutError
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
 from bcbench_core.exceptions import AgentTimeoutError
 
-__all__ = ["COPILOT_HARNESS_NAME", "CopilotHarness"]
-
-COPILOT_HARNESS_NAME = "copilot"
+__all__ = ["CopilotHarness"]
 
 
 @dataclass(frozen=True)
-class CopilotHarness(Harness[str, str]):
+class CopilotHarness[N: str = str](Harness[str, N]):
     """Runs a prompt through Copilot CLI with fixed options; the task is the prompt itself.
 
     ``CopilotOptions()`` answers from the prompt alone (no tools, no custom instructions).
     Debug logs go to ``request.output_dir``; ``options.log_dir`` is ignored.
     """
 
+    name: N
     model: str
     env: Mapping[str, str]
     options: CopilotOptions = field(default_factory=CopilotOptions)
+    # Reported with every result and timeout
+    experiment: ExperimentConfiguration | None = None
     timeout: int = 30 * 60
 
     @override
-    def identity(self) -> AgentIdentity[str]:
-        return AgentIdentity(harness=COPILOT_HARNESS_NAME, version=get_copilot_version(), model=self.model)
+    def identity(self) -> AgentIdentity[N]:
+        # Validating against the unparametrized model would coerce a StrEnum name to a plain str
+        return AgentIdentity[N].model_construct(harness=self.name, version=get_copilot_version(), model=self.model)
 
     @override
     def run(self, request: AgentRequest[str], /) -> AgentResult:
@@ -43,5 +46,5 @@ class CopilotHarness(Harness[str, str]):
                 options=replace(self.options, log_dir=request.output_dir),
             )
         except CopilotTimeoutError as exc:
-            raise AgentTimeoutError(str(exc), metrics=exc.metrics) from exc
-        return AgentResult(response=response, metrics=metrics)
+            raise AgentTimeoutError(str(exc), metrics=exc.metrics, config=self.experiment) from exc
+        return AgentResult(response=response, metrics=metrics, experiment=self.experiment)
