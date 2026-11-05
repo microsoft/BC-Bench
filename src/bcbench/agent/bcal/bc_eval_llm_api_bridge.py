@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, cast
+from typing import TYPE_CHECKING, BinaryIO, Protocol, cast
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
@@ -14,6 +15,75 @@ if TYPE_CHECKING:
 _CERT_FILE_ENV = "LLM_API_CERTIFICATE_FILE"
 _TAXONOMY_INFERENCE_STEP = "HostAgent"
 _DEFAULT_REASONING_EFFORT: str | None = None
+_STICKY_ROUTE_TICKET_HEADER = "x-sticky-route-session-ticket"
+_STICKY_ROUTE_REQUIRED = f"Required taxonomy data {_STICKY_ROUTE_TICKET_HEADER} not provided"
+
+
+class _Completions(Protocol):
+    def create(self, **kwargs: object) -> object: ...
+
+
+class _CompletionMethod:
+    def __init__(self, create: Callable[..., object]) -> None:
+        self._create = create
+
+    def create(self, **kwargs: object) -> object:
+        return self._create(**kwargs)
+
+
+class StickyRouteSession:
+    def __init__(self) -> None:
+        self._ticket: str | None = None
+
+    def create(self, completions: _Completions, kwargs: dict[str, object]) -> object:
+        request = dict(kwargs)
+        if self._ticket is not None:
+            request["extra_headers"] = {_STICKY_ROUTE_TICKET_HEADER: self._ticket}
+        try:
+            return completions.create(**request)
+        except Exception as exc:
+            if self._ticket is not None:
+                raise RuntimeError("LLM API rejected its response-derived sticky-route session ticket.") from None
+            if _STICKY_ROUTE_REQUIRED not in str(exc):
+                raise
+
+            response = getattr(exc, "response", None)
+            headers = getattr(response, "headers", {})
+            ticket = headers.get(_STICKY_ROUTE_TICKET_HEADER) if hasattr(headers, "get") else None
+            if not isinstance(ticket, str) or not ticket:
+                raise RuntimeError("LLM API required a sticky-route session ticket but did not return one for retry.") from None
+
+            self._ticket = ticket
+            retry = dict(kwargs)
+            retry["extra_headers"] = {_STICKY_ROUTE_TICKET_HEADER: ticket}
+            try:
+                return completions.create(**retry)
+            except Exception:  # noqa: BLE001 - suppress a rejected ticket value from third-party error text
+                raise RuntimeError("LLM API rejected its response-derived sticky-route session ticket.") from None
+
+
+def install_sticky_route_compat() -> None:
+    from bc_eval.llm import llm_api
+
+    if getattr(llm_api.create_llm_api_client, "_bcbench_sticky_route_compat", False):
+        return
+
+    create_llm_api_client = llm_api.create_llm_api_client
+
+    def create_compatible_client(*args: object, **kwargs: object) -> object:
+        client = create_llm_api_client(*args, **kwargs)
+        completions = client.chat.completions
+        completion_method = _CompletionMethod(completions.create)
+        sticky_route_session = StickyRouteSession()
+
+        def create(**request: object) -> object:
+            return sticky_route_session.create(completion_method, request)
+
+        completions.create = create
+        return client
+
+    create_compatible_client._bcbench_sticky_route_compat = True  # type: ignore[attr-defined]
+    llm_api.create_llm_api_client = create_compatible_client
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -71,6 +141,7 @@ def main() -> int:
         raise TypeError("External AI request requires a messages array.")
 
     try:
+        install_sticky_route_compat()
         from bc_eval.llm.llm_api import LlmApiSettings, create_llm_api_client
     except ImportError as exc:
         raise RuntimeError("bc-eval>=0.6.0 is required for the bcal LLM API bridge.") from exc
