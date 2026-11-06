@@ -8,7 +8,7 @@ from bcbench_core.exceptions import AgentError
 from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_review_metrics
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, EvaluationCategory, PRReviewMetrics
+from bcbench.types import EvaluationCategory, HarnessName, PRReviewMetrics
 from tests.conftest import create_codereview_entry, create_codereview_result
 
 
@@ -108,7 +108,7 @@ def test_valid_engine_metrics_without_billing_preserve_unknown_credits_through_e
     metrics = build_pr_review_metrics(tmp_path, execution_time=2.5)
     assert metrics.ai_credits is None
     assert metrics.total_tokens == (178 if has_token_usage else None)
-    result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
+    result = create_codereview_result(agent_name=HarnessName.PR_REVIEW, metrics=metrics)
     result.save(tmp_path, "raw-result.jsonl")
     assert json.loads((tmp_path / "raw-result.jsonl").read_text(encoding="utf-8"))["metrics"]["ai_credits"] is None
 

@@ -26,7 +26,6 @@ __all__ = [
     "AL_MCP_SERVER_NAME",
     "BC_MCP_SERVER_NAME",
     "AgentConfig",
-    "AgentHarness",
     "AgentMetricsContract",
     "AnyAgentMetrics",
     "Checklist",
@@ -37,6 +36,7 @@ __all__ = [
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
+    "HarnessName",
     "HttpMcpServer",
     "JudgeCalibrationReport",
     "McpServerConfig",
@@ -143,7 +143,7 @@ class PluginConfig(BaseModel):
         return self
 
 
-class AgentHarness(StrEnum):
+class HarnessName(StrEnum):
     """Agents that can be evaluated, and the metrics each of them is able to report."""
 
     COPILOT = "GitHub Copilot"
@@ -161,7 +161,7 @@ class AgentHarness(StrEnum):
         """
 
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
@@ -169,7 +169,7 @@ class AgentHarness(StrEnum):
                     turn_count=None,
                     tool_usage=None,
                 )
-            case AgentHarness.CLAUDE | AgentHarness.MOCK:
+            case HarnessName.CLAUDE | HarnessName.MOCK:
                 metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
@@ -178,9 +178,9 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL:
+            case HarnessName.BCAL:
                 metrics = AgentMetrics(execution_time=None)
-            case AgentHarness.PR_REVIEW:
+            case HarnessName.PR_REVIEW:
                 metrics = PRReviewMetrics(
                     execution_time=None,
                     prompt_tokens=None,
@@ -189,25 +189,25 @@ class AgentHarness(StrEnum):
                     ai_credits=None,
                 )
             case _:
-                raise ValueError(f"Unknown AgentHarness: {self}")
+                raise ValueError(f"Unknown HarnessName: {self}")
 
         return AgentMetricsContract(type(metrics), frozenset(metrics.model_fields_set))
 
     @property
     def instruction_filename(self) -> str:
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 return "copilot-instructions.md"
-            case AgentHarness.CLAUDE:
+            case HarnessName.CLAUDE:
                 return "CLAUDE.md"
             case _:
                 raise ValueError(f"{self.value} does not support repository instructions")
 
     def get_target_dir(self, repo_path: Path) -> Path:
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 return repo_path / ".github"
-            case AgentHarness.CLAUDE:
+            case HarnessName.CLAUDE:
                 return repo_path / ".claude"
             case _:
                 raise ValueError(f"{self.value} does not support repository setup")
@@ -631,7 +631,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     result_dir: Path
 
     # The agent under evaluation, resolved before running
-    agent: AgentIdentity[AgentHarness]
+    agent: AgentIdentity[HarnessName]
 
     # Evaluation category
     category: EvaluationCategory

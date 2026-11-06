@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentResult, Harness
+from bcbench_core.agent.harness import AgentHarness, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentTimeoutError
 
@@ -15,7 +15,7 @@ from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentConfig, AgentHarness, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentConfig, EvaluationCategory, EvaluationContext, HarnessName
 from tests.conftest import StubHarness, create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
 
@@ -36,7 +36,7 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
         self.setup_called = True
 
     @override
-    def run_agent(self, context: EvaluationContext[E], harness: Harness[E, AgentHarness]) -> None:
+    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> None:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent

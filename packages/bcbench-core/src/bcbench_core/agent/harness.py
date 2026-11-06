@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
 
-__all__ = ["AgentIdentity", "AgentRequest", "AgentResult", "Harness"]
+__all__ = ["AgentHarness", "AgentIdentity", "AgentRequest", "AgentResult"]
 
 
 class AgentIdentity[N: str = str](BaseModel):
@@ -46,7 +46,7 @@ class AgentResult:
     experiment: ExperimentConfiguration | None = None
 
 
-class Harness[T, N: str = str](Protocol):
+class AgentHarness[T, N: str = str](Protocol):
     """Runs an agent on tasks of type ``T``, identified by a harness name of type ``N``.
 
     ``identity`` checks the harness is usable and raises ``AgentError`` otherwise. ``run`` raises

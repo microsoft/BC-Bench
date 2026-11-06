@@ -8,7 +8,7 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, EvaluationCategory, PRReviewMetrics
+from bcbench.types import EvaluationCategory, HarnessName, PRReviewMetrics
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
 
 
@@ -27,7 +27,7 @@ class TestWriteBcevalResults:
         ],
     )
     def test_pr_review_credits_preserve_missing_zero_and_observed_values(self, tmp_path, metrics):
-        result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
+        result = create_codereview_result(agent_name=HarnessName.PR_REVIEW, metrics=metrics)
         with patch.object(CodeReviewEntry, "load", return_value=[create_codereview_entry()]):
             write_bceval_results(
                 results=[result],

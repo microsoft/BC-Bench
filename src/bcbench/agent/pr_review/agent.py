@@ -23,7 +23,7 @@ from typing import Any, override
 
 import yaml
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from bcbench_core.git import commit_changes, has_changes, init_repo
 
@@ -31,7 +31,7 @@ from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.paths import SHARED_CONFIG_FILE
-from bcbench.types import AgentHarness, PRReviewMetrics
+from bcbench.types import HarnessName, PRReviewMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +154,7 @@ def _write_review_json(output_dir: Path, repo_path: Path) -> int:
 
 
 @dataclass(frozen=True)
-class PRReviewHarness(Harness[CodeReviewEntry, AgentHarness]):
+class PRReviewHarness(AgentHarness[CodeReviewEntry, HarnessName]):
     """The production BC-ALAgents review engine, run in local mode on code-review entries.
 
     Separate from CopilotHarness by design: this spawns the PROD BC-ALAgents PowerShell
@@ -168,8 +168,8 @@ class PRReviewHarness(Harness[CodeReviewEntry, AgentHarness]):
     timeout: int = 60 * 60
 
     @override
-    def identity(self) -> AgentIdentity[AgentHarness]:
-        return AgentIdentity[AgentHarness](harness=AgentHarness.PR_REVIEW, version=get_pr_review_version(self.engine_path), model=self.model)
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.PR_REVIEW, version=get_pr_review_version(self.engine_path), model=self.model)
 
     @override
     def run(self, request: AgentRequest[CodeReviewEntry], /) -> AgentResult:

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import override
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
@@ -17,7 +17,7 @@ from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from bcbench.dataset import NL2ALEntry
-from bcbench.types import AgentHarness
+from bcbench.types import HarnessName
 
 logger = logging.getLogger(__name__)
 
@@ -124,15 +124,15 @@ def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, exp
 
 
 @dataclass(frozen=True)
-class BCalHarness(Harness[NL2ALEntry, AgentHarness]):
+class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
     """The bcal CLI, generating AL code for NL2AL entries into the prepared workspace."""
 
     backend_config: BCalBackendConfig
     timeout: int = 25 * 60
 
     @override
-    def identity(self) -> AgentIdentity[AgentHarness]:
-        return AgentIdentity[AgentHarness](harness=AgentHarness.BCAL, version=get_bcal_version(), model=self.backend_config.model or "external-command")
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.BCAL, version=get_bcal_version(), model=self.backend_config.model or "external-command")
 
     @override
     def run(self, request: AgentRequest[NL2ALEntry], /) -> AgentResult:

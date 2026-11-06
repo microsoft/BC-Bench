@@ -7,7 +7,7 @@ from typing import override
 
 from bcbench_core.agent.customization import setup_custom_agent, setup_instructions, setup_skills
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
@@ -23,7 +23,7 @@ from bcbench.agent.shared import (
 )
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.operations import instructions_profile_dir
-from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, PluginConfig
+from bcbench.types import AgentConfig, AgentRuntimeConfig, EvaluationCategory, HarnessName, PluginConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def get_claude_version() -> str:
 
 
 @dataclass(frozen=True)
-class ClaudeHarness(Harness[BaseDatasetEntry, AgentHarness]):
+class ClaudeHarness(AgentHarness[BaseDatasetEntry, HarnessName]):
     """Claude Code on any category, customized through the agent config."""
 
     model: str
@@ -44,8 +44,8 @@ class ClaudeHarness(Harness[BaseDatasetEntry, AgentHarness]):
     timeout: int = 60 * 60
 
     @override
-    def identity(self) -> AgentIdentity[AgentHarness]:
-        return AgentIdentity[AgentHarness](harness=AgentHarness.CLAUDE, version=get_claude_version(), model=self.model)
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.CLAUDE, version=get_claude_version(), model=self.model)
 
     @override
     def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
@@ -71,13 +71,13 @@ class ClaudeHarness(Harness[BaseDatasetEntry, AgentHarness]):
             entry,
             category,
             repo_path,
-            AgentHarness.CLAUDE,
+            HarnessName.CLAUDE,
             plugin_root,
             runtime=runtime,
         )
         profile_dir: Path = instructions_profile_dir(entry.customization_profile)
-        target_dir: Path = AgentHarness.CLAUDE.get_target_dir(repo_path)
-        instructions_enabled: bool = setup_instructions(agent_config.instructions, profile_dir, target_dir, AgentHarness.CLAUDE.instruction_filename)
+        target_dir: Path = HarnessName.CLAUDE.get_target_dir(repo_path)
+        instructions_enabled: bool = setup_instructions(agent_config.instructions, profile_dir, target_dir, HarnessName.CLAUDE.instruction_filename)
         skills_enabled: bool = setup_skills(agent_config.skills, profile_dir, target_dir)
         custom_agent: str | None = setup_custom_agent(agent_config.agents, profile_dir, target_dir)
         plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(agent_config, plugin_root, allow_copilot_manifest=False)

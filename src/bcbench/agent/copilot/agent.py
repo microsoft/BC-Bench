@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import override
 
-from bcbench_core.agent.copilot import CopilotOptions, CopilotTimeoutError, get_copilot_version, invoke_copilot
+from bcbench_core.agent.copilot import CopilotHarness as CoreCopilotHarness
+from bcbench_core.agent.copilot import CopilotOptions, get_copilot_version
 from bcbench_core.agent.customization import setup_custom_agent, setup_instructions, setup_skills
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult, Harness
-from bcbench_core.exceptions import AgentTimeoutError
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 
 from bcbench.agent.shared import (
     agent_subprocess_env,
@@ -21,13 +21,13 @@ from bcbench.agent.shared import (
 )
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.operations import instructions_profile_dir
-from bcbench.types import AgentConfig, AgentHarness, AgentRuntimeConfig, EvaluationCategory, PluginConfig
+from bcbench.types import AgentConfig, AgentRuntimeConfig, EvaluationCategory, HarnessName, PluginConfig
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class CopilotHarness(Harness[BaseDatasetEntry, AgentHarness]):
+class CopilotHarness(AgentHarness[BaseDatasetEntry, HarnessName]):
     """GitHub Copilot CLI on any category, customized through the agent config."""
 
     model: str
@@ -38,8 +38,8 @@ class CopilotHarness(Harness[BaseDatasetEntry, AgentHarness]):
     timeout: int = 60 * 60
 
     @override
-    def identity(self) -> AgentIdentity[AgentHarness]:
-        return AgentIdentity[AgentHarness](harness=AgentHarness.COPILOT, version=get_copilot_version(), model=self.model)
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.COPILOT, version=get_copilot_version(), model=self.model)
 
     @override
     def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
@@ -60,13 +60,13 @@ class CopilotHarness(Harness[BaseDatasetEntry, AgentHarness]):
             entry,
             category,
             repo_path,
-            AgentHarness.COPILOT,
+            HarnessName.COPILOT,
             plugin_root,
             runtime=runtime,
         )
         profile_dir: Path = instructions_profile_dir(entry.customization_profile)
-        target_dir: Path = AgentHarness.COPILOT.get_target_dir(repo_path)
-        instructions_enabled: bool = setup_instructions(agent_config.instructions, profile_dir, target_dir, AgentHarness.COPILOT.instruction_filename)
+        target_dir: Path = HarnessName.COPILOT.get_target_dir(repo_path)
+        instructions_enabled: bool = setup_instructions(agent_config.instructions, profile_dir, target_dir, HarnessName.COPILOT.instruction_filename)
         skills_enabled: bool = setup_skills(agent_config.skills, profile_dir, target_dir)
         custom_agent: str | None = setup_custom_agent(agent_config.agents, profile_dir, target_dir)
         plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(agent_config, plugin_root, allow_copilot_manifest=True)
@@ -89,27 +89,23 @@ class CopilotHarness(Harness[BaseDatasetEntry, AgentHarness]):
             options = CopilotOptions(
                 allow_all_tools=True,
                 custom_instructions=instructions_enabled,
-                log_dir=output_dir,
                 mcp_config_json=mcp_config_json,
                 plugin_dirs=(*lsp_plugin_dirs, *(plugin_dir for _, plugin_dir in plugins)),
                 granted_dirs=tuple(plugin_dir for plugin, plugin_dir in plugins if plugin.grant_dir_access),
                 custom_agent=custom_agent,
                 workspace_mcp=True,
             )
-
-            metrics, response = invoke_copilot(
-                prompt=prompt,
+            harness = CoreCopilotHarness(
+                name=HarnessName.COPILOT,
                 model=self.model,
-                work_dir=repo_path,
-                timeout=self.timeout if request.timeout is None else request.timeout,
                 env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
                 options=options,
+                experiment=config,
+                timeout=self.timeout,
             )
+            result: AgentResult = harness.run(AgentRequest(task=prompt, work_dir=repo_path, output_dir=output_dir, timeout=request.timeout))
             logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
-        except CopilotTimeoutError as exc:
-            raise AgentTimeoutError("Copilot CLI timed out", metrics=exc.metrics, config=config) from exc
-        else:
-            return AgentResult(response=response, metrics=metrics, experiment=config)
+            return result
         finally:
             if bc_gateway is not None:
                 bc_gateway.stop()
