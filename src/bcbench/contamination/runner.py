@@ -7,7 +7,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
+from bcbench_core.agent.copilot import CopilotHarness
+from bcbench_core.agent.harness import AgentRequest, AgentResult
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.contamination.filepath_identification import (
@@ -31,14 +32,8 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
 
     logger.info("Running context-free filepath identification on %s (model=%s)", entry.instance_id, model)
     with tempfile.TemporaryDirectory(prefix="bcbench-fpid-") as tmp:
-        metrics, raw_output = invoke_copilot(
-            prompt=prompt,
-            model=model,
-            work_dir=Path(tmp),
-            timeout=timeout,
-            env=os.environ,
-            options=CopilotOptions(allow_all_tools=False),
-        )
+        result: AgentResult = CopilotHarness(model=model, env=os.environ, timeout=timeout).run(AgentRequest(task=prompt, work_dir=Path(tmp), output_dir=Path(tmp) / "logs"))
+    metrics, raw_output = result.metrics, result.response or ""
 
     gold_files: list[str] = extract_file_paths_from_patch(entry.patch)
     try:
@@ -47,7 +42,7 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
         logger.exception("Failed to parse filepath identification response for %s. Raw output:\n%s", entry.instance_id, raw_output)
         raise
 
-    result = FilePathIdentificationResult(
+    file_identification_result = FilePathIdentificationResult(
         instance_id=entry.instance_id,
         model=model,
         category=EvaluationCategory.BUG_FIX,
@@ -57,8 +52,8 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
         metrics=metrics,
         raw_output=raw_output,
     )
-    save_identification_result(result, result_dir)
-    return result
+    save_identification_result(file_identification_result, result_dir)
+    return file_identification_result
 
 
 def save_identification_result(result: FilePathIdentificationResult, result_dir: Path) -> Path:

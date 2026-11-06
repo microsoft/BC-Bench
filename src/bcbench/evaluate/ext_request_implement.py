@@ -2,16 +2,14 @@ import logging
 from pathlib import Path
 from typing import override
 
-from bcbench_core.agent.harness import Harness
 from bcbench_core.exceptions import EmptyDiffError
 from bcbench_core.git import stage_and_get_diff
 
 from bcbench.dataset import ExtRequestImplementEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.github_actions import github_log_group
 from bcbench.operations import copy_problem_statement_folder, set_runtime_version, setup_repo_prebuild
 from bcbench.results.base import JudgeBasedEvaluationResult
-from bcbench.types import AgentHarness, EvaluationContext
+from bcbench.types import EvaluationContext
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +33,6 @@ class ExtRequestImplementPipeline(EvaluationPipeline[ExtRequestImplementEntry]):
     @override
     def setup(self, context: EvaluationContext[ExtRequestImplementEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
-
-    @override
-    def run_agent(self, context: EvaluationContext[ExtRequestImplementEntry], harness: Harness[ExtRequestImplementEntry, AgentHarness]) -> None:
-        with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
-            result = harness.run(context.agent_request())
-            context.metrics, context.experiment = result.metrics, result.experiment
 
     @override
     def evaluate(self, context: EvaluationContext[ExtRequestImplementEntry]) -> None:
