@@ -1135,7 +1135,7 @@ def test_report_experiment_runner_is_fail_closed():
 
 
 def test_report_experiment_workflow_runs_only_authorized_matrix():
-    workflow = Path(".github/workflows/bcal-report-skill-experiment.yml").read_text(encoding="utf-8")
+    workflow = Path(".github/workflows/bcal-evaluation.yml").read_text(encoding="utf-8")
 
     assert "bcal-report-skill-progressive-disclosure-20261108" in workflow
     assert "Workflow must run from immutable ref" in workflow

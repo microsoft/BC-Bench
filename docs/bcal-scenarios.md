@@ -134,7 +134,7 @@ canonical tool traces fail closed and preserves sticky-route tickets in an
 authenticated in-memory per-run broker across separate bridge processes. It
 pins `gpt-55-chat`, all three package byte identities, and the
 `report-authoring` 1.0.0 content/revision/catalog/activated-segment identity.
-The dedicated `bcal-report-skill-experiment.yml` workflow reads those values
+The immutable study version of the registered `bcal-evaluation.yml` workflow reads those values
 from the selector and runs one six-case repetition per dispatch. Exactly six
 dispatches (three variants by two repetitions) produce the authorized 36 cells.
 
