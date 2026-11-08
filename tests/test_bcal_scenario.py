@@ -941,29 +941,47 @@ def test_report_artifact_assertion_types(
 def test_report_skill_delivery_must_precede_first_mutation(monkeypatch: pytest.MonkeyPatch):
     payload = scenario_result_payload()
     payload["evidence"] = {
+        "promptEvidence": {
+            "compositions": [{"segment": "main.skill-catalog"}],
+            "uses": [{"segment": "main.activated-skill.revision"}],
+        },
         "trace": {
             "truncated": False,
             "events": [
                 {
-                    "type": "skill_delivery",
+                    "type": "skill_activation_delivered",
                     "sequence": 1,
-                    "skillId": "al-report-authoring",
-                    "source": "model",
+                    "skillId": "report-authoring",
+                    "contractVersion": "1.0.0",
+                    "contentSha256": "content-sha",
+                    "revision": "revision",
+                    "activationMode": "model_triggered",
+                    "requestedToolCallId": "tool-call-1",
                 },
                 {"type": "tool_call", "sequence": 2, "toolName": "write_file"},
             ],
-        }
+        },
     }
     result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "model")
-    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "al-report-authoring")
+    monkeypatch.setenv("BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE", "model_triggered")
+    monkeypatch.setenv("BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID", "non_null")
+    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "report-authoring")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CONTRACT_VERSION", "1.0.0")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CONTENT_SHA256", "content-sha")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_REVISION", "revision")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CATALOG_SEGMENT", "main.skill-catalog")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATED_SEGMENT", "main.activated-skill.revision")
 
     assertions = scenario_evaluation._variant_skill_assertions(result)
 
     assert [assertion.assertion_id for assertion in assertions] == [
         "variant-canonical-trace-complete",
-        "variant-skill-delivered",
+        "variant-skill-identity",
+        "variant-skill-prompt-delivery",
+        "variant-activation-mode",
+        "variant-requested-tool-call",
         "variant-skill-before-first-mutation",
     ]
     assert all(assertion.passed for assertion in assertions)
@@ -972,6 +990,10 @@ def test_report_skill_delivery_must_precede_first_mutation(monkeypatch: pytest.M
 def test_report_skill_delivery_after_mutation_fails_ordering(monkeypatch: pytest.MonkeyPatch):
     payload = scenario_result_payload()
     payload["evidence"] = {
+        "promptEvidence": {
+            "compositions": [{"segment": "main.skill-catalog"}],
+            "uses": [{"segment": "main.activated-skill.revision"}],
+        },
         "trace": {
             "truncated": False,
             "events": [
@@ -979,22 +1001,34 @@ def test_report_skill_delivery_after_mutation_fails_ordering(monkeypatch: pytest
                 {
                     "type": "skill_activation_delivered",
                     "sequence": 2,
-                    "skillId": "al-report-authoring",
-                    "source": "host",
+                    "skillId": "report-authoring",
+                    "contractVersion": "1.0.0",
+                    "contentSha256": "content-sha",
+                    "revision": "revision",
+                    "activationMode": "host_deterministic",
+                    "requestedToolCallId": None,
                 },
             ],
-        }
+        },
     }
     result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "host")
-    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "al-report-authoring")
+    monkeypatch.setenv("BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE", "host_deterministic")
+    monkeypatch.setenv("BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID", "null")
+    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "report-authoring")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CONTRACT_VERSION", "1.0.0")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CONTENT_SHA256", "content-sha")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_REVISION", "revision")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CATALOG_SEGMENT", "main.skill-catalog")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATED_SEGMENT", "main.activated-skill.revision")
 
     assertions = scenario_evaluation._variant_skill_assertions(result)
 
     assert assertions[0].passed is True
     assert assertions[1].passed is True
-    assert assertions[2].passed is False
+    assert all(assertion.passed for assertion in assertions[:-1])
+    assert assertions[-1].passed is False
 
 
 @pytest.mark.parametrize(
@@ -1015,8 +1049,8 @@ def test_report_variant_rejects_incomplete_canonical_trace(
                 {
                     "type": "skill_delivery",
                     "sequence": 1,
-                    "skillId": "al-report-authoring",
-                    "source": "model",
+                    "skillId": "report-authoring",
+                    "activationMode": "model_triggered",
                 }
             ],
         }
@@ -1024,7 +1058,7 @@ def test_report_variant_rejects_incomplete_canonical_trace(
     result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "model")
-    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "al-report-authoring")
+    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "report-authoring")
 
     assertions = scenario_evaluation._variant_skill_assertions(result)
 
@@ -1032,7 +1066,7 @@ def test_report_variant_rejects_incomplete_canonical_trace(
     assert assertions[0].passed is False
 
 
-def test_report_experiment_selector_is_focused_and_dispatch_blocked():
+def test_report_experiment_selector_is_authorized_and_focused():
     selector = json.loads(Path("dataset/experiments/bcal_report_skill_progressive_disclosure_v1.json").read_text(encoding="utf-8"))
     entries = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
     entries_by_id = {entry.instance_id: entry for entry in entries}
@@ -1041,11 +1075,13 @@ def test_report_experiment_selector_is_focused_and_dispatch_blocked():
     assert selector["github"]["base_pull_request"] == 1011
     assert selector["github"]["starting_base_sha"] == "c0fab214d0cfd3a0c4720cb9abde35698925e16d"
     assert selector["github"]["required_fixed_base_sha"] == "1969363374c57aa23bb79ea0f3ec537ce440c870"
-    assert selector["authorization"]["state"] == "pending-coordinator"
-    assert len(selector["authorization"]["blockers"]) == 1
-    assert selector["execution"]["package"] is None
-    assert selector["execution"]["model"] is None
+    assert selector["authorization"]["state"] == "authorized"
+    assert selector["authorization"]["authorized_cell_count"] == 36
+    assert selector["authorization"]["workflow_ref"] == "bcal-report-skill-progressive-disclosure-20261108"
+    assert selector["execution"]["model"] == "gpt-55-chat"
     assert selector["execution"]["repeat_count"] == 2
+    assert selector["execution"]["evidence_contract_version"] == "1.3"
+    assert selector["execution"]["trace_contract_version"] == "1.3"
     assert len(selected) == len(set(selected)) == 6
     assert all(entries_by_id[entry_id].metadata.area == "report-progressive-disclosure" for entry_id in selected)
     assert all(entries_by_id[entry_id].evaluation.compile_required for entry_id in selected)
@@ -1057,8 +1093,17 @@ def test_report_experiment_selector_is_focused_and_dispatch_blocked():
         "host-triggered-report-skill",
     }
     assert selector["variants"]["permanent-full-report-guidance"]["skill_activation_policy"] == "forbidden"
-    assert selector["variants"]["model-triggered-report-skill"]["skill_activation_source"] == "model"
-    assert selector["variants"]["host-triggered-report-skill"]["skill_activation_source"] == "host"
+    model_variant = selector["variants"]["model-triggered-report-skill"]
+    host_variant = selector["variants"]["host-triggered-report-skill"]
+    assert model_variant["skill_activation_source"] == "model"
+    assert model_variant["expected_activation_mode"] == "model_triggered"
+    assert model_variant["requested_tool_call_id"] == "non_null"
+    assert host_variant["skill_activation_source"] == "host"
+    assert host_variant["expected_activation_mode"] == "host_deterministic"
+    assert host_variant["requested_tool_call_id"] == "null"
+    assert {variant["package"]["build_id"] for variant in selector["variants"].values()} == {3021632, 3021787, 3021789}
+    assert selector["skill"]["id"] == "report-authoring"
+    assert selector["skill"]["contract_version"] == "1.0.0"
     assert selector["invariants"]["preserve_pre_model_failures"] is True
     assert selector["invariants"]["exclude_pre_model_failures_from_semantic_metrics"] is True
     assert selector["invariants"]["require_github_duplicate_gate"] is True
@@ -1082,9 +1127,27 @@ def test_report_experiment_runner_is_fail_closed():
     assert "missing the exact fixed microsoft/BC-Bench#1011 head" in script
     assert "BCBENCH_BCAL_SKILL_ACTIVATION_POLICY" in script
     assert "BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE" in script
+    assert "BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE" in script
+    assert "BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID" in script
     assert "BCBENCH_BCAL_REPORT_SKILL_ID" in script
     assert "foreach ($repeat in 1..$config.execution.repeat_count)" in script
     assert "Publish-BCalCaseResults.ps1" in script
+
+
+def test_report_experiment_workflow_runs_only_authorized_matrix():
+    workflow = Path(".github/workflows/bcal-report-skill-experiment.yml").read_text(encoding="utf-8")
+
+    assert "bcal-report-skill-progressive-disclosure-20261108" in workflow
+    assert "Workflow must run from immutable ref" in workflow
+    assert "Selector must contain exactly six unique report entries" in workflow
+    assert "Control Tower is prohibited" in workflow
+    assert "authorized_cell_count" in workflow
+    assert "Installed nupkg bytes do not match the authorized selector" in workflow
+    assert "BCBENCH_BCAL_SKILL_CONTENT_SHA256" in workflow
+    assert "BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID" in workflow
+    assert "Incomplete coverage" in workflow
+    assert "--storage kusto" in workflow
+    assert "publication-only" not in workflow
 
 
 def test_pre_model_failures_are_explicitly_excluded_from_semantic_metrics(tmp_path: Path):

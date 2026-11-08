@@ -126,14 +126,17 @@ delivery. All report-study variants reject a missing or truncated canonical
 trace. Pre-model failures remain coverage rows but set
 `semantic_metrics_eligible=false`, so semantic comparisons must filter them out.
 
-Dispatch is intentionally blocked. The selector records the original #1011
-starting SHA as provenance and pins repaired #1011 head
+The authorized immutable study is
+`bcal-report-skill-progressive-disclosure-20261108`. The selector records the
+original #1011 starting SHA as provenance and pins repaired #1011 head
 `1969363374c57aa23bb79ea0f3ec537ce440c870`, which makes truncated or omitted
 canonical tool traces fail closed and preserves sticky-route tickets in an
-authenticated in-memory per-run broker across separate bridge processes. The
-package, model, study authorization, report skill ID, and variant configuration
-identities remain unset. Populate only those coordinator-supplied fields without
-changing the cohort.
+authenticated in-memory per-run broker across separate bridge processes. It
+pins `gpt-55-chat`, all three package byte identities, and the
+`report-authoring` 1.0.0 content/revision/catalog/activated-segment identity.
+The dedicated `bcal-report-skill-experiment.yml` workflow reads those values
+from the selector and runs one six-case repetition per dispatch. Exactly six
+dispatches (three variants by two repetitions) produce the authorized 36 cells.
 
 Validate the package-independent cohort without invoking BCal:
 
@@ -143,9 +146,11 @@ Validate the package-independent cohort without invoking BCal:
   -ValidateCohort
 ```
 
-Authorized dry-run and execution additionally require an exact matching BCal
-tool directory, backend/model preflight, BC 28 symbols, and a duplicate-gate
-receipt bound to the study ID and selector Git-blob SHA-256 with zero GitHub and
-Kusto matches. The runner rejects Control Tower, unrelated lanes, dirty selector
-bytes, duplicate entries, incomplete package/configuration provenance, and a
-nonempty output directory.
+Execution requires the immutable study ref, exact matching BCal ProductVersion
+and nupkg bytes, the fixed bridge/model, BC 28 symbols, complete six-row
+coverage, and noncolliding GitHub/Kusto study provenance. Gate B verifies the
+skill contract, content SHA, revision, catalog and activated segments,
+activation mode, requested-tool-call ID nullability, complete canonical trace,
+and delivery before the first workspace mutation. The permanent-guidance
+variant rejects activated-skill delivery. Control Tower, unrelated lanes,
+replacement candidates, and semantic retries are prohibited.

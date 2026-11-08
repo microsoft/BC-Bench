@@ -328,3 +328,45 @@ class TestWriteBcevalResults:
         assert data["metadata"]["experiment"]["al_lsp_enabled"] is True
         assert data["metadata"]["experiment"]["custom_instructions"] is True
         assert data["metadata"]["git_branch"] == "feat/al-mcp"
+
+    def test_includes_authorized_study_metadata(
+        self,
+        tmp_path,
+        sample_dataset_file,
+        problem_statement_dir,
+        monkeypatch,
+    ):
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        expected = {
+            "study_id": "bcal-report-skill-progressive-disclosure-20261108",
+            "variant_id": "model-triggered",
+            "repetition_index": "2",
+            "repetition_count": "2",
+            "selector_git_blob_sha256": "selector-sha",
+            "package_version": "30.0.46.7223-beta",
+            "package_source_sha": "source-sha",
+            "variant_patch_sha": "patch-sha",
+            "expected_activation_mode": "model_triggered",
+        }
+        for key, value in expected.items():
+            monkeypatch.setenv(f"BCBENCH_{key.upper()}", value)
+
+        result = create_bugfix_result(metrics=AgentMetrics(execution_time=1.0))
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[result],
+                out_dir=output_dir,
+                run_id="authorized-study",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        with (output_dir / "results.jsonl").open() as f:
+            data = json.loads(f.readline())
+
+        assert {key: data["metadata"][key] for key in expected} == expected

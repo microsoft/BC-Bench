@@ -1,0 +1,12 @@
+{
+  "name": "bcal-report-skill-progressive-disclosure-20261108",
+  "dataset": "bcal-scenario",
+  "entries": [
+    "bcal-scenario__report-create-customer-snapshot-1",
+    "bcal-scenario__report-repair-and-extend-1",
+    "bcal-scenario__report-layout-choice-1",
+    "bcal-scenario__report-labels-and-filters-1",
+    "bcal-scenario__report-source-clarification-1",
+    "bcal-scenario__report-sales-order-analysis-1"
+  ]
+}

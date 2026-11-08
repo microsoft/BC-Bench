@@ -137,4 +137,12 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         metadata["canonical_trace_truncated"] = _metadata_scalar(canonical_trace.get("truncated"))
         metadata["canonical_trace_omitted_event_count"] = _metadata_scalar(canonical_trace.get("omittedEventCount"))
         metadata["semantic_metrics_eligible"] = self.semantic_metrics_eligible
+        activation_assertions = {assertion.assertion_id: assertion.passed for assertion in self.trace_assertions if assertion.assertion_id.startswith("variant-")}
+        metadata["activation_trace_complete"] = activation_assertions.get("variant-canonical-trace-complete")
+        metadata["activation_skill_identity_valid"] = activation_assertions.get("variant-skill-identity")
+        metadata["activation_prompt_delivery_valid"] = activation_assertions.get("variant-skill-prompt-delivery")
+        metadata["activation_mode_valid"] = activation_assertions.get("variant-activation-mode")
+        metadata["activation_requested_tool_call_valid"] = activation_assertions.get("variant-requested-tool-call")
+        metadata["activation_before_first_mutation"] = activation_assertions.get("variant-skill-before-first-mutation")
+        metadata["activation_skill_absent"] = activation_assertions.get("variant-skill-not-delivered")
         return metadata

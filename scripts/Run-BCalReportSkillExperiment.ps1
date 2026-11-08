@@ -79,6 +79,8 @@ $selection = [ordered]@{
     variant = $Variant
     variant_configuration = $variantConfig
     execution = $config.execution
+    package = $variantConfig.package
+    skill = $config.skill
     category = $config.cohort.category
     repeat_count = $config.execution.repeat_count
     selected_entries = $entries
@@ -104,7 +106,7 @@ if (-not $config.github.required_fixed_base_sha) {
 if ($LASTEXITCODE -ne 0) {
     throw "Current HEAD is not based on the authorized fixed microsoft/BC-Bench#1011 head $($config.github.required_fixed_base_sha)."
 }
-$requiredExecutionFields = @("model", "package")
+$requiredExecutionFields = @("model")
 $missingExecutionFields = @($requiredExecutionFields | Where-Object { -not $config.execution.$_ })
 if ($missingExecutionFields.Count -ne 0) {
     throw "Authorized report experiment is missing exact execution fields: $($missingExecutionFields -join ', ')."
@@ -122,16 +124,17 @@ $requiredPackageFields = @(
     "build_result",
     "published"
 )
-$missingPackageFields = @($requiredPackageFields | Where-Object { $null -eq $config.execution.package.$_ -or $config.execution.package.$_ -eq "" })
+$package = $variantConfig.package
+$missingPackageFields = @($requiredPackageFields | Where-Object { $null -eq $package.$_ -or $package.$_ -eq "" })
 if ($missingPackageFields.Count -ne 0) {
     throw "Authorized report experiment package is missing immutable fields: $($missingPackageFields -join ', ')."
 }
-if (-not $config.execution.package.published -or $config.execution.package.build_result -ne "succeeded") {
+if (-not $package.published -or $package.build_result -ne "succeeded") {
     throw "Authorized report experiment package must be published from a final-success build."
 }
-$requiredVariantFields = @("configuration_id", "configuration_sha256")
+$requiredVariantFields = @("configuration_id", "expected_activation_mode", "requested_tool_call_id")
 if ($variantConfig.skill_activation_policy -eq "required") {
-    $requiredVariantFields += @("skill_activation_source", "report_skill_id")
+    $requiredVariantFields += @("skill_activation_source")
 }
 $missingVariantFields = @($requiredVariantFields | Where-Object { -not $variantConfig.$_ })
 if ($missingVariantFields.Count -ne 0) {
@@ -159,19 +162,19 @@ if (-not (Test-Path -LiteralPath $bcal)) {
     throw "BCal executable not found at $bcal."
 }
 $installedIdentity = (& $bcal --version 2>&1 | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $installedIdentity -ne $config.execution.package.installed_identity) {
-    throw "Expected BCal identity '$($config.execution.package.installed_identity)', found '$installedIdentity'."
+if ($LASTEXITCODE -ne 0 -or $installedIdentity -ne $package.installed_identity) {
+    throw "Expected BCal identity '$($package.installed_identity)', found '$installedIdentity'."
 }
-$packageArchive = Get-ChildItem -LiteralPath $ToolPath -Recurse -File -Filter $config.execution.package.nupkg_file | Select-Object -First 1
+$packageArchive = Get-ChildItem -LiteralPath $ToolPath -Recurse -File -Filter $package.nupkg_file | Select-Object -First 1
 if (-not $packageArchive) {
-    throw "Pinned BCal package archive '$($config.execution.package.nupkg_file)' was not found under ToolPath."
+    throw "Pinned BCal package archive '$($package.nupkg_file)' was not found under ToolPath."
 }
 $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packageArchive.FullName).Hash.ToLowerInvariant()
-if ($packageHash -ne $config.execution.package.nupkg_sha256) {
-    throw "Expected BCal package SHA-256 '$($config.execution.package.nupkg_sha256)', found '$packageHash'."
+if ($packageHash -ne $package.nupkg_sha256) {
+    throw "Expected BCal package SHA-256 '$($package.nupkg_sha256)', found '$packageHash'."
 }
-if ($packageArchive.Length -ne $config.execution.package.nupkg_size) {
-    throw "Expected BCal package size '$($config.execution.package.nupkg_size)', found '$($packageArchive.Length)'."
+if ($packageArchive.Length -ne $package.nupkg_size) {
+    throw "Expected BCal package size '$($package.nupkg_size)', found '$($packageArchive.Length)'."
 }
 $missingPrerequisites = @()
 if ([string]::IsNullOrWhiteSpace($env:BCAL_LLM_COMMAND)) {
@@ -222,7 +225,14 @@ $selectionArtifactSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]
 $env:PATH = "$ToolPath;$env:PATH"
 $env:BCBENCH_BCAL_SKILL_ACTIVATION_POLICY = $variantConfig.skill_activation_policy
 $env:BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE = $variantConfig.skill_activation_source
-$env:BCBENCH_BCAL_REPORT_SKILL_ID = $variantConfig.report_skill_id
+$env:BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE = $variantConfig.expected_activation_mode
+$env:BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID = $variantConfig.requested_tool_call_id
+$env:BCBENCH_BCAL_REPORT_SKILL_ID = $config.skill.id
+$env:BCBENCH_BCAL_SKILL_CONTRACT_VERSION = $config.skill.contract_version
+$env:BCBENCH_BCAL_SKILL_CONTENT_SHA256 = $config.skill.content_sha256
+$env:BCBENCH_BCAL_SKILL_REVISION = $config.skill.revision
+$env:BCBENCH_BCAL_SKILL_CATALOG_SEGMENT = $config.skill.catalog_segment
+$env:BCBENCH_BCAL_SKILL_ACTIVATED_SEGMENT = $config.skill.activated_segment
 foreach ($repeat in 1..$config.execution.repeat_count) {
     $runOutput = Join-Path $OutputDir "$Variant-r$repeat"
     $aggregateRun = Join-Path $runOutput "bcal_test_run"

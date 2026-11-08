@@ -293,12 +293,28 @@ def _skill_delivery_events(result: BCalScenarioRunResult) -> list[tuple[float, s
     return events
 
 
+def _find_values(value: object, names: set[str]) -> list[object]:
+    if isinstance(value, dict):
+        found = [child for key, child in value.items() if isinstance(key, str) and key.lower() in names]
+        return [*found, *(nested for child in value.values() for nested in _find_values(child, names))]
+    if isinstance(value, list):
+        return [nested for child in value for nested in _find_values(child, names)]
+    return []
+
+
 def _variant_skill_assertions(result: BCalScenarioRunResult) -> list[TraceAssertionResult]:
     policy = os.getenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY")
     if not policy:
         return []
     expected_skill = os.environ.get("BCBENCH_BCAL_REPORT_SKILL_ID", "report").lower()
     expected_source = os.getenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "").lower()
+    expected_mode = os.getenv("BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE", "").lower()
+    expected_contract = os.getenv("BCBENCH_BCAL_SKILL_CONTRACT_VERSION", "").lower()
+    expected_content_sha = os.getenv("BCBENCH_BCAL_SKILL_CONTENT_SHA256", "").lower()
+    expected_revision = os.getenv("BCBENCH_BCAL_SKILL_REVISION", "").lower()
+    expected_catalog = os.getenv("BCBENCH_BCAL_SKILL_CATALOG_SEGMENT", "").lower()
+    expected_segment = os.getenv("BCBENCH_BCAL_SKILL_ACTIVATED_SEGMENT", "").lower()
+    expected_request_id = os.getenv("BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID", "").lower()
     canonical_trace = result.canonical_trace
     trace_complete = canonical_trace is not None and not _canonical_trace_is_incomplete(result)
     assertions = [
@@ -311,23 +327,68 @@ def _variant_skill_assertions(result: BCalScenarioRunResult) -> list[TraceAssert
     deliveries = _skill_delivery_events(result)
     matching = [event for event in deliveries if expected_skill in event[1] or expected_skill in json.dumps(event)]
     mutations = [position for position, tool, _step in _canonical_trace_events(result) if tool in _MUTATION_TOOLS]
+    evidence_text = json.dumps(result.evidence or {}, sort_keys=True).lower()
     if policy == "forbidden":
         return [
             *assertions,
             TraceAssertionResult(
                 assertion_id="variant-skill-not-delivered",
-                passed=not matching,
+                passed=not matching and (not expected_segment or expected_segment not in evidence_text),
                 message=f"Expected no {expected_skill!r} skill delivery in the permanent-guidance variant",
             ),
         ]
-    source_matches = [event for event in matching if not expected_source or expected_source in event[2] or expected_source in json.dumps(event)]
-    delivered_before_mutation = bool(source_matches) and (not mutations or min(event[0] for event in source_matches) < min(mutations))
+    raw_trace_events = canonical_trace.get("events") if canonical_trace else None
+    trace_events = raw_trace_events if isinstance(raw_trace_events, list) else []
+    activation_records = [
+        value
+        for value in trace_events
+        if isinstance(value, dict) and expected_skill in json.dumps(value, sort_keys=True).lower() and (not expected_mode or expected_mode in json.dumps(value, sort_keys=True).lower())
+    ]
+    activation_text = json.dumps(activation_records, sort_keys=True).lower()
+    identity_valid = all(expected and expected in activation_text for expected in (expected_skill, expected_contract, expected_content_sha, expected_revision))
+    prompt_delivery_valid = all(expected and expected in evidence_text for expected in (expected_catalog, expected_segment))
+    mode_valid = bool(activation_records) and expected_mode in activation_text
+    requested_values = _find_values(
+        activation_records,
+        {"requestedtoolcallid", "requested_tool_call_id"},
+    )
+    if expected_request_id == "non_null":
+        requested_tool_call_valid = any(isinstance(value, str) and bool(value.strip()) for value in requested_values)
+    elif expected_request_id == "null":
+        requested_tool_call_valid = bool(requested_values) and all(value is None for value in requested_values)
+    else:
+        requested_tool_call_valid = not requested_values
+    source_matches = [event for event in matching if not expected_source or expected_source in event[2] or expected_mode in activation_text]
+    activation_positions: list[float] = []
+    for index, value in enumerate(trace_events):
+        if not isinstance(value, dict) or expected_skill not in json.dumps(value, sort_keys=True).lower():
+            continue
+        record = cast(dict[str, object], value)
+        position = record.get("sequence", record.get("index", index))
+        if isinstance(position, int | float):
+            activation_positions.append(float(position))
+    delivered_before_mutation = bool(source_matches and activation_positions) and (not mutations or min(activation_positions) < min(mutations))
     return [
         *assertions,
         TraceAssertionResult(
-            assertion_id="variant-skill-delivered",
-            passed=bool(source_matches),
-            message=f"Expected {expected_source or 'configured'} delivery of skill {expected_skill!r}",
+            assertion_id="variant-skill-identity",
+            passed=identity_valid,
+            message=f"Expected exact contract/content/revision identity for skill {expected_skill!r}",
+        ),
+        TraceAssertionResult(
+            assertion_id="variant-skill-prompt-delivery",
+            passed=prompt_delivery_valid,
+            message=f"Expected catalog {expected_catalog!r} and activated segment {expected_segment!r}",
+        ),
+        TraceAssertionResult(
+            assertion_id="variant-activation-mode",
+            passed=mode_valid,
+            message=f"Expected activationMode {expected_mode!r}",
+        ),
+        TraceAssertionResult(
+            assertion_id="variant-requested-tool-call",
+            passed=requested_tool_call_valid,
+            message=f"Expected requestedToolCallId state {expected_request_id!r}",
         ),
         TraceAssertionResult(
             assertion_id="variant-skill-before-first-mutation",

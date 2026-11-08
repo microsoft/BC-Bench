@@ -3,6 +3,7 @@ Convert the result into a format that bceval can consume and upload to Braintrus
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +74,24 @@ def write_bceval_results(
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
                 **_experiment_metadata(result.experiment, git_ref, benchmark_version),
             }
+            metadata.update(
+                {
+                    key.removeprefix("BCBENCH_").lower(): value
+                    for key, value in os.environ.items()
+                    if key
+                    in {
+                        "BCBENCH_STUDY_ID",
+                        "BCBENCH_VARIANT_ID",
+                        "BCBENCH_REPETITION_INDEX",
+                        "BCBENCH_REPETITION_COUNT",
+                        "BCBENCH_SELECTOR_GIT_BLOB_SHA256",
+                        "BCBENCH_PACKAGE_VERSION",
+                        "BCBENCH_PACKAGE_SOURCE_SHA",
+                        "BCBENCH_VARIANT_PATCH_SHA",
+                        "BCBENCH_EXPECTED_ACTIVATION_MODE",
+                    }
+                }
+            )
 
             bceval_result = {
                 "id": result.instance_id,
