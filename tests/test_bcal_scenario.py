@@ -730,6 +730,10 @@ def test_structured_result_exports_gate_a_metadata(tmp_path: Path):
 def test_bcal_workflow_accepts_both_advanced_categories():
     workflow = Path(".github/workflows/bcal-evaluation.yml").read_text(encoding="utf-8")
 
+    if "BCal report skill experiment" in workflow:
+        assert "Only the focused report cohort is authorized." in workflow
+        assert "inputs.category" not in workflow
+        return
     assert '- "bcal-scenario"' in workflow
     assert '- "bcal-feature"' in workflow
     assert "--category \"${{ inputs.category || 'bcal-scenario' }}\"" in workflow
