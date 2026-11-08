@@ -423,6 +423,71 @@ def test_trace_prefers_gate_a_canonical_trace(tmp_path: Path):
     assert result.canonical_trace == payload["evidence"]["trace"]
 
 
+def test_complete_canonical_trace_can_prove_forbidden_tool_and_ordering():
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [
+                {"type": "tool_call", "toolName": "ask_user", "sequence": 1},
+                {"type": "tool_call", "toolName": "edit_file", "sequence": 2},
+            ],
+        },
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    ordering = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="ordering", type="tool_order", before="ask_user", after="write_file"),
+        result,
+        None,
+        [],
+    )
+    forbidden = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="forbidden", type="forbidden_tool", tool="publish"),
+        result,
+        None,
+        [],
+    )
+
+    assert ordering.passed is True
+    assert forbidden.passed is True
+
+
+@pytest.mark.parametrize(
+    ("trace_metadata", "assertion"),
+    [
+        (
+            {"truncated": True, "omittedEventCount": 1, "events": []},
+            BCalTraceAssertion(id="forbidden", type="forbidden_tool", tool="publish"),
+        ),
+        (
+            {
+                "truncated": False,
+                "omittedEventCount": 1,
+                "events": [
+                    {"type": "tool_call", "toolName": "ask_user", "sequence": 1},
+                    {"type": "tool_call", "toolName": "edit_file", "sequence": 2},
+                ],
+            },
+            BCalTraceAssertion(id="ordering", type="tool_order", before="ask_user", after="write_file"),
+        ),
+    ],
+)
+def test_incomplete_canonical_trace_cannot_prove_tool_compliance(
+    trace_metadata: dict[str, object],
+    assertion: BCalTraceAssertion,
+):
+    payload = scenario_result_payload()
+    payload["evidence"] = {"trace": trace_metadata}
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    evaluated = scenario_evaluation.evaluate_trace_assertion(assertion, result, None, [])
+
+    assert evaluated.passed is False
+    assert "truncated or reports omitted events" in evaluated.message
+
+
 def test_tool_order_treats_edit_file_as_workspace_mutation(tmp_path: Path):
     entry = create_bcal_scenario_entry()
     result = bcal_scenario.BCalScenarioRunResult.model_validate(scenario_result_payload())
@@ -642,7 +707,7 @@ def test_structured_result_exports_gate_a_metadata(tmp_path: Path):
             "aggregateSha256": "a" * 64,
         },
         prompt_evidence={"compositions": [{"id": "system"}], "uses": [{"id": "system"}, {"id": "user"}]},
-        canonical_trace={"truncated": False, "events": [{"type": "tool_call"}]},
+        canonical_trace={"truncated": False, "omittedEventCount": 0, "events": [{"type": "tool_call"}]},
     )
 
     assert result.export_metadata["bcal_product_version"] == "30.0.44.65502-beta"
@@ -653,6 +718,7 @@ def test_structured_result_exports_gate_a_metadata(tmp_path: Path):
     assert result.export_metadata["prompt_use_count"] == 2
     assert result.export_metadata["canonical_trace_event_count"] == 1
     assert result.export_metadata["canonical_trace_truncated"] is False
+    assert result.export_metadata["canonical_trace_omitted_event_count"] == 0
 
 
 def test_bcal_workflow_accepts_both_advanced_categories():

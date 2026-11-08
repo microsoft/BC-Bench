@@ -22,6 +22,7 @@ logger = get_logger(__name__)
 
 _MUTATION_TOOLS = frozenset({"write_file", "edit_file", "create_file", "apply_patch", "replace_text", "patch_text"})
 _TEXT_EXTENSIONS = frozenset({".al", ".json", ".md", ".txt", ".xml", ".yml", ".yaml", ".ps1", ".toml"})
+_CANONICAL_TOOL_TRACE_ASSERTIONS = frozenset({"required_tool", "forbidden_tool", "tool_order"})
 
 
 def _scenario_app_id(instance_id: str) -> str:
@@ -98,6 +99,14 @@ def _canonical_trace_events(result: BCalScenarioRunResult) -> list[tuple[float, 
     return events
 
 
+def _canonical_trace_is_incomplete(result: BCalScenarioRunResult) -> bool:
+    trace = result.canonical_trace
+    if trace is None:
+        return False
+    omitted_event_count = trace.get("omittedEventCount")
+    return trace.get("truncated") is True or (isinstance(omitted_event_count, int) and omitted_event_count > 0)
+
+
 def _chat_tool_events(chat_path: Path | None) -> list[tuple[float, str, str]]:
     if chat_path is None:
         return []
@@ -137,6 +146,13 @@ def evaluate_trace_assertion(
     chat_path: Path | None,
     changed_paths: list[str],
 ) -> TraceAssertionResult:
+    if assertion.type in _CANONICAL_TOOL_TRACE_ASSERTIONS and _canonical_trace_is_incomplete(result):
+        return TraceAssertionResult(
+            assertion_id=assertion.id,
+            passed=False,
+            message="Canonical trace is truncated or reports omitted events; tool-event compliance cannot be established",
+        )
+
     events = _canonical_trace_events(result) or _chat_tool_events(chat_path) or _result_tool_events(result)
     tool_positions: dict[str, list[float]] = {}
     for position, tool, _step_id in events:

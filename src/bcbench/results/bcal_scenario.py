@@ -131,4 +131,5 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         metadata["prompt_use_count"] = len(uses) if isinstance(uses, list) else None
         metadata["canonical_trace_event_count"] = len(events) if isinstance(events, list) else None
         metadata["canonical_trace_truncated"] = _metadata_scalar(canonical_trace.get("truncated"))
+        metadata["canonical_trace_omitted_event_count"] = _metadata_scalar(canonical_trace.get("omittedEventCount"))
         return metadata

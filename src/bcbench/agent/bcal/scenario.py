@@ -11,7 +11,7 @@ from typing import Annotated, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from bcbench.agent.bcal.agent import BCalBackendConfig, _process_output, _resolve_bcal_executable
+from bcbench.agent.bcal.agent import BCalBackendConfig, _bcal_process_environment, _process_output, _resolve_bcal_executable
 from bcbench.config import get_config
 from bcbench.dataset import BCalScenarioEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -301,17 +301,19 @@ def run_bcal_scenario(
     logger.debug(f"BCal scenario command: {cmd_args}")
 
     try:
-        start = time.monotonic()
-        completed = subprocess.run(
-            cmd_args,
-            timeout=_config.timeout.bcal_execution,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-        )
-        execution_time = time.monotonic() - start
+        with _bcal_process_environment(backend_config) as environment:
+            start = time.monotonic()
+            completed = subprocess.run(
+                cmd_args,
+                timeout=_config.timeout.bcal_execution,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+                env=environment,
+            )
+            execution_time = time.monotonic() - start
     except subprocess.TimeoutExpired:
         metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
         raise AgentTimeoutError("bcal scenario timed out", metrics=metrics, config=ExperimentConfiguration()) from None

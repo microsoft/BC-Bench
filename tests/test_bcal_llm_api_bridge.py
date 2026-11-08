@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
+from textwrap import dedent
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
@@ -11,6 +16,7 @@ from bcbench.agent.bcal.bc_eval_llm_api_bridge import (
     _STICKY_ROUTE_TICKET_HEADER,
     StickyRouteSession,
     install_sticky_route_compat,
+    sticky_route_ticket_broker_environment,
 )
 
 
@@ -54,8 +60,8 @@ def test_install_compat_wraps_initial_and_subsequent_requests(monkeypatch: pytes
 
     bc_eval = ModuleType("bc_eval")
     bc_eval_llm = ModuleType("bc_eval.llm")
-    bc_eval_llm.llm_api = SimpleNamespace(create_llm_api_client=create_client)
-    bc_eval.llm = bc_eval_llm
+    bc_eval_llm.llm_api = SimpleNamespace(create_llm_api_client=create_client)  # ty: ignore[unresolved-attribute]
+    bc_eval.llm = bc_eval_llm  # ty: ignore[unresolved-attribute]
     monkeypatch.setitem(sys.modules, "bc_eval", bc_eval)
     monkeypatch.setitem(sys.modules, "bc_eval.llm", bc_eval_llm)
 
@@ -139,3 +145,136 @@ def test_sticky_route_session_suppresses_rejected_ticket_value():
 def test_sticky_route_session_requires_model():
     with pytest.raises(TypeError, match="string model"):
         StickyRouteSession().create(_RawCompletions([]), {})
+
+
+def test_external_bridge_replays_ticket_across_process_turns(tmp_path: Path):
+    package = tmp_path / "bc_eval" / "llm"
+    package.mkdir(parents=True)
+    (tmp_path / "bc_eval" / "__init__.py").write_text("", encoding="utf-8")
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "llm_api.py").write_text(
+        dedent(
+            f"""
+            import json
+            import os
+
+            TICKET_HEADER = {_STICKY_ROUTE_TICKET_HEADER!r}
+
+
+            class LlmApiSettings:
+                tenant_id = ""
+                client_id = ""
+
+                @classmethod
+                def from_env(cls):
+                    return cls()
+
+
+            class RawResponse:
+                headers = {{TICKET_HEADER: "opaque-ticket"}}
+
+                def parse(self):
+                    return {{"choices": [{{"message": {{"content": "READY"}}}}]}}
+
+
+            class RawCompletions:
+                def create(self, **kwargs):
+                    ticket = kwargs["extra_headers"][TICKET_HEADER]
+                    with open(os.environ["REQUEST_LOG"], "a", encoding="utf-8") as stream:
+                        stream.write(json.dumps({{"ticket": ticket}}) + "\\n")
+                    if ticket not in {{"", "opaque-ticket"}}:
+                        raise RuntimeError("unexpected ticket")
+                    return RawResponse()
+
+
+            class Completions:
+                def __init__(self):
+                    self.with_raw_response = RawCompletions()
+
+
+            class Client:
+                def __init__(self):
+                    self.chat = type("Chat", (), {{"completions": Completions()}})()
+
+
+            def create_llm_api_client(**kwargs):
+                return Client()
+            """
+        ),
+        encoding="utf-8",
+    )
+    bridge = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "bcal" / "bc_eval_llm_api_bridge.py"
+    request_log = tmp_path / "requests.jsonl"
+    request = json.dumps({"model": "gpt-55-chat", "messages": [{"role": "user", "content": "READY"}]})
+
+    with sticky_route_ticket_broker_environment() as broker_environment:
+        environment = (
+            os.environ
+            | broker_environment
+            | {
+                "PYTHONPATH": str(tmp_path),
+                "REQUEST_LOG": str(request_log),
+            }
+        )
+        turns = [
+            subprocess.run(
+                [sys.executable, str(bridge)],
+                input=request,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=environment,
+                check=False,
+            )
+            for _ in range(2)
+        ]
+
+    assert [turn.returncode for turn in turns] == [0, 0]
+    assert [json.loads(line)["ticket"] for line in request_log.read_text(encoding="utf-8").splitlines()] == ["", "opaque-ticket"]
+    assert all("opaque-ticket" not in turn.stdout + turn.stderr for turn in turns)
+
+
+def test_external_bridge_fails_without_session_broker(tmp_path: Path):
+    package = tmp_path / "bc_eval" / "llm"
+    package.mkdir(parents=True)
+    (tmp_path / "bc_eval" / "__init__.py").write_text("", encoding="utf-8")
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "llm_api.py").write_text(
+        dedent(
+            """
+            class LlmApiSettings:
+                tenant_id = ""
+                client_id = ""
+
+                @classmethod
+                def from_env(cls):
+                    return cls()
+
+
+            def create_llm_api_client(**kwargs):
+                return type("Client", (), {"chat": type("Chat", (), {"completions": object()})()})()
+            """
+        ),
+        encoding="utf-8",
+    )
+    bridge = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "bcal" / "bc_eval_llm_api_bridge.py"
+    environment = os.environ | {"PYTHONPATH": str(tmp_path)}
+    for name in (
+        "BCBENCH_STICKY_ROUTE_BROKER_ADDRESS",
+        "BCBENCH_STICKY_ROUTE_BROKER_AUTH",
+        "BCBENCH_STICKY_ROUTE_BROKER_FAMILY",
+    ):
+        environment.pop(name, None)
+
+    completed = subprocess.run(
+        [sys.executable, str(bridge)],
+        input=json.dumps({"model": "gpt-55-chat", "messages": []}),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=environment,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "requires a session-scoped sticky-route broker" in completed.stderr

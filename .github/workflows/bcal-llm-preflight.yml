@@ -88,17 +88,46 @@ jobs:
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
         run: |
-          $request = @{
-            model = "${{ inputs.model }}"
-            messages = @(@{ role = "user"; content = "Reply with exactly READY." })
-            max_completion_tokens = 32
-          } | ConvertTo-Json -Depth 5 -Compress
-          $response = $request | & .\.bcal-llm-api-venv\Scripts\python.exe .\src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py
+          $script = @'
+          import importlib.util
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          bridge_path = Path("src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py")
+          spec = importlib.util.spec_from_file_location("bcbench_bcal_llm_api_bridge", bridge_path)
+          if spec is None or spec.loader is None:
+              raise RuntimeError("Could not load the BC-Bench LLM API compatibility module.")
+          bridge = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(bridge)
+          responses = []
+          with bridge.sticky_route_ticket_broker_environment() as broker_environment:
+              environment = os.environ | broker_environment
+              for turn in range(2):
+                  request = {
+                      "model": "${{ inputs.model }}",
+                      "messages": [{"role": "user", "content": f"Turn {turn + 1}: reply with exactly READY."}],
+                      "max_completion_tokens": 32,
+                  }
+                  completed = subprocess.run(
+                      [sys.executable, str(bridge_path)],
+                      input=json.dumps(request),
+                      capture_output=True,
+                      text=True,
+                      encoding="utf-8",
+                      env=environment,
+                      check=False,
+                  )
+                  if completed.returncode != 0:
+                      raise RuntimeError(f"External-command bridge turn {turn + 1} failed: {completed.stderr}")
+                  responses.append(json.loads(completed.stdout))
+          if any(not response.get("choices") or not response["choices"][0]["message"].get("content") for response in responses):
+              raise RuntimeError("External-command bridge returned no model response.")
+          '@
+          $script | & .\.bcal-llm-api-venv\Scripts\python.exe -
           if ($LASTEXITCODE -ne 0) {
             throw "External-command bridge preflight failed."
           }
-          $completion = $response | ConvertFrom-Json
-          if (-not $completion.choices -or -not $completion.choices[0].message.content) {
-            throw "External-command bridge returned no model response."
-          }
-          Write-Output "External-command bridge returned a real model response."
+          Write-Output "External-command bridge returned two real model responses with session-scoped routing."

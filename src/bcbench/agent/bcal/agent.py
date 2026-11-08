@@ -1,12 +1,16 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+import os
 import shutil
 import subprocess
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from bcbench.agent.bcal.bc_eval_llm_api_bridge import sticky_route_ticket_broker_environment
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -17,6 +21,13 @@ logger = get_logger(__name__)
 _config = get_config()
 
 _BCAL_TOOL = "bcal"
+
+
+@contextmanager
+def _bcal_process_environment(backend_config: "BCalBackendConfig") -> Iterator[dict[str, str]]:
+    broker_environment = sticky_route_ticket_broker_environment() if backend_config.backend == BCalLLMBackend.EXTERNAL_COMMAND else nullcontext({})
+    with broker_environment as sticky_route_environment:
+        yield os.environ | sticky_route_environment
 
 
 class BCalBackendConfig(BaseModel):
@@ -162,13 +173,15 @@ def run_bcal_agent(
     logger.debug(f"bcal CLI command: {cmd_args}")
 
     try:
-        start = time.monotonic()
-        subprocess.run(
-            cmd_args,
-            timeout=_config.timeout.bcal_execution,
-            check=True,
-        )
-        execution_time = time.monotonic() - start
+        with _bcal_process_environment(backend_config) as environment:
+            start = time.monotonic()
+            subprocess.run(
+                cmd_args,
+                timeout=_config.timeout.bcal_execution,
+                check=True,
+                env=environment,
+            )
+            execution_time = time.monotonic() - start
 
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
         return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
@@ -205,16 +218,18 @@ def run_bcal_prompt(
     cmd_args = _bcal_cmd_args(entry, query, package_cache_path, export_folder, backend_config)
 
     try:
-        result = subprocess.run(
-            cmd_args,
-            timeout=_config.timeout.bcal_execution,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=True,
-        )
-        stdout = result.stdout or ""
+        with _bcal_process_environment(backend_config) as environment:
+            result = subprocess.run(
+                cmd_args,
+                timeout=_config.timeout.bcal_execution,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+                env=environment,
+            )
+            stdout = result.stdout or ""
     except subprocess.TimeoutExpired as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
         message = f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds"
