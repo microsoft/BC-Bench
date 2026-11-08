@@ -270,7 +270,7 @@ def _skill_delivery_events(result: BCalScenarioRunResult) -> list[tuple[float, s
         if not isinstance(value, dict):
             return ""
         for key, child in value.items():
-            if key.lower() in names and isinstance(child, str):
+            if isinstance(key, str) and key.lower() in names and isinstance(child, str):
                 return child
         for child in value.values():
             found = find_scalar(child, names)
@@ -281,13 +281,14 @@ def _skill_delivery_events(result: BCalScenarioRunResult) -> list[tuple[float, s
     for index, value in enumerate(raw_events):
         if not isinstance(value, dict):
             continue
+        record = cast(dict[str, object], value)
         text = json.dumps(value, sort_keys=True).lower()
         if "skill" not in text or not any(marker in text for marker in ("deliver", "activat", "inject")):
             continue
-        sequence = value.get("sequence", value.get("index", index))
+        sequence = record.get("sequence", record.get("index", index))
         position = float(sequence) if isinstance(sequence, int | float) else float(index)
-        skill = find_scalar(value, {"skillid", "skill_id", "skill"})
-        source = find_scalar(value, {"source", "activationsource", "activation_source"})
+        skill = find_scalar(record, {"skillid", "skill_id", "skill"})
+        source = find_scalar(record, {"source", "activationsource", "activation_source"})
         events.append((position, skill.lower(), source.lower()))
     return events
 

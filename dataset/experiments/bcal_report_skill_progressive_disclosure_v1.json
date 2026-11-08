@@ -7,7 +7,7 @@
     "base_pull_request": 1011,
     "base_branch": "esbenk-bcal-authority-scenarios",
     "starting_base_sha": "c0fab214d0cfd3a0c4720cb9abde35698925e16d",
-    "required_fixed_base_sha": null
+    "required_fixed_base_sha": "1969363374c57aa23bb79ea0f3ec537ce440c870"
   },
   "authorization": {
     "state": "pending-coordinator",
@@ -15,8 +15,7 @@
     "authorized_at": null,
     "authorized_by": null,
     "blockers": [
-      "Canonical trace truncation must fail closed.",
-      "Sticky-route state must persist across per-turn external-command processes."
+      "Exact BCal package, model, report skill, and variant configuration identities are pending coordinator authorization."
     ]
   },
   "execution": {

@@ -127,12 +127,13 @@ trace. Pre-model failures remain coverage rows but set
 `semantic_metrics_eligible=false`, so semantic comparisons must filter them out.
 
 Dispatch is intentionally blocked. The selector records the original #1011
-starting SHA only as provenance and leaves `required_fixed_base_sha`, package,
-model, study authorization, report skill ID, and variant configuration
-identities unset. #1011 must first fix fail-open trace truncation and sticky-route
-state loss across per-turn external-command processes. After the coordinator
-supplies the new exact #1011 head and immutable BCal configuration, populate
-those fields without changing the cohort.
+starting SHA as provenance and pins repaired #1011 head
+`1969363374c57aa23bb79ea0f3ec537ce440c870`, which makes truncated or omitted
+canonical tool traces fail closed and preserves sticky-route tickets in an
+authenticated in-memory per-run broker across separate bridge processes. The
+package, model, study authorization, report skill ID, and variant configuration
+identities remain unset. Populate only those coordinator-supplied fields without
+changing the cohort.
 
 Validate the package-independent cohort without invoking BCal:
 

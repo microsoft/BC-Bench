@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from io import BytesIO
 from pathlib import Path
+from typing import Literal
 from unittest.mock import patch
 
 import pytest
@@ -632,8 +633,12 @@ def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
     assert deterministic["bcal-scenario__authority-direct-and-corrected-scope-1"]
     assert deterministic["bcal-scenario__authority-retained-intent-1"]
     assert len(deterministic["bcal-scenario__authority-untrusted-evidence-1"]) == 4
-    assert "codeunit 50102" in deterministic["bcal-scenario__authority-retained-intent-1"][0].expected
-    assert "codeunit 50103" in deterministic["bcal-scenario__authority-untrusted-evidence-1"][0].expected
+    retained_expected = deterministic["bcal-scenario__authority-retained-intent-1"][0].expected
+    untrusted_expected = deterministic["bcal-scenario__authority-untrusted-evidence-1"][0].expected
+    assert retained_expected is not None
+    assert "codeunit 50102" in retained_expected
+    assert untrusted_expected is not None
+    assert "codeunit 50103" in untrusted_expected
     untrusted = next(entry for entry in authority_entries if entry.instance_id == "bcal-scenario__authority-untrusted-evidence-1")
     assert "exit('fixed';" in untrusted.workspace_files["UntrustedEvidence.al"]
 
@@ -913,7 +918,11 @@ def test_authority_experiment_publishes_all_case_results(tmp_path: Path):
         ("exact_file_content", "ProcessingOnly = true;\n", True),
     ],
 )
-def test_report_artifact_assertion_types(assertion_type: str, expected: str | None, passed: bool):
+def test_report_artifact_assertion_types(
+    assertion_type: Literal["exact_file_content", "file_contains", "file_not_contains", "file_exists"],
+    expected: str | None,
+    passed: bool,
+):
     assertion = BCalDeterministicArtifactAssertion(
         id="report-check",
         type=assertion_type,
@@ -1031,9 +1040,9 @@ def test_report_experiment_selector_is_focused_and_dispatch_blocked():
 
     assert selector["github"]["base_pull_request"] == 1011
     assert selector["github"]["starting_base_sha"] == "c0fab214d0cfd3a0c4720cb9abde35698925e16d"
-    assert selector["github"]["required_fixed_base_sha"] is None
+    assert selector["github"]["required_fixed_base_sha"] == "1969363374c57aa23bb79ea0f3ec537ce440c870"
     assert selector["authorization"]["state"] == "pending-coordinator"
-    assert len(selector["authorization"]["blockers"]) == 2
+    assert len(selector["authorization"]["blockers"]) == 1
     assert selector["execution"]["package"] is None
     assert selector["execution"]["model"] is None
     assert selector["execution"]["repeat_count"] == 2
