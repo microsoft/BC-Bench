@@ -676,6 +676,7 @@ def test_structured_result_exposes_deterministic_metrics(tmp_path: Path):
         "independent_build": False,
         "independent_build_attempted": False,
         "trace_compliance": True,
+        "semantic_metrics_eligible": False,
     }
     assert BCalScenarioEvaluationResult.model_validate_json(result.model_dump_json()) == result
 
@@ -900,3 +901,203 @@ def test_authority_experiment_publishes_all_case_results(tmp_path: Path):
     )
     assert duplicate.returncode != 0
     assert "BCal experiment output collision" in duplicate.stderr
+
+
+@pytest.mark.parametrize(
+    ("assertion_type", "expected", "passed"),
+    [
+        ("file_exists", None, True),
+        ("file_contains", "ProcessingOnly = true;", True),
+        ("file_contains", "UsageCategory = Tasks;", False),
+        ("file_not_contains", "Report.Run", True),
+        ("exact_file_content", "ProcessingOnly = true;\n", True),
+    ],
+)
+def test_report_artifact_assertion_types(assertion_type: str, expected: str | None, passed: bool):
+    assertion = BCalDeterministicArtifactAssertion(
+        id="report-check",
+        type=assertion_type,
+        path="Report.al",
+        expected=expected,
+    )
+
+    result = scenario_evaluation.evaluate_artifact_assertion(
+        assertion,
+        {"Report.al": "ProcessingOnly = true;\n"},
+    )
+
+    assert result.passed is passed
+
+
+def test_report_skill_delivery_must_precede_first_mutation(monkeypatch: pytest.MonkeyPatch):
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "events": [
+                {
+                    "type": "skill_delivery",
+                    "sequence": 1,
+                    "skillId": "al-report-authoring",
+                    "source": "model",
+                },
+                {"type": "tool_call", "sequence": 2, "toolName": "write_file"},
+            ],
+        }
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "model")
+    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "al-report-authoring")
+
+    assertions = scenario_evaluation._variant_skill_assertions(result)
+
+    assert [assertion.assertion_id for assertion in assertions] == [
+        "variant-canonical-trace-complete",
+        "variant-skill-delivered",
+        "variant-skill-before-first-mutation",
+    ]
+    assert all(assertion.passed for assertion in assertions)
+
+
+def test_report_skill_delivery_after_mutation_fails_ordering(monkeypatch: pytest.MonkeyPatch):
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "events": [
+                {"type": "tool_call", "sequence": 1, "toolName": "edit_file"},
+                {
+                    "type": "skill_activation_delivered",
+                    "sequence": 2,
+                    "skillId": "al-report-authoring",
+                    "source": "host",
+                },
+            ],
+        }
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "host")
+    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "al-report-authoring")
+
+    assertions = scenario_evaluation._variant_skill_assertions(result)
+
+    assert assertions[0].passed is True
+    assert assertions[1].passed is True
+    assert assertions[2].passed is False
+
+
+@pytest.mark.parametrize(
+    ("truncated", "omitted_event_count"),
+    [(True, 0), (False, 1)],
+)
+def test_report_variant_rejects_incomplete_canonical_trace(
+    monkeypatch: pytest.MonkeyPatch,
+    truncated: bool,
+    omitted_event_count: int,
+):
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "trace": {
+            "truncated": truncated,
+            "omittedEventCount": omitted_event_count,
+            "events": [
+                {
+                    "type": "skill_delivery",
+                    "sequence": 1,
+                    "skillId": "al-report-authoring",
+                    "source": "model",
+                }
+            ],
+        }
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "model")
+    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "al-report-authoring")
+
+    assertions = scenario_evaluation._variant_skill_assertions(result)
+
+    assert assertions[0].assertion_id == "variant-canonical-trace-complete"
+    assert assertions[0].passed is False
+
+
+def test_report_experiment_selector_is_focused_and_dispatch_blocked():
+    selector = json.loads(Path("dataset/experiments/bcal_report_skill_progressive_disclosure_v1.json").read_text(encoding="utf-8"))
+    entries = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    entries_by_id = {entry.instance_id: entry for entry in entries}
+    selected = selector["cohort"]["entries"]
+
+    assert selector["github"]["base_pull_request"] == 1011
+    assert selector["github"]["starting_base_sha"] == "c0fab214d0cfd3a0c4720cb9abde35698925e16d"
+    assert selector["github"]["required_fixed_base_sha"] is None
+    assert selector["authorization"]["state"] == "pending-coordinator"
+    assert len(selector["authorization"]["blockers"]) == 2
+    assert selector["execution"]["package"] is None
+    assert selector["execution"]["model"] is None
+    assert selector["execution"]["repeat_count"] == 2
+    assert len(selected) == len(set(selected)) == 6
+    assert all(entries_by_id[entry_id].metadata.area == "report-progressive-disclosure" for entry_id in selected)
+    assert all(entries_by_id[entry_id].evaluation.compile_required for entry_id in selected)
+    assert all(entries_by_id[entry_id].evaluation.deterministic_artifact_assertions for entry_id in selected)
+    assert not any("control-tower" in entry_id for entry_id in selected)
+    assert set(selector["variants"]) == {
+        "permanent-full-report-guidance",
+        "model-triggered-report-skill",
+        "host-triggered-report-skill",
+    }
+    assert selector["variants"]["permanent-full-report-guidance"]["skill_activation_policy"] == "forbidden"
+    assert selector["variants"]["model-triggered-report-skill"]["skill_activation_source"] == "model"
+    assert selector["variants"]["host-triggered-report-skill"]["skill_activation_source"] == "host"
+    assert selector["invariants"]["preserve_pre_model_failures"] is True
+    assert selector["invariants"]["exclude_pre_model_failures_from_semantic_metrics"] is True
+    assert selector["invariants"]["require_github_duplicate_gate"] is True
+    assert selector["invariants"]["require_kusto_duplicate_gate"] is True
+    assert selector["promotion"]["replace_unfavorable_outcomes"] is False
+    assert selector["promotion"]["reject_truncated_canonical_trace"] is True
+
+
+def test_report_experiment_runner_is_fail_closed():
+    script = Path("scripts/Run-BCalReportSkillExperiment.ps1").read_text(encoding="utf-8")
+
+    assert "bcal_report_skill_progressive_disclosure_v1.json" in script
+    assert "exactly six unique entries" in script
+    assert "Control Tower is prohibited" in script
+    assert "outside the focused report lane" in script
+    assert "must require compilation" in script
+    assert "GitHub and Kusto checks" in script
+    assert "selector_git_blob_sha256" in script
+    assert "pending-coordinator" not in script
+    assert "dispatch is blocked until the coordinator supplies and authorizes" in script
+    assert "missing the exact fixed microsoft/BC-Bench#1011 head" in script
+    assert "BCBENCH_BCAL_SKILL_ACTIVATION_POLICY" in script
+    assert "BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE" in script
+    assert "BCBENCH_BCAL_REPORT_SKILL_ID" in script
+    assert "foreach ($repeat in 1..$config.execution.repeat_count)" in script
+    assert "Publish-BCalCaseResults.ps1" in script
+
+
+def test_pre_model_failures_are_explicitly_excluded_from_semantic_metrics(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    context = create_evaluation_context(
+        tmp_path,
+        entry=entry,
+        agent_name=AgentHarness.BCAL,
+        category=EvaluationCategory.BCAL_SCENARIO,
+    )
+
+    result = BCalScenarioEvaluationResult.create(
+        context,
+        output="preserved pre-model failure",
+        scenario_completed=False,
+        independent_build=IndependentBuildResult(status="not_attempted"),
+        trace_assertions=[],
+        runtime_status=None,
+        semantic_metrics_eligible=False,
+        error_message="First model request failed before a response.",
+    )
+
+    assert result.semantic_metrics_eligible is False
+    assert result.category_metrics["semantic_metrics_eligible"] is False
+    assert result.export_metadata["semantic_metrics_eligible"] is False

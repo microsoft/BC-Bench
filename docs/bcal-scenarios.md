@@ -105,3 +105,46 @@ The following studies are infrastructure-invalid and must not be scored or compa
 - `41686175570` / `41686175782`: nullable interaction-choice result-contract incompatibility;
 - `41691412171` / `41691423433`: missing Gate A opt-in and empty model-visible workspaces;
 - `41798148490` / `41798152826`: random protected `app.json` UUID caused baseline/candidate seed-receipt divergence.
+
+## Report skill progressive-disclosure study
+
+The package-independent report-authoring cohort is checked in as
+`dataset\experiments\bcal_report_skill_progressive_disclosure_v1.json`. It
+selects exactly six `bcal-scenario` entries covering report creation,
+extension/repair, output-mode choice, labels and filters, source clarification,
+and one larger Sales Order analysis report. Every entry requires compilation,
+deterministic artifact checks, and a nonpublishing trace. Workspace seeds,
+model, package, cases, and two repetitions are shared across all three variants:
+
+- permanent full report guidance;
+- model-triggered report skill;
+- deterministic host-triggered report skill.
+
+Skill variants require Gate B delivery from the configured source before the
+first workspace mutation. The permanent-guidance variant rejects report-skill
+delivery. All report-study variants reject a missing or truncated canonical
+trace. Pre-model failures remain coverage rows but set
+`semantic_metrics_eligible=false`, so semantic comparisons must filter them out.
+
+Dispatch is intentionally blocked. The selector records the original #1011
+starting SHA only as provenance and leaves `required_fixed_base_sha`, package,
+model, study authorization, report skill ID, and variant configuration
+identities unset. #1011 must first fix fail-open trace truncation and sticky-route
+state loss across per-turn external-command processes. After the coordinator
+supplies the new exact #1011 head and immutable BCal configuration, populate
+those fields without changing the cohort.
+
+Validate the package-independent cohort without invoking BCal:
+
+```powershell
+.\scripts\Run-BCalReportSkillExperiment.ps1 `
+  -Variant permanent-full-report-guidance `
+  -ValidateCohort
+```
+
+Authorized dry-run and execution additionally require an exact matching BCal
+tool directory, backend/model preflight, BC 28 symbols, and a duplicate-gate
+receipt bound to the study ID and selector Git-blob SHA-256 with zero GitHub and
+Kusto matches. The runner rejects Control Tower, unrelated lanes, dirty selector
+bytes, duplicate entries, incomplete package/configuration provenance, and a
+nonempty output directory.

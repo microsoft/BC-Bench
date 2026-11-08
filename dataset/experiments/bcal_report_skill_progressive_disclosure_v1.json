@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "name": "bcal-report-skill-progressive-disclosure-v1",
+  "github": {
+    "host": "github.com",
+    "repository": "microsoft/BC-Bench",
+    "base_pull_request": 1011,
+    "base_branch": "esbenk-bcal-authority-scenarios",
+    "starting_base_sha": "c0fab214d0cfd3a0c4720cb9abde35698925e16d",
+    "required_fixed_base_sha": null
+  },
+  "authorization": {
+    "state": "pending-coordinator",
+    "authorized_study_id": null,
+    "authorized_at": null,
+    "authorized_by": null,
+    "blockers": [
+      "Canonical trace truncation must fail closed.",
+      "Sticky-route state must persist across per-turn external-command processes."
+    ]
+  },
+  "execution": {
+    "backend": "external-command",
+    "model": null,
+    "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
+    "bridge_package": "bc-eval==0.6.1",
+    "bc_version": "28.0",
+    "symbol_cache": "C:\\bcartifacts.cache",
+    "scenario_contract_version": "1.1",
+    "evidence_contract_minimum": "1.2",
+    "workspace_seed_contract_version": "1.0",
+    "repeat_count": 2,
+    "package": null
+  },
+  "invariants": {
+    "identical_across_variants": [
+      "execution.package",
+      "execution.model",
+      "execution.backend",
+      "execution.bridge",
+      "execution.bridge_package",
+      "execution.bc_version",
+      "execution.repeat_count",
+      "cohort.category",
+      "cohort.entries"
+    ],
+    "require_workspace_seed_parity": true,
+    "require_compile_or_explicit_not_required": true,
+    "require_artifact_assertions": true,
+    "preserve_pre_model_failures": true,
+    "exclude_pre_model_failures_from_semantic_metrics": true,
+    "require_github_duplicate_gate": true,
+    "require_kusto_duplicate_gate": true,
+    "require_selector_provenance": true,
+    "forbid_control_tower": true,
+    "forbid_unrelated_lanes": true
+  },
+  "variants": {
+    "permanent-full-report-guidance": {
+      "configuration_id": null,
+      "configuration_sha256": null,
+      "skill_activation_policy": "forbidden",
+      "skill_activation_source": null,
+      "report_skill_id": null
+    },
+    "model-triggered-report-skill": {
+      "configuration_id": null,
+      "configuration_sha256": null,
+      "skill_activation_policy": "required",
+      "skill_activation_source": "model",
+      "report_skill_id": null
+    },
+    "host-triggered-report-skill": {
+      "configuration_id": null,
+      "configuration_sha256": null,
+      "skill_activation_policy": "required",
+      "skill_activation_source": "host",
+      "report_skill_id": null
+    }
+  },
+  "cohort": {
+    "category": "bcal-scenario",
+    "entries": [
+      "bcal-scenario__report-create-customer-snapshot-1",
+      "bcal-scenario__report-repair-and-extend-1",
+      "bcal-scenario__report-layout-choice-1",
+      "bcal-scenario__report-labels-and-filters-1",
+      "bcal-scenario__report-source-clarification-1",
+      "bcal-scenario__report-sales-order-analysis-1"
+    ]
+  },
+  "excluded_entries": [
+    {
+      "instance_id": "nl2al__collected-sales-operations-control-tower-1",
+      "reason": "Control Tower is unrelated to report-authoring progressive disclosure.",
+      "include_in_coverage": false,
+      "include_in_semantic_metrics": false
+    }
+  ],
+  "promotion": {
+    "primary_metrics": [
+      "trace_compliance",
+      "independent_build",
+      "critical_assertion_pass_rate"
+    ],
+    "semantic_metrics_filter": "semantic_metrics_eligible == true",
+    "require_complete_cells": true,
+    "require_complete_artifacts": true,
+    "require_complete_gate_a_evidence": true,
+    "reject_truncated_canonical_trace": true,
+    "require_complete_gate_b_evidence_for_skill_variants": true,
+    "require_complete_kusto_rows": true,
+    "replace_unfavorable_outcomes": false
+  }
+}

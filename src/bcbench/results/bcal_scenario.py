@@ -42,6 +42,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
     workspace_seed: dict[str, object] | None = None
     prompt_evidence: dict[str, object] | None = None
     canonical_trace: dict[str, object] | None = None
+    semantic_metrics_eligible: bool = False
 
     @classmethod
     def create_agent_timeout_failure(cls, context: EvaluationContext) -> Self:
@@ -67,6 +68,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         workspace_seed: dict[str, object] | None = None,
         prompt_evidence: dict[str, object] | None = None,
         canonical_trace: dict[str, object] | None = None,
+        semantic_metrics_eligible: bool = False,
         error_message: str | None = None,
     ) -> Self:
         return cls(
@@ -82,6 +84,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
             workspace_seed=workspace_seed,
             prompt_evidence=prompt_evidence,
             canonical_trace=canonical_trace,
+            semantic_metrics_eligible=semantic_metrics_eligible,
         )
 
     @property
@@ -101,6 +104,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
             "independent_build": self.independent_build.passed,
             "independent_build_attempted": self.independent_build.status != "not_attempted",
             "trace_compliance": self.trace_compliance,
+            "semantic_metrics_eligible": self.semantic_metrics_eligible,
         }
         if self.runtime_status is not None:
             metrics["runtime_verified"] = self.runtime_status == "passed"
@@ -132,4 +136,5 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         metadata["canonical_trace_event_count"] = len(events) if isinstance(events, list) else None
         metadata["canonical_trace_truncated"] = _metadata_scalar(canonical_trace.get("truncated"))
         metadata["canonical_trace_omitted_event_count"] = _metadata_scalar(canonical_trace.get("omittedEventCount"))
+        metadata["semantic_metrics_eligible"] = self.semantic_metrics_eligible
         return metadata

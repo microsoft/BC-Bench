@@ -141,9 +141,9 @@ class BCalDeterministicArtifactAssertion(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: Annotated[str, Field(min_length=1)]
-    type: Literal["exact_file_content"]
+    type: Literal["exact_file_content", "file_contains", "file_not_contains", "file_exists"]
     path: Annotated[str, Field(min_length=1)]
-    expected: str
+    expected: str | None = None
 
     @model_validator(mode="after")
     def validate_path(self) -> Self:
@@ -151,6 +151,8 @@ class BCalDeterministicArtifactAssertion(BaseModel):
         windows_path = PureWindowsPath(self.path)
         if "\\" in self.path or relative_path.is_absolute() or windows_path.is_absolute() or ".." in relative_path.parts or not relative_path.name:
             raise ValueError(f"deterministic artifact path must stay within the exported app folder: {self.path}")
+        if self.type != "file_exists" and self.expected is None:
+            raise ValueError(f"{self.type} deterministic artifact assertion requires expected content")
         return self
 
 

@@ -242,14 +242,98 @@ def evaluate_artifact_assertion(
     workspace: dict[str, str],
 ) -> TraceAssertionResult:
     actual = workspace.get(assertion.path)
-    passed = actual == assertion.expected
+    if assertion.type == "file_exists":
+        passed = actual is not None
+    elif assertion.type == "file_contains":
+        passed = actual is not None and assertion.expected is not None and assertion.expected in actual
+    elif assertion.type == "file_not_contains":
+        passed = actual is not None and assertion.expected is not None and assertion.expected not in actual
+    else:
+        passed = actual == assertion.expected
     if actual is None:
         message = f"Expected artifact {assertion.path!r} was not exported"
     elif passed:
-        message = f"Artifact {assertion.path!r} exactly matched the hidden expected content"
+        message = f"Artifact {assertion.path!r} satisfied hidden assertion {assertion.type!r}"
     else:
-        message = f"Artifact {assertion.path!r} differed from the hidden expected content"
+        message = f"Artifact {assertion.path!r} failed hidden assertion {assertion.type!r}"
     return TraceAssertionResult(assertion_id=assertion.id, passed=passed, message=message)
+
+
+def _skill_delivery_events(result: BCalScenarioRunResult) -> list[tuple[float, str, str]]:
+    trace = result.canonical_trace or {}
+    raw_events = trace.get("events")
+    if not isinstance(raw_events, list):
+        return []
+    events: list[tuple[float, str, str]] = []
+
+    def find_scalar(value: object, names: set[str]) -> str:
+        if not isinstance(value, dict):
+            return ""
+        for key, child in value.items():
+            if key.lower() in names and isinstance(child, str):
+                return child
+        for child in value.values():
+            found = find_scalar(child, names)
+            if found:
+                return found
+        return ""
+
+    for index, value in enumerate(raw_events):
+        if not isinstance(value, dict):
+            continue
+        text = json.dumps(value, sort_keys=True).lower()
+        if "skill" not in text or not any(marker in text for marker in ("deliver", "activat", "inject")):
+            continue
+        sequence = value.get("sequence", value.get("index", index))
+        position = float(sequence) if isinstance(sequence, int | float) else float(index)
+        skill = find_scalar(value, {"skillid", "skill_id", "skill"})
+        source = find_scalar(value, {"source", "activationsource", "activation_source"})
+        events.append((position, skill.lower(), source.lower()))
+    return events
+
+
+def _variant_skill_assertions(result: BCalScenarioRunResult) -> list[TraceAssertionResult]:
+    policy = os.getenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY")
+    if not policy:
+        return []
+    expected_skill = os.environ.get("BCBENCH_BCAL_REPORT_SKILL_ID", "report").lower()
+    expected_source = os.getenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "").lower()
+    canonical_trace = result.canonical_trace
+    trace_complete = canonical_trace is not None and not _canonical_trace_is_incomplete(result)
+    assertions = [
+        TraceAssertionResult(
+            assertion_id="variant-canonical-trace-complete",
+            passed=trace_complete,
+            message="Expected a present, nontruncated canonical trace for report-study evidence",
+        )
+    ]
+    deliveries = _skill_delivery_events(result)
+    matching = [event for event in deliveries if expected_skill in event[1] or expected_skill in json.dumps(event)]
+    mutations = [position for position, tool, _step in _canonical_trace_events(result) if tool in _MUTATION_TOOLS]
+    if policy == "forbidden":
+        return [
+            *assertions,
+            TraceAssertionResult(
+                assertion_id="variant-skill-not-delivered",
+                passed=not matching,
+                message=f"Expected no {expected_skill!r} skill delivery in the permanent-guidance variant",
+            ),
+        ]
+    source_matches = [event for event in matching if not expected_source or expected_source in event[2] or expected_source in json.dumps(event)]
+    delivered_before_mutation = bool(source_matches) and (not mutations or min(event[0] for event in source_matches) < min(mutations))
+    return [
+        *assertions,
+        TraceAssertionResult(
+            assertion_id="variant-skill-delivered",
+            passed=bool(source_matches),
+            message=f"Expected {expected_source or 'configured'} delivery of skill {expected_skill!r}",
+        ),
+        TraceAssertionResult(
+            assertion_id="variant-skill-before-first-mutation",
+            passed=delivered_before_mutation,
+            message=f"Expected skill {expected_skill!r} delivery before the first report workspace mutation",
+        ),
+    ]
 
 
 def _compile_exported_project(app_folder: Path, package_cache: Path) -> IndependentBuildResult:
@@ -423,6 +507,7 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
         trace = [
             *evaluate_trace(context.entry, result, chat_path, changed_paths),
             *(evaluate_artifact_assertion(assertion, workspace) for assertion in context.entry.evaluation.deterministic_artifact_assertions),
+            *_variant_skill_assertions(result),
         ]
         _archive_workspace(context.entry, app_folder, context.result_dir)
         output = _create_scoring_packet(context.entry, result, build, trace, workspace, diff, changed_paths)
@@ -439,6 +524,7 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
             workspace_seed=(result.workspace_seed.model_dump(mode="json", by_alias=True) if result.workspace_seed else None),
             prompt_evidence=result.prompt_evidence,
             canonical_trace=result.canonical_trace,
+            semantic_metrics_eligible=any(step.assistant_text for step in result.steps) or result.totals.output_tokens > 0,
             error_message=error_message,
         )
         self.save_result(context, evaluation_result)
