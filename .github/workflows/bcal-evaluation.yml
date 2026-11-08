@@ -99,7 +99,7 @@ jobs:
               raise SystemExit("Selector is not authorized.")
           if not publication_source and os.environ["GITHUB_REF_NAME"] != expected_ref:
               raise SystemExit(f"Workflow must run from immutable ref {expected_ref}.")
-          if publication_source and os.environ["GITHUB_REF_NAME"] != "bcal-report-skill-publication-recovery-20261108":
+          if publication_source and os.environ["GITHUB_REF_NAME"] != "bcal-report-skill-publication-recovery-v3-20261108":
               raise SystemExit("Publication recovery must run from its immutable recovery ref.")
           if repetition not in range(1, config["execution"]["repeat_count"] + 1):
               raise SystemExit("Repetition is outside the authorized range.")
