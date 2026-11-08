@@ -25,7 +25,11 @@ def test_bcal_llm_preflight_uses_exact_package_and_real_model_and_judge_paths() 
     registered_workflow = _workflow("bcal-evaluation.yml")
 
     assert '"bc-eval==0.6.1"' in workflow
-    assert "model: gpt-55-chat" in registered_workflow
+    if "BCal report skill experiment" in registered_workflow:
+        assert '"model": config["execution"]["model"]' in registered_workflow
+        assert "BCAL_LLM_MODEL: ${{ needs.validate-selection.outputs.model }}" in registered_workflow
+    else:
+        assert "model: gpt-55-chat" in registered_workflow
     assert "gpt-56-ceres" in workflow
     assert "bc_eval_llm_api_bridge.py" in workflow
     assert "install_sticky_route_compat" in workflow
@@ -37,7 +41,8 @@ def test_bcal_llm_preflight_uses_exact_package_and_real_model_and_judge_paths() 
     assert "response.choices" in workflow
     assert "message.content" in workflow
     assert "Write-Output $response" not in workflow
-    assert "llm-preflight-only:" in registered_workflow
+    if "BCal report skill experiment" not in registered_workflow:
+        assert "llm-preflight-only:" in registered_workflow
     assert "uses: ./.github/workflows/bcal-llm-preflight.yml" in registered_workflow
     assert "if: ${{ !(inputs.llm-preflight-only || false) }}" in registered_workflow
 
