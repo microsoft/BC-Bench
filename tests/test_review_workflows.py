@@ -43,8 +43,8 @@ def test_bcal_llm_preflight_uses_exact_package_and_real_model_and_judge_paths() 
     assert "Write-Output $response" not in workflow
     if "BCal report skill experiment" not in registered_workflow:
         assert "llm-preflight-only:" in registered_workflow
-    assert "uses: ./.github/workflows/bcal-llm-preflight.yml" in registered_workflow
-    assert "if: ${{ !(inputs.llm-preflight-only || false) }}" in registered_workflow
+        assert "uses: ./.github/workflows/bcal-llm-preflight.yml" in registered_workflow
+        assert "if: ${{ !(inputs.llm-preflight-only || false) }}" in registered_workflow
 
 
 def test_bcal_scenario_judging_uses_shared_sticky_route_compat_only() -> None:
