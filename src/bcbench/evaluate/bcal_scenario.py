@@ -340,16 +340,11 @@ def _offered_tool_assertions(records: list[dict[str, object]]) -> list[TraceAsse
     complete = request is not None and truncated is False and omitted == 0
     count_valid = isinstance(names, list) and isinstance(count, int) and count == len(names)
     schema_hash_valid = isinstance(schema_hash, str) and len(schema_hash) == 64 and all(character in "0123456789abcdef" for character in schema_hash)
-    return [
+    assertions = [
         TraceAssertionResult(
             assertion_id="variant-offered-tools-complete",
             passed=complete,
             message="Expected complete, nontruncated offered-tool evidence on the first delivery model request",
-        ),
-        TraceAssertionResult(
-            assertion_id="variant-activate-skill-offered",
-            passed=complete and activate_skill_offered is True and "activate_skill" in normalized_names,
-            message="Expected activateSkillToolOffered=true and activate_skill in the first delivery model request offered-tool names",
         ),
         TraceAssertionResult(
             assertion_id="variant-offered-tool-count",
@@ -362,6 +357,16 @@ def _offered_tool_assertions(records: list[dict[str, object]]) -> list[TraceAsse
             message="Expected a lowercase SHA-256 offeredToolSchemaHash without raw tool schemas",
         ),
     ]
+    if os.getenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE") == "model":
+        assertions.insert(
+            1,
+            TraceAssertionResult(
+                assertion_id="variant-activate-skill-offered",
+                passed=complete and activate_skill_offered is True and "activate_skill" in normalized_names,
+                message="Expected activateSkillToolOffered=true and activate_skill in the first delivery model request offered-tool names",
+            ),
+        )
+    return assertions
 
 
 def _variant_skill_assertions(result: BCalScenarioRunResult) -> list[TraceAssertionResult]:

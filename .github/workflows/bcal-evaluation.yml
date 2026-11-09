@@ -105,7 +105,11 @@ jobs:
               raise SystemExit("Selector is not authorized.")
           if not publication_source and os.environ["GITHUB_REF_NAME"] != expected_ref:
               raise SystemExit(f"Workflow must run from immutable ref {expected_ref}.")
-          if publication_source and os.environ["GITHUB_REF_NAME"] != "bcal-report-skill-publication-recovery-v3-20261108":
+          recovery_refs = {
+              "bcal-report-skill-publication-recovery-v3-20261108",
+              f"{expected_ref}-publication-recovery-v1",
+          }
+          if publication_source and os.environ["GITHUB_REF_NAME"] not in recovery_refs:
               raise SystemExit("Publication recovery must run from its immutable recovery ref.")
           if repetition not in range(1, config["execution"]["repeat_count"] + 1):
               raise SystemExit("Repetition is outside the authorized range.")
@@ -285,6 +289,8 @@ jobs:
           BCBENCH_PACKAGE_SOURCE_SHA: ${{ needs.validate-selection.outputs.package-source-sha }}
           BCBENCH_VARIANT_PATCH_SHA: ${{ needs.validate-selection.outputs.variant-patch-sha }}
           BCBENCH_EXPECTED_ACTIVATION_MODE: ${{ needs.validate-selection.outputs.activation-mode }}
+          BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE: ${{ needs.validate-selection.outputs.activation-source }}
+          BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE: ${{ needs.validate-selection.outputs.require-offered-tool-evidence }}
           BCBENCH_BCAL_SKILL_ACTIVATION_POLICY: ${{ needs.validate-selection.outputs.activation-policy }}
           BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE: ${{ needs.validate-selection.outputs.activation-source }}
           BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE: ${{ needs.validate-selection.outputs.activation-mode }}
@@ -367,6 +373,37 @@ jobs:
           workspaces = list((run / "artifacts").glob("*-workspace.zip"))
           if len(workspaces) != len(expected):
               raise SystemExit(f"Expected {len(expected)} workspace artifacts, found {len(workspaces)}.")
+          PY
+
+      - name: Re-evaluate offered-tool assertions for publication recovery
+        if: inputs.publication-source-run-id != ''
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from bcbench.evaluate.bcal_scenario import _offered_tool_assertions
+
+          run = Path(os.environ["EVALUATION_RESULTS_DIR"]) / os.environ["SOURCE_RUN_ID"]
+          offered_ids = {
+              "variant-offered-tools-complete",
+              "variant-activate-skill-offered",
+              "variant-offered-tool-count",
+              "variant-offered-tool-schema-hash",
+          }
+          for path in run.glob("*.jsonl"):
+              rows = []
+              for line in path.read_text(encoding="utf-8").splitlines():
+                  row = json.loads(line)
+                  assertions = [item for item in row["trace_assertions"] if item["assertion_id"] not in offered_ids]
+                  events = row.get("canonical_trace", {}).get("events", [])
+                  assertions.extend(assertion.model_dump(mode="json") for assertion in _offered_tool_assertions(events))
+                  row["trace_assertions"] = assertions
+                  row["trace_compliance"] = all(item["passed"] for item in assertions)
+                  rows.append(json.dumps(row, separators=(",", ":")))
+              path.write_text("\n".join(rows) + "\n", encoding="utf-8")
           PY
 
       - name: Summarize results

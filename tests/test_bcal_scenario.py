@@ -1188,12 +1188,45 @@ def test_offered_tool_evidence_fails_closed(
     payload["evidence"] = {"trace": {"truncated": False, "omittedEventCount": 0, "events": [request]}}
     result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "model")
     monkeypatch.setenv("BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE", "true")
 
     assertions = scenario_evaluation._variant_skill_assertions(result)
     offered = {assertion.assertion_id: assertion.passed for assertion in assertions if "offered-tool" in assertion.assertion_id or "activate-skill-offered" in assertion.assertion_id}
 
     assert {assertion_id for assertion_id, passed in offered.items() if not passed} == failed_assertions
+
+
+def test_permanent_control_validates_inventory_without_requiring_activate_skill(monkeypatch: pytest.MonkeyPatch):
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [
+                {
+                    "type": "model_request",
+                    "sequence": 1,
+                    "operation": "delivery",
+                    "offeredToolNames": ["write_file"],
+                    "offeredToolCount": 1,
+                    "offeredToolSchemaHash": "a" * 64,
+                    "offeredToolsTruncated": False,
+                    "omittedOfferedToolCount": 0,
+                    "activateSkillToolOffered": False,
+                }
+            ],
+        }
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "forbidden")
+    monkeypatch.setenv("BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE", "true")
+
+    assertions = scenario_evaluation._variant_skill_assertions(result)
+    assertion_ids = {assertion.assertion_id for assertion in assertions}
+
+    assert "variant-activate-skill-offered" not in assertion_ids
+    assert all(assertion.passed for assertion in assertions)
 
 
 def test_activation_request_without_delivery_fails_ordering(monkeypatch: pytest.MonkeyPatch):
