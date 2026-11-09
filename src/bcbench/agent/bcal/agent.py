@@ -8,7 +8,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, override
+from typing import override
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
@@ -16,7 +16,7 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter, ValidationError, field_validator
 
 from bcbench.dataset import NL2ALEntry
 from bcbench.types import HarnessName
@@ -51,9 +51,8 @@ class BCalBackendConfig(BaseModel):
         return args
 
 
-class _BCalScenarioResult(BaseModel):
-    schema_version: Literal["1.0"] = Field(alias="schemaVersion")
-    evidence: dict[str, JsonValue] | None = None
+_SCENARIO_RESULT_ADAPTER: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
+_SCENARIO_RESULT_SCHEMA_VERSION = "1.0"
 
 
 def _resolve_bcal_executable() -> str:
@@ -145,12 +144,15 @@ def _write_scenario(path: Path, prompt: str) -> None:
     path.write_text(f"{json.dumps(scenario, indent=2)}\n", encoding="utf-8")
 
 
-def _read_transcript(result_path: Path) -> dict[str, JsonValue] | None:
+def _read_transcript(result_path: Path) -> dict[str, JsonValue]:
+    # The whole scenario result is the transcript: execution identity, completion, failures, per-step compile status and evidence
     try:
-        result = _BCalScenarioResult.model_validate_json(result_path.read_bytes())
+        result: dict[str, JsonValue] = _SCENARIO_RESULT_ADAPTER.validate_json(result_path.read_bytes())
     except (OSError, ValidationError) as exc:
         raise AgentError(f"Could not read BCal scenario result {result_path}: {exc}") from exc
-    return result.evidence
+    if result.get("schemaVersion") != _SCENARIO_RESULT_SCHEMA_VERSION:
+        raise AgentError(f"Unsupported BCal scenario result schemaVersion {result.get('schemaVersion')!r}, expected {_SCENARIO_RESULT_SCHEMA_VERSION!r}")
+    return result
 
 
 def _read_transcript_after_failure(result_path: Path) -> dict[str, JsonValue] | None:
@@ -189,7 +191,7 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
         logger.debug(f"Package cache path: {package_cache_path}")
         logger.debug(f"Using prompt:\n{entry.get_task()}")
 
-        # Evidence (the transcript) is only emitted in scenario mode
+        # Evidence is only emitted in scenario mode
         with tempfile.TemporaryDirectory(prefix="bcbench-bcal-") as temp_dir:
             scenario_path = Path(temp_dir) / "scenario.json"
             result_path = Path(temp_dir) / "result.json"
@@ -214,7 +216,7 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
                 logger.exception("bcal CLI execution failed")
                 raise AgentError(f"bcal CLI execution failed: {e}", transcript=_read_transcript_after_failure(result_path)) from None
 
-            transcript: dict[str, JsonValue] | None = _read_transcript(result_path)
+            transcript: dict[str, JsonValue] = _read_transcript(result_path)
 
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
         return AgentResult(metrics=AgentMetrics(execution_time=execution_time), experiment=ExperimentConfiguration(), transcript=transcript)
