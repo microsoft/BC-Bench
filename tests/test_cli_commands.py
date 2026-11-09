@@ -130,11 +130,12 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     with (
         patch.object(EvaluationCategory, "dataset_path", return_value=tmp_path / "nl2al.jsonl"),
         patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
-        patch.object(evaluate_commands, "NL2ALPipeline", return_value=Pipeline()),
+        patch.object(EvaluationCategory, "pipeline", return_value=Pipeline()),
         patch("bcbench.agent.bcal.agent.get_bcal_version", return_value="18.0.1.2-beta"),
     ):
         evaluate_commands.evaluate_bcal(
             entry_id=entry.instance_id,
+            category=EvaluationCategory.NL2AL,
             repo_path=tmp_path / "repo",
             output_dir=tmp_path / "results",
             run_id="bcal-run",
