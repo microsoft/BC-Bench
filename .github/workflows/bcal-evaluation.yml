@@ -110,6 +110,7 @@ jobs:
               f"{expected_ref}-publication-recovery-v1",
               f"{expected_ref}-publication-recovery-v2",
               f"{expected_ref}-publication-recovery-v3",
+              f"{expected_ref}-publication-recovery-v4",
           }
           if publication_source and os.environ["GITHUB_REF_NAME"] not in recovery_refs:
               raise SystemExit("Publication recovery must run from its immutable recovery ref.")
@@ -381,7 +382,7 @@ jobs:
         if: inputs.publication-source-run-id != ''
         shell: bash
         run: |
-          python - <<'PY'
+          uv run python - <<'PY'
           import json
           import os
           from pathlib import Path
