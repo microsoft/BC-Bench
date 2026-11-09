@@ -727,6 +727,34 @@ def test_structured_result_exports_gate_a_metadata(tmp_path: Path):
     assert result.export_metadata["canonical_trace_omitted_event_count"] == 0
 
 
+def test_structured_result_exports_offered_tool_gate_b_metadata(tmp_path: Path):
+    entry = create_bcal_scenario_entry()
+    context = create_evaluation_context(
+        tmp_path,
+        entry=entry,
+        agent_name=AgentHarness.BCAL,
+        category=EvaluationCategory.BCAL_SCENARIO,
+    )
+    result = BCalScenarioEvaluationResult.create(
+        context,
+        output="packet",
+        scenario_completed=True,
+        independent_build=IndependentBuildResult(status="passed"),
+        trace_assertions=[
+            TraceAssertionResult(assertion_id="variant-offered-tools-complete", passed=True, message="complete"),
+            TraceAssertionResult(assertion_id="variant-activate-skill-offered", passed=True, message="offered"),
+            TraceAssertionResult(assertion_id="variant-offered-tool-count", passed=True, message="count"),
+            TraceAssertionResult(assertion_id="variant-offered-tool-schema-hash", passed=True, message="hash"),
+        ],
+        runtime_status=None,
+    )
+
+    assert result.export_metadata["offered_tools_complete"] is True
+    assert result.export_metadata["activate_skill_tool_offered"] is True
+    assert result.export_metadata["offered_tool_count_valid"] is True
+    assert result.export_metadata["offered_tool_schema_hash_valid"] is True
+
+
 def test_bcal_workflow_accepts_both_advanced_categories():
     workflow = Path(".github/workflows/bcal-evaluation.yml").read_text(encoding="utf-8")
 
@@ -949,20 +977,70 @@ def test_report_skill_delivery_must_precede_first_mutation(monkeypatch: pytest.M
             "compositions": [{"segment": "main.skill-catalog"}],
             "uses": [{"segment": "main.activated-skill.revision"}],
         },
+        "skillEvidence": {
+            "catalogTruncated": False,
+            "omittedCatalogEntryCount": 0,
+            "catalog": [
+                {
+                    "name": "report-authoring",
+                    "revisionId": "revision",
+                    "semanticContractVersion": "1.0.0",
+                    "contentHash": "content-sha",
+                    "activationMode": "model_triggered",
+                }
+            ],
+        },
         "trace": {
             "truncated": False,
             "events": [
                 {
-                    "type": "skill_activation_delivered",
+                    "type": "model_request",
                     "sequence": 1,
-                    "skillId": "report-authoring",
-                    "contractVersion": "1.0.0",
-                    "contentSha256": "content-sha",
-                    "revision": "revision",
-                    "activationMode": "model_triggered",
-                    "requestedToolCallId": "tool-call-1",
+                    "operation": "delivery",
+                    "offeredToolNames": ["activate_skill", "write_file"],
+                    "offeredToolCount": 2,
+                    "offeredToolSchemaHash": "a" * 64,
+                    "offeredToolsTruncated": False,
+                    "omittedOfferedToolCount": 0,
+                    "activateSkillToolOffered": True,
                 },
-                {"type": "tool_call", "sequence": 2, "toolName": "write_file"},
+                {
+                    "type": "skill_activation_requested",
+                    "sequence": 2,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "model_triggered",
+                    "activateSkillToolCallId": "tool-call-1",
+                },
+                {
+                    "type": "skill_activation_pending",
+                    "sequence": 3,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "model_triggered",
+                },
+                {
+                    "type": "skill_instructions_delivered",
+                    "sequence": 4,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "model_triggered",
+                },
+                {
+                    "type": "skill_activation_ready",
+                    "sequence": 5,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "model_triggered",
+                    "deliveryEventSequence": 4,
+                },
+                {
+                    "type": "tool_started",
+                    "sequence": 6,
+                    "toolName": "write_file",
+                    "toolClassifications": ["workspace_mutation"],
+                    "skillDependencyReceipts": [{"revisionId": "revision", "priorReadyEventSequence": 5}],
+                },
             ],
         },
     }
@@ -977,11 +1055,16 @@ def test_report_skill_delivery_must_precede_first_mutation(monkeypatch: pytest.M
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_REVISION", "revision")
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_CATALOG_SEGMENT", "main.skill-catalog")
     monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATED_SEGMENT", "main.activated-skill.revision")
+    monkeypatch.setenv("BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE", "true")
 
     assertions = scenario_evaluation._variant_skill_assertions(result)
 
     assert [assertion.assertion_id for assertion in assertions] == [
         "variant-canonical-trace-complete",
+        "variant-offered-tools-complete",
+        "variant-activate-skill-offered",
+        "variant-offered-tool-count",
+        "variant-offered-tool-schema-hash",
         "variant-skill-identity",
         "variant-skill-prompt-delivery",
         "variant-activation-mode",
@@ -998,19 +1081,58 @@ def test_report_skill_delivery_after_mutation_fails_ordering(monkeypatch: pytest
             "compositions": [{"segment": "main.skill-catalog"}],
             "uses": [{"segment": "main.activated-skill.revision"}],
         },
+        "skillEvidence": {
+            "catalogTruncated": False,
+            "omittedCatalogEntryCount": 0,
+            "catalog": [
+                {
+                    "name": "report-authoring",
+                    "revisionId": "revision",
+                    "semanticContractVersion": "1.0.0",
+                    "contentHash": "content-sha",
+                    "activationMode": "host_deterministic",
+                }
+            ],
+        },
         "trace": {
             "truncated": False,
             "events": [
-                {"type": "tool_call", "sequence": 1, "toolName": "edit_file"},
                 {
-                    "type": "skill_activation_delivered",
+                    "type": "skill_activation_requested",
+                    "sequence": 1,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "host_deterministic",
+                    "activateSkillToolCallId": None,
+                },
+                {
+                    "type": "skill_activation_pending",
                     "sequence": 2,
-                    "skillId": "report-authoring",
-                    "contractVersion": "1.0.0",
-                    "contentSha256": "content-sha",
-                    "revision": "revision",
-                    "activationMode": "host_deterministic",
-                    "requestedToolCallId": None,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "host_deterministic",
+                },
+                {
+                    "type": "tool_started",
+                    "sequence": 3,
+                    "toolName": "edit_file",
+                    "toolClassifications": ["workspace_mutation"],
+                    "skillDependencyReceipts": [],
+                },
+                {
+                    "type": "skill_instructions_delivered",
+                    "sequence": 4,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "host_deterministic",
+                },
+                {
+                    "type": "skill_activation_ready",
+                    "sequence": 5,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "host_deterministic",
+                    "deliveryEventSequence": 4,
                 },
             ],
         },
@@ -1033,6 +1155,97 @@ def test_report_skill_delivery_after_mutation_fails_ordering(monkeypatch: pytest
     assert assertions[1].passed is True
     assert all(assertion.passed for assertion in assertions[:-1])
     assert assertions[-1].passed is False
+
+
+@pytest.mark.parametrize(
+    ("request_updates", "failed_assertions"),
+    [
+        ({"offeredToolNames": ["write_file"], "offeredToolCount": 1, "activateSkillToolOffered": False}, {"variant-activate-skill-offered"}),
+        ({"offeredToolsTruncated": True}, {"variant-offered-tools-complete", "variant-activate-skill-offered", "variant-offered-tool-count", "variant-offered-tool-schema-hash"}),
+        ({"omittedOfferedToolCount": 1}, {"variant-offered-tools-complete", "variant-activate-skill-offered", "variant-offered-tool-count", "variant-offered-tool-schema-hash"}),
+        ({"offeredToolCount": 1}, {"variant-offered-tool-count"}),
+        ({"offeredToolSchemaHash": None}, {"variant-offered-tool-schema-hash"}),
+    ],
+)
+def test_offered_tool_evidence_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    request_updates: dict[str, object],
+    failed_assertions: set[str],
+):
+    payload = scenario_result_payload()
+    request = {
+        "type": "model_request",
+        "sequence": 1,
+        "operation": "delivery",
+        "offeredToolNames": ["activate_skill", "write_file"],
+        "offeredToolCount": 2,
+        "offeredToolSchemaHash": "a" * 64,
+        "offeredToolsTruncated": False,
+        "omittedOfferedToolCount": 0,
+        "activateSkillToolOffered": True,
+    }
+    request.update(request_updates)
+    payload["evidence"] = {"trace": {"truncated": False, "omittedEventCount": 0, "events": [request]}}
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
+    monkeypatch.setenv("BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE", "true")
+
+    assertions = scenario_evaluation._variant_skill_assertions(result)
+    offered = {assertion.assertion_id: assertion.passed for assertion in assertions if "offered-tool" in assertion.assertion_id or "activate-skill-offered" in assertion.assertion_id}
+
+    assert {assertion_id for assertion_id, passed in offered.items() if not passed} == failed_assertions
+
+
+def test_activation_request_without_delivery_fails_ordering(monkeypatch: pytest.MonkeyPatch):
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "promptEvidence": {"compositions": [{"segment": "main.skill-catalog"}], "uses": []},
+        "skillEvidence": {
+            "catalogTruncated": False,
+            "omittedCatalogEntryCount": 0,
+            "catalog": [
+                {
+                    "name": "report-authoring",
+                    "revisionId": "revision",
+                    "semanticContractVersion": "1.0.0",
+                    "contentHash": "content-sha",
+                    "activationMode": "model_triggered",
+                }
+            ],
+        },
+        "trace": {
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [
+                {
+                    "type": "skill_activation_requested",
+                    "sequence": 1,
+                    "activationId": "activation-1",
+                    "skillRevisionId": "revision",
+                    "skillActivationMode": "model_triggered",
+                    "activateSkillToolCallId": "call-1",
+                }
+            ],
+        },
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY", "required")
+    monkeypatch.setenv("BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE", "model_triggered")
+    monkeypatch.setenv("BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID", "non_null")
+    monkeypatch.setenv("BCBENCH_BCAL_REPORT_SKILL_ID", "report-authoring")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CONTRACT_VERSION", "1.0.0")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CONTENT_SHA256", "content-sha")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_REVISION", "revision")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_CATALOG_SEGMENT", "main.skill-catalog")
+    monkeypatch.setenv("BCBENCH_BCAL_SKILL_ACTIVATED_SEGMENT", "main.activated-skill.revision")
+
+    assertions = {assertion.assertion_id: assertion.passed for assertion in scenario_evaluation._variant_skill_assertions(result)}
+
+    assert assertions["variant-skill-identity"] is True
+    assert assertions["variant-activation-mode"] is True
+    assert assertions["variant-requested-tool-call"] is True
+    assert assertions["variant-skill-prompt-delivery"] is False
+    assert assertions["variant-skill-before-first-mutation"] is False
 
 
 @pytest.mark.parametrize(
@@ -1136,6 +1349,49 @@ def test_report_experiment_runner_is_fail_closed():
     assert "BCBENCH_BCAL_REPORT_SKILL_ID" in script
     assert "foreach ($repeat in 1..$config.execution.repeat_count)" in script
     assert "Publish-BCalCaseResults.ps1" in script
+
+
+def test_gate_b_calibration_selector_is_blocked_and_nonsemantic():
+    selector = json.loads(Path("dataset/experiments/bcal_report_skill_gate_b_calibration_v1.json").read_text(encoding="utf-8"))
+    entries = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    entries_by_id = {entry.instance_id: entry for entry in entries}
+
+    assert selector["github"]["required_fixed_base_sha"] == "1969363374c57aa23bb79ea0f3ec537ce440c870"
+    assert selector["authorization"] == {
+        "state": "awaiting_corrected_package_identities",
+        "authorized_study_id": None,
+        "authorized_at": None,
+        "authorized_by": None,
+        "workflow_ref": None,
+    }
+    assert selector["execution"]["model"] is None
+    assert selector["execution"]["evidence_contract_version"] == "1.4"
+    assert selector["execution"]["trace_contract_version"] == "1.4"
+    assert selector["execution"]["repeat_count"] == 2
+    assert selector["scoring"]["semantic_promotion_metrics_enabled"] is False
+    assert selector["invariants"]["require_complete_offered_tool_inventory"] is True
+    assert selector["invariants"]["require_ready_dependency_receipt_before_mutation"] is True
+    assert all(variant["configuration_id"] is None and variant["package"] is None for variant in selector["variants"].values())
+    assert {variant["entry"] for variant in selector["variants"].values()} == set(selector["cohort"]["entries"])
+    assert all(entries_by_id[entry_id].metadata.area == "report-gate-b-calibration" for entry_id in selector["cohort"]["entries"])
+    assert all(entries_by_id[entry_id].evaluation.compile_required for entry_id in selector["cohort"]["entries"])
+    assert all(entries_by_id[entry_id].evaluation.deterministic_artifact_assertions for entry_id in selector["cohort"]["entries"])
+    assert "activate_skill" in entries_by_id[selector["variants"]["forced-model-activation"]["entry"]].steps[0].text
+
+
+def test_gate_b_calibration_runner_is_fail_closed():
+    script = Path("scripts/Run-BCalReportSkillGateBCalibration.ps1").read_text(encoding="utf-8")
+
+    assert "bcal_report_skill_gate_b_calibration_v1.json" in script
+    assert "exactly three unique probes" in script
+    assert "exactly two repetitions" in script
+    assert "excluded from semantic promotion scoring" in script
+    assert "corrected immutable package identities and coordinator authorization" in script
+    assert "duplicate-gate receipt" in script
+    assert "selector_git_blob_sha256" in script
+    assert "BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE" in script
+    assert "BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID" in script
+    assert "output collision" in script
 
 
 def test_report_experiment_workflow_runs_only_authorized_matrix():

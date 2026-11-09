@@ -293,13 +293,75 @@ def _skill_delivery_events(result: BCalScenarioRunResult) -> list[tuple[float, s
     return events
 
 
-def _find_values(value: object, names: set[str]) -> list[object]:
-    if isinstance(value, dict):
-        found = [child for key, child in value.items() if isinstance(key, str) and key.lower() in names]
-        return [*found, *(nested for child in value.values() for nested in _find_values(child, names))]
-    if isinstance(value, list):
-        return [nested for child in value for nested in _find_values(child, names)]
-    return []
+def _trace_records(result: BCalScenarioRunResult) -> list[dict[str, object]]:
+    trace = result.canonical_trace or {}
+    events = trace.get("events")
+    if not isinstance(events, list):
+        return []
+    return [cast(dict[str, object], event) for event in events if isinstance(event, dict)]
+
+
+def _record_sequence(record: dict[str, object], fallback: int = 0) -> int | float | None:
+    value = record.get("sequence", record.get("index", fallback))
+    return value if isinstance(value, int | float) else None
+
+
+def _skill_catalog(result: BCalScenarioRunResult) -> tuple[list[dict[str, object]], bool]:
+    evidence = result.evidence or {}
+    skill_evidence = evidence.get("skillEvidence")
+    if not isinstance(skill_evidence, dict):
+        return [], False
+    skill_evidence_record = cast(dict[str, object], skill_evidence)
+    catalog = skill_evidence_record.get("catalog")
+    complete = skill_evidence_record.get("catalogTruncated") is False and skill_evidence_record.get("omittedCatalogEntryCount") == 0
+    if not isinstance(catalog, list):
+        return [], False
+    return [cast(dict[str, object], entry) for entry in catalog if isinstance(entry, dict)], complete
+
+
+def _first_delivery_model_request(records: list[dict[str, object]]) -> dict[str, object] | None:
+    return next(
+        (record for record in records if record.get("type") == "model_request" and record.get("operation") == "delivery"),
+        None,
+    )
+
+
+def _offered_tool_assertions(records: list[dict[str, object]]) -> list[TraceAssertionResult]:
+    if os.getenv("BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE", "").lower() != "true":
+        return []
+    request = _first_delivery_model_request(records)
+    names = request.get("offeredToolNames") if request else None
+    count = request.get("offeredToolCount") if request else None
+    schema_hash = request.get("offeredToolSchemaHash") if request else None
+    truncated = request.get("offeredToolsTruncated") if request else None
+    omitted = request.get("omittedOfferedToolCount") if request else None
+    activate_skill_offered = request.get("activateSkillToolOffered") if request else None
+    normalized_names = {_normalize_tool(name) for name in names if isinstance(name, str)} if isinstance(names, list) else set()
+    complete = request is not None and truncated is False and omitted == 0
+    count_valid = isinstance(names, list) and isinstance(count, int) and count == len(names)
+    schema_hash_valid = isinstance(schema_hash, str) and len(schema_hash) == 64 and all(character in "0123456789abcdef" for character in schema_hash)
+    return [
+        TraceAssertionResult(
+            assertion_id="variant-offered-tools-complete",
+            passed=complete,
+            message="Expected complete, nontruncated offered-tool evidence on the first delivery model request",
+        ),
+        TraceAssertionResult(
+            assertion_id="variant-activate-skill-offered",
+            passed=complete and activate_skill_offered is True and "activate_skill" in normalized_names,
+            message="Expected activateSkillToolOffered=true and activate_skill in the first delivery model request offered-tool names",
+        ),
+        TraceAssertionResult(
+            assertion_id="variant-offered-tool-count",
+            passed=complete and count_valid,
+            message="Expected offeredToolCount to equal the number of offeredToolNames",
+        ),
+        TraceAssertionResult(
+            assertion_id="variant-offered-tool-schema-hash",
+            passed=complete and schema_hash_valid,
+            message="Expected a lowercase SHA-256 offeredToolSchemaHash without raw tool schemas",
+        ),
+    ]
 
 
 def _variant_skill_assertions(result: BCalScenarioRunResult) -> list[TraceAssertionResult]:
@@ -307,7 +369,6 @@ def _variant_skill_assertions(result: BCalScenarioRunResult) -> list[TraceAssert
     if not policy:
         return []
     expected_skill = os.environ.get("BCBENCH_BCAL_REPORT_SKILL_ID", "report").lower()
-    expected_source = os.getenv("BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE", "").lower()
     expected_mode = os.getenv("BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE", "").lower()
     expected_contract = os.getenv("BCBENCH_BCAL_SKILL_CONTRACT_VERSION", "").lower()
     expected_content_sha = os.getenv("BCBENCH_BCAL_SKILL_CONTENT_SHA256", "").lower()
@@ -326,50 +387,87 @@ def _variant_skill_assertions(result: BCalScenarioRunResult) -> list[TraceAssert
     ]
     deliveries = _skill_delivery_events(result)
     matching = [event for event in deliveries if expected_skill in event[1] or expected_skill in json.dumps(event)]
-    mutations = [position for position, tool, _step in _canonical_trace_events(result) if tool in _MUTATION_TOOLS]
     evidence_text = json.dumps(result.evidence or {}, sort_keys=True).lower()
     if policy == "forbidden":
         return [
             *assertions,
+            *_offered_tool_assertions(_trace_records(result)),
             TraceAssertionResult(
                 assertion_id="variant-skill-not-delivered",
                 passed=not matching and (not expected_segment or expected_segment not in evidence_text),
                 message=f"Expected no {expected_skill!r} skill delivery in the permanent-guidance variant",
             ),
         ]
-    raw_trace_events = canonical_trace.get("events") if canonical_trace else None
-    trace_events = raw_trace_events if isinstance(raw_trace_events, list) else []
-    activation_records = [
-        value
-        for value in trace_events
-        if isinstance(value, dict) and expected_skill in json.dumps(value, sort_keys=True).lower() and (not expected_mode or expected_mode in json.dumps(value, sort_keys=True).lower())
-    ]
-    activation_text = json.dumps(activation_records, sort_keys=True).lower()
-    identity_valid = all(expected and expected in activation_text for expected in (expected_skill, expected_contract, expected_content_sha, expected_revision))
-    prompt_delivery_valid = all(expected and expected in evidence_text for expected in (expected_catalog, expected_segment))
-    mode_valid = bool(activation_records) and expected_mode in activation_text
-    requested_values = _find_values(
-        activation_records,
-        {"requestedtoolcallid", "requested_tool_call_id"},
+    trace_events = _trace_records(result)
+    catalog, catalog_complete = _skill_catalog(result)
+    matching_catalog = [entry for entry in catalog if str(entry.get("name", "")).lower() == expected_skill and str(entry.get("revisionId", "")).lower() == expected_revision]
+    identity_valid = catalog_complete and any(
+        str(entry.get("semanticContractVersion", "")).lower() == expected_contract and str(entry.get("contentHash", "")).lower() == expected_content_sha for entry in matching_catalog
     )
+    lifecycle_types = (
+        "skill_activation_requested",
+        "skill_activation_pending",
+        "skill_instructions_delivered",
+        "skill_activation_ready",
+    )
+    lifecycle = {
+        event_type: [record for record in trace_events if record.get("type") == event_type and str(record.get("skillRevisionId", "")).lower() == expected_revision] for event_type in lifecycle_types
+    }
+    lifecycle_records = [record for event_type in lifecycle_types for record in lifecycle[event_type]]
+    mode_valid = (
+        bool(matching_catalog)
+        and all(str(entry.get("activationMode", "")).lower() == expected_mode for entry in matching_catalog)
+        and bool(lifecycle_records)
+        and all(str(record.get("skillActivationMode", "")).lower() == expected_mode for record in lifecycle_records)
+    )
+    prompt_delivery_valid = all(expected and expected in evidence_text for expected in (expected_catalog, expected_segment))
+    requested_records = lifecycle["skill_activation_requested"]
+    request_keys = ("activateSkillToolCallId", "requestedToolCallId", "requested_tool_call_id")
+    requested_values = [record[key] for record in requested_records for key in request_keys if key in record]
     if expected_request_id == "non_null":
         requested_tool_call_valid = any(isinstance(value, str) and bool(value.strip()) for value in requested_values)
     elif expected_request_id == "null":
         requested_tool_call_valid = bool(requested_values) and all(value is None for value in requested_values)
     else:
         requested_tool_call_valid = not requested_values
-    source_matches = [event for event in matching if not expected_source or expected_source in event[2] or expected_mode in activation_text]
-    activation_positions: list[float] = []
-    for index, value in enumerate(trace_events):
-        if not isinstance(value, dict) or expected_skill not in json.dumps(value, sort_keys=True).lower():
-            continue
-        record = cast(dict[str, object], value)
-        position = record.get("sequence", record.get("index", index))
-        if isinstance(position, int | float):
-            activation_positions.append(float(position))
-    delivered_before_mutation = bool(source_matches and activation_positions) and (not mutations or min(activation_positions) < min(mutations))
+    requested = requested_records[0] if len(requested_records) == 1 else None
+    pending = lifecycle["skill_activation_pending"][0] if len(lifecycle["skill_activation_pending"]) == 1 else None
+    delivered = lifecycle["skill_instructions_delivered"][0] if len(lifecycle["skill_instructions_delivered"]) == 1 else None
+    ready = lifecycle["skill_activation_ready"][0] if len(lifecycle["skill_activation_ready"]) == 1 else None
+    lifecycle_chain = [requested, pending, delivered, ready]
+    activation_ids = {str(record.get("activationId")) for record in lifecycle_chain if record is not None and record.get("activationId") is not None}
+    sequences = [_record_sequence(record) for record in lifecycle_chain if record is not None]
+    ready_sequence = _record_sequence(ready) if ready else None
+    delivered_sequence = _record_sequence(delivered) if delivered else None
+
+    def is_workspace_mutation(record: dict[str, object]) -> bool:
+        classifications = record.get("toolClassifications")
+        return record.get("type") == "tool_started" and isinstance(classifications, list) and "workspace_mutation" in classifications
+
+    first_mutation = next(
+        (record for record in trace_events if is_workspace_mutation(record)),
+        None,
+    )
+    first_mutation_sequence = _record_sequence(first_mutation) if first_mutation else None
+    receipts = first_mutation.get("skillDependencyReceipts") if first_mutation else None
+    receipt_records = [cast(dict[str, object], receipt) for receipt in receipts if isinstance(receipt, dict)] if isinstance(receipts, list) else []
+    receipt_valid = any(str(receipt.get("revisionId", "")).lower() == expected_revision and receipt.get("priorReadyEventSequence") == ready_sequence for receipt in receipt_records)
+    lifecycle_order_valid = (
+        all(record is not None for record in lifecycle_chain)
+        and len(activation_ids) == 1
+        and len(sequences) == 4
+        and all(isinstance(sequence, int | float) for sequence in sequences)
+        and sequences == sorted(sequences)
+        and len(set(sequences)) == 4
+        and ready is not None
+        and ready.get("deliveryEventSequence") == delivered_sequence
+    )
+    delivered_before_mutation = lifecycle_order_valid and (
+        first_mutation is None or (isinstance(first_mutation_sequence, int | float) and isinstance(ready_sequence, int | float) and ready_sequence < first_mutation_sequence and receipt_valid)
+    )
     return [
         *assertions,
+        *_offered_tool_assertions(trace_events),
         TraceAssertionResult(
             assertion_id="variant-skill-identity",
             passed=identity_valid,

@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "name": "bcal-report-skill-gate-b-calibration-v1",
+  "purpose": "Gate B evidence and lifecycle calibration only; exclude all cells from semantic promotion scoring.",
+  "github": {
+    "host": "github.com",
+    "repository": "microsoft/BC-Bench",
+    "base_pull_request": 1011,
+    "required_fixed_base_sha": "1969363374c57aa23bb79ea0f3ec537ce440c870"
+  },
+  "authorization": {
+    "state": "awaiting_corrected_package_identities",
+    "authorized_study_id": null,
+    "authorized_at": null,
+    "authorized_by": null,
+    "workflow_ref": null
+  },
+  "execution": {
+    "backend": "external-command",
+    "model": null,
+    "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
+    "bridge_package": "bc-eval==0.6.1",
+    "bc_version": "28.0",
+    "symbol_cache": "C:\\bcartifacts.cache",
+    "scenario_contract_version": "1.1",
+    "evidence_contract_version": "1.4",
+    "trace_contract_version": "1.4",
+    "workspace_seed_contract_version": "1.0",
+    "repeat_count": 2
+  },
+  "invariants": {
+    "require_workspace_seed_parity": true,
+    "require_compile_or_explicit_not_required": true,
+    "require_artifact_assertions": true,
+    "require_complete_canonical_trace": true,
+    "require_complete_skill_catalog": true,
+    "require_complete_offered_tool_inventory": true,
+    "require_activate_skill_offered_on_first_request": true,
+    "require_complete_activation_chain": true,
+    "require_ready_dependency_receipt_before_mutation": true,
+    "exclude_from_semantic_promotion_scoring": true,
+    "preserve_failures": true,
+    "forbid_retries_or_replacement": true,
+    "require_github_duplicate_gate": true,
+    "require_kusto_duplicate_gate": true,
+    "require_selector_provenance": true,
+    "forbid_control_tower": true,
+    "forbid_unrelated_lanes": true
+  },
+  "variants": {
+    "forced-model-activation": {
+      "configuration_id": null,
+      "skill_activation_policy": "required",
+      "skill_activation_source": "model",
+      "expected_activation_mode": "model_triggered",
+      "requested_tool_call_id": "non_null",
+      "require_offered_tool_evidence": true,
+      "entry": "bcal-scenario__report-gate-b-forced-model-activation-1",
+      "package": null
+    },
+    "host-deterministic": {
+      "configuration_id": null,
+      "skill_activation_policy": "required",
+      "skill_activation_source": "host",
+      "expected_activation_mode": "host_deterministic",
+      "requested_tool_call_id": "null",
+      "require_offered_tool_evidence": true,
+      "entry": "bcal-scenario__report-gate-b-host-deterministic-1",
+      "package": null
+    },
+    "permanent-contract-smoke": {
+      "configuration_id": null,
+      "skill_activation_policy": "forbidden",
+      "skill_activation_source": null,
+      "expected_activation_mode": "permanent_guidance",
+      "requested_tool_call_id": "absent",
+      "require_offered_tool_evidence": true,
+      "entry": "bcal-scenario__report-gate-b-permanent-contract-smoke-1",
+      "package": null
+    }
+  },
+  "skill": {
+    "id": "report-authoring",
+    "contract_version": "1.0.0",
+    "content_sha256": "09ee187742a44ca6b985c25a1da37cf8c04fd489c179e1a440dea5b57dcc9dcf",
+    "revision": "b1833b8be7ea4be6e229982dc8927716cb3393daea02b5f7687aeaab9d480d53",
+    "catalog_segment": "main.skill-catalog",
+    "activated_segment": "main.activated-skill.b1833b8be7ea4be6e229982dc8927716cb3393daea02b5f7687aeaab9d480d53"
+  },
+  "cohort": {
+    "category": "bcal-scenario",
+    "manifest": "dataset/cohorts/bcal-report-skill-gate-b-calibration-v1.json",
+    "entries": [
+      "bcal-scenario__report-gate-b-forced-model-activation-1",
+      "bcal-scenario__report-gate-b-host-deterministic-1",
+      "bcal-scenario__report-gate-b-permanent-contract-smoke-1"
+    ]
+  },
+  "scoring": {
+    "semantic_promotion_metrics_enabled": false,
+    "required_outputs": [
+      "deterministic_artifact_assertions",
+      "compile_result",
+      "canonical_trace",
+      "skill_catalog",
+      "offered_tool_inventory",
+      "activation_lifecycle",
+      "dependency_receipt"
+    ]
+  }
+}

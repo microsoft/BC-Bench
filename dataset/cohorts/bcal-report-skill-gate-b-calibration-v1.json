@@ -1,0 +1,9 @@
+{
+  "name": "bcal-report-skill-gate-b-calibration-v1",
+  "dataset": "bcal-scenario",
+  "entries": [
+    "bcal-scenario__report-gate-b-forced-model-activation-1",
+    "bcal-scenario__report-gate-b-host-deterministic-1",
+    "bcal-scenario__report-gate-b-permanent-contract-smoke-1"
+  ]
+}

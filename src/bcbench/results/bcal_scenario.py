@@ -145,4 +145,8 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         metadata["activation_requested_tool_call_valid"] = activation_assertions.get("variant-requested-tool-call")
         metadata["activation_before_first_mutation"] = activation_assertions.get("variant-skill-before-first-mutation")
         metadata["activation_skill_absent"] = activation_assertions.get("variant-skill-not-delivered")
+        metadata["offered_tools_complete"] = activation_assertions.get("variant-offered-tools-complete")
+        metadata["activate_skill_tool_offered"] = activation_assertions.get("variant-activate-skill-offered")
+        metadata["offered_tool_count_valid"] = activation_assertions.get("variant-offered-tool-count")
+        metadata["offered_tool_schema_hash_valid"] = activation_assertions.get("variant-offered-tool-schema-hash")
         return metadata

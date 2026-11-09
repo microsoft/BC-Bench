@@ -154,3 +154,42 @@ activation mode, requested-tool-call ID nullability, complete canonical trace,
 and delivery before the first workspace mutation. The permanent-guidance
 variant rejects activated-skill delivery. Control Tower, unrelated lanes,
 replacement candidates, and semantic retries are prohibited.
+
+## Report skill Gate B calibration
+
+The follow-up calibration is defined by
+`dataset\experiments\bcal_report_skill_gate_b_calibration_v1.json` and remains
+unauthorized until three corrected immutable BCal package identities, one
+model, a study ID, and an immutable workflow ref are supplied and approved.
+It is not a quality comparison and exports no semantic promotion metrics.
+Each of its forced model-activation, host-deterministic, and permanent-contract
+smoke probes runs exactly twice with deterministic workspace seeds and hidden
+artifact checks.
+
+Gate B joins lifecycle events to `skillEvidence.catalog` by
+`skillRevisionId`, rather than requiring duplicated skill names and content
+identity on every lifecycle event. Required skill variants must emit exactly
+one ordered activation chain:
+`skill_activation_requested`, `skill_activation_pending`,
+`skill_instructions_delivered`, and `skill_activation_ready`. The ready event
+must reference the delivery event, and the first workspace mutation must carry
+a dependency receipt for that revision whose `priorReadyEventSequence` is the
+ready event sequence. Model activation requires a non-null
+`activateSkillToolCallId`; host activation requires the field to be present
+with a null value.
+
+Evidence contract 1.4 also records the first delivery model request's offered
+tool inventory without storing raw schemas or descriptions:
+`offeredToolNames`, `offeredToolCount`, `offeredToolSchemaHash`,
+`offeredToolsTruncated`, `omittedOfferedToolCount`, and
+`activateSkillToolOffered`. Calibration fails closed if the inventory is
+missing, truncated, reports omissions, has inconsistent count/hash evidence,
+or does not include `activate_skill`.
+
+Validate the blocked cohort without dispatch:
+
+```powershell
+.\scripts\Run-BCalReportSkillGateBCalibration.ps1 `
+  -Variant forced-model-activation `
+  -ValidateCohort
+```
