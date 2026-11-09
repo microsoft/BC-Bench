@@ -428,6 +428,24 @@ comment_templates:
       If you still need this request, please create a new issue and include the required updated information.
 
   # =============================================================================
+  # REQUESTER-CONFIRMED CLOSURE COMMENT
+  # =============================================================================
+
+  requester_confirmed_closure:
+    description: "Posted when the requester accepts an existing solution or confirms that the request is withdrawn or cancelled"
+    applies_to: ["all"]
+    template: |
+      Thanks for confirming!
+
+      {closure_explanation}
+
+      Closing this issue because no additional extensibility change is needed.
+
+    placeholders:
+      closure_explanation:
+        description: "The actual closure reason. For an accepted solution, include its name and any known signature and file details. For a withdrawal or cancellation, acknowledge it directly."
+
+  # =============================================================================
   # BCAPPS REDIRECT COMMENT
   # =============================================================================
 
