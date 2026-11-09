@@ -4,9 +4,11 @@ import logging
 from typing import Annotated, cast
 
 import typer
+from bcbench_core.agent.harness import AgentRequest
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, BCalHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
 from bcbench.cli_options import (
+    AgentConfigPath,
     ClaudeCodeModel,
     ContainerCompany,
     ContainerMcpUrl,
@@ -25,7 +27,10 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.types import DatasetTier, EvaluationCategory
+from bcbench.dataset.codereview import CodeReviewEntry
+from bcbench.evaluate import CodeReviewPipeline, NL2ALPipeline
+from bcbench.paths import SHARED_CONFIG_FILE
+from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -51,6 +56,7 @@ def run_copilot(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Run GitHub Copilot CLI on a single entry to generate the category output.
@@ -73,16 +79,11 @@ def run_copilot(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
+    agent_config = AgentConfig.from_file(config_path)
+    category.pipeline(agent_config).setup_workspace(entry, repo_path)
 
-    run_copilot_agent(
-        entry=entry,
-        repo_path=repo_path,
-        model=model,
-        category=category,
-        output_dir=output_dir,
-        runtime=runtime,
-    )
+    harness = CopilotHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir))
 
 
 @run_app.command("claude")
@@ -103,6 +104,7 @@ def run_claude(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Run Claude Code on a single entry to generate the category output.
@@ -125,16 +127,11 @@ def run_claude(
         bc_mcp=bc_mcp,
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
+    agent_config = AgentConfig.from_file(config_path)
+    category.pipeline(agent_config).setup_workspace(entry, repo_path)
 
-    run_claude_code(
-        entry=entry,
-        repo_path=repo_path,
-        model=model,
-        category=category,
-        output_dir=output_dir,
-        runtime=runtime,
-    )
+    harness = ClaudeHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir))
 
 
 @run_app.command("pr-review")
@@ -160,18 +157,11 @@ def run_pr_review(
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
     category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path(), entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
+    entry = CodeReviewEntry.load(category.dataset_path(), entry_id=entry_id)[0]
+    CodeReviewPipeline().setup_workspace(entry, repo_path)
 
-    run_pr_review_agent(
-        entry=entry,
-        model=model,
-        repo_path=repo_path,
-        category=category,
-        output_dir=output_dir,
-        engine_path=engine_path,
-        min_severity=min_severity,
-    )
+    harness = PRReviewHarness(model=model, engine_path=engine_path, min_severity=min_severity)
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir))
 
 
 @run_app.command("bcal")
@@ -192,13 +182,7 @@ def run_bcal(
     """
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
-    category.pipeline.setup_workspace(entry, repo_path)
+    NL2ALPipeline().setup_workspace(entry, repo_path)
 
-    run_bcal_agent(
-        entry=entry,
-        repo_path=repo_path,
-        backend_config=BCalBackendConfig(
-            command=llm_command,
-            model=llm_model,
-        ),
-    )
+    harness = BCalHarness(BCalBackendConfig(command=llm_command, model=llm_model))
+    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=repo_path))

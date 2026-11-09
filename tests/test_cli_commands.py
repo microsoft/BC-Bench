@@ -12,14 +12,12 @@ from bcbench_core.agent.metrics import AgentMetrics
 from typer.main import get_command
 from typer.testing import CliRunner
 
-from bcbench.agent.bcal import BCalScenarioError
-from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.cli import _redteam_extra_installed, app
 from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtime
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
@@ -126,14 +124,14 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             return [entry]
 
     class Pipeline:
-        def execute(self, context, _agent_runner):
+        def execute(self, context, _harness):
             captured["context"] = context
 
     with (
         patch.object(EvaluationCategory, "dataset_path", return_value=tmp_path / "nl2al.jsonl"),
         patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
-        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
-        patch.object(evaluate_commands, "get_bcal_version", return_value="18.0.1.2-beta"),
+        patch.object(evaluate_commands, "NL2ALPipeline", return_value=Pipeline()),
+        patch("bcbench.agent.bcal.agent.get_bcal_version", return_value="18.0.1.2-beta"),
     ):
         evaluate_commands.evaluate_bcal(
             entry_id=entry.instance_id,
@@ -144,90 +142,8 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             llm_model=llm_model,
         )
 
-    assert captured["context"].model == expected_model
-    assert captured["context"].agent_version == "18.0.1.2-beta"
-
-
-def test_evaluate_bcal_incomplete_result_persists_exported_patch_and_failure(tmp_path):
-    entry = create_nl2al_entry()
-    dataset_path = tmp_path / "nl2al.jsonl"
-    dataset_path.write_text(entry.model_dump_json() + "\n", encoding="utf-8")
-    evidence = {"contractVersion": "1.0", "trace": {"events": []}}
-    scenario_result = bcal_agent._BCalScenarioResult.model_validate(
-        {
-            "schemaVersion": "1.0",
-            "executionIdentity": {
-                "productVersion": "30.0.44.1",
-                "sourceCommitSha": "a" * 40,
-                "buildConfiguration": "Release",
-                "scenarioContractVersion": "1.0",
-                "evidenceContractVersion": "1.0",
-            },
-            "evidence": evidence,
-            "completed": False,
-            "steps": [
-                {
-                    "id": "benchmark-prompt",
-                    "type": "user",
-                    "status": "failed",
-                    "failure": {
-                        "code": "incomplete_execution",
-                        "message": "repair_budget_exhausted",
-                        "stepId": "benchmark-prompt",
-                        "retryable": False,
-                    },
-                }
-            ],
-        }
-    )
-    generated_patch = 'diff --git a/BcalDataset/src/Generated.al b/BcalDataset/src/Generated.al\n+pageextension 50100 Generated extends "Customer Card"'
-
-    class EntryClass:
-        @staticmethod
-        def load(_dataset_path, entry_id: str):
-            assert entry_id == entry.instance_id
-            return [entry]
-
-    class Pipeline:
-        def execute(self, context, agent_runner):
-            agent_runner(context)
-
-        def save_result(self, context, result):
-            result.save(context.result_dir, f"{context.entry.instance_id}.jsonl")
-
-    with (
-        patch.object(EvaluationCategory, "dataset_path", return_value=dataset_path),
-        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
-        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
-        patch.object(evaluate_commands, "get_bcal_version", return_value="30.0.44.1"),
-        patch.object(
-            evaluate_commands,
-            "run_bcal_agent",
-            side_effect=BCalScenarioError("BCal scenario exited with status 1", scenario_result),
-        ),
-        patch.object(evaluate_commands, "stage_and_get_diff", return_value=generated_patch),
-        pytest.raises(typer.Exit) as exc_info,
-    ):
-        evaluate_commands.evaluate_bcal(
-            entry_id=entry.instance_id,
-            repo_path=tmp_path / "repo",
-            output_dir=tmp_path / "results",
-            run_id="bcal-incomplete",
-            llm_command="python bridge.py",
-        )
-
-    result_path = tmp_path / "results" / "bcal-incomplete" / f"{entry.instance_id}.jsonl"
-    result = json.loads(result_path.read_text(encoding="utf-8"))
-    assert exc_info.value.exit_code == 1
-    assert result["output"] == generated_patch
-    assert result["error_message"] == "BCal scenario exited with status 1"
-    assert result["evidence"] == evidence
-    assert result["bcal_failure"] == {
-        "code": "incomplete_execution",
-        "message": "repair_budget_exhausted",
-        "step_id": "benchmark-prompt",
-        "retryable": False,
-    }
+    assert captured["context"].agent.model == expected_model
+    assert captured["context"].agent.version == "18.0.1.2-beta"
 
 
 def _option_names(command: click.Command) -> set[str]:
@@ -260,33 +176,31 @@ def agent_command_category(tmp_path):
         def setup_workspace(self, _entry, _repo_path):
             pass
 
-        def execute(self, context, agent_runner):
-            agent_runner(context)
+        def execute(self, context, harness):
+            harness.run(context.agent_request())
 
     return entry, SimpleNamespace(
         dataset_path=lambda _tier=None: tmp_path / "dataset.jsonl",
         entry_class=EntryClass,
-        pipeline=Pipeline(),
+        pipeline=lambda _agent_config: Pipeline(),
         requires_container=False,
     )
 
 
 @pytest.mark.parametrize(
-    ("commands", "command_name", "agent_name", "extra_args"),
+    ("commands", "command_name", "harness_name", "extra_args"),
     [
-        (run_commands, "run_copilot", "run_copilot_agent", {}),
-        (run_commands, "run_claude", "run_claude_code", {}),
-        (evaluate_commands, "evaluate_copilot", "run_copilot_agent", {"run_id": "test-run"}),
-        (evaluate_commands, "evaluate_claude_code", "run_claude_code", {"run_id": "test-run"}),
+        (run_commands, "run_copilot", "CopilotHarness", {}),
+        (run_commands, "run_claude", "ClaudeHarness", {}),
+        (evaluate_commands, "evaluate_copilot", "CopilotHarness", {"run_id": "test-run"}),
+        (evaluate_commands, "evaluate_claude_code", "ClaudeHarness", {"run_id": "test-run"}),
     ],
 )
-def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_category, commands, command_name, agent_name, extra_args):
+def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_category, commands, command_name, harness_name, extra_args):
     entry, category = agent_command_category
 
     with (
-        patch.object(commands, agent_name) as run_agent,
-        patch.object(evaluate_commands, "get_copilot_version", return_value="1.2.3"),
-        patch.object(evaluate_commands, "get_claude_version", return_value="1.2.3"),
+        patch.object(commands, harness_name) as harness,
     ):
         getattr(commands, command_name)(
             entry_id=entry.instance_id,
@@ -301,10 +215,39 @@ def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_cat
             **extra_args,
         )
 
-    runtime = run_agent.call_args.kwargs["runtime"]
+    runtime = harness.call_args.kwargs["runtime"]
     assert runtime.al_mcp is True
     assert runtime.bc_mcp is True
     assert runtime.container.name == "bcbench"
+
+
+@pytest.mark.parametrize(
+    ("commands", "command_name", "harness_name", "extra_args"),
+    [
+        (run_commands, "run_copilot", "CopilotHarness", {}),
+        (run_commands, "run_claude", "ClaudeHarness", {}),
+        (evaluate_commands, "evaluate_copilot", "CopilotHarness", {"run_id": "test-run"}),
+        (evaluate_commands, "evaluate_claude_code", "ClaudeHarness", {"run_id": "test-run"}),
+    ],
+)
+def test_agent_commands_pass_the_given_agent_config(tmp_path, agent_command_category, commands, command_name, harness_name, extra_args):
+    entry, category = agent_command_category
+    config_path = tmp_path / "agent-config.yaml"
+    config_path.write_text("instructions:\n  enabled: true\n", encoding="utf-8")
+
+    with (
+        patch.object(commands, harness_name) as harness,
+    ):
+        getattr(commands, command_name)(
+            entry_id=entry.instance_id,
+            category=category,
+            repo_path=tmp_path / "repo",
+            output_dir=tmp_path / "results",
+            config_path=config_path,
+            **extra_args,
+        )
+
+    assert harness.call_args.kwargs["agent_config"] == AgentConfig.model_validate({"instructions": {"enabled": True}})
 
 
 def _runtime_options(**overrides):
@@ -377,9 +320,9 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
     with (
         patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
         patch.object(EvaluationCategory, "dataset_path", return_value=dataset_path),
-        patch.object(evaluate_commands, "get_copilot_version", side_effect=AssertionError("Must use artifact version")),
-        patch.object(evaluate_commands, "get_claude_version", side_effect=AssertionError("Must use artifact version")),
-        patch.object(evaluate_commands, "get_pr_review_version", side_effect=AssertionError("Must use artifact version")),
+        patch("bcbench.agent.copilot.agent.get_copilot_version", side_effect=AssertionError("Must use artifact version")),
+        patch("bcbench.agent.claude.agent.get_claude_version", side_effect=AssertionError("Must use artifact version")),
+        patch("bcbench.agent.pr_review.agent.get_pr_review_version", side_effect=AssertionError("Must use artifact version")),
     ):
         result = runner.invoke(
             app,

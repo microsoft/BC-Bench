@@ -5,12 +5,16 @@ import logging
 from pathlib import Path
 from typing import Any, Self, cast, override
 
-from pydantic import BaseModel, model_validator
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from pydantic import BaseModel, JsonValue, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AnyAgentMetrics, BCalExecutionFacts, BCalExecutionIdentity, BCalScenarioFailure, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
+
+# Per-instance result files are JSON Lines
+RESULT_FILE_SUFFIX = ".jsonl"
 
 
 class BaseEvaluationResult(BaseModel):
@@ -23,10 +27,7 @@ class BaseEvaluationResult(BaseModel):
     category: EvaluationCategory
     tier: DatasetTier = DatasetTier.GOLD
     agent_version: str | None = None
-    execution_identity: BCalExecutionIdentity | None = None
-    evidence: dict[str, Any] | None = None
-    bcal_failure: BCalScenarioFailure | None = None
-    execution_facts: BCalExecutionFacts | None = None
+    transcript: dict[str, JsonValue] | None = None
 
     timeout: bool = False
 
@@ -38,28 +39,25 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
-        metrics_contract = context.agent_name.metrics_contract
+        metrics_contract = context.agent.harness.metrics_contract
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
         elif type(context.metrics) is not metrics_contract.metrics_type:
-            raise TypeError(f"{context.agent_name} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
+            raise TypeError(f"{context.agent.harness} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
         elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(context.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         return {
             "instance_id": context.entry.instance_id,
             "project": context.entry.extract_project_name(),
-            "model": context.model.replace(".", "-"),
+            "model": (context.agent.model or "").replace(".", "-"),
             "category": context.category,
             "tier": context.tier,
-            "agent_name": context.agent_name,
-            "agent_version": context.agent_version,
-            "execution_identity": context.execution_identity,
-            "evidence": context.evidence,
-            "bcal_failure": context.bcal_failure,
-            "execution_facts": context.execution_facts,
+            "agent_name": context.agent.harness,
+            "agent_version": context.agent.version,
             "metrics": context.metrics,
             "experiment": context.experiment,
+            "transcript": context.transcript,
         }
 
     @classmethod
@@ -103,6 +101,11 @@ class BaseEvaluationResult(BaseModel):
         return {}
 
     @property
+    def scorer_output(self) -> str:
+        """Output sent to the scorer, without changing the persisted artifact."""
+        return self.output
+
+    @property
     def display_row(self) -> dict[str, str]:
         """Extra columns for per-instance detail tables.
 
@@ -113,8 +116,6 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "BaseEvaluationResult":
-        if "category" not in payload and ({"id", "context", "metadata"} <= payload.keys() or {"Id", "Context", "Metadata"} <= payload.keys()):
-            raise ValueError("Published bc-eval rows are not raw BC-Bench result JSONL; re-export the retained per-instance result artifact instead")
         category = EvaluationCategory(payload["category"])
         return category.result_class.model_validate(payload)
 

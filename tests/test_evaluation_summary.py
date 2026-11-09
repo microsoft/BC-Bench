@@ -2,11 +2,12 @@ import json
 from datetime import UTC, date, datetime
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.config import get_config
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 _config = get_config()

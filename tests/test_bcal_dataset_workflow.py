@@ -58,6 +58,17 @@ def test_bcal_run_identity_includes_tier_and_package_selection():
     assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}"
 
 
+def test_bcal_completion_review_model_offers_external_models_or_none():
+    workflow = _workflow("bcal-evaluation.yml")
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    review_model = inputs["completion-review-model"]
+    run = _step(workflow, "evaluate-with-bcal", "Run BCal for entry ${{ matrix.entry }}")
+
+    assert review_model["default"] == "none"
+    assert review_model["options"] == ["none", *inputs["external-model"]["options"]]
+    assert run["env"]["BCAL_COMPLETION_REVIEW_MODEL"] == "${{ inputs.completion-review-model != 'none' && inputs.completion-review-model || '' }}"
+
+
 def test_bcal_feed_selects_official_or_internal_test_feed():
     workflow = _workflow("bcal-evaluation.yml")
     feed = workflow[True]["workflow_dispatch"]["inputs"]["bcal-feed"]

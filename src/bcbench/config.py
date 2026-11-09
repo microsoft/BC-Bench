@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from pydantic import AliasPath, BaseModel, ConfigDict, Field
 
 from bcbench.cli_options import CopilotModelName
+from bcbench.paths import SHARED_CONFIG_FILE
 
 __all__ = ["Config", "get_config"]
 
@@ -42,14 +43,12 @@ class PathConfig:
     testbed_path: Path
     evaluation_results_path: Path
     leaderboard_dir: Path
-    agent_share_dir: Path
     redteam_scorecard: Path
     plugin_root: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
         """Create path configuration from repository root."""
-        agent_share_dir = root / "src" / "bcbench" / "agent" / "shared"
         evaluation_results_path = root / "evaluation_results"
         return cls(
             bc_bench_root=root,
@@ -58,68 +57,9 @@ class PathConfig:
             testbed_path=root.parent / "NAV",
             evaluation_results_path=evaluation_results_path,
             leaderboard_dir=root / "docs" / "_data",
-            agent_share_dir=agent_share_dir,
             redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
             # `.bcbench` avoids colliding with agent-reserved dirs (`.claude/`, `.github/`)
             plugin_root=root / ".bcbench",
-        )
-
-
-@dataclass(frozen=True)
-class TimeoutConfig:
-    """Timeout configuration for various operations."""
-
-    execute_query: int
-    agent_execution: int
-    bcal_execution: int
-    filepath_identification: int
-
-    @classmethod
-    def default(cls) -> TimeoutConfig:
-        """Get default timeout configuration."""
-        return cls(
-            # The data-query gold query is compiled, published AND run live per entry — it does more
-            # than a plain app build and is slow on the insider-29 artifact, so it gets its own budget.
-            execute_query=15 * 60,
-            agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
-            # Total bcal CLI budget per instance.
-            bcal_execution=25 * 60,
-            # Context-free file-path identification; kept below the 20-min workflow step timeout
-            # so a hung run fails before the CI step is force-killed.
-            filepath_identification=15 * 60,
-        )
-
-
-@dataclass(frozen=True)
-class FilePatternConfig:
-    """File patterns and naming conventions."""
-
-    trajectory_pattern: str
-    instance_pattern: str
-    result_pattern: str
-    instruction_source_naming: str
-    instructions_dirname: str
-    test_project_identifiers: tuple[str, ...]
-    problem_statement_readme: str
-    problem_statement_dest_dir: str
-    nl2al_export_subdir: str
-    plugin_manifest: Path
-
-    @classmethod
-    def default(cls) -> FilePatternConfig:
-        """Get default file pattern configuration."""
-        return cls(
-            trajectory_pattern=".traj.json",
-            instance_pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$",
-            result_pattern=".jsonl",
-            instruction_source_naming="AGENTS.md",
-            instructions_dirname="instructions",
-            test_project_identifiers=("test", "tests"),
-            problem_statement_readme="README.md",
-            problem_statement_dest_dir="problem",
-            nl2al_export_subdir="src",
-            # Where both Copilot CLI and Claude Code look for a plugin's manifest
-            plugin_manifest=Path(".claude-plugin") / "plugin.json",
         )
 
 
@@ -164,8 +104,6 @@ class Config:
 
     paths: PathConfig
     env: EnvironmentConfig
-    timeout: TimeoutConfig
-    file_patterns: FilePatternConfig
     judge: JudgeConfig
 
     @classmethod
@@ -176,9 +114,7 @@ class Config:
         return cls(
             paths=path_config,
             env=EnvironmentConfig.from_environment(),
-            timeout=TimeoutConfig.default(),
-            file_patterns=FilePatternConfig.default(),
-            judge=JudgeConfig.from_file(path_config.agent_share_dir / "config.yaml"),
+            judge=JudgeConfig.from_file(SHARED_CONFIG_FILE),
         )
 
 

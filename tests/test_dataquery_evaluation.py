@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from bcbench_core.agent.harness import AgentIdentity
 from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import BuildError
 
@@ -9,7 +10,7 @@ from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.dataquery import DataQueryPipeline, _load_answer_rows, result_sets_match
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.operations import dataquery_operations, wrap_query_as_api
-from bcbench.types import AgentHarness, EvaluationCategory, EvaluationContext
+from bcbench.types import EvaluationCategory, EvaluationContext, HarnessName
 from tests.conftest import create_data_query_entry
 
 
@@ -87,8 +88,7 @@ class TestGoldRowsEmptyGuard:
             repo_path=tmp_path / "repo",
             result_dir=tmp_path / "results",
             container=ContainerConfig("bcbench", "admin", "secret", company="CRONUS"),
-            model="test-model",
-            agent_name=AgentHarness.COPILOT,
+            agent=AgentIdentity[HarnessName](harness=HarnessName.COPILOT, version="1.0.0", model="test-model"),
             category=EvaluationCategory.DATA_QUERY,
         )
 

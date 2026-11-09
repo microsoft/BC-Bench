@@ -7,7 +7,7 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 - **Core Library** (`packages/bcbench-core/`): Reusable, distributable evaluation library consumed by `bcbench`; must never import `bcbench`, read environment variables, or contain BC-Bench policy
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
 - **Tools** (`tools/`): Ad-hoc scripts for GitHub Artifacts download, etc
-- **Agent Evaluations**: Focuses on GitHub Copilot CLI and Claude Code
+- **Agent Evaluations**: Agent harness integrations and evaluation pipelines
 - **Experiments**: MCP Servers, custom instructions, custom agents, skills, etc. and their performance on the benchmark
 - **Notebooks** (`notebooks/`): Analysis and visualization of benchmark results
 
@@ -17,7 +17,11 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 - Uses `pre-commit` for code quality checks (ruff linting/formatting, trailing whitespace, etc.)
 
 ## Categories
-BC-Bench is category-based and designed to grow over time. It currently has two categories, `bug-fix` and `test-generation`. They share the same dataset tasks and execution-based setup, but use different prompts, expected outputs, and evaluation pipelines. Future categories such as `code-review` can be added within the same overall benchmark structure, though they may require different inputs, setup, or evaluation methods.
+A category defines the kind of development task being evaluated, including its inputs, prompts, expected outputs, and evaluation and scoring methods.
+
+## Development workflow
+- Keep pull request descriptions concise. Focus on the goal and, when relevant, the design; avoid detailed implementation walkthroughs.
+- Run relevant local checks, but do not wait for CI to complete during local development.
 
 ## Coding Patterns and Guidelines
 
@@ -32,7 +36,7 @@ BC-Bench is category-based and designed to grow over time. It currently has two 
 
 ### Architecture design conventions
 
-Preserve one-way dependency flow from orchestration toward lower-level abstractions. Keep domain and result models independent of runtime code. CLI commands are composition roots: they select concrete agents and inject them into evaluation pipelines through `AgentRunner`; pipelines must not select agent implementations.
+Preserve one-way dependency flow from orchestration toward lower-level abstractions. Keep domain and result models independent of runtime code. CLI commands are composition roots: they construct concrete agent harnesses (`bcbench_core.agent.harness.AgentHarness`) and inject them into evaluation pipelines; pipelines must not select agent implementations.
 
 `bcbench.types` is the central category registry. Extend `EvaluationCategory` for category-owned mappings such as datasets, pipelines, results, and scoring behavior instead of duplicating those decisions elsewhere. Keep imports following the existing direction and avoid circular dependencies.
 

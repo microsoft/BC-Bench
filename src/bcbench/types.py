@@ -8,9 +8,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 import yaml
+from bcbench_core.agent.customization import CustomAgentsConfig, ToggleConfig
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictBool, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -23,14 +26,8 @@ __all__ = [
     "AL_MCP_SERVER_NAME",
     "BC_MCP_SERVER_NAME",
     "AgentConfig",
-    "AgentHarness",
     "AgentMetricsContract",
     "AnyAgentMetrics",
-    "BCalCompilationEvent",
-    "BCalExecutionFacts",
-    "BCalExecutionIdentity",
-    "BCalFailureFacts",
-    "BCalScenarioFailure",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
@@ -39,7 +36,7 @@ __all__ = [
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
-    "ExperimentConfiguration",
+    "HarnessName",
     "HttpMcpServer",
     "JudgeCalibrationReport",
     "McpServerConfig",
@@ -75,68 +72,6 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
 
 
-class BCalExecutionIdentity(BaseModel):
-    model_config = ConfigDict(frozen=True, populate_by_name=True)
-
-    product_version: str = Field(alias="productVersion")
-    source_commit_sha: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{7,64}$")] | None = Field(alias="sourceCommitSha")
-    build_configuration: str = Field(alias="buildConfiguration")
-    scenario_contract_version: Literal["1.0"] = Field(alias="scenarioContractVersion")
-    evidence_contract_version: Literal["1.0"] = Field(alias="evidenceContractVersion")
-
-
-class BCalScenarioFailure(BaseModel):
-    model_config = ConfigDict(frozen=True, populate_by_name=True)
-
-    code: str
-    message: str
-    step_id: str | None = Field(default=None, alias="stepId")
-    retryable: bool | None = None
-
-
-class BCalFailureFacts(BaseModel):
-    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
-
-    code: str
-    message: str
-    step_id: str | None = Field(default=None, alias="stepId")
-    retryable: bool | None = None
-
-
-class BCalCompilationEvent(BaseModel):
-    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="ignore")
-
-    sequence: int = Field(ge=0)
-    type: Literal["compilation_attempt", "compilation_outcome"]
-    scenario_step_id: str = Field(alias="scenarioStepId")
-    turn: int | None = Field(default=None, ge=0)
-    iteration: int | None = Field(default=None, ge=0)
-    call_id: str | None = Field(default=None, alias="callId")
-    operation: str
-    status: str
-    succeeded: StrictBool | None = None
-
-
-class BCalExecutionFacts(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    contract_version: Literal["1.0"] = "1.0"
-    provider: Literal["bcal"] = "bcal"
-    source: Literal["bcal_scenario_result"] = "bcal_scenario_result"
-    agent_authored: Literal[False] = False
-    execution_identity: BCalExecutionIdentity
-    scenario_completed: bool | None = None
-    scenario_step_status: Literal["succeeded", "failed"] | None = None
-    step_compile_succeeded: bool | None = None
-    compile_succeeded: bool | None = None
-    compile_evidence_source: Literal["scenario_step", "trace_latest_outcome"] | None = None
-    compilation_events: tuple[BCalCompilationEvent, ...] = ()
-    scenario_failure: BCalFailureFacts | None = None
-    step_failure: BCalFailureFacts | None = None
-    evidence_status: Literal["present", "missing", "malformed"]
-    trace_truncated: bool | None = None
-
-
 class PRReviewMetrics(AgentMetrics):
     kind: Literal["pr-review"] = "pr-review"
 
@@ -162,42 +97,6 @@ class AgentMetricsContract:
     def __post_init__(self) -> None:
         if unknown_fields := self.required_fields - self.metrics_type.model_fields.keys():
             raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
-
-
-class ExperimentConfiguration(BaseModel):
-    """Configuration for agent experiment execution.
-
-    This encapsulates experiment-related configuration that agents use,
-    making it easier to add new configuration options without changing function signatures.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    # MCP server names used in experiment (if any)
-    mcp_servers: list[str] | None = None
-
-    # Whether the AL LSP server was enabled for this experiment
-    al_lsp_enabled: bool = False
-
-    # Custom instructions enabled in experiment
-    custom_instructions: bool = False
-
-    # Skills enabled in experiment
-    skills_enabled: bool = False
-
-    # Custom agent name used in experiment (if any)
-    custom_agent: str | None = None
-
-    # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
-    plugins: list[str] | None = None
-
-    def is_empty(self) -> bool:
-        """Check if this configuration has all default/empty values.
-
-        An empty configuration means no special experiment settings were used.
-        This is useful for comparing with None (no experiment) vs default experiment.
-        """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
@@ -244,7 +143,7 @@ class PluginConfig(BaseModel):
         return self
 
 
-class AgentHarness(StrEnum):
+class HarnessName(StrEnum):
     """Agents that can be evaluated, and the metrics each of them is able to report."""
 
     COPILOT = "GitHub Copilot"
@@ -262,7 +161,7 @@ class AgentHarness(StrEnum):
         """
 
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
@@ -270,7 +169,7 @@ class AgentHarness(StrEnum):
                     turn_count=None,
                     tool_usage=None,
                 )
-            case AgentHarness.CLAUDE | AgentHarness.MOCK:
+            case HarnessName.CLAUDE | HarnessName.MOCK:
                 metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
@@ -279,9 +178,9 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL:
+            case HarnessName.BCAL:
                 metrics = AgentMetrics(execution_time=None)
-            case AgentHarness.PR_REVIEW:
+            case HarnessName.PR_REVIEW:
                 metrics = PRReviewMetrics(
                     execution_time=None,
                     prompt_tokens=None,
@@ -290,25 +189,25 @@ class AgentHarness(StrEnum):
                     ai_credits=None,
                 )
             case _:
-                raise ValueError(f"Unknown AgentHarness: {self}")
+                raise ValueError(f"Unknown HarnessName: {self}")
 
         return AgentMetricsContract(type(metrics), frozenset(metrics.model_fields_set))
 
     @property
     def instruction_filename(self) -> str:
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 return "copilot-instructions.md"
-            case AgentHarness.CLAUDE:
+            case HarnessName.CLAUDE:
                 return "CLAUDE.md"
             case _:
                 raise ValueError(f"{self.value} does not support repository instructions")
 
     def get_target_dir(self, repo_path: Path) -> Path:
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 return repo_path / ".github"
-            case AgentHarness.CLAUDE:
+            case HarnessName.CLAUDE:
                 return repo_path / ".claude"
             case _:
                 raise ValueError(f"{self.value} does not support repository setup")
@@ -391,6 +290,7 @@ class EvaluationCategory(StrEnum):
         from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.codereview import CodeReviewResult
+        from bcbench.results.nl2al import NL2ALResult
         from bcbench.results.testgeneration import TestGenerationResult
 
         match self:
@@ -401,7 +301,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewResult
             case EvaluationCategory.NL2AL:
-                return JudgeBasedEvaluationResult
+                return NL2ALResult
             case EvaluationCategory.DATA_QUERY:
                 return ExecutionBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
@@ -464,8 +364,7 @@ class EvaluationCategory(StrEnum):
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
-    @property
-    def pipeline(self) -> EvaluationPipeline[Any]:
+    def pipeline(self, agent_config: AgentConfig) -> EvaluationPipeline[Any]:
         from bcbench.evaluate import (
             BugFixPipeline,
             CodeReviewPipeline,
@@ -481,7 +380,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.BUG_FIX:
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationPipeline()
+                return TestGenerationPipeline(agent_config.prompt.test_generation_input)
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewPipeline()
             case EvaluationCategory.NL2AL:
@@ -674,16 +573,6 @@ class McpConfig(BaseModel):
         return self
 
 
-class ToggleConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    enabled: StrictBool = False
-
-
-class CustomAgentsConfig(ToggleConfig):
-    name: str | None = None
-
-
 class AgentConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -742,9 +631,8 @@ class EvaluationContext[E: BaseDatasetEntry]:
     repo_path: Path
     result_dir: Path
 
-    # Agent metadata
-    agent_name: AgentHarness
-    model: str
+    # The agent under evaluation, resolved before running
+    agent: AgentIdentity[HarnessName]
 
     # Evaluation category
     category: EvaluationCategory
@@ -753,19 +641,19 @@ class EvaluationContext[E: BaseDatasetEntry]:
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
 
-    agent_version: str | None = None
-    execution_identity: BCalExecutionIdentity | None = None
-    evidence: dict[str, Any] | None = None
-    bcal_failure: BCalScenarioFailure | None = None
-    execution_facts: BCalExecutionFacts | None = None
-
     # Agent execution metrics
     metrics: AgentMetrics | None = None
 
     # Experiment configuration
     experiment: ExperimentConfiguration | None = None
 
+    # Agent transcript, set by the pipeline from the harness result or error
+    transcript: dict[str, JsonValue] | None = None
+
     def get_container(self) -> ContainerConfig:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
+
+    def agent_request(self) -> AgentRequest[E]:
+        return AgentRequest(task=self.entry, work_dir=self.repo_path, output_dir=self.result_dir)

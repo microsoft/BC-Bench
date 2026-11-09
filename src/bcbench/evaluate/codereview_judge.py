@@ -143,7 +143,7 @@ def judge_verdicts(
             prompt=prompt,
             model=model,
             work_dir=work_dir,
-            timeout=_config.timeout.agent_execution,
+            timeout=60 * 60,
             env=os.environ,
             options=CopilotOptions(allow_all_tools=True),
         )

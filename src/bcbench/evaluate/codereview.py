@@ -6,10 +6,9 @@ from typing import override
 from bcbench_core.git import apply_patch, fetch_commit_if_missing
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.evaluate.codereview_judge import judge_expected_and_ignored
 from bcbench.evaluate.review_parsing import parse_review_output
-from bcbench.github_actions import github_log_group
 from bcbench.operations import setup_repo_prebuild
 from bcbench.results.codereview import CodeReviewResult, candidate_comment_pairs
 from bcbench.types import EvaluationContext
@@ -53,11 +52,6 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     @override
     def setup(self, context: EvaluationContext[CodeReviewEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
-
-    @override
-    def run_agent(self, context: EvaluationContext[CodeReviewEntry], agent_runner: AgentRunner[CodeReviewEntry]) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
 
     @override
     def evaluate(self, context: EvaluationContext[CodeReviewEntry]) -> None:

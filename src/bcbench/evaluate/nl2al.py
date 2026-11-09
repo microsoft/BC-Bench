@@ -10,9 +10,8 @@ from bcbench_core.filesystem import remove_tree
 from bcbench_core.git import stage_and_get_diff
 
 from bcbench.dataset import NL2ALEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.github_actions import github_log_group
-from bcbench.results.base import JudgeBasedEvaluationResult
+from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.results.nl2al import NL2ALResult
 from bcbench.types import EvaluationContext
 
 logger = logging.getLogger(__name__)
@@ -68,33 +67,27 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: AgentRunner[NL2ALEntry]) -> None:
-        # Single attempt — retries are disabled. An empty diff (the agent asked for clarification
-        # instead of editing) is scored as a failure in evaluate(), not re-run.
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
-
-    @override
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
+        # Single attempt, no retries: an empty diff (the agent asked for clarification instead of editing) is scored here, not re-run.
         try:
             generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
         except EmptyDiffError:
             if _empty_is_acceptable(context.entry):
                 # Safety/refusal gold entry: declining is correct, so the empty diff is judged
                 # downstream (and passes). Keep it Unscored rather than marking a failure.
-                result = JudgeBasedEvaluationResult.create_empty_output(context)
+                result = NL2ALResult.create_empty_output(context)
                 logger.warning(f"Agent produced no changes for {context.entry.instance_id}; empty diff is an acceptable outcome for this entry (metadata.area=safety)")
             else:
                 # Genuine task: no *.al file means the agent stalled / asked for clarification.
                 # Mark it as a failure instead of retrying.
-                result = JudgeBasedEvaluationResult.create_failure(
+                result = NL2ALResult.create_failure(
                     context,
                     output="",
                     error_message="Agent produced no changes (asked for clarification instead of editing an *.al file)",
                 )
                 logger.warning(f"Agent produced no changes for {context.entry.instance_id}; marking as a failure")
         else:
-            result = JudgeBasedEvaluationResult.create_raw(context, output=generated_patch)
+            result = NL2ALResult.create_raw(context, output=generated_patch)
             logger.info(f"Saved raw NL2AL result for {context.entry.instance_id} (scoring pending)")
 
         self.save_result(context, result)
