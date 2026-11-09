@@ -1,5 +1,8 @@
 """Errors raised by bcbench-core operations."""
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.metrics import AgentMetrics
+
 
 class GitOperationError(Exception):
     """Base class for git operation failures."""
@@ -122,3 +125,12 @@ class TestExecutionTimeoutExpired(Exception):
 
 class AgentError(Exception):
     """Agent execution errors."""
+
+
+class AgentTimeoutError(AgentError):
+    """The agent exceeded its timeout; carries what was observed before it was stopped."""
+
+    def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None) -> None:
+        self.metrics = metrics
+        self.config = config
+        super().__init__(message)

@@ -6,26 +6,26 @@ from pydantic import TypeAdapter
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentHarness, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
+from bcbench.types import AgentConfig, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, HarnessName, PRReviewMetrics
 
 
 def test_repository_harnesses_have_target_dir():
     repo_path = Path("C:/test/repo")
-    for harness in (AgentHarness.COPILOT, AgentHarness.CLAUDE):
+    for harness in (HarnessName.COPILOT, HarnessName.CLAUDE):
         target_dir = harness.get_target_dir(repo_path)
         assert isinstance(target_dir, Path)
         assert str(target_dir).startswith(str(repo_path))
 
 
 def test_repository_harnesses_have_instruction_filename():
-    for harness in (AgentHarness.COPILOT, AgentHarness.CLAUDE):
+    for harness in (HarnessName.COPILOT, HarnessName.CLAUDE):
         filename = harness.instruction_filename
         assert isinstance(filename, str)
         assert filename.endswith(".md")
 
 
-@pytest.mark.parametrize("harness", [AgentHarness.BCAL, AgentHarness.MOCK])
-def test_other_harnesses_reject_repository_setup(harness: AgentHarness):
+@pytest.mark.parametrize("harness", [HarnessName.BCAL, HarnessName.MOCK])
+def test_other_harnesses_reject_repository_setup(harness: HarnessName):
     with pytest.raises(ValueError, match="does not support repository setup"):
         harness.get_target_dir(Path("C:/test/repo"))
     with pytest.raises(ValueError, match="does not support repository instructions"):
@@ -33,7 +33,7 @@ def test_other_harnesses_reject_repository_setup(harness: AgentHarness):
 
 
 def test_all_agent_names_have_metrics_contracts():
-    for agent_name in AgentHarness:
+    for agent_name in HarnessName:
         contract = agent_name.metrics_contract
         assert contract.required_fields
         assert contract.required_fields <= contract.metrics_type.model_fields.keys()
@@ -49,7 +49,7 @@ def test_every_harness_metrics_type_round_trips_through_the_union():
     # union, or a subclass that forgot to override `kind`, would serialize fine and then fail to load or
     # silently downcast and drop its extra fields.
     adapter = TypeAdapter(AnyAgentMetrics)
-    for agent_name in AgentHarness:
+    for agent_name in HarnessName:
         metrics_type = agent_name.metrics_contract.metrics_type
         restored = adapter.validate_python(metrics_type().model_dump(mode="json"))
         assert type(restored) is metrics_type, f"{metrics_type.__name__} needs a unique `kind` and a place in AnyAgentMetrics"
@@ -59,12 +59,12 @@ def test_pr_review_metrics_extend_generic_metrics():
     assert issubclass(PRReviewMetrics, AgentMetrics)
     assert PRReviewMetrics().kind == "pr-review"
     assert "api_calls" not in AgentMetrics.model_fields
-    assert AgentHarness.PR_REVIEW.metrics_contract.metrics_type is PRReviewMetrics
+    assert HarnessName.PR_REVIEW.metrics_contract.metrics_type is PRReviewMetrics
 
 
 def test_all_categories_have_pipelines():
     for category in EvaluationCategory:
-        pipeline = category.pipeline
+        pipeline = category.pipeline(AgentConfig())
         assert pipeline is not None
 
 

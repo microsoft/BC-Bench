@@ -7,10 +7,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
+
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExpectedOutput
 
 logger = logging.getLogger(__name__)
 

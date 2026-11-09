@@ -9,18 +9,15 @@ from bcbench_core.git import apply_patch, clean_project_paths, stage_and_get_dif
 from bcbench_core.projects import categorize_projects
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.config import get_config
 from bcbench.dataset import TestGenEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import NoTestsExtractedError
-from bcbench.github_actions import github_log_group
 from bcbench.operations import copy_problem_statement_folder, extract_tests_from_patch, setup_repo_prebuild
 from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentConfig, EvaluationContext
+from bcbench.types import EvaluationContext, TestGenerationInput
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 __all__ = ["TestGenerationPipeline"]
 
@@ -28,8 +25,12 @@ __all__ = ["TestGenerationPipeline"]
 class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
     """Pipeline for test-generation evaluation category."""
 
+    def __init__(self, input_mode: TestGenerationInput) -> None:
+        # Must match the input mode the prompt was built with (AgentConfig.prompt.test_generation_input)
+        self.input_mode: TestGenerationInput = input_mode
+
     def _apply_input_postbuild(self, entry: TestGenEntry, repo_path: Path) -> None:
-        input_mode = AgentConfig.from_file(_config.paths.agent_share_dir / "config.yaml").prompt.test_generation_input
+        input_mode = self.input_mode
         logger.info(f"Test generation input mode: {input_mode}")
         match input_mode:
             case "gold-patch":
@@ -61,11 +62,6 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
 
         self._apply_input_postbuild(context.entry, context.repo_path)
         set_runtime_version(context.repo_path, context.entry.project_paths)
-
-    @override
-    def run_agent(self, context: EvaluationContext[TestGenEntry], agent_runner: AgentRunner[TestGenEntry]) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
 
     @override
     def evaluate(self, context: EvaluationContext[TestGenEntry]) -> None:

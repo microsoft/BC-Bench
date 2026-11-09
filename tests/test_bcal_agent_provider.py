@@ -7,11 +7,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from bcbench_core.exceptions import AgentError
+from bcbench_core.agent.harness import AgentRequest, AgentResult
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
-from bcbench.exceptions import AgentTimeoutError
+from bcbench.dataset import NL2ALEntry
 from tests.conftest import create_nl2al_entry
 
 
@@ -49,6 +50,10 @@ class TestCliArgs:
         assert not any(a.startswith("--deployment=") for a in args)
 
 
+def _run_bcal(entry: NL2ALEntry, workspace: Path, backend_config: BCalBackendConfig) -> AgentResult:
+    return bcal_agent.BCalHarness(backend_config).run(AgentRequest(task=entry, work_dir=workspace, output_dir=workspace))
+
+
 class TestRunBcalAgent:
     def test_passes_external_command_to_bcal(self, workspace: Path):
         entry = create_nl2al_entry()
@@ -64,16 +69,9 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=fake_run),
         ):
-            metrics, _ = bcal_agent.run_bcal_agent(
-                entry=entry,
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(
-                    command="python bridge.py",
-                    model="gpt-5",
-                ),
-            )
+            result = _run_bcal(entry, workspace, BCalBackendConfig(command="python bridge.py", model="gpt-5"))
 
-        assert metrics is not None
+        assert result.metrics is not None
         args = captured["args"]
         assert "--deployment=gpt-5" in args
         assert "--llm-backend=external-command" in args
@@ -88,7 +86,7 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             pytest.raises(AgentError),
         ):
-            bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace, backend_config=BCalBackendConfig())
+            _run_bcal(entry, workspace, BCalBackendConfig())
 
     def test_external_command_model_is_optional(self, workspace: Path):
         entry = create_nl2al_entry()
@@ -104,11 +102,7 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=fake_run),
         ):
-            bcal_agent.run_bcal_agent(
-                entry=entry,
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            _run_bcal(entry, workspace, BCalBackendConfig(command="python bridge.py"))
 
         assert "--llm-backend=external-command" in captured["args"]
         assert "--llm-command=python bridge.py" in captured["args"]

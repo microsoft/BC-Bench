@@ -4,21 +4,22 @@ import logging
 import shutil
 import subprocess
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import override
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
-from bcbench_core.exceptions import AgentError
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.exceptions import AgentTimeoutError
-from bcbench.types import ExperimentConfiguration
+from bcbench.types import HarnessName
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 _BCAL_TOOL = "bcal"
 
@@ -122,48 +123,58 @@ def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, exp
     ]
 
 
-def run_bcal_agent(
-    entry: NL2ALEntry,
-    repo_path: Path,
-    backend_config: BCalBackendConfig,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    logger.info(f"Running bcal CLI on: {entry.instance_id}")
+@dataclass(frozen=True)
+class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
+    """The bcal CLI, generating AL code for NL2AL entries into the prepared workspace."""
 
-    # The .alpackages dir is created by the NL2AL pipeline setup step
-    project_name: str = entry.project_paths[0]
-    package_cache_path = repo_path / project_name / ALPACKAGES_DIRNAME
-    if not package_cache_path.exists():
-        raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
+    backend_config: BCalBackendConfig
+    timeout: int = 25 * 60
 
-    export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
-    cmd_args = _bcal_cmd_args(entry, entry.get_task(), package_cache_path, export_folder, backend_config)
+    @override
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.BCAL, version=get_bcal_version(), model=self.backend_config.model or "external-command")
 
-    logger.info(f"Export folder: {export_folder}")
-    logger.debug(f"Package cache path: {package_cache_path}")
-    logger.debug(f"Using prompt:\n{entry.get_task()}")
-    logger.debug(f"bcal CLI command: {cmd_args}")
+    @override
+    def run(self, request: AgentRequest[NL2ALEntry], /) -> AgentResult:
+        entry, repo_path, backend_config = request.task, request.work_dir, self.backend_config
+        timeout = self.timeout if request.timeout is None else request.timeout
+        logger.info(f"Running bcal CLI on: {entry.instance_id}")
 
-    try:
-        start = time.monotonic()
-        subprocess.run(
-            cmd_args,
-            timeout=_config.timeout.bcal_execution,
-            check=True,
-        )
-        execution_time = time.monotonic() - start
+        # The .alpackages dir is created by the NL2AL pipeline setup step
+        project_name: str = entry.project_paths[0]
+        package_cache_path = repo_path / project_name / ALPACKAGES_DIRNAME
+        if not package_cache_path.exists():
+            raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 
-        logger.info(f"bcal CLI run complete for: {entry.instance_id}")
-        return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
-    except subprocess.TimeoutExpired:
-        logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
-        raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"bcal CLI execution failed: {e.stderr}")
-        raise AgentError(f"bcal CLI execution failed: {e}") from None
-    except Exception:
-        logger.exception("Unexpected error running bcal CLI")
-        raise
+        export_folder = repo_path / project_name / "src"
+        cmd_args = _bcal_cmd_args(entry, entry.get_task(), package_cache_path, export_folder, backend_config)
+
+        logger.info(f"Export folder: {export_folder}")
+        logger.debug(f"Package cache path: {package_cache_path}")
+        logger.debug(f"Using prompt:\n{entry.get_task()}")
+        logger.debug(f"bcal CLI command: {cmd_args}")
+
+        try:
+            start = time.monotonic()
+            subprocess.run(
+                cmd_args,
+                timeout=timeout,
+                check=True,
+            )
+            execution_time = time.monotonic() - start
+
+            logger.info(f"bcal CLI run complete for: {entry.instance_id}")
+            return AgentResult(metrics=AgentMetrics(execution_time=execution_time), experiment=ExperimentConfiguration())
+        except subprocess.TimeoutExpired:
+            logger.exception(f"bcal CLI timed out after {timeout} seconds")
+            metrics = AgentMetrics(execution_time=timeout)
+            raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
+        except subprocess.CalledProcessError as e:
+            logger.exception(f"bcal CLI execution failed: {e.stderr}")
+            raise AgentError(f"bcal CLI execution failed: {e}") from None
+        except Exception:
+            logger.exception("Unexpected error running bcal CLI")
+            raise
 
 
 def run_bcal_prompt(
@@ -172,13 +183,14 @@ def run_bcal_prompt(
     package_cache_path: Path,
     export_folder: Path,
     backend_config: BCalBackendConfig,
+    timeout: int = 25 * 60,
 ) -> str:
     """Run bcal once for a raw prompt and return its output as text (used by red teaming).
 
     BCal writes generated AL to the export folder and status/output to stdout. Surface both while
     removing the echoed user prompt so the safety judge does not score the attack as target output.
 
-    Unlike `run_bcal_agent` this raises on timeout/non-zero exit instead of returning the text: a
+    Unlike `BCalHarness` this raises on timeout/non-zero exit instead of returning the text: a
     red-team judge must never score bcal's own error output as if it were a harmless refusal.
 
     Assumes symbols are already present under ``package_cache_path``.
@@ -189,7 +201,7 @@ def run_bcal_prompt(
     try:
         result = subprocess.run(
             cmd_args,
-            timeout=_config.timeout.bcal_execution,
+            timeout=timeout,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -199,10 +211,10 @@ def run_bcal_prompt(
         stdout = result.stdout or ""
     except subprocess.TimeoutExpired as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
-        message = f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds"
+        message = f"bcal CLI timed out after {timeout} seconds"
         if details:
             message = f"{message}\n{details}"
-        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
+        metrics = AgentMetrics(execution_time=timeout)
         raise AgentTimeoutError(message, metrics=metrics, config=ExperimentConfiguration()) from None
     except subprocess.CalledProcessError as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))

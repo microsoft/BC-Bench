@@ -1,6 +1,6 @@
 """Test ExperimentConfiguration dataclass."""
 
-from bcbench.types import ExperimentConfiguration
+from bcbench_core.agent.experiment import ExperimentConfiguration
 
 
 class TestExperimentConfiguration:

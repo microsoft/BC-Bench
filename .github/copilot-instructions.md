@@ -32,7 +32,7 @@ BC-Bench is category-based and designed to grow over time. It currently has two 
 
 ### Architecture design conventions
 
-Preserve one-way dependency flow from orchestration toward lower-level abstractions. Keep domain and result models independent of runtime code. CLI commands are composition roots: they select concrete agents and inject them into evaluation pipelines through `AgentRunner`; pipelines must not select agent implementations.
+Preserve one-way dependency flow from orchestration toward lower-level abstractions. Keep domain and result models independent of runtime code. CLI commands are composition roots: they construct concrete agent harnesses (`bcbench_core.agent.harness.AgentHarness`) and inject them into evaluation pipelines; pipelines must not select agent implementations.
 
 `bcbench.types` is the central category registry. Extend `EvaluationCategory` for category-owned mappings such as datasets, pipelines, results, and scoring behavior instead of duplicating those decisions elsewhere. Keep imports following the existing direction and avoid circular dependencies.
 

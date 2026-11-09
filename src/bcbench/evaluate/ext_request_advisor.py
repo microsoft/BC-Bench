@@ -3,8 +3,7 @@ from pathlib import Path
 from typing import override
 
 from bcbench.dataset import ExtRequestAdvisorEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.github_actions import github_log_group
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.operations import setup_repo_prebuild
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
@@ -27,11 +26,6 @@ class ExtRequestAdvisorPipeline(EvaluationPipeline[ExtRequestAdvisorEntry]):
     @override
     def setup(self, context: EvaluationContext[ExtRequestAdvisorEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
-
-    @override
-    def run_agent(self, context: EvaluationContext[ExtRequestAdvisorEntry], agent_runner: AgentRunner[ExtRequestAdvisorEntry]) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
 
     @override
     def evaluate(self, context: EvaluationContext[ExtRequestAdvisorEntry]) -> None:

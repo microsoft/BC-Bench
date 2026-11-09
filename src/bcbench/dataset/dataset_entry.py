@@ -15,6 +15,13 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
+INSTANCE_ID_PATTERN = r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$"
+
+# A Markdown problem statement is a folder holding this file and the images it links to
+PROBLEM_STATEMENT_FILE = "README.md"
+# The problem statement folder is copied here in the agent's workspace; task image links are rewritten to match
+WORKSPACE_PROBLEM_DIR = "problem"
+
 __all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestGenEntry"]
 
 
@@ -34,7 +41,7 @@ class BaseDatasetEntry(BaseModel):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
+    instance_id: str = Field(pattern=INSTANCE_ID_PATTERN)
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
     project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = []
@@ -129,7 +136,7 @@ class RepoGroundedEntry(BaseDatasetEntry):
 
     @override
     def get_task(self) -> str:
-        readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
+        readme_path = self.problem_statement_dir / PROBLEM_STATEMENT_FILE
         return readme_path.read_text(encoding="utf-8")
 
 
