@@ -9,7 +9,7 @@ from bcbench_core.agent.experiment import ExperimentConfiguration
 from pydantic import BaseModel, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AnyAgentMetrics, BCalExecutionIdentity, BCalScenarioFailure, DatasetTier, EvaluationCategory, EvaluationContext
+from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +27,7 @@ class BaseEvaluationResult(BaseModel):
     category: EvaluationCategory
     tier: DatasetTier = DatasetTier.GOLD
     agent_version: str | None = None
-    execution_identity: BCalExecutionIdentity | None = None
-    evidence: dict[str, Any] | None = None
-    bcal_failure: BCalScenarioFailure | None = None
+    transcript: str | None = None
 
     timeout: bool = False
 
@@ -57,11 +55,9 @@ class BaseEvaluationResult(BaseModel):
             "tier": context.tier,
             "agent_name": context.agent.harness,
             "agent_version": context.agent.version,
-            "execution_identity": context.execution_identity,
-            "evidence": context.evidence,
-            "bcal_failure": context.bcal_failure,
             "metrics": context.metrics,
             "experiment": context.experiment,
+            "transcript": context.transcript,
         }
 
     @classmethod

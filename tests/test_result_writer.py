@@ -8,7 +8,7 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import BCalScenarioFailure, EvaluationCategory, HarnessName, PRReviewMetrics
+from bcbench.types import EvaluationCategory, HarnessName, PRReviewMetrics
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
 
 
@@ -168,13 +168,9 @@ class TestWriteBcevalResults:
         assert "metadata" in data
         assert "tags" in data
 
-    def test_writes_structured_evidence_to_context(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
-        evidence = {
-            "contractVersion": "1.0",
-            "promptEvidence": {"compositions": [], "uses": []},
-            "trace": {"events": []},
-        }
-        sample_bugfix_result_with_metrics.evidence = evidence
+    @pytest.mark.parametrize("transcript", ['{"trace": {"events": []}}', None])
+    def test_writes_transcript_to_context(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir, transcript):
+        sample_bugfix_result_with_metrics.transcript = transcript
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
@@ -183,80 +179,13 @@ class TestWriteBcevalResults:
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
                 out_dir=tmp_path,
-                run_id="evidence",
+                run_id="transcript",
                 output_filename="results.jsonl",
                 category=EvaluationCategory.BUG_FIX,
             )
 
         row = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))
-        assert row["context"] == evidence
-
-    def test_preserves_empty_string_context_without_evidence(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
-        with (
-            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
-        ):
-            write_bceval_results(
-                results=[sample_bugfix_result_with_metrics],
-                out_dir=tmp_path,
-                run_id="no-evidence",
-                output_filename="results.jsonl",
-                category=EvaluationCategory.BUG_FIX,
-            )
-
-        row = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))
-        assert row["context"] == ""
-
-    @pytest.mark.parametrize(
-        "terminal_reason",
-        ["repair_budget_exhausted", "interrupted_before_finalization"],
-    )
-    def test_writes_incomplete_bcal_artifact_and_failure_metadata(
-        self,
-        tmp_path,
-        sample_dataset_file,
-        sample_bugfix_result_with_metrics,
-        problem_statement_dir,
-        terminal_reason,
-    ):
-        generated_patch = 'diff --git a/src/Generated.al b/src/Generated.al\n+pageextension 50100 Generated extends "Customer Card"'
-        evidence = {"contractVersion": "1.0", "trace": {"events": []}}
-        sample_bugfix_result_with_metrics.output = generated_patch
-        sample_bugfix_result_with_metrics.error_message = "BCal scenario exited with status 1"
-        sample_bugfix_result_with_metrics.resolved = False
-        sample_bugfix_result_with_metrics.build = False
-        sample_bugfix_result_with_metrics.evidence = evidence
-        sample_bugfix_result_with_metrics.bcal_failure = BCalScenarioFailure(
-            code="incomplete_execution",
-            message=terminal_reason,
-            stepId="benchmark-prompt",
-            retryable=False,
-        )
-
-        with (
-            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
-        ):
-            write_bceval_results(
-                results=[sample_bugfix_result_with_metrics],
-                out_dir=tmp_path,
-                run_id="incomplete-bcal",
-                output_filename="results.jsonl",
-                category=EvaluationCategory.BUG_FIX,
-            )
-
-        row = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))
-        assert row["output"] == generated_patch
-        assert row["context"] == evidence
-        assert row["metadata"]["error_message"] == "BCal scenario exited with status 1"
-        assert row["metadata"]["bcal_failure_code"] == "incomplete_execution"
-        assert row["metadata"]["bcal_failure_message"] == terminal_reason
-        assert row["metadata"]["bcal_failure_step_id"] == "benchmark-prompt"
-        assert row["metadata"]["bcal_failure_retryable"] is False
-        assert row["metadata"]["bcal_terminal_reason"] == terminal_reason
-        assert row["metadata"]["resolved"] is False
-        assert row["metadata"]["build"] is False
-        assert sample_bugfix_result_with_metrics.status_label == "Failed"
+        assert row["context"] == (transcript or "")
 
     def test_skips_results_without_matching_dataset_entry(self, tmp_path, sample_dataset_file):
         output_dir = tmp_path / "output"

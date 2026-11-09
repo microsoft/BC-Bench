@@ -44,6 +44,8 @@ class AgentResult:
     response: str | None = None
     metrics: AgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
+    # Serialized record of the run in a harness-specific format, e.g. BCal's JSON evidence
+    transcript: str | None = None
 
 
 class AgentHarness[T, N: str = str](Protocol):

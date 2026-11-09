@@ -1,6 +1,5 @@
 import logging
 import random
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, cast, override
 
@@ -8,12 +7,10 @@ import typer
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
-from bcbench_core.exceptions import AgentError, EmptyDiffError
+from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
-from bcbench_core.git import stage_and_get_diff
 
-from bcbench.agent import BCalBackendConfig, BCalHarness, BCalScenarioError, ClaudeHarness, CopilotHarness, PRReviewHarness
-from bcbench.agent.bcal import BCalRunResult
+from bcbench.agent import BCalBackendConfig, BCalHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
 from bcbench.cli_options import (
     AgentConfigPath,
     ClaudeCodeModel,
@@ -46,40 +43,6 @@ logger = logging.getLogger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
-
-
-@dataclass(frozen=True)
-class _BCalEvaluationHarness(AgentHarness[NL2ALEntry, HarnessName]):
-    harness: BCalHarness
-    context: EvaluationContext[NL2ALEntry]
-
-    @override
-    def identity(self) -> AgentIdentity[HarnessName]:
-        return self.harness.identity()
-
-    @override
-    def run(self, request: AgentRequest[NL2ALEntry], /) -> BCalRunResult:
-        try:
-            run_result: BCalRunResult = self.harness.run(request)
-        except BCalScenarioError as exc:
-            if exc.scenario_result is not None:
-                self.context.execution_identity = exc.scenario_result.execution_identity
-                self.context.evidence = exc.scenario_result.evidence
-                benchmark_step = next((step for step in exc.scenario_result.steps if step.id == "benchmark-prompt"), None)
-                self.context.bcal_failure = exc.scenario_result.failure or (benchmark_step.failure if benchmark_step else None)
-            raise
-        self.context.execution_identity = run_result.execution_identity
-        self.context.evidence = run_result.evidence
-        return run_result
-
-
-def _get_incomplete_bcal_output(context: EvaluationContext[NL2ALEntry]) -> str:
-    if context.bcal_failure is None or context.bcal_failure.code != "incomplete_execution":
-        return ""
-    try:
-        return stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
-    except EmptyDiffError:
-        return ""
 
 
 @evaluate_app.command("copilot")
@@ -284,13 +247,9 @@ def evaluate_bcal(
 
     pipeline = NL2ALPipeline()
     try:
-        pipeline.execute(context, _BCalEvaluationHarness(harness, context))
+        pipeline.execute(context, harness)
     except AgentError as exc:
-        result = JudgeBasedEvaluationResult.create_failure(
-            context,
-            output=_get_incomplete_bcal_output(context),
-            error_message=str(exc),
-        )
+        result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
         pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
         raise typer.Exit(code=1) from exc

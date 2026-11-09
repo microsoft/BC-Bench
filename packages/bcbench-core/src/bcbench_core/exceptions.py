@@ -124,7 +124,11 @@ class TestExecutionTimeoutExpired(Exception):
 
 
 class AgentError(Exception):
-    """Agent execution errors."""
+    """Agent execution errors; ``transcript`` keeps what the agent recorded before failing."""
+
+    def __init__(self, message: str, *, transcript: str | None = None) -> None:
+        self.transcript = transcript
+        super().__init__(message)
 
 
 class AgentTimeoutError(AgentError):

@@ -8,7 +8,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, override
+from typing import Literal, override
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
@@ -16,10 +16,10 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, field_validator
 
 from bcbench.dataset import NL2ALEntry
-from bcbench.types import BCalExecutionIdentity, BCalScenarioFailure, HarnessName
+from bcbench.types import HarnessName
 
 logger = logging.getLogger(__name__)
 
@@ -51,50 +51,9 @@ class BCalBackendConfig(BaseModel):
         return args
 
 
-class _BCalScenarioStepResult(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str
-    type: Literal["user"]
-    status: Literal["succeeded", "failed"]
-    failure: BCalScenarioFailure | None = None
-
-
-class _BCalOutputStatus(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    attempted: bool
-    success: bool
-    path: str | None = None
-    file_name: str | None = Field(default=None, alias="fileName")
-    files_exported: int | None = Field(default=None, alias="filesExported")
-    entries_exported: int | None = Field(default=None, alias="entriesExported")
-    message: str | None = None
-
-
 class _BCalScenarioResult(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
     schema_version: Literal["1.0"] = Field(alias="schemaVersion")
-    execution_identity: BCalExecutionIdentity = Field(alias="executionIdentity")
-    evidence: dict[str, Any] | None = None
-    completed: bool
-    steps: list[_BCalScenarioStepResult] = Field(min_length=1)
-    export: _BCalOutputStatus | None = None
-    session_archive: _BCalOutputStatus | None = Field(default=None, alias="sessionArchive")
-    failure: BCalScenarioFailure | None = None
-
-
-class BCalScenarioError(AgentError):
-    def __init__(self, message: str, scenario_result: _BCalScenarioResult | None = None) -> None:
-        self.scenario_result = scenario_result
-        super().__init__(message)
-
-
-@dataclass(frozen=True, kw_only=True)
-class BCalRunResult(AgentResult):
-    execution_identity: BCalExecutionIdentity
-    evidence: dict[str, Any] | None
+    evidence: JsonValue = None
 
 
 def _resolve_bcal_executable() -> str:
@@ -186,88 +145,20 @@ def _write_scenario(path: Path, prompt: str) -> None:
     path.write_text(f"{json.dumps(scenario, indent=2)}\n", encoding="utf-8")
 
 
-def _parse_scenario_result(path: Path) -> _BCalScenarioResult:
-    if not path.exists():
-        raise AgentError(f"BCal did not create the scenario result file: {path}")
-
+def _read_transcript(result_path: Path) -> str | None:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise AgentError(f"BCal scenario result is not valid UTF-8 JSON: {path}: {exc}") from exc
+        result = _BCalScenarioResult.model_validate_json(result_path.read_bytes())
+    except (OSError, ValidationError) as exc:
+        raise AgentError(f"Could not read BCal scenario result {result_path}: {exc}") from exc
+    return None if result.evidence is None else json.dumps(result.evidence)
 
+
+def _read_transcript_after_failure(result_path: Path) -> str | None:
     try:
-        result = _BCalScenarioResult.model_validate(payload)
-    except ValidationError as exc:
-        raise AgentError(f"BCal scenario result is incompatible with contract 1.0: {exc}") from exc
-
-    matching_steps = [step for step in result.steps if step.id == "benchmark-prompt"]
-    if len(matching_steps) != 1:
-        raise AgentError("BCal scenario result must contain exactly one 'benchmark-prompt' step")
-    return result
-
-
-def _format_failure(failure: BCalScenarioFailure | None) -> str:
-    if failure is None:
-        return "none"
-    details = [f"code={failure.code}", f"message={failure.message}"]
-    if failure.step_id:
-        details.append(f"stepId={failure.step_id}")
-    if failure.retryable is not None:
-        details.append(f"retryable={str(failure.retryable).lower()}")
-    return ", ".join(details)
-
-
-def _format_output_status(status: _BCalOutputStatus | None) -> str:
-    if status is None:
-        return "not reported"
-    details = [f"attempted={str(status.attempted).lower()}", f"success={str(status.success).lower()}"]
-    if status.path:
-        details.append(f"path={status.path}")
-    if status.file_name:
-        details.append(f"fileName={status.file_name}")
-    if status.files_exported is not None:
-        details.append(f"filesExported={status.files_exported}")
-    if status.entries_exported is not None:
-        details.append(f"entriesExported={status.entries_exported}")
-    if status.message:
-        details.append(f"message={status.message}")
-    return ", ".join(details)
-
-
-def _scenario_failure_message(
-    exc: subprocess.CalledProcessError,
-    result_path: Path,
-) -> tuple[str, _BCalScenarioResult | None]:
-    sections = [f"BCal scenario exited with status {exc.returncode}"]
-    scenario_result: _BCalScenarioResult | None = None
-
-    if result_path.exists():
-        try:
-            scenario_result = _parse_scenario_result(result_path)
-        except AgentError as parse_error:
-            sections.append(f"Scenario result: {parse_error}")
-        else:
-            benchmark_steps = [step for step in scenario_result.steps if step.id == "benchmark-prompt"]
-            step_failure = benchmark_steps[0].failure if benchmark_steps else None
-            sections.extend(
-                [
-                    f"Completed: {str(scenario_result.completed).lower()}",
-                    f"Failure: {_format_failure(scenario_result.failure)}",
-                    f"Step failure: {_format_failure(step_failure)}",
-                    f"Export: {_format_output_status(scenario_result.export)}",
-                    f"Session archive: {_format_output_status(scenario_result.session_archive)}",
-                ]
-            )
-    else:
-        sections.append(f"Scenario result: not created at {result_path}")
-
-    stdout = _process_output(exc.stdout)
-    stderr = _process_output(exc.stderr)
-    if stdout:
-        sections.append(f"stdout:\n{stdout}")
-    if stderr:
-        sections.append(f"stderr:\n{stderr}")
-    return "\n".join(sections), scenario_result
+        return _read_transcript(result_path)
+    except AgentError:
+        logger.warning("No usable BCal transcript after failure", exc_info=True)
+        return None
 
 
 @dataclass(frozen=True)
@@ -282,7 +173,7 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
         return AgentIdentity[HarnessName](harness=HarnessName.BCAL, version=get_bcal_version(), model=self.backend_config.model or "external-command")
 
     @override
-    def run(self, request: AgentRequest[NL2ALEntry], /) -> BCalRunResult:
+    def run(self, request: AgentRequest[NL2ALEntry], /) -> AgentResult:
         entry, repo_path, backend_config = request.task, request.work_dir, self.backend_config
         timeout = self.timeout if request.timeout is None else request.timeout
         logger.info(f"Running bcal CLI on: {entry.instance_id}")
@@ -298,53 +189,35 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
         logger.debug(f"Package cache path: {package_cache_path}")
         logger.debug(f"Using prompt:\n{entry.get_task()}")
 
-        try:
-            with tempfile.TemporaryDirectory(prefix="bcbench-bcal-") as temp_dir:
-                scenario_path = Path(temp_dir) / "scenario.json"
-                result_path = Path(temp_dir) / "result.json"
-                _write_scenario(scenario_path, entry.get_task())
-                cmd_args = [
-                    *_bcal_cli_args(entry, package_cache_path, export_folder, backend_config),
-                    f"--scenario={scenario_path}",
-                    f"--result={result_path}",
-                    "--include-evidence",
-                ]
-                logger.debug(f"bcal CLI command: {cmd_args}")
+        # Evidence (the transcript) is only emitted in scenario mode
+        with tempfile.TemporaryDirectory(prefix="bcbench-bcal-") as temp_dir:
+            scenario_path = Path(temp_dir) / "scenario.json"
+            result_path = Path(temp_dir) / "result.json"
+            _write_scenario(scenario_path, entry.get_task())
+            cmd_args: list[str] = [
+                *_bcal_cli_args(entry, package_cache_path, export_folder, backend_config),
+                f"--scenario={scenario_path}",
+                f"--result={result_path}",
+                "--include-evidence",
+            ]
+            logger.debug(f"bcal CLI command: {cmd_args}")
 
+            try:
                 start = time.monotonic()
-                try:
-                    subprocess.run(
-                        cmd_args,
-                        timeout=timeout,
-                        capture_output=True,
-                        text=True,
-                        encoding="utf-8",
-                        errors="replace",
-                        check=True,
-                    )
-                except subprocess.CalledProcessError as exc:
-                    message, scenario_result = _scenario_failure_message(exc, result_path)
-                    logger.exception(message)
-                    raise BCalScenarioError(message, scenario_result=scenario_result) from None
-                scenario_result = _parse_scenario_result(result_path)
-            execution_time = time.monotonic() - start
+                subprocess.run(cmd_args, timeout=timeout, check=True)
+                execution_time = time.monotonic() - start
+            except subprocess.TimeoutExpired:
+                logger.exception(f"bcal CLI timed out after {timeout} seconds")
+                metrics = AgentMetrics(execution_time=timeout)
+                raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
+            except subprocess.CalledProcessError as e:
+                logger.exception("bcal CLI execution failed")
+                raise AgentError(f"bcal CLI execution failed: {e}", transcript=_read_transcript_after_failure(result_path)) from None
 
-            logger.info(f"bcal CLI run complete for: {entry.instance_id}")
-            return BCalRunResult(
-                metrics=AgentMetrics(execution_time=execution_time),
-                experiment=ExperimentConfiguration(),
-                execution_identity=scenario_result.execution_identity,
-                evidence=scenario_result.evidence,
-            )
-        except subprocess.TimeoutExpired:
-            logger.exception(f"bcal CLI timed out after {timeout} seconds")
-            metrics = AgentMetrics(execution_time=timeout)
-            raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
-        except AgentError:
-            raise
-        except Exception:
-            logger.exception("Unexpected error running bcal CLI")
-            raise
+            transcript: str | None = _read_transcript(result_path)
+
+        logger.info(f"bcal CLI run complete for: {entry.instance_id}")
+        return AgentResult(metrics=AgentMetrics(execution_time=execution_time), experiment=ExperimentConfiguration(), transcript=transcript)
 
 
 def run_bcal_prompt(
