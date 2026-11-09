@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
@@ -44,6 +44,7 @@ class AgentResult:
     response: str | None = None
     metrics: AgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
+    transcript: dict[str, JsonValue] | None = None
 
 
 class AgentHarness[T, N: str = str](Protocol):

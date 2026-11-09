@@ -3,13 +3,13 @@
 import json
 from pathlib import Path
 from typing import override
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentHarness, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
-from bcbench_core.exceptions import AgentTimeoutError
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
 
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
@@ -104,6 +104,26 @@ class TestExecuteAgentTimeout:
         result = _read_only_result(ctx)
         assert isinstance(result, JudgeBasedEvaluationResult)
         assert result.judge_model == EvaluationCategory.NL2AL.judge_model
+
+
+class TestRunAgentTranscript:
+    def test_copies_transcript_from_result(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        harness = StubHarness[BugFixEntry](AgentResult(transcript={"trace": []}))
+
+        EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
+
+        assert ctx.transcript == {"trace": []}
+
+    def test_copies_transcript_from_agent_error(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        harness = MagicMock(spec=StubHarness)
+        harness.run.side_effect = AgentError("agent failed", transcript={"trace": []})
+
+        with pytest.raises(AgentError, match="agent failed"):
+            EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
+
+        assert ctx.transcript == {"trace": []}
 
 
 class TestExecuteEvaluateError:

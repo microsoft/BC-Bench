@@ -13,7 +13,7 @@ from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentIdentity, AgentRequest
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictBool, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -645,6 +645,9 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # Experiment configuration
     experiment: ExperimentConfiguration | None = None
+
+    # Agent transcript, set by the pipeline from the harness result or error
+    transcript: dict[str, JsonValue] | None = None
 
     def get_container(self) -> ContainerConfig:
         if self.container is None:
