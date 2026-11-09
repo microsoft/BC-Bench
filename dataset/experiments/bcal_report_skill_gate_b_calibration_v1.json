@@ -9,15 +9,16 @@
     "required_fixed_base_sha": "1969363374c57aa23bb79ea0f3ec537ce440c870"
   },
   "authorization": {
-    "state": "awaiting_corrected_package_identities",
-    "authorized_study_id": null,
-    "authorized_at": null,
-    "authorized_by": null,
-    "workflow_ref": null
+    "state": "authorized",
+    "authorized_study_id": "bcal-report-skill-gate-b-calibration-20261109",
+    "authorized_at": "2026-11-09",
+    "authorized_by": "coordinator",
+    "authorized_cell_count": 6,
+    "workflow_ref": "bcal-report-skill-gate-b-calibration-20261109"
   },
   "execution": {
     "backend": "external-command",
-    "model": null,
+    "model": "gpt-55-chat",
     "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
     "bridge_package": "bc-eval==0.6.1",
     "bc_version": "28.0",
@@ -49,34 +50,91 @@
   },
   "variants": {
     "forced-model-activation": {
-      "configuration_id": null,
+      "configuration_id": "report-authoring-model-gateb-v1",
+      "source_ref": "experiment/report-authoring-model-gateb-v1-20261108",
       "skill_activation_policy": "required",
       "skill_activation_source": "model",
       "expected_activation_mode": "model_triggered",
       "requested_tool_call_id": "non_null",
       "require_offered_tool_evidence": true,
       "entry": "bcal-scenario__report-gate-b-forced-model-activation-1",
-      "package": null
+      "package": {
+        "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+        "package_version": "30.0.46.15378-beta",
+        "installed_identity": "30.0.46.15378+f38db4c32b4e5b2252e2f5348ad8eb7997ce4ba0",
+        "package_source_commit_sha": "f38db4c32b4e5b2252e2f5348ad8eb7997ce4ba0",
+        "variant_patch_sha": "dddcf246e57b9a316192669858ee558b0a612dd4",
+        "common_base_sha": "204935d9a97301d048c9e4de4a1825636b61169b",
+        "nupkg_file": "microsoft.businesscentral.bcal.cli.30.0.46.15378-beta.nupkg",
+        "nupkg_sha256": "c4f232cc7bc4bc3b11a5fd09d23bd0e0e91b99a887c9e3874c219c39d1c1f45f",
+        "nupkg_size": 37692028,
+        "feed": "DynamicsSMBTest",
+        "feed_id": "986caaa0-ac2b-4c39-9e33-c37569e6bc83",
+        "feed_package_id": "100a0599-9969-49b4-8a5e-5b3b9d022069",
+        "build_definition_id": 1875,
+        "build_id": 3029942,
+        "build_result": "succeeded",
+        "published": true,
+        "published_at": "2026-11-09T13:59:06.6962747Z"
+      }
     },
     "host-deterministic": {
-      "configuration_id": null,
+      "configuration_id": "report-authoring-host-gateb-v1",
+      "source_ref": "experiment/report-authoring-host-gateb-v1-20261108",
       "skill_activation_policy": "required",
       "skill_activation_source": "host",
       "expected_activation_mode": "host_deterministic",
       "requested_tool_call_id": "null",
       "require_offered_tool_evidence": true,
       "entry": "bcal-scenario__report-gate-b-host-deterministic-1",
-      "package": null
+      "package": {
+        "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+        "package_version": "30.0.46.15379-beta",
+        "installed_identity": "30.0.46.15379+dc85c61badac7f8a560c32ab88c57231ff4ced94",
+        "package_source_commit_sha": "dc85c61badac7f8a560c32ab88c57231ff4ced94",
+        "variant_patch_sha": "fccfddbe360adefc2ed37696e55882821d4a57b9",
+        "common_base_sha": "204935d9a97301d048c9e4de4a1825636b61169b",
+        "nupkg_file": "microsoft.businesscentral.bcal.cli.30.0.46.15379-beta.nupkg",
+        "nupkg_sha256": "c3a538c37981321dda7c9a786e1db782a470609bfda0278bc44c26f3f335d1ae",
+        "nupkg_size": 37692076,
+        "feed": "DynamicsSMBTest",
+        "feed_id": "986caaa0-ac2b-4c39-9e33-c37569e6bc83",
+        "feed_package_id": "100a0599-9969-49b4-8a5e-5b3b9d022069",
+        "build_definition_id": 1875,
+        "build_id": 3029943,
+        "build_result": "succeeded",
+        "published": true,
+        "published_at": "2026-11-09T14:09:41.6361979Z"
+      }
     },
     "permanent-contract-smoke": {
-      "configuration_id": null,
+      "configuration_id": "report-authoring-control-gateb-v2",
+      "source_ref": "experiment/report-authoring-control-gateb-v2-20261108",
       "skill_activation_policy": "forbidden",
       "skill_activation_source": null,
       "expected_activation_mode": "permanent_guidance",
       "requested_tool_call_id": "absent",
       "require_offered_tool_evidence": true,
       "entry": "bcal-scenario__report-gate-b-permanent-contract-smoke-1",
-      "package": null
+      "package": {
+        "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+        "package_version": "30.0.46.15377-beta",
+        "installed_identity": "30.0.46.15377+7db2640ea007eb397c4f2b8e6d0a8166c8639ae3",
+        "package_source_commit_sha": "7db2640ea007eb397c4f2b8e6d0a8166c8639ae3",
+        "variant_patch_sha": "88ee237a9ac0ed6e9709f5470699937584c13f73",
+        "common_base_sha": "204935d9a97301d048c9e4de4a1825636b61169b",
+        "nupkg_file": "microsoft.businesscentral.bcal.cli.30.0.46.15377-beta.nupkg",
+        "nupkg_sha256": "76b5c5e1284d1b6e3606a98b6c4462f7a6abdda99e4d6a8cb4981e0bb52b0fb0",
+        "nupkg_size": 37692384,
+        "feed": "DynamicsSMBTest",
+        "feed_id": "986caaa0-ac2b-4c39-9e33-c37569e6bc83",
+        "feed_package_id": "100a0599-9969-49b4-8a5e-5b3b9d022069",
+        "build_definition_id": 1875,
+        "build_id": 3029941,
+        "build_result": "succeeded",
+        "published": true,
+        "published_at": "2026-11-09T14:07:48.8138338Z"
+      }
     }
   },
   "skill": {

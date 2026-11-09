@@ -1,5 +1,5 @@
 name: BCal report skill experiment
-run-name: Report skill ${{ inputs.variant }} r${{ inputs.repetition }} [bcal-report-skill-progressive-disclosure-20261108]
+run-name: Report skill ${{ inputs.variant }} r${{ inputs.repetition }} [${{ github.ref_name }}]
 
 permissions:
   contents: read
@@ -16,6 +16,9 @@ on:
           - permanent-full-report-guidance
           - model-triggered-report-skill
           - host-triggered-report-skill
+          - forced-model-activation
+          - host-deterministic
+          - permanent-contract-smoke
       repetition:
         description: Authorized one-based repetition
         required: true
@@ -30,13 +33,13 @@ on:
         default: ""
 
 concurrency:
-  group: bcal-report-skill-progressive-disclosure-20261108-${{ inputs.variant }}-r${{ inputs.repetition }}
+  group: bcal-report-skill-${{ github.ref_name }}-${{ inputs.variant }}-r${{ inputs.repetition }}
   cancel-in-progress: false
 
 env:
   SOURCE_RUN_ID: ${{ inputs.publication-source-run-id || github.run_id }}
   EVALUATION_RESULTS_DIR: evaluation_results
-  SELECTOR_PATH: dataset/experiments/bcal_report_skill_progressive_disclosure_v1.json
+  SELECTOR_PATH: ${{ (inputs.variant == 'forced-model-activation' || inputs.variant == 'host-deterministic' || inputs.variant == 'permanent-contract-smoke') && 'dataset/experiments/bcal_report_skill_gate_b_calibration_v1.json' || 'dataset/experiments/bcal_report_skill_progressive_disclosure_v1.json' }}
 
 jobs:
   validate-selection:
@@ -64,6 +67,8 @@ jobs:
       skill-revision: ${{ steps.selector.outputs.skill-revision }}
       skill-catalog-segment: ${{ steps.selector.outputs.skill-catalog-segment }}
       skill-activated-segment: ${{ steps.selector.outputs.skill-activated-segment }}
+      require-offered-tool-evidence: ${{ steps.selector.outputs.require-offered-tool-evidence }}
+      workflow-ref: ${{ steps.selector.outputs.workflow-ref }}
     steps:
       - name: Checkout immutable study ref
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,7 +97,8 @@ jobs:
           repetition = int(os.environ["REPETITION"])
           variant = config["variants"][variant_id]
           package = variant["package"]
-          entries = config["cohort"]["entries"]
+          cohort_entries = config["cohort"]["entries"]
+          entries = [variant["entry"]] if "entry" in variant else cohort_entries
           expected_ref = auth["workflow_ref"]
           publication_source = os.environ.get("PUBLICATION_SOURCE_RUN_ID", "")
           if auth["state"] != "authorized":
@@ -103,13 +109,16 @@ jobs:
               raise SystemExit("Publication recovery must run from its immutable recovery ref.")
           if repetition not in range(1, config["execution"]["repeat_count"] + 1):
               raise SystemExit("Repetition is outside the authorized range.")
-          if len(entries) != 6 or len(set(entries)) != 6:
-              raise SystemExit("Selector must contain exactly six unique report entries.")
+          if len(cohort_entries) not in {3, 6} or len(set(cohort_entries)) != len(cohort_entries):
+              raise SystemExit("Selector must contain exactly three calibration probes or six quality-study cases.")
+          if any(entry not in cohort_entries for entry in entries):
+              raise SystemExit("Selected variant entry is outside the immutable cohort.")
           if any("control-tower" in entry for entry in entries):
               raise SystemExit("Control Tower is prohibited.")
           if any(not entry.startswith("bcal-scenario__report-") for entry in entries):
               raise SystemExit("Only the focused report cohort is authorized.")
-          if auth["authorized_cell_count"] != len(entries) * config["execution"]["repeat_count"] * len(config["variants"]):
+          cells_per_variant = sum(1 if "entry" in item else len(cohort_entries) for item in config["variants"].values())
+          if auth["authorized_cell_count"] != cells_per_variant * config["execution"]["repeat_count"]:
               raise SystemExit("Authorized cell count does not match the selector matrix.")
           base = config["github"]["required_fixed_base_sha"]
           if subprocess.run(["git", "merge-base", "--is-ancestor", base, "HEAD"]).returncode:
@@ -139,6 +148,8 @@ jobs:
               "skill-revision": config["skill"]["revision"],
               "skill-catalog-segment": config["skill"]["catalog_segment"],
               "skill-activated-segment": config["skill"]["activated_segment"],
+              "require-offered-tool-evidence": str(variant.get("require_offered_tool_evidence", False)).lower(),
+              "workflow-ref": auth["workflow_ref"],
           }
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               for key, value in values.items():
@@ -284,6 +295,7 @@ jobs:
           BCBENCH_BCAL_SKILL_REVISION: ${{ needs.validate-selection.outputs.skill-revision }}
           BCBENCH_BCAL_SKILL_CATALOG_SEGMENT: ${{ needs.validate-selection.outputs.skill-catalog-segment }}
           BCBENCH_BCAL_SKILL_ACTIVATED_SEGMENT: ${{ needs.validate-selection.outputs.skill-activated-segment }}
+          BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE: ${{ needs.validate-selection.outputs.require-offered-tool-evidence }}
         run: |
           $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
           $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-llm-api-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py"
@@ -358,7 +370,7 @@ jobs:
           PY
 
       - name: Summarize results
-        run: uv run bcbench result summarize --run-id "$SOURCE_RUN_ID" --category bcal-scenario --result-dir "$EVALUATION_RESULTS_DIR" --git-ref bcal-report-skill-progressive-disclosure-20261108
+        run: uv run bcbench result summarize --run-id "$SOURCE_RUN_ID" --category bcal-scenario --result-dir "$EVALUATION_RESULTS_DIR" --git-ref "${{ needs.validate-selection.outputs.workflow-ref }}"
 
       - name: Upload summary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

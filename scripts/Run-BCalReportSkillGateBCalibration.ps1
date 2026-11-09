@@ -100,7 +100,7 @@ if ($ValidateCohort) {
 }
 
 if ($config.authorization.state -ne "authorized" -or -not $config.authorization.authorized_study_id) {
-    throw "Gate B calibration dispatch is blocked until corrected immutable package identities and coordinator authorization are recorded."
+    throw "Gate B calibration dispatch is blocked until coordinator authorization is recorded."
 }
 if (-not $config.execution.model) {
     throw "Authorized Gate B calibration is missing the exact model."

@@ -1351,27 +1351,38 @@ def test_report_experiment_runner_is_fail_closed():
     assert "Publish-BCalCaseResults.ps1" in script
 
 
-def test_gate_b_calibration_selector_is_blocked_and_nonsemantic():
+def test_gate_b_calibration_selector_is_authorized_with_pinned_packages():
     selector = json.loads(Path("dataset/experiments/bcal_report_skill_gate_b_calibration_v1.json").read_text(encoding="utf-8"))
     entries = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
     entries_by_id = {entry.instance_id: entry for entry in entries}
 
     assert selector["github"]["required_fixed_base_sha"] == "1969363374c57aa23bb79ea0f3ec537ce440c870"
     assert selector["authorization"] == {
-        "state": "awaiting_corrected_package_identities",
-        "authorized_study_id": None,
-        "authorized_at": None,
-        "authorized_by": None,
-        "workflow_ref": None,
+        "state": "authorized",
+        "authorized_study_id": "bcal-report-skill-gate-b-calibration-20261109",
+        "authorized_at": "2026-11-09",
+        "authorized_by": "coordinator",
+        "authorized_cell_count": 6,
+        "workflow_ref": "bcal-report-skill-gate-b-calibration-20261109",
     }
-    assert selector["execution"]["model"] is None
+    assert selector["execution"]["model"] == "gpt-55-chat"
     assert selector["execution"]["evidence_contract_version"] == "1.4"
     assert selector["execution"]["trace_contract_version"] == "1.4"
     assert selector["execution"]["repeat_count"] == 2
     assert selector["scoring"]["semantic_promotion_metrics_enabled"] is False
     assert selector["invariants"]["require_complete_offered_tool_inventory"] is True
     assert selector["invariants"]["require_ready_dependency_receipt_before_mutation"] is True
-    assert all(variant["configuration_id"] is None and variant["package"] is None for variant in selector["variants"].values())
+    assert {variant["configuration_id"] for variant in selector["variants"].values()} == {
+        "report-authoring-control-gateb-v2",
+        "report-authoring-model-gateb-v1",
+        "report-authoring-host-gateb-v1",
+    }
+    packages = {variant["package"]["package_version"]: variant["package"] for variant in selector["variants"].values()}
+    assert set(packages) == {"30.0.46.15377-beta", "30.0.46.15378-beta", "30.0.46.15379-beta"}
+    assert {package["build_id"] for package in packages.values()} == {3029941, 3029942, 3029943}
+    assert {package["build_definition_id"] for package in packages.values()} == {1875}
+    assert {package["common_base_sha"] for package in packages.values()} == {"204935d9a97301d048c9e4de4a1825636b61169b"}
+    assert all(package["published"] and package["build_result"] == "succeeded" for package in packages.values())
     assert {variant["entry"] for variant in selector["variants"].values()} == set(selector["cohort"]["entries"])
     assert all(entries_by_id[entry_id].metadata.area == "report-gate-b-calibration" for entry_id in selector["cohort"]["entries"])
     assert all(entries_by_id[entry_id].evaluation.compile_required for entry_id in selector["cohort"]["entries"])
@@ -1386,7 +1397,7 @@ def test_gate_b_calibration_runner_is_fail_closed():
     assert "exactly three unique probes" in script
     assert "exactly two repetitions" in script
     assert "excluded from semantic promotion scoring" in script
-    assert "corrected immutable package identities and coordinator authorization" in script
+    assert "coordinator authorization is recorded" in script
     assert "duplicate-gate receipt" in script
     assert "selector_git_blob_sha256" in script
     assert "BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE" in script
@@ -1397,14 +1408,16 @@ def test_gate_b_calibration_runner_is_fail_closed():
 def test_report_experiment_workflow_runs_only_authorized_matrix():
     workflow = Path(".github/workflows/bcal-evaluation.yml").read_text(encoding="utf-8")
 
-    assert "bcal-report-skill-progressive-disclosure-20261108" in workflow
+    assert "bcal_report_skill_progressive_disclosure_v1.json" in workflow
+    assert "bcal_report_skill_gate_b_calibration_v1.json" in workflow
     assert "Workflow must run from immutable ref" in workflow
-    assert "Selector must contain exactly six unique report entries" in workflow
+    assert "exactly three calibration probes or six quality-study cases" in workflow
     assert "Control Tower is prohibited" in workflow
     assert "authorized_cell_count" in workflow
     assert "Installed nupkg bytes do not match the authorized selector" in workflow
     assert "BCBENCH_BCAL_SKILL_CONTENT_SHA256" in workflow
     assert "BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID" in workflow
+    assert "BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE" in workflow
     assert "Incomplete coverage" in workflow
     assert "--storage kusto" in workflow
     assert "publication-only" not in workflow
