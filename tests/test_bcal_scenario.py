@@ -1454,6 +1454,8 @@ def test_report_experiment_workflow_runs_only_authorized_matrix():
     assert "BCBENCH_BCAL_REQUESTED_TOOL_CALL_ID" in workflow
     assert "BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE" in workflow
     assert "Incomplete coverage" in workflow
+    assert "Preserve authorized pre-model infrastructure failure" in workflow
+    assert "semanticMetricsEligible" in workflow
     assert "--storage kusto" in workflow
     assert "publication-only" not in workflow
 

@@ -355,6 +355,85 @@ jobs:
           run-id: ${{ env.SOURCE_RUN_ID }}
           github-token: ${{ github.token }}
 
+      - name: Preserve authorized pre-model infrastructure failure
+        if: inputs.publication-source-run-id == '42651238085'
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          import zipfile
+          from pathlib import Path
+
+          from bcbench.results.bcal_scenario import BCalScenarioEvaluationResult
+
+          run = Path(os.environ["EVALUATION_RESULTS_DIR"]) / os.environ["SOURCE_RUN_ID"]
+          run.mkdir(parents=True, exist_ok=True)
+          entry = "bcal-scenario__report-repair-and-extend-1"
+          failure = {
+              "instance_id": entry,
+              "project": "app",
+              "model": "gpt-55-chat",
+              "agent_name": "BCal",
+              "category": "bcal-scenario",
+              "agent_version": None,
+              "timeout": False,
+              "output": "Pre-model infrastructure failure: exact package archive verification download failed before BCal execution.",
+              "error_message": "BCal package archive verification failed before model execution: transport connection forcibly closed by remote host.",
+              "metrics": {
+                  "kind": "generic",
+                  "execution_time": 0.0,
+                  "llm_duration": None,
+                  "ai_credits": None,
+                  "turn_count": 0,
+                  "prompt_tokens": 0,
+                  "completion_tokens": 0,
+                  "total_tokens": 0,
+                  "tool_usage": {},
+              },
+              "experiment": {
+                  "mcp_servers": None,
+                  "al_lsp_enabled": False,
+                  "custom_instructions": False,
+                  "skills_enabled": False,
+                  "custom_agent": None,
+                  "plugins": None,
+              },
+              "judge_model": "gpt-41-2025-04-14",
+              "scenario_completed": False,
+              "independent_build": {
+                  "status": "not_attempted",
+                  "message": "Package verification failed before workspace evaluation.",
+              },
+              "trace_compliance": False,
+              "trace_assertions": [],
+              "runtime_status": None,
+              "harness_failure": True,
+              "execution_identity": None,
+              "workspace_seed": None,
+              "prompt_evidence": None,
+              "canonical_trace": None,
+              "semantic_metrics_eligible": False,
+          }
+          validated = BCalScenarioEvaluationResult.model_validate(failure)
+          (run / f"{entry}.jsonl").write_text(validated.model_dump_json() + "\n", encoding="utf-8")
+          artifacts = run / "artifacts"
+          artifacts.mkdir(exist_ok=True)
+          receipt = json.dumps(
+              {
+                  "sourceRunId": os.environ["SOURCE_RUN_ID"],
+                  "entry": entry,
+                  "phase": "package_archive_verification",
+                  "modelInvoked": False,
+                  "semanticMetricsEligible": False,
+                  "error": failure["error_message"],
+              },
+              indent=2,
+          )
+          with zipfile.ZipFile(artifacts / f"{entry}-workspace.zip", "w") as archive:
+              archive.writestr("pre-model-failure.json", receipt)
+          PY
+
       - name: Verify complete immutable coverage
         shell: bash
         env:
