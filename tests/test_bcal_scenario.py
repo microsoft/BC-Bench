@@ -1226,6 +1226,7 @@ def test_permanent_control_validates_inventory_without_requiring_activate_skill(
     assertion_ids = {assertion.assertion_id for assertion in assertions}
 
     assert "variant-activate-skill-offered" not in assertion_ids
+    assert "variant-activate-skill-not-offered" in assertion_ids
     assert all(assertion.passed for assertion in assertions)
 
 
@@ -1442,6 +1443,7 @@ def test_report_experiment_workflow_runs_only_authorized_matrix():
     workflow = Path(".github/workflows/bcal-evaluation.yml").read_text(encoding="utf-8")
 
     assert "bcal_report_skill_progressive_disclosure_v1.json" in workflow
+    assert "bcal_report_skill_quality_rerun_v1.json" in workflow
     assert "bcal_report_skill_gate_b_calibration_v1.json" in workflow
     assert "Workflow must run from immutable ref" in workflow
     assert "exactly three calibration probes or six quality-study cases" in workflow
@@ -1454,6 +1456,37 @@ def test_report_experiment_workflow_runs_only_authorized_matrix():
     assert "Incomplete coverage" in workflow
     assert "--storage kusto" in workflow
     assert "publication-only" not in workflow
+
+
+def test_quality_rerun_selector_preserves_original_cohort_with_gate_b_packages():
+    original = json.loads(Path("dataset/experiments/bcal_report_skill_progressive_disclosure_v1.json").read_text(encoding="utf-8"))
+    selector = json.loads(Path("dataset/experiments/bcal_report_skill_quality_rerun_v1.json").read_text(encoding="utf-8"))
+
+    assert selector["authorization"] == {
+        "state": "authorized",
+        "authorized_study_id": "bcal-report-skill-quality-rerun-20261109",
+        "authorized_at": "2026-11-09",
+        "authorized_by": "coordinator",
+        "authorized_cell_count": 36,
+        "workflow_ref": "bcal-report-skill-quality-rerun-20261109",
+    }
+    assert selector["cohort"] == original["cohort"]
+    assert selector["execution"]["model"] == original["execution"]["model"] == "gpt-55-chat"
+    assert selector["execution"]["backend"] == original["execution"]["backend"] == "external-command"
+    assert selector["execution"]["repeat_count"] == original["execution"]["repeat_count"] == 2
+    assert selector["execution"]["evidence_contract_version"] == "1.4"
+    assert selector["execution"]["trace_contract_version"] == "1.4"
+    assert {variant["package"]["package_version"] for variant in selector["variants"].values()} == {
+        "30.0.46.15377-beta",
+        "30.0.46.15378-beta",
+        "30.0.46.15379-beta",
+    }
+    assert all(variant["require_offered_tool_evidence"] for variant in selector["variants"].values())
+    assert selector["variants"]["model-triggered-report-skill"]["skill_activation_source"] == "model"
+    assert selector["variants"]["host-triggered-report-skill"]["requested_tool_call_id"] == "null"
+    assert selector["variants"]["permanent-full-report-guidance"]["skill_activation_policy"] == "forbidden"
+    entries = {entry.instance_id: entry for entry in BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)}
+    assert all("activate_skill" not in step.text for entry_id in selector["cohort"]["entries"] for step in entries[entry_id].steps)
 
 
 def test_pre_model_failures_are_explicitly_excluded_from_semantic_metrics(tmp_path: Path):

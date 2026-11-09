@@ -39,7 +39,7 @@ concurrency:
 env:
   SOURCE_RUN_ID: ${{ inputs.publication-source-run-id || github.run_id }}
   EVALUATION_RESULTS_DIR: evaluation_results
-  SELECTOR_PATH: ${{ (inputs.variant == 'forced-model-activation' || inputs.variant == 'host-deterministic' || inputs.variant == 'permanent-contract-smoke') && 'dataset/experiments/bcal_report_skill_gate_b_calibration_v1.json' || 'dataset/experiments/bcal_report_skill_progressive_disclosure_v1.json' }}
+  SELECTOR_PATH: ${{ startsWith(github.ref_name, 'bcal-report-skill-quality-rerun-20261109') && 'dataset/experiments/bcal_report_skill_quality_rerun_v1.json' || ((inputs.variant == 'forced-model-activation' || inputs.variant == 'host-deterministic' || inputs.variant == 'permanent-contract-smoke') && 'dataset/experiments/bcal_report_skill_gate_b_calibration_v1.json' || 'dataset/experiments/bcal_report_skill_progressive_disclosure_v1.json') }}
 
 jobs:
   validate-selection:

@@ -366,6 +366,15 @@ def _offered_tool_assertions(records: list[dict[str, object]]) -> list[TraceAsse
                 message="Expected activateSkillToolOffered=true and activate_skill in the first delivery model request offered-tool names",
             ),
         )
+    elif os.getenv("BCBENCH_BCAL_SKILL_ACTIVATION_POLICY") == "forbidden":
+        assertions.insert(
+            1,
+            TraceAssertionResult(
+                assertion_id="variant-activate-skill-not-offered",
+                passed=complete and activate_skill_offered is False and "activate_skill" not in normalized_names,
+                message="Expected activateSkillToolOffered=false and activate_skill absent from permanent-control offered-tool names",
+            ),
+        )
     return assertions
 
 

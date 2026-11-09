@@ -147,6 +147,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         metadata["activation_skill_absent"] = activation_assertions.get("variant-skill-not-delivered")
         metadata["offered_tools_complete"] = activation_assertions.get("variant-offered-tools-complete")
         metadata["activate_skill_tool_offered"] = activation_assertions.get("variant-activate-skill-offered")
+        metadata["activate_skill_tool_absent"] = activation_assertions.get("variant-activate-skill-not-offered")
         metadata["offered_tool_count_valid"] = activation_assertions.get("variant-offered-tool-count")
         metadata["offered_tool_schema_hash_valid"] = activation_assertions.get("variant-offered-tool-schema-hash")
         return metadata

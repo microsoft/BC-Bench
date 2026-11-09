@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "name": "bcal-report-skill-quality-rerun-v1",
+  "github": {
+    "host": "github.com",
+    "repository": "microsoft/BC-Bench",
+    "base_pull_request": 1011,
+    "required_fixed_base_sha": "1969363374c57aa23bb79ea0f3ec537ce440c870"
+  },
+  "authorization": {
+    "state": "authorized",
+    "authorized_study_id": "bcal-report-skill-quality-rerun-20261109",
+    "authorized_at": "2026-11-09",
+    "authorized_by": "coordinator",
+    "authorized_cell_count": 36,
+    "workflow_ref": "bcal-report-skill-quality-rerun-20261109"
+  },
+  "execution": {
+    "backend": "external-command",
+    "model": "gpt-55-chat",
+    "bridge": "src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py",
+    "bridge_package": "bc-eval==0.6.1",
+    "bc_version": "28.0",
+    "symbol_cache": "C:\\bcartifacts.cache",
+    "scenario_contract_version": "1.1",
+    "result_schema_version": "1.0",
+    "evidence_contract_version": "1.4",
+    "trace_contract_version": "1.4",
+    "workspace_seed_contract_version": "1.0",
+    "repeat_count": 2
+  },
+  "invariants": {
+    "identical_across_variants": [
+      "execution.model",
+      "execution.backend",
+      "execution.bridge",
+      "execution.bridge_package",
+      "execution.bc_version",
+      "execution.repeat_count",
+      "cohort.category",
+      "cohort.entries"
+    ],
+    "require_workspace_seed_parity": true,
+    "require_compile_or_explicit_not_required": true,
+    "require_artifact_assertions": true,
+    "require_complete_canonical_trace": true,
+    "require_complete_skill_catalog": true,
+    "require_complete_offered_tool_inventory": true,
+    "require_complete_activation_chain": true,
+    "require_ready_dependency_receipt_before_mutation": true,
+    "preserve_pre_model_failures": true,
+    "exclude_pre_model_failures_from_semantic_metrics": true,
+    "forbid_retries_or_replacement": true,
+    "require_github_duplicate_gate": true,
+    "require_kusto_duplicate_gate": true,
+    "require_selector_provenance": true,
+    "forbid_control_tower": true,
+    "forbid_unrelated_lanes": true
+  },
+  "variants": {
+    "permanent-full-report-guidance": {
+      "configuration_id": "report-authoring-control-gateb-v2",
+      "source_ref": "experiment/report-authoring-control-gateb-v2-20261108",
+      "skill_activation_policy": "forbidden",
+      "skill_activation_source": null,
+      "expected_activation_mode": "permanent_guidance",
+      "requested_tool_call_id": "absent",
+      "require_offered_tool_evidence": true,
+      "package": {
+        "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+        "package_version": "30.0.46.15377-beta",
+        "installed_identity": "30.0.46.15377+7db2640ea007eb397c4f2b8e6d0a8166c8639ae3",
+        "package_source_commit_sha": "7db2640ea007eb397c4f2b8e6d0a8166c8639ae3",
+        "variant_patch_sha": "88ee237a9ac0ed6e9709f5470699937584c13f73",
+        "common_base_sha": "204935d9a97301d048c9e4de4a1825636b61169b",
+        "nupkg_file": "microsoft.businesscentral.bcal.cli.30.0.46.15377-beta.nupkg",
+        "nupkg_sha256": "76b5c5e1284d1b6e3606a98b6c4462f7a6abdda99e4d6a8cb4981e0bb52b0fb0",
+        "nupkg_size": 37692384,
+        "feed": "DynamicsSMBTest",
+        "feed_id": "986caaa0-ac2b-4c39-9e33-c37569e6bc83",
+        "feed_package_id": "100a0599-9969-49b4-8a5e-5b3b9d022069",
+        "build_definition_id": 1875,
+        "build_id": 3029941,
+        "build_result": "succeeded",
+        "published": true,
+        "published_at": "2026-11-09T14:07:48.8138338Z"
+      }
+    },
+    "model-triggered-report-skill": {
+      "configuration_id": "report-authoring-model-gateb-v1",
+      "source_ref": "experiment/report-authoring-model-gateb-v1-20261108",
+      "skill_activation_policy": "required",
+      "skill_activation_source": "model",
+      "expected_activation_mode": "model_triggered",
+      "requested_tool_call_id": "non_null",
+      "require_offered_tool_evidence": true,
+      "package": {
+        "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+        "package_version": "30.0.46.15378-beta",
+        "installed_identity": "30.0.46.15378+f38db4c32b4e5b2252e2f5348ad8eb7997ce4ba0",
+        "package_source_commit_sha": "f38db4c32b4e5b2252e2f5348ad8eb7997ce4ba0",
+        "variant_patch_sha": "dddcf246e57b9a316192669858ee558b0a612dd4",
+        "common_base_sha": "204935d9a97301d048c9e4de4a1825636b61169b",
+        "nupkg_file": "microsoft.businesscentral.bcal.cli.30.0.46.15378-beta.nupkg",
+        "nupkg_sha256": "c4f232cc7bc4bc3b11a5fd09d23bd0e0e91b99a887c9e3874c219c39d1c1f45f",
+        "nupkg_size": 37692028,
+        "feed": "DynamicsSMBTest",
+        "feed_id": "986caaa0-ac2b-4c39-9e33-c37569e6bc83",
+        "feed_package_id": "100a0599-9969-49b4-8a5e-5b3b9d022069",
+        "build_definition_id": 1875,
+        "build_id": 3029942,
+        "build_result": "succeeded",
+        "published": true,
+        "published_at": "2026-11-09T13:59:06.6962747Z"
+      }
+    },
+    "host-triggered-report-skill": {
+      "configuration_id": "report-authoring-host-gateb-v1",
+      "source_ref": "experiment/report-authoring-host-gateb-v1-20261108",
+      "skill_activation_policy": "required",
+      "skill_activation_source": "host",
+      "expected_activation_mode": "host_deterministic",
+      "requested_tool_call_id": "null",
+      "require_offered_tool_evidence": true,
+      "package": {
+        "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+        "package_version": "30.0.46.15379-beta",
+        "installed_identity": "30.0.46.15379+dc85c61badac7f8a560c32ab88c57231ff4ced94",
+        "package_source_commit_sha": "dc85c61badac7f8a560c32ab88c57231ff4ced94",
+        "variant_patch_sha": "fccfddbe360adefc2ed37696e55882821d4a57b9",
+        "common_base_sha": "204935d9a97301d048c9e4de4a1825636b61169b",
+        "nupkg_file": "microsoft.businesscentral.bcal.cli.30.0.46.15379-beta.nupkg",
+        "nupkg_sha256": "c3a538c37981321dda7c9a786e1db782a470609bfda0278bc44c26f3f335d1ae",
+        "nupkg_size": 37692076,
+        "feed": "DynamicsSMBTest",
+        "feed_id": "986caaa0-ac2b-4c39-9e33-c37569e6bc83",
+        "feed_package_id": "100a0599-9969-49b4-8a5e-5b3b9d022069",
+        "build_definition_id": 1875,
+        "build_id": 3029943,
+        "build_result": "succeeded",
+        "published": true,
+        "published_at": "2026-11-09T14:09:41.6361979Z"
+      }
+    }
+  },
+  "skill": {
+    "id": "report-authoring",
+    "contract_version": "1.0.0",
+    "content_sha256": "09ee187742a44ca6b985c25a1da37cf8c04fd489c179e1a440dea5b57dcc9dcf",
+    "revision": "b1833b8be7ea4be6e229982dc8927716cb3393daea02b5f7687aeaab9d480d53",
+    "catalog_segment": "main.skill-catalog",
+    "activated_segment": "main.activated-skill.b1833b8be7ea4be6e229982dc8927716cb3393daea02b5f7687aeaab9d480d53"
+  },
+  "cohort": {
+    "category": "bcal-scenario",
+    "entries": [
+      "bcal-scenario__report-create-customer-snapshot-1",
+      "bcal-scenario__report-repair-and-extend-1",
+      "bcal-scenario__report-layout-choice-1",
+      "bcal-scenario__report-labels-and-filters-1",
+      "bcal-scenario__report-source-clarification-1",
+      "bcal-scenario__report-sales-order-analysis-1"
+    ]
+  },
+  "promotion": {
+    "primary_metrics": [
+      "trace_compliance",
+      "independent_build",
+      "critical_assertion_pass_rate",
+      "core_score",
+      "checklist_score"
+    ],
+    "semantic_metrics_filter": "semantic_metrics_eligible == true",
+    "require_complete_cells": true,
+    "require_complete_artifacts": true,
+    "reject_truncated_canonical_trace": true,
+    "require_complete_gate_b_evidence_for_skill_variants": true,
+    "require_complete_kusto_rows": true,
+    "replace_unfavorable_outcomes": false,
+    "reject_model_triggered_if_natural_activation_unreliable": true,
+    "host_requires_gate_b_12_of_12": true,
+    "host_requires_non_regressing_semantic_quality": true,
+    "host_requires_prompt_cost_improvement": true
+  }
+}
