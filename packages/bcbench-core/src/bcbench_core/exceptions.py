@@ -128,8 +128,8 @@ class TestExecutionTimeoutExpired(Exception):
 class AgentError(Exception):
     """Agent execution errors; ``transcript`` keeps what the agent recorded before failing."""
 
-    def __init__(self, message: str, *, transcript: dict[str, JsonValue] | None = None) -> None:
-        self.transcript = transcript
+    def __init__(self, message: str, transcript: dict[str, JsonValue] | None = None) -> None:
+        self.transcript: dict[str, JsonValue] | None = transcript
         super().__init__(message)
 
 

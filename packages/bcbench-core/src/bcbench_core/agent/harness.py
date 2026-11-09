@@ -44,7 +44,6 @@ class AgentResult:
     response: str | None = None
     metrics: AgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
-    # Structured record of the run in a harness-specific shape, e.g. BCal's evidence
     transcript: dict[str, JsonValue] | None = None
 
 

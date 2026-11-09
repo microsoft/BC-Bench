@@ -112,7 +112,12 @@ def _trim_prompt_echo(stdout: str, query: str) -> str:
     return f"{stdout[:start]}{stdout[end:]}".strip()
 
 
-def _bcal_cli_args(entry: NL2ALEntry, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig) -> list[str]:
+def _bcal_cmd_args(entry: NL2ALEntry, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig, *mode_args: str) -> list[str]:
+    """Build the bcal argv shared by the nl2al agent run (scenario mode) and the red-team run (prompt mode).
+
+    Only the mode arguments and the paths differ between the two, so keeping one builder stops the flag
+    set from drifting when bcal's CLI changes.
+    """
     return [
         _resolve_bcal_executable(),
         f"--packagecachepath={package_cache_path}",
@@ -120,28 +125,8 @@ def _bcal_cli_args(entry: NL2ALEntry, package_cache_path: Path, export_folder: P
         f"--audience={entry.audience}",
         f"--page={entry.page}",
         f"--exportfolder={export_folder}",
+        *mode_args,
     ]
-
-
-def _bcal_prompt_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig) -> list[str]:
-    return [
-        *_bcal_cli_args(entry, package_cache_path, export_folder, backend_config),
-        f"--prompt={prompt}",
-    ]
-
-
-def _write_scenario(path: Path, prompt: str) -> None:
-    scenario = {
-        "schemaVersion": "1.0",
-        "steps": [
-            {
-                "id": "benchmark-prompt",
-                "type": "user",
-                "text": prompt,
-            }
-        ],
-    }
-    path.write_text(f"{json.dumps(scenario, indent=2)}\n", encoding="utf-8")
 
 
 def _read_transcript(result_path: Path) -> dict[str, JsonValue]:
@@ -191,17 +176,13 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
         logger.debug(f"Package cache path: {package_cache_path}")
         logger.debug(f"Using prompt:\n{entry.get_task()}")
 
-        # Evidence is only emitted in scenario mode
+        # Only scenario mode writes a result file with the transcript; --scenario takes a file, not inline JSON
         with tempfile.TemporaryDirectory(prefix="bcbench-bcal-") as temp_dir:
             scenario_path = Path(temp_dir) / "scenario.json"
             result_path = Path(temp_dir) / "result.json"
-            _write_scenario(scenario_path, entry.get_task())
-            cmd_args: list[str] = [
-                *_bcal_cli_args(entry, package_cache_path, export_folder, backend_config),
-                f"--scenario={scenario_path}",
-                f"--result={result_path}",
-                "--include-evidence",
-            ]
+            scenario = {"schemaVersion": "1.0", "steps": [{"id": "benchmark-prompt", "type": "user", "text": entry.get_task()}]}
+            scenario_path.write_text(json.dumps(scenario), encoding="utf-8")
+            cmd_args = _bcal_cmd_args(entry, package_cache_path, export_folder, backend_config, f"--scenario={scenario_path}", f"--result={result_path}", "--include-evidence")
             logger.debug(f"bcal CLI command: {cmd_args}")
 
             try:
@@ -241,7 +222,7 @@ def run_bcal_prompt(
     Assumes symbols are already present under ``package_cache_path``.
     """
     export_folder.mkdir(parents=True, exist_ok=True)
-    cmd_args = _bcal_prompt_cmd_args(entry, query, package_cache_path, export_folder, backend_config)
+    cmd_args = _bcal_cmd_args(entry, package_cache_path, export_folder, backend_config, f"--prompt={query}")
 
     try:
         result = subprocess.run(
