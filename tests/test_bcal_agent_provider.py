@@ -154,7 +154,7 @@ class TestRunBcalAgent:
         with (
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=lambda args, **_: _write_result(args, {**RESULT, "schemaVersion": "2.0"})),
-            pytest.raises(AgentError, match="Unsupported BCal scenario result schemaVersion"),
+            pytest.raises(AgentError, match="Unsupported BCal scenario result"),
         ):
             _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
