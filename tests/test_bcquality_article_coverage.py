@@ -181,7 +181,7 @@ class TestDatasetArticleSlugs:
     @pytest.mark.e2e
     def test_declared_slugs_exist_in_bcquality(self):
         bcquality_root = _require_bcquality_root()
-        entries = CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path)
+        entries = CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path())
         declared = collect_declared_articles(entries)
         report = build_coverage_report(entries, inventory=enumerate_inventory(bcquality_root))
         unknown = {article: declared[article] for article in report.unknown_articles}

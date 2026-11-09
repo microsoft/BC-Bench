@@ -6,19 +6,18 @@ import shutil
 import subprocess
 import zipfile
 from pathlib import Path
-from typing import cast
+from typing import cast, override
 from uuid import NAMESPACE_URL, uuid5
 
-from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_RESULT, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult, load_scenario_result, resolve_session_chat
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME, copy_symbol_apps
+from bcbench_core.filesystem import remove_tree
+
+from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult, resolve_session_chat
 from bcbench.dataset import BCalDeterministicArtifactAssertion, BCalScenarioEntry, BCalTraceAssertion
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
-from bcbench.operations import bootstrap_app_json, copy_symbol_apps
+from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.operations import bootstrap_app_json
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationContext
-
-logger = get_logger(__name__)
 
 _MUTATION_TOOLS = frozenset({"write_file", "edit_file", "create_file", "apply_patch", "replace_text", "patch_text"})
 _TEXT_EXTENSIONS = frozenset({".al", ".json", ".md", ".txt", ".xml", ".yml", ".yaml", ".ps1", ".toml"})
@@ -378,9 +377,10 @@ def _archive_workspace(entry: BCalScenarioEntry, app_folder: Path, result_dir: P
 
 
 class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
+    @override
     def setup_workspace(self, entry: BCalScenarioEntry, repo_path: Path) -> None:
         if repo_path.exists():
-            shutil.rmtree(repo_path)
+            remove_tree(repo_path)
         app_folder = repo_path / SCENARIO_EXPORT_DIR
         app_folder.mkdir(parents=True)
         bootstrap_app_json(
@@ -398,21 +398,22 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
         for file_name in ("launch.json", "settings.json"):
             (vscode_folder / file_name).write_bytes(b"{}\n")
         copy_symbol_apps(repo_path / SCENARIO_SYMBOL_DIR, entry.environment_setup_version)
-        (repo_path / ".gitignore").write_text(".bcal-symbols/\n**/.alpackages/\n**/.bcbench-build/\n", encoding="utf-8")
+        (repo_path / ".gitignore").write_text(f"{SCENARIO_SYMBOL_DIR}/\n**/{ALPACKAGES_DIRNAME}/\n**/.bcbench-build/\n", encoding="utf-8")
         _git_init_and_commit(repo_path)
 
+    @override
     def setup(self, context: EvaluationContext[BCalScenarioEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
 
-    def run_agent(self, context: EvaluationContext[BCalScenarioEntry], agent_runner: AgentRunner[BCalScenarioEntry]) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
-
+    @override
     def evaluate(self, context: EvaluationContext[BCalScenarioEntry]) -> None:
-        result = load_scenario_result(context.repo_path / SCENARIO_RESULT)
+        if context.transcript is None:
+            raise ValueError("BCal scenario harness did not provide a transcript")
+
+        result = BCalScenarioRunResult.model_validate(context.transcript)
         chat_path = resolve_session_chat(result, context.repo_path)
         app_folder = context.repo_path / SCENARIO_EXPORT_DIR
-        package_cache = context.repo_path / SCENARIO_SYMBOL_DIR / ".alpackages"
+        package_cache = context.repo_path / SCENARIO_SYMBOL_DIR / ALPACKAGES_DIRNAME
         build = (
             _compile_exported_project(app_folder, package_cache)
             if context.entry.evaluation.compile_required

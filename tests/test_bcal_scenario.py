@@ -8,6 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentError
 from pydantic import ValidationError
 
 import bcbench.evaluate.bcal_scenario as scenario_evaluation
@@ -15,9 +17,8 @@ from bcbench.agent.bcal import BCalBackendConfig, bc_eval_llm_api_bridge
 from bcbench.agent.bcal import scenario as bcal_scenario
 from bcbench.dataset import BCalDeterministicArtifactAssertion, BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.bcal_scenario import evaluate_trace
-from bcbench.exceptions import AgentError
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
-from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory
+from bcbench.types import EvaluationCategory, HarnessName
 from tests.conftest import create_evaluation_context
 
 
@@ -222,7 +223,7 @@ def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
         metrics, _ = bcal_scenario.run_bcal_scenario(
             entry,
             tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py", model="gpt-5"),
+            BCalBackendConfig(command="python bridge.py", model="gpt-5"),
         )
 
     assert captured[captured.index("--scenario") + 1].endswith("execution.json")
@@ -291,7 +292,7 @@ def test_setup_workspace_is_identical_across_variants_and_repetitions(tmp_path: 
             bcal_scenario.run_bcal_scenario(
                 entry,
                 workspace,
-                BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+                BCalBackendConfig(command="python bridge.py"),
             )
 
     exported_files = [{path.relative_to(app_folder).as_posix(): path.read_bytes() for path in app_folder.rglob("*") if path.is_file()} for app_folder in app_folders]
@@ -327,7 +328,7 @@ def test_run_scenario_rejects_seed_receipt_divergence(tmp_path: Path):
         bcal_scenario.run_bcal_scenario(
             entry,
             tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            BCalBackendConfig(command="python bridge.py"),
         )
 
 
@@ -343,7 +344,7 @@ def test_nonzero_exit_without_result_is_harness_failure(tmp_path: Path):
         bcal_scenario.run_bcal_scenario(
             entry,
             tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            BCalBackendConfig(command="python bridge.py"),
         )
 
 
@@ -365,7 +366,7 @@ def test_export_failure_in_structured_result_is_harness_failure(tmp_path: Path):
         bcal_scenario.run_bcal_scenario(
             entry,
             tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            BCalBackendConfig(command="python bridge.py"),
         )
 
 
@@ -530,7 +531,7 @@ def test_changed_paths_and_rejected_interactions_are_behavioral_assertions():
 
 
 def test_scope_matcher_accepts_seeded3_question_with_alternatives_only_in_choices():
-    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path())
     entry = next(scenario for scenario in scenarios if scenario.instance_id == "bcal-scenario__authority-direct-and-corrected-scope-1")
     match = entry.interactions[0].match
     question = "Which target should I use?"
@@ -606,8 +607,8 @@ def test_exact_artifact_assertion_rejects_semantic_drift(content: str, passed: b
 
 
 def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
-    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
-    features = BCalScenarioEntry.load(EvaluationCategory.BCAL_FEATURE.dataset_path)
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path())
+    features = BCalScenarioEntry.load(EvaluationCategory.BCAL_FEATURE.dataset_path())
 
     scenario_ids = {entry.instance_id for entry in scenarios}
     assert {
@@ -656,7 +657,7 @@ def test_structured_result_exposes_deterministic_metrics(tmp_path: Path):
     context = create_evaluation_context(
         tmp_path,
         entry=entry,
-        agent_name=AgentHarness.BCAL,
+        agent_name=HarnessName.BCAL,
         category=EvaluationCategory.BCAL_SCENARIO,
     )
     context.metrics = AgentMetrics(execution_time=1, prompt_tokens=10, completion_tokens=20, turn_count=1, tool_usage={"write_file": 1})
@@ -685,7 +686,7 @@ def test_structured_result_exports_gate_a_metadata(tmp_path: Path):
     context = create_evaluation_context(
         tmp_path,
         entry=entry,
-        agent_name=AgentHarness.BCAL,
+        agent_name=HarnessName.BCAL,
         category=EvaluationCategory.BCAL_SCENARIO,
     )
     result = BCalScenarioEvaluationResult.create(
@@ -733,7 +734,7 @@ def test_bcal_workflow_accepts_both_advanced_categories():
 def test_authority_experiment_selector_excludes_control_tower():
     selector_path = Path("dataset/experiments/bcal_authority_provenance_v1.json")
     selector = json.loads(selector_path.read_text(encoding="utf-8"))
-    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path())
     scenario_ids = {entry.instance_id for entry in scenarios}
     gold_ids = {json.loads(line)["instance_id"] for line in Path(selector["ordinary_quality"]["dataset_file"]).read_text(encoding="utf-8").splitlines() if line.strip()}
     excluded = {entry["instance_id"] for entry in selector["excluded_entries"]}

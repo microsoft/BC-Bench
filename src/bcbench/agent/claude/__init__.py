@@ -1,3 +1,3 @@
-from bcbench.agent.claude.agent import get_claude_version, run_claude_code
+from bcbench.agent.claude.agent import ClaudeHarness, get_claude_version
 
-__all__ = ["get_claude_version", "run_claude_code"]
+__all__ = ["ClaudeHarness", "get_claude_version"]

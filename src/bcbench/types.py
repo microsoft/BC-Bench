@@ -5,9 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+import yaml
+from bcbench_core.agent.customization import CustomAgentsConfig, ToggleConfig
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.container import ContainerConfig
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictBool, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -17,24 +23,28 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
-    "AgentHarness",
-    "AgentMetrics",
+    "AL_MCP_SERVER_NAME",
+    "BC_MCP_SERVER_NAME",
+    "AgentConfig",
     "AgentMetricsContract",
     "AnyAgentMetrics",
-    "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
     "CommitSha",
-    "ContainerConfig",
+    "DatasetTier",
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
-    "ExperimentConfiguration",
+    "HarnessName",
+    "HttpMcpServer",
     "JudgeCalibrationReport",
+    "McpServerConfig",
     "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
+    "StdioMcpServer",
+    "TestGenerationInput",
 ]
 
 
@@ -62,35 +72,6 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
 
 
-class AgentMetrics(BaseModel):
-    """Metrics collected during agent execution.
-
-    Separates runtime execution data from experiment configuration.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    kind: Literal["generic"] = "generic"
-
-    # Total execution time in seconds
-    execution_time: float | None = None
-    llm_duration: float | None = None
-
-    # Session cost in AI Credits (GitHub Copilot only)
-    ai_credits: float | None = None
-
-    turn_count: int | None = None
-
-    # Token usage from LLM calls
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-
-    total_tokens: int | None = None
-
-    # Tool usage statistics from agent logs
-    tool_usage: dict[str, int] | None = None
-
-
 class PRReviewMetrics(AgentMetrics):
     kind: Literal["pr-review"] = "pr-review"
 
@@ -116,42 +97,6 @@ class AgentMetricsContract:
     def __post_init__(self) -> None:
         if unknown_fields := self.required_fields - self.metrics_type.model_fields.keys():
             raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
-
-
-class ExperimentConfiguration(BaseModel):
-    """Configuration for agent experiment execution.
-
-    This encapsulates experiment-related configuration that agents use,
-    making it easier to add new configuration options without changing function signatures.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    # MCP server names used in experiment (if any)
-    mcp_servers: list[str] | None = None
-
-    # Whether the AL LSP server was enabled for this experiment
-    al_lsp_enabled: bool = False
-
-    # Custom instructions enabled in experiment
-    custom_instructions: bool = False
-
-    # Skills enabled in experiment
-    skills_enabled: bool = False
-
-    # Custom agent name used in experiment (if any)
-    custom_agent: str | None = None
-
-    # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
-    plugins: list[str] | None = None
-
-    def is_empty(self) -> bool:
-        """Check if this configuration has all default/empty values.
-
-        An empty configuration means no special experiment settings were used.
-        This is useful for comparing with None (no experiment) vs default experiment.
-        """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
@@ -198,7 +143,7 @@ class PluginConfig(BaseModel):
         return self
 
 
-class AgentHarness(StrEnum):
+class HarnessName(StrEnum):
     """Agents that can be evaluated, and the metrics each of them is able to report."""
 
     COPILOT = "GitHub Copilot"
@@ -216,7 +161,7 @@ class AgentHarness(StrEnum):
         """
 
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
@@ -224,7 +169,7 @@ class AgentHarness(StrEnum):
                     turn_count=None,
                     tool_usage=None,
                 )
-            case AgentHarness.CLAUDE | AgentHarness.MOCK:
+            case HarnessName.CLAUDE | HarnessName.MOCK:
                 metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
@@ -233,15 +178,9 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL:
-                metrics = AgentMetrics(
-                    execution_time=None,
-                    turn_count=None,
-                    prompt_tokens=None,
-                    completion_tokens=None,
-                    tool_usage=None,
-                )
-            case AgentHarness.PR_REVIEW:
+            case HarnessName.BCAL:
+                metrics = AgentMetrics(execution_time=None)
+            case HarnessName.PR_REVIEW:
                 metrics = PRReviewMetrics(
                     execution_time=None,
                     prompt_tokens=None,
@@ -250,28 +189,34 @@ class AgentHarness(StrEnum):
                     ai_credits=None,
                 )
             case _:
-                raise ValueError(f"Unknown AgentHarness: {self}")
+                raise ValueError(f"Unknown HarnessName: {self}")
 
         return AgentMetricsContract(type(metrics), frozenset(metrics.model_fields_set))
 
     @property
     def instruction_filename(self) -> str:
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 return "copilot-instructions.md"
-            case AgentHarness.CLAUDE:
+            case HarnessName.CLAUDE:
                 return "CLAUDE.md"
             case _:
                 raise ValueError(f"{self.value} does not support repository instructions")
 
     def get_target_dir(self, repo_path: Path) -> Path:
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 return repo_path / ".github"
-            case AgentHarness.CLAUDE:
+            case HarnessName.CLAUDE:
                 return repo_path / ".claude"
             case _:
                 raise ValueError(f"{self.value} does not support repository setup")
+
+
+class DatasetTier(StrEnum):
+    # Every category has a gold dataset; a category may optionally define a harder held-out challenge dataset.
+    GOLD = "gold"
+    CHALLENGE = "challenge"
 
 
 class EvaluationCategory(StrEnum):
@@ -289,9 +234,14 @@ class EvaluationCategory(StrEnum):
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
-    @property
-    def dataset_path(self) -> Path:
+    def dataset_path(self, tier: DatasetTier = DatasetTier.GOLD) -> Path:
         from bcbench.config import get_config
+
+        match self, tier:
+            case EvaluationCategory.NL2AL, DatasetTier.CHALLENGE:
+                return get_config().paths.dataset_dir / "nl2al_challenge.jsonl"
+            case _, DatasetTier.CHALLENGE:
+                raise ValueError(f"{self.value} has no {tier.value} dataset")
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -428,8 +378,7 @@ class EvaluationCategory(StrEnum):
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
-    @property
-    def pipeline(self) -> EvaluationPipeline:
+    def pipeline(self, agent_config: AgentConfig) -> EvaluationPipeline[Any]:
         from bcbench.evaluate import (
             BCalScenarioPipeline,
             BugFixPipeline,
@@ -446,7 +395,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.BUG_FIX:
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationPipeline()
+                return TestGenerationPipeline(agent_config.prompt.test_generation_input)
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewPipeline()
             case EvaluationCategory.NL2AL:
@@ -603,25 +552,88 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
 
-@dataclass(frozen=True)
-class ContainerConfig:
-    name: str
-    username: str
-    password: str
-    company: str
-    server_url: str = ""
-    server_instance: str = ""
-    mcp_url: str | None = None
+type TestGenerationInput = Literal["problem-statement", "gold-patch", "both"]
 
-    def __post_init__(self) -> None:
-        name = self.name.strip()
-        if not name:
-            raise ValueError("Container name must not be empty")
-        company = self.company.strip()
-        if not company:
-            raise ValueError("Company must not be empty")
-        object.__setattr__(self, "name", name)
-        object.__setattr__(self, "company", company)
+
+class PromptConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    include_project_paths: StrictBool = False
+    test_generation_input: TestGenerationInput = Field(default="problem-statement", alias="test-generation-input")
+    templates: dict[EvaluationCategory, str] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_templates(cls, data: object) -> object:
+        # config.yaml keys each prompt template as `<category>-template`
+        if not isinstance(data, dict):
+            return data
+        if "templates" in data:
+            raise ValueError("Prompt templates must be configured as `<category>-template` keys, not `templates`")
+        settings = {key: value for key, value in data.items() if not key.endswith("-template")}
+        templates = {key.removesuffix("-template"): value for key, value in data.items() if key.endswith("-template")}
+        return {**settings, "templates": templates}
+
+
+class HttpMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["http"]
+    name: str
+    url: str
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+class StdioMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["stdio"]
+    name: str
+    command: str
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+type McpServerConfig = Annotated[HttpMcpServer | StdioMcpServer, Field(discriminator="type")]
+
+AL_MCP_SERVER_NAME = "altool"
+BC_MCP_SERVER_NAME = "bcmcp"
+
+
+class McpConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    servers: tuple[McpServerConfig, ...] = ()
+
+    @model_validator(mode="after")
+    def check_reserved_server_types(self) -> McpConfig:
+        # build_mcp_config customizes these servers by name and relies on their transport type
+        for server in self.servers:
+            if server.name == AL_MCP_SERVER_NAME and not isinstance(server, StdioMcpServer):
+                raise ValueError(f"MCP server '{AL_MCP_SERVER_NAME}' must be of type 'stdio'")
+            if server.name == BC_MCP_SERVER_NAME and not isinstance(server, HttpMcpServer):
+                raise ValueError(f"MCP server '{BC_MCP_SERVER_NAME}' must be of type 'http'")
+        return self
+
+
+class AgentConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    prompt: PromptConfig = Field(default_factory=PromptConfig)
+    instructions: ToggleConfig = Field(default_factory=ToggleConfig)
+    skills: ToggleConfig = Field(default_factory=ToggleConfig)
+    agents: CustomAgentsConfig = Field(default_factory=CustomAgentsConfig)
+    # Kept raw: only enabled entries are validated into `PluginConfig`, since a disabled
+    # entry may point at a path that only exists on another machine.
+    plugins: tuple[dict[str, object], ...] = ()
+    mcp: McpConfig = Field(default_factory=McpConfig)
+    # Declared so typos in agent sections are rejected; their contents are validated by `JudgeConfig` and the pr-review agent
+    judges: dict[str, object] = Field(default_factory=dict)
+    pr_review: dict[str, object] = Field(default_factory=dict)
+
+    @classmethod
+    def from_file(cls, path: Path) -> AgentConfig:
+        return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 @dataclass(frozen=True)
@@ -662,17 +674,15 @@ class EvaluationContext[E: BaseDatasetEntry]:
     repo_path: Path
     result_dir: Path
 
-    # Agent metadata
-    agent_name: AgentHarness
-    model: str
+    # The agent under evaluation, resolved before running
+    agent: AgentIdentity[HarnessName]
 
     # Evaluation category
     category: EvaluationCategory
+    tier: DatasetTier = DatasetTier.GOLD
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
-
-    agent_version: str | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None
@@ -680,12 +690,13 @@ class EvaluationContext[E: BaseDatasetEntry]:
     # Experiment configuration
     experiment: ExperimentConfiguration | None = None
 
+    # Agent transcript, set by the pipeline from the harness result or error
+    transcript: dict[str, JsonValue] | None = None
+
     def get_container(self) -> ContainerConfig:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
 
-
-class BCalLLMBackend(StrEnum):
-    AZURE_OPENAI = "azure-openai"
-    EXTERNAL_COMMAND = "external-command"
+    def agent_request(self) -> AgentRequest[E]:
+        return AgentRequest(task=self.entry, work_dir=self.repo_path, output_dir=self.result_dir)

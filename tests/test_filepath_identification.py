@@ -1,4 +1,7 @@
+import bcbench_core.agent.copilot.harness as copilot_harness_mod
 import pytest
+from bcbench_core.agent.copilot import CopilotOptions
+from bcbench_core.agent.metrics import AgentMetrics
 
 import bcbench.contamination.runner as runner_mod
 from bcbench.contamination.filepath_identification import (
@@ -7,7 +10,7 @@ from bcbench.contamination.filepath_identification import (
     matches_any_gold_path,
     parse_prediction,
 )
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry, create_problem_statement_dir
 
 FULL_PATCH = """diff --git a/App/Foo/Bar.Table.al b/App/Foo/Bar.Table.al
@@ -194,13 +197,14 @@ App/Foo/Bar.Table.al
             invocation_kwargs.update(kwargs)
             return metrics, raw_output
 
-        monkeypatch.setattr(runner_mod, "invoke_copilot", invoke_copilot)
+        monkeypatch.setattr(copilot_harness_mod, "invoke_copilot", invoke_copilot)
         result_dir = tmp_path / "out"
         result_dir.mkdir()
 
         result = runner_mod.run_filepath_identification(entry=entry, model="m", result_dir=result_dir)
 
-        assert invocation_kwargs["allow_all_tools"] is False
+        assert invocation_kwargs["options"] == CopilotOptions(log_dir=invocation_kwargs["work_dir"] / "logs")
+        assert "env" in invocation_kwargs
         assert result.predicted_files == ["App/Foo/Bar.Table.al"]
         assert result.matches_any_gold_path
         assert result.metrics == metrics
@@ -211,7 +215,7 @@ App/Foo/Bar.Table.al
         problem_dir = create_problem_statement_dir(tmp_path, "Sales invoice posting fails")
         monkeypatch.setattr(type(entry), "problem_statement_dir", property(lambda self: problem_dir))
         raw_output = "I cannot determine the file."
-        monkeypatch.setattr(runner_mod, "invoke_copilot", lambda **_kwargs: (None, raw_output))
+        monkeypatch.setattr(copilot_harness_mod, "invoke_copilot", lambda **_kwargs: (None, raw_output))
         result_dir = tmp_path / "out"
         result_dir.mkdir()
 
@@ -229,7 +233,7 @@ App/Foo/Bar.Table.al
         def fail(**_kwargs):
             raise RuntimeError("copilot missing")
 
-        monkeypatch.setattr(runner_mod, "invoke_copilot", fail)
+        monkeypatch.setattr(copilot_harness_mod, "invoke_copilot", fail)
 
         with pytest.raises(RuntimeError, match="copilot missing"):
             runner_mod.run_filepath_identification(entry=entry, model="m", result_dir=tmp_path / "out")

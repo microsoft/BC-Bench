@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATASET = REPO_ROOT / "dataset" / "codereview.jsonl"
@@ -64,7 +65,7 @@ PRIVACY_003_CONTENT = """codeunit 50323 "Customer Email Validator"
 """
 
 
-def fix_privacy_003(entry: dict) -> None:
+def fix_privacy_003(entry: dict[str, Any]) -> None:
     entry["patch"] = replace_file_block(
         entry["patch"],
         "src/CustomerEmailValidator.Codeunit.al",
@@ -87,7 +88,7 @@ def fix_privacy_003(entry: dict) -> None:
     ]
 
 
-def fix_style_002(entry: dict) -> None:
+def fix_style_002(entry: dict[str, Any]) -> None:
     entry["expected_comments"] = [
         {
             "file": "src/PostingHelper.Codeunit.al",

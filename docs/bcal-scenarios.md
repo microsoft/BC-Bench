@@ -13,7 +13,7 @@ The harness writes a redacted `execution.json` containing only `schemaVersion`, 
 bcbench evaluate bcal <instance-id> --category bcal-scenario
 ```
 
-BCal receives `--scenario`, `--result`, and `--exportfolder` arguments. BC-Bench parses `evaluation-run.json` and the archived `chat.json`. A nonzero exit with a step-associated failure and successful export/archive is preserved as a measured agent outcome; missing/invalid results, session-level failures, and export/archive failures are surfaced as harness failures.
+BCal receives `--scenario`, `--result`, `--exportfolder`, and `--include-evidence` arguments. BC-Bench captures the complete `evaluation-run.json` through the shared harness transcript channel, reads structured trace events first, and can fall back to the archived `chat.json`. A nonzero exit with a step-associated failure and successful export/archive is preserved as a measured agent outcome; missing/invalid results, session-level failures, and export/archive failures are surfaced as harness failures.
 
 Evaluation combines:
 
@@ -22,7 +22,7 @@ Evaluation combines:
 3. Optional runtime verification (currently `null` in the pilot entries).
 4. LMChecklist scoring over the task, confirmed scripted decisions, deterministic summaries, exported workspace diff, and complete textual workspace.
 
-The three original pilot entries cover an inventory-risk feature, an integration-choice interaction, and an explicit plan-first lifecycle.
+The pilot entries span an inventory-risk feature, an integration-choice interaction, and an explicit plan-first lifecycle.
 
 ## Authority/provenance experiment
 

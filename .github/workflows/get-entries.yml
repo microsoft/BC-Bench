@@ -20,6 +20,11 @@ on:
         required: true
         type: string
         default: "bug-fix"
+      tier:
+        description: Dataset tier to list (gold, or challenge for categories that define one)
+        required: false
+        type: string
+        default: "gold"
     outputs:
       entries:
         description: JSON array of dataset entries
@@ -44,7 +49,7 @@ jobs:
       requires-repo: ${{ steps.runtime-config.outputs.requires-repo }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: ${{ inputs.modified-only && '0' || '1' }}
 
@@ -58,7 +63,7 @@ jobs:
       - name: Get entries for matrix
         id: get-entries
         run: |
-          cmd="uv run bcbench dataset list --category ${{ inputs.category }} --github-output entries"
+          cmd="uv run bcbench dataset list --category ${{ inputs.category }} --tier ${{ inputs.tier }} --github-output entries"
 
           if [[ "${{ inputs.modified-only }}" == "true" ]]; then
             cmd="$cmd --modified-only"

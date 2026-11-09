@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import typer
+from bcbench_core.container import ContainerConfig
 
-from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, DatasetTier, EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here
@@ -26,6 +27,8 @@ PRReviewEnginePath = Annotated[
 
 OutputDir = Annotated[Path, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)]
 
+AgentConfigPath = Annotated[Path, typer.Option("--config", help="Agent config file (prompts, instructions, skills, plugins, MCP)", exists=True, dir_okay=False, readable=True)]
+
 RunId = Annotated[str, typer.Option(envvar="GITHUB_RUN_ID", help="Unique identifier for this evaluation run")]
 
 ContainerName = Annotated[str, typer.Option(envvar="BC_CONTAINER_NAME", help="BC container name")]
@@ -43,6 +46,8 @@ ContainerMcpUrl = Annotated[str | None, typer.Option(envvar="BC_MCP_URL", help="
 ContainerCompany = Annotated[str, typer.Option(envvar="BC_COMPANY", help="BC company name")]
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
+
+TierOption = Annotated[DatasetTier, typer.Option(help="Only use dataset entries whose metadata.tier matches")]
 
 
 def resolve_agent_runtime(

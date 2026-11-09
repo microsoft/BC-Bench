@@ -2,18 +2,21 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from typing import override
+from unittest.mock import MagicMock, patch
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentHarness, AgentResult
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
 
 from bcbench.commands.evaluate import MockEvaluationPipeline
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import AgentTimeoutError
-from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
-from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_nl2al_entry
+from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.types import AgentConfig, EvaluationCategory, EvaluationContext, HarnessName
+from tests.conftest import StubHarness, create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
 
 class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
@@ -24,30 +27,35 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
         self.run_agent_called = False
         self.evaluate_called = False
 
+    @override
     def setup_workspace(self, entry: E, repo_path: Path) -> None:
         pass
 
+    @override
     def setup(self, context: EvaluationContext[E]) -> None:
         self.setup_called = True
 
-    def run_agent(self, context: EvaluationContext[E], agent_runner: AgentRunner[E]) -> None:
+    @override
+    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> None:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
-        context.metrics, context.experiment = agent_runner(context)
+        result = harness.run(context.agent_request())
+        context.metrics, context.experiment = result.metrics, result.experiment
 
+    @override
     def evaluate(self, context: EvaluationContext[E]) -> None:
         self.evaluate_called = True
         if self.raise_in_evaluate is not None:
             raise self.raise_in_evaluate
 
 
-def _noop_runner(_ctx: EvaluationContext[BugFixEntry]) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]:
-    return AgentMetrics(execution_time=1.0), ExperimentConfiguration()
+def _noop_harness() -> StubHarness[BugFixEntry]:
+    return StubHarness(AgentResult(metrics=AgentMetrics(execution_time=1.0), experiment=ExperimentConfiguration()))
 
 
 def _read_only_result[E: BaseDatasetEntry](ctx: EvaluationContext[E]) -> BaseEvaluationResult:
-    result_file = ctx.result_dir / f"{ctx.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result_file = ctx.result_dir / f"{ctx.entry.instance_id}{RESULT_FILE_SUFFIX}"
     payload = result_file.read_text(encoding="utf-8").strip().splitlines()
     assert len(payload) == 1, f"Expected one persisted result, got {len(payload)}: {payload}"
 
@@ -59,7 +67,7 @@ class TestExecuteHappyPath:
         ctx = create_evaluation_context(tmp_path)
         pipeline = _StubPipeline[BugFixEntry]()
 
-        pipeline.execute(ctx, _noop_runner)
+        pipeline.execute(ctx, _noop_harness())
 
         assert pipeline.setup_called
         assert pipeline.run_agent_called
@@ -73,7 +81,7 @@ class TestExecuteAgentTimeout:
         timeout_config = ExperimentConfiguration(custom_instructions=True)
         pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config))
 
-        pipeline.execute(ctx, _noop_runner)
+        pipeline.execute(ctx, _noop_harness())
 
         assert pipeline.evaluate_called is False
         result = _read_only_result(ctx)
@@ -87,9 +95,9 @@ class TestExecuteAgentTimeout:
         ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
         pipeline = _StubPipeline[NL2ALEntry](raise_in_run_agent=AgentTimeoutError("test timeout"))
 
-        pipeline.execute(ctx, lambda _: (None, None))
+        pipeline.execute(ctx, StubHarness())
 
-        result_file = ctx.result_dir / f"{entry.instance_id}{get_config().file_patterns.result_pattern}"
+        result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
         payload = json.loads(result_file.read_text(encoding="utf-8"))
         assert payload["judge_model"] == EvaluationCategory.NL2AL.judge_model
 
@@ -98,13 +106,33 @@ class TestExecuteAgentTimeout:
         assert result.judge_model == EvaluationCategory.NL2AL.judge_model
 
 
+class TestRunAgentTranscript:
+    def test_copies_transcript_from_result(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        harness = StubHarness[BugFixEntry](AgentResult(transcript={"trace": []}))
+
+        EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
+
+        assert ctx.transcript == {"trace": []}
+
+    def test_copies_transcript_from_agent_error(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        harness = MagicMock(spec=StubHarness)
+        harness.run.side_effect = AgentError("agent failed", transcript={"trace": []})
+
+        with pytest.raises(AgentError, match="agent failed"):
+            EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
+
+        assert ctx.transcript == {"trace": []}
+
+
 class TestExecuteEvaluateError:
     def test_unexpected_exceptions_still_propagate(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
         pipeline = _StubPipeline[BugFixEntry](raise_in_evaluate=RuntimeError("infra blew up"))
 
         with pytest.raises(RuntimeError, match="infra blew up"):
-            pipeline.execute(ctx, _noop_runner)
+            pipeline.execute(ctx, _noop_harness())
 
 
 def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
@@ -115,8 +143,27 @@ def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
             return create_nl2al_entry()
         case EvaluationCategory.EXT_REQUEST_ADVISOR:
             return create_ext_advisor_entry()
+        case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+            return create_ext_implement_entry()
         case _:
             return create_dataset_entry()
+
+
+@pytest.mark.parametrize("category", [EvaluationCategory.BUG_FIX, EvaluationCategory.TEST_GENERATION, EvaluationCategory.NL2AL, EvaluationCategory.EXT_REQUEST_IMPLEMENT])
+def test_al_evaluation_pipelines_pass_recommended_diff_exclusions(tmp_path, category):
+    entry = category.entry_class.model_validate(_entry_for_category(category).model_dump())
+    ctx = create_evaluation_context(tmp_path, entry=entry, category=category)
+    pipeline = category.pipeline(AgentConfig())
+    module = type(pipeline).__module__
+
+    with (
+        patch(f"{module}.clean_project_paths", create=True),
+        patch(f"{module}.stage_and_get_diff", side_effect=RuntimeError("stop before evaluation")) as stage_diff,
+        pytest.raises(RuntimeError, match="stop before evaluation"),
+    ):
+        pipeline.evaluate(ctx)
+
+    stage_diff.assert_called_once_with(ctx.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
 
 
 class TestMockPipelineCoversAllCategories:
@@ -132,7 +179,29 @@ class TestMockPipelineCoversAllCategories:
             with patch("bcbench.commands.evaluate.random.choice", pick):
                 pipeline.evaluate(ctx)
 
-        result_file = ctx.result_dir / f"{entry.instance_id}{get_config().file_patterns.result_pattern}"
+        result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
         results = [BaseEvaluationResult.from_json(json.loads(line)) for line in result_file.read_text(encoding="utf-8").splitlines()]
         assert {r.category for r in results} == {category}
         assert all(r.instance_id == entry.instance_id for r in results)
+
+
+@pytest.mark.parametrize(
+    ("input_mode", "applies_gold_patch", "copies_problem_statement"),
+    [("problem-statement", False, True), ("gold-patch", True, False), ("both", True, True)],
+)
+def test_test_generation_workspace_follows_the_given_agent_config(tmp_path, input_mode, applies_gold_patch, copies_problem_statement):
+    entry = EvaluationCategory.TEST_GENERATION.entry_class.model_validate(create_dataset_entry().model_dump())
+    agent_config = AgentConfig.model_validate({"prompt": {"test-generation-input": input_mode}})
+    pipeline = EvaluationCategory.TEST_GENERATION.pipeline(agent_config)
+    module = type(pipeline).__module__
+
+    with (
+        patch(f"{module}.setup_repo_prebuild"),
+        patch(f"{module}.set_runtime_version"),
+        patch(f"{module}.apply_patch") as apply_patch,
+        patch(f"{module}.copy_problem_statement_folder") as copy_problem_statement,
+    ):
+        pipeline.setup_workspace(entry, tmp_path)
+
+    assert apply_patch.called is applies_gold_patch
+    assert copy_problem_statement.called is copies_problem_statement

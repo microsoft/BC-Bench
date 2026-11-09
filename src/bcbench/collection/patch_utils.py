@@ -1,20 +1,18 @@
 """Utilities for working with git patches and project paths."""
 
+import logging
 import subprocess
 from pathlib import Path
 
 from unidiff import PatchSet
 from unidiff.errors import UnidiffParseError
 
-from bcbench.config import get_config
 from bcbench.exceptions import CollectionError
-from bcbench.logger import get_logger
 
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
 
-def separate_patches(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str, str, str]:
+def separate_patches(diff: str, test_identifiers: tuple[str, ...] = ("test", "tests")) -> tuple[str, str, str]:
     """Separate a diff into full, fix, and test patches.
 
     Args:
@@ -76,7 +74,7 @@ def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_p
     if not patch:
         raise CollectionError("No patch data found between the specified commits")
 
-    return separate_patches(patch, _config.file_patterns.test_project_identifiers)
+    return separate_patches(patch)
 
 
 def find_project_paths_from_diff(patch: str) -> list[str]:

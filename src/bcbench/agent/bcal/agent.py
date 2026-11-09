@@ -1,51 +1,50 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+import json
+import logging
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from typing import cast, override
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.agent.version import get_cli_version
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
+from pydantic import BaseModel, ConfigDict, JsonValue, field_validator
 
 from bcbench.agent.bcal.bc_eval_llm_api_bridge import sticky_route_ticket_broker_environment
-from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
-from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics, BCalLLMBackend, ExperimentConfiguration
+from bcbench.types import HarnessName
 
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
 _BCAL_TOOL = "bcal"
 
 
 @contextmanager
-def _bcal_process_environment(backend_config: "BCalBackendConfig") -> Iterator[dict[str, str]]:
-    broker_environment = sticky_route_ticket_broker_environment() if backend_config.backend == BCalLLMBackend.EXTERNAL_COMMAND else nullcontext({})
-    with broker_environment as sticky_route_environment:
-        yield os.environ | sticky_route_environment
+def _bcal_process_environment() -> Iterator[dict[str, str]]:
+    with sticky_route_ticket_broker_environment() as broker_environment:
+        yield os.environ | broker_environment
 
 
 class BCalBackendConfig(BaseModel):
-    """A resolved bcal backend plus the inputs it needs to run.
-
-    Bundles the backend selector with its (command-entry supplied) values so call sites pass a
-    single object, and the conditional "which inputs are required" rules stay in one place.
-    """
+    """Configuration for bcal's external-command LLM bridge."""
 
     model_config = ConfigDict(frozen=True)
 
-    backend: BCalLLMBackend
-    endpoint: str | None = None
-    deployment: str | None = None
     command: str | None = None
     model: str | None = None
 
-    @field_validator("endpoint", "deployment", "command", "model", mode="before")
+    @field_validator("command", "model", mode="before")
     @classmethod
     def _strip_optional_string(cls, value: object) -> object:
         if isinstance(value, str):
@@ -54,31 +53,18 @@ class BCalBackendConfig(BaseModel):
         return value
 
     def cli_args(self) -> list[str]:
-        match self.backend:
-            case BCalLLMBackend.EXTERNAL_COMMAND:
-                if not self.command:
-                    raise AgentError("BCAL_LLM_COMMAND is required for the external-command backend.")
-                args = ["--llm-backend=external-command", f"--llm-command={self.command}"]
-                if self.model:
-                    args.append(f"--deployment={self.model}")
-                return args
-            case BCalLLMBackend.AZURE_OPENAI:
-                if not self.endpoint:
-                    raise AgentError("AZURE_OPENAI_ENDPOINT is required for the azure-openai backend.")
-                if not self.deployment:
-                    raise AgentError("AZURE_OPENAI_DEPLOYMENT is required for the azure-openai backend.")
-                return [f"--endpoint={self.endpoint}", f"--deployment={self.deployment}"]
+        if not self.command:
+            raise AgentError("BCAL_LLM_COMMAND is required.")
+        args = ["--llm-backend=external-command", f"--llm-command={self.command}"]
+        if self.model:
+            args.append(f"--deployment={self.model}")
+        return args
 
-        raise ValueError(f"Unknown BCalLLMBackend: {self.backend}")
 
-    def model_label(self) -> str:
-        match self.backend:
-            case BCalLLMBackend.EXTERNAL_COMMAND:
-                return self.model or self.backend.value
-            case BCalLLMBackend.AZURE_OPENAI:
-                return self.deployment or self.backend.value
-
-        raise ValueError(f"Unknown BCalLLMBackend: {self.backend}")
+# BCal versions the scenario input and the result output independently
+_SCENARIO_SCHEMA_VERSION = "1.0"
+# BCal builds before bic/BC-DeveloperExperience#8982 labelled the same result layout "1.1"
+_RESULT_SCHEMA_VERSIONS = ("1.0", "1.1")
 
 
 def _resolve_bcal_executable() -> str:
@@ -86,6 +72,10 @@ def _resolve_bcal_executable() -> str:
     if not resolved:
         raise AgentError(f"'{_BCAL_TOOL}' executable not found on PATH.")
     return resolved
+
+
+def get_bcal_version() -> str:
+    return get_cli_version(shutil.which(_BCAL_TOOL), "BCal")
 
 
 def _process_output(output: str | bytes | None) -> str:
@@ -134,10 +124,10 @@ def _trim_prompt_echo(stdout: str, query: str) -> str:
     return f"{stdout[:start]}{stdout[end:]}".strip()
 
 
-def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig) -> list[str]:
-    """Build the bcal argv shared by the nl2al agent run and the red-team single-prompt run.
+def _bcal_cmd_args(entry: NL2ALEntry, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig, *mode_args: str) -> list[str]:
+    """Build the bcal argv shared by the nl2al agent run (scenario mode) and the red-team run (prompt mode).
 
-    Only the prompt and the paths differ between the two, so keeping one builder stops the flag
+    Only the mode arguments and the paths differ between the two, so keeping one builder stops the flag
     set from drifting when bcal's CLI changes.
     """
     return [
@@ -146,55 +136,85 @@ def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, exp
         *backend_config.cli_args(),
         f"--audience={entry.audience}",
         f"--page={entry.page}",
-        f"--prompt={prompt}",
         f"--exportfolder={export_folder}",
+        *mode_args,
     ]
 
 
-def run_bcal_agent(
-    entry: NL2ALEntry,
-    repo_path: Path,
-    backend_config: BCalBackendConfig,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend_config.backend.value})")
-
-    # The .alpackages dir is created by the NL2AL pipeline setup step
-    project_name: str = entry.project_paths[0]
-    package_cache_path = repo_path / project_name / _config.file_patterns.alpackages_dirname
-    if not package_cache_path.exists():
-        raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
-
-    export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
-    cmd_args = _bcal_cmd_args(entry, entry.get_task(), package_cache_path, export_folder, backend_config)
-
-    logger.info(f"Export folder: {export_folder}")
-    logger.debug(f"Package cache path: {package_cache_path}")
-    logger.debug(f"Using prompt:\n{entry.get_task()}")
-    logger.debug(f"bcal CLI command: {cmd_args}")
-
+def _read_transcript(result_path: Path) -> dict[str, JsonValue]:
+    # The whole scenario result is the transcript: execution identity, completion, failures, per-step compile status and evidence
     try:
-        with _bcal_process_environment(backend_config) as environment:
-            start = time.monotonic()
-            subprocess.run(
-                cmd_args,
-                timeout=_config.timeout.bcal_execution,
-                check=True,
-                env=environment,
-            )
-            execution_time = time.monotonic() - start
+        result = cast(JsonValue, json.loads(result_path.read_bytes()))
+    except (OSError, ValueError) as exc:
+        raise AgentError(f"Could not read BCal scenario result {result_path}: {exc}") from exc
+    if not isinstance(result, dict) or result.get("schemaVersion") not in _RESULT_SCHEMA_VERSIONS:
+        raise AgentError(f"Unsupported BCal scenario result in {result_path}, expected schemaVersion in {_RESULT_SCHEMA_VERSIONS}")
+    return result
+
+
+def _read_transcript_after_failure(result_path: Path) -> dict[str, JsonValue] | None:
+    try:
+        return _read_transcript(result_path)
+    except AgentError:
+        logger.warning("No usable BCal transcript after failure", exc_info=True)
+        return None
+
+
+@dataclass(frozen=True)
+class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
+    """The bcal CLI, generating AL code for NL2AL entries into the prepared workspace."""
+
+    backend_config: BCalBackendConfig
+    timeout: int = 25 * 60
+
+    @override
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.BCAL, version=get_bcal_version(), model=self.backend_config.model or "external-command")
+
+    @override
+    def run(self, request: AgentRequest[NL2ALEntry], /) -> AgentResult:
+        entry, repo_path, backend_config = request.task, request.work_dir, self.backend_config
+        timeout = self.timeout if request.timeout is None else request.timeout
+        logger.info(f"Running bcal CLI on: {entry.instance_id}")
+
+        # The .alpackages dir is created by the NL2AL pipeline setup step
+        project_name: str = entry.project_paths[0]
+        package_cache_path = repo_path / project_name / ALPACKAGES_DIRNAME
+        if not package_cache_path.exists():
+            raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
+
+        export_folder = repo_path / project_name / "src"
+        logger.info(f"Export folder: {export_folder}")
+        logger.debug(f"Package cache path: {package_cache_path}")
+        logger.debug(f"Using prompt:\n{entry.get_task()}")
+
+        # Only scenario mode writes a result file with the transcript; --scenario takes a file, not inline JSON
+        with tempfile.TemporaryDirectory(prefix="bcbench-bcal-") as temp_dir:
+            scenario_path = Path(temp_dir) / "scenario.json"
+            result_path = Path(temp_dir) / "result.json"
+            scenario = {"schemaVersion": _SCENARIO_SCHEMA_VERSION, "steps": [{"id": "benchmark-prompt", "type": "user", "text": entry.get_task()}]}
+            scenario_path.write_text(json.dumps(scenario), encoding="utf-8")
+            cmd_args = _bcal_cmd_args(entry, package_cache_path, export_folder, backend_config, f"--scenario={scenario_path}", f"--result={result_path}", "--include-evidence")
+            logger.debug(f"bcal CLI command: {cmd_args}")
+
+            try:
+                start = time.monotonic()
+                with _bcal_process_environment() as environment:
+                    subprocess.run(cmd_args, timeout=timeout, check=True, env=environment)
+                execution_time = time.monotonic() - start
+            except subprocess.TimeoutExpired:
+                logger.exception(f"bcal CLI timed out after {timeout} seconds")
+                metrics = AgentMetrics(execution_time=timeout)
+                # A hard kill skips BCal's final result write; a result only exists if BCal hung after writing it
+                raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration(), transcript=_read_transcript_after_failure(result_path)) from None
+            except subprocess.CalledProcessError as e:
+                logger.exception("bcal CLI execution failed")
+                raise AgentError(f"bcal CLI execution failed: {e}", transcript=_read_transcript_after_failure(result_path)) from None
+
+            transcript: dict[str, JsonValue] = _read_transcript(result_path)
 
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
-        return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
-    except subprocess.TimeoutExpired:
-        logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
-        raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"bcal CLI execution failed: {e.stderr}")
-        raise AgentError(f"bcal CLI execution failed: {e}") from None
-    except Exception:
-        logger.exception("Unexpected error running bcal CLI")
-        raise
+        return AgentResult(metrics=AgentMetrics(execution_time=execution_time), experiment=ExperimentConfiguration(), transcript=transcript)
 
 
 def run_bcal_prompt(
@@ -203,25 +223,26 @@ def run_bcal_prompt(
     package_cache_path: Path,
     export_folder: Path,
     backend_config: BCalBackendConfig,
+    timeout: int = 25 * 60,
 ) -> str:
     """Run bcal once for a raw prompt and return its output as text (used by red teaming).
 
     BCal writes generated AL to the export folder and status/output to stdout. Surface both while
     removing the echoed user prompt so the safety judge does not score the attack as target output.
 
-    Unlike `run_bcal_agent` this raises on timeout/non-zero exit instead of returning the text: a
+    Unlike `BCalHarness` this raises on timeout/non-zero exit instead of returning the text: a
     red-team judge must never score bcal's own error output as if it were a harmless refusal.
 
     Assumes symbols are already present under ``package_cache_path``.
     """
     export_folder.mkdir(parents=True, exist_ok=True)
-    cmd_args = _bcal_cmd_args(entry, query, package_cache_path, export_folder, backend_config)
+    cmd_args = _bcal_cmd_args(entry, package_cache_path, export_folder, backend_config, f"--prompt={query}")
 
     try:
-        with _bcal_process_environment(backend_config) as environment:
+        with _bcal_process_environment() as environment:
             result = subprocess.run(
                 cmd_args,
-                timeout=_config.timeout.bcal_execution,
+                timeout=timeout,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -229,13 +250,13 @@ def run_bcal_prompt(
                 check=True,
                 env=environment,
             )
-            stdout = result.stdout or ""
+        stdout = result.stdout or ""
     except subprocess.TimeoutExpired as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
-        message = f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds"
+        message = f"bcal CLI timed out after {timeout} seconds"
         if details:
             message = f"{message}\n{details}"
-        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
+        metrics = AgentMetrics(execution_time=timeout)
         raise AgentTimeoutError(message, metrics=metrics, config=ExperimentConfiguration()) from None
     except subprocess.CalledProcessError as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))

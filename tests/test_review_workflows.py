@@ -42,13 +42,14 @@ def test_bcal_llm_preflight_uses_exact_package_and_real_model_and_judge_paths() 
     assert "if: ${{ !(inputs.llm-preflight-only || false) }}" in registered_workflow
 
 
-def test_bcal_scenario_judging_uses_shared_sticky_route_compat_only() -> None:
+def test_bcal_scenario_and_feature_judging_use_shared_sticky_route_compat() -> None:
     workflow = _workflow("summarize-results.yml")
 
-    assert 'if [[ "${{ inputs.category }}" == "bcal-scenario" ]]' in workflow
+    assert 'if [[ "${{ inputs.category }}" == "bcal-scenario" || "${{ inputs.category }}" == "bcal-feature" ]]' in workflow
     assert '"bc-eval==0.6.1"' in workflow
     assert "python -m bcbench.agent.bcal.bc_eval_cli" in workflow
-    assert "bc-eval[capi]==0.3.14" in workflow
+    assert "uv tool install bc-eval==0.6.1" in workflow
+    assert "bc-eval[capi]==0.3.14" not in workflow
     assert '"${BCEVAL[@]}" metrics calculate' in workflow
 
 

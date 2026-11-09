@@ -1,4 +1,4 @@
-using module ..\..\scripts\BCBenchUtils.psm1
+using module ..\..\packages\bcbench-core\src\bcbench_core\powershell\BCBenchUtils.psm1
 
 <#
     .SYNOPSIS

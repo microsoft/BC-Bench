@@ -1,3 +1,5 @@
+import os
+
 from bcbench.agent.shared.env import agent_subprocess_env
 
 
@@ -42,8 +44,20 @@ def test_preserves_bc_connection_vars_when_allowed(monkeypatch):
 
 def test_overrides_are_applied(monkeypatch):
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
+    monkeypatch.delenv("FLAG", raising=False)
 
     env = agent_subprocess_env({"FLAG": "on"})
 
     assert env["FLAG"] == "on"
     assert "BC_SERVER_PASSWORD" not in env
+    assert os.environ["BC_SERVER_PASSWORD"] == "secret"
+    assert "FLAG" not in os.environ
+
+
+def test_explicit_overrides_can_restore_withheld_vars(monkeypatch):
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "parent")
+
+    env = agent_subprocess_env({"BC_SERVER_PASSWORD": "explicit"})
+
+    assert env["BC_SERVER_PASSWORD"] == "explicit"
+    assert os.environ["BC_SERVER_PASSWORD"] == "parent"

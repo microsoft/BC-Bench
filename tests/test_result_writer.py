@@ -1,12 +1,14 @@
 import json
-from unittest.mock import PropertyMock, patch
+from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import EvaluationCategory, HarnessName, PRReviewMetrics
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
 
 
@@ -25,7 +27,7 @@ class TestWriteBcevalResults:
         ],
     )
     def test_pr_review_credits_preserve_missing_zero_and_observed_values(self, tmp_path, metrics):
-        result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
+        result = create_codereview_result(agent_name=HarnessName.PR_REVIEW, metrics=metrics)
         with patch.object(CodeReviewEntry, "load", return_value=[create_codereview_entry()]):
             write_bceval_results(
                 results=[result],
@@ -37,7 +39,7 @@ class TestWriteBcevalResults:
 
         metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
         assert metadata["ai_credits"] == (metrics.ai_credits if metrics is not None else None)
-        # bc-eval 0.3.14 adds these fields before invoking our custom metric callback.
+        # bc-eval 0.6.1 adds these fields before invoking our custom metric callback.
         assert isinstance(metadata["prompt_tokens"], int)
         assert isinstance(metadata["completion_tokens"], int)
 
@@ -48,7 +50,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
         ):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
@@ -86,7 +88,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
         ):
             write_bceval_results(
                 results=[sample_testgen_result],
@@ -111,7 +113,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
         ):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics, sample_testgen_result],
@@ -143,7 +145,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
         ):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
@@ -166,6 +168,25 @@ class TestWriteBcevalResults:
         assert "metadata" in data
         assert "tags" in data
 
+    @pytest.mark.parametrize("transcript", [{"trace": {"events": []}}, None])
+    def test_writes_transcript_to_context(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir, transcript):
+        sample_bugfix_result_with_metrics.transcript = transcript
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[sample_bugfix_result_with_metrics],
+                out_dir=tmp_path,
+                run_id="transcript",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        row = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))
+        assert row["context"] == (transcript if transcript is not None else "")
+
     def test_skips_results_without_matching_dataset_entry(self, tmp_path, sample_dataset_file):
         output_dir = tmp_path / "output"
         output_dir.mkdir()
@@ -177,7 +198,7 @@ class TestWriteBcevalResults:
             metrics=AgentMetrics(prompt_tokens=1000, completion_tokens=200),
         )
 
-        with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file):
+        with patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file):
             write_bceval_results(
                 results=[non_matching_result],
                 out_dir=output_dir,
@@ -201,7 +222,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
         ):
             write_bceval_results(
                 results=[result],
@@ -233,7 +254,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
             patch.object(BugFixEntry, "get_expected_output", lambda self: checklist_payload),
         ):
             write_bceval_results(
@@ -257,7 +278,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
         ):
             write_bceval_results(
                 results=[result],
@@ -284,7 +305,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
         ):
             write_bceval_results(
                 results=[result],
@@ -309,7 +330,7 @@ class TestWriteBcevalResults:
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
         ):
             write_bceval_results(
                 results=[result],

@@ -1,86 +1,16 @@
+import logging
 from pathlib import Path
 from shutil import copytree, rmtree
 
-from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry
-from bcbench.dataset.dataset_entry import RepoGroundedEntry
-from bcbench.logger import get_logger
-from bcbench.types import AgentHarness
+from bcbench.dataset.dataset_entry import WORKSPACE_PROBLEM_DIR, RepoGroundedEntry
+from bcbench.paths import AGENT_SHARE_DIR
 
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
 
-def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
-    """
-    Setup custom instructions from config if enabled.
-
-    Args:
-        agent_config: Agent configuration dictionary
-        entry: Dataset entry naming the customization profile to apply
-        repo_path: Path to repository where instructions will be copied
-        harness: Agent harness (Copilot or Claude)
-
-    Returns:
-        True if instructions are enabled, False otherwise
-    """
-    instructions_config: dict = agent_config["instructions"]
-    instructions_enabled: bool = instructions_config["enabled"]
-
-    if instructions_enabled:
-        source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
-        target_dir: Path = harness.get_target_dir(repo_path)
-
-        logger.info(f"Setting up custom instructions for profile: {entry.customization_profile}")
-        if target_dir.exists():
-            rmtree(target_dir)
-        copytree(source_instructions, target_dir)
-
-        # Rename canonical instruction file to agent-specific name
-        canonical = target_dir / _config.file_patterns.instruction_source_naming
-        expected = target_dir / harness.instruction_filename
-        if canonical.exists() and canonical != expected:
-            canonical.rename(expected)
-            logger.info(f"Renamed {canonical.name} -> {expected.name}")
-
-        logger.info(f"{target_dir.name} dir is overwritten with {source_instructions}")
-
-    return instructions_enabled
-
-
-def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> str | None:
-    """
-    Setup custom agents in the repository if available.
-    """
-    custom_agent_config: dict = agent_config["agents"]
-    custom_agent_enabled: bool = custom_agent_config["enabled"]
-
-    if custom_agent_enabled:
-        source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
-        target_dir: Path = harness.get_target_dir(repo_path)
-        copytree(source_instructions / "agents", target_dir / "agents", dirs_exist_ok=True)
-
-        logger.info(f"Custom agents are set up from {source_instructions / 'agents'}")
-        return custom_agent_config.get("name")
-
-    return None
-
-
-def _get_source_instructions_path(profile: str) -> Path:
-    """
-    Get path to the source instruction folder for an instruction profile.
-
-    Instructions are stored in shared/instructions/ and used by both Copilot and Claude.
-
-    Raises:
-        FileNotFoundError: If instruction file doesn't exist
-    """
-    instructions_path = _config.paths.agent_share_dir / _config.file_patterns.instructions_dirname / profile
-
-    if not instructions_path.exists():
-        raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for profile: {profile}")
-
-    return instructions_path
+def instructions_profile_dir(profile: str) -> Path:
+    """Shipped instructions, skills and custom agents for a customization profile, shared by Copilot and Claude."""
+    return AGENT_SHARE_DIR / "instructions" / profile
 
 
 def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> None:
@@ -94,7 +24,7 @@ def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> 
         repo_path: Path to testbed repository where folder will be copied
     """
     source_dir: Path = entry.problem_statement_dir
-    dest_dir: Path = repo_path / _config.file_patterns.problem_statement_dest_dir
+    dest_dir: Path = repo_path / WORKSPACE_PROBLEM_DIR
 
     if dest_dir.exists():
         rmtree(dest_dir)

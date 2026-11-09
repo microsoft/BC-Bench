@@ -29,8 +29,8 @@ Use this table when the model set changes:
 ## Copilot Surfaces
 
 - `.github/actions/install-agent-harnesses/action.yml`
-- `src/bcbench/agent/copilot/agent.py` and `metrics.py`
-- `src/bcbench/agent/copilot/cli.py` and `src/bcbench/cli_options.py`
+- `src/bcbench/agent/copilot/agent.py` and `src/bcbench/cli_options.py`
+- `packages/bcbench-core/src/bcbench_core/agent/copilot/` (CLI invocation and metrics parsing)
 - `.github/workflows/copilot-evaluation.yml`
 - `.github/workflows/contamination.yml`
 - Defaults under `src/bcbench/commands/` and `src/bcbench/config.py`

@@ -1,14 +1,16 @@
 """Judge all same-file candidates before assigning one-to-one code review matches."""
 
 import json
+import os
 import re
-import subprocess
 from pathlib import Path
 
-from bcbench.agent.copilot.cli import invoke_copilot
+from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
+from bcbench_core.exceptions import AgentError
+
 from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment
-from bcbench.exceptions import AgentError, LLMJudgeError
+from bcbench.exceptions import LLMJudgeError
 from bcbench.results.codereview import assign_comment_matches
 
 _config = get_config()
@@ -141,10 +143,11 @@ def judge_verdicts(
             prompt=prompt,
             model=model,
             work_dir=work_dir,
-            timeout=_config.timeout.agent_execution,
-            allow_all_tools=True,
+            timeout=60 * 60,
+            env=os.environ,
+            options=CopilotOptions(allow_all_tools=True),
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, AgentError) as exc:
+    except AgentError as exc:
         raise LLMJudgeError(f"Judge subprocess failed: {exc}{_format_subprocess_output(exc)}") from exc
 
     return _parse_judge_results(result_path, len(pairs), stdout=final_response)

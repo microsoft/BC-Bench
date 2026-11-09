@@ -7,20 +7,26 @@ meeting all Pydantic validation requirements.
 
 import json
 from collections.abc import Generator
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, cast, override
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.container import ContainerConfig
+from bcbench_core.dataset import TestEntry
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentHarness, AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import ChecklistAssertion, EvaluationCategory, EvaluationContext, HarnessName
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -76,11 +82,27 @@ def create_dataset_entry(
     )
 
 
+@dataclass
+class StubHarness[E: BaseDatasetEntry](AgentHarness[E, HarnessName]):
+    result: AgentResult = field(default_factory=AgentResult)
+    requests: list[AgentRequest[E]] = field(default_factory=list)
+
+    @override
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.COPILOT, version="1.0.0", model="test-model")
+
+    @override
+    def run(self, request: AgentRequest[E], /) -> AgentResult:
+        self.requests.append(request)
+        return self.result
+
+
 def create_evaluation_context[EntryT: BaseDatasetEntry](
     tmp_path: Path,
     entry: EntryT | None = None,
-    agent_name: AgentHarness = AgentHarness.COPILOT,
+    agent_name: HarnessName = HarnessName.COPILOT,
     model: str = "test-model",
+    agent_version: str = "1.0.0",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
     container_name: str = "test-container",
     password: str = "test-password",
@@ -93,8 +115,7 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
         container=ContainerConfig(name=container_name, username=username, password=password, company="CRONUS"),
-        agent_name=agent_name,
-        model=model,
+        agent=AgentIdentity[HarnessName](harness=agent_name, version=agent_version, model=model),
         category=category,
     )
 
@@ -192,7 +213,7 @@ def create_codereview_entry(
 def create_codereview_result(
     instance_id: str = VALID_INSTANCE_ID,
     model: str = "gpt-4o",
-    agent_name: AgentHarness = AgentHarness.COPILOT,
+    agent_name: HarnessName = HarnessName.COPILOT,
     output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
     expected_comments: list[ReviewComment] | None = None,
     metrics: AgentMetrics | None = None,
@@ -214,8 +235,7 @@ def create_codereview_result(
         repo_path=Path(),
         result_dir=Path(),
         container=ContainerConfig(name="t", username="t", password="t", company="CRONUS"),
-        agent_name=agent_name,
-        model=model,
+        agent=AgentIdentity[HarnessName](harness=agent_name, version="1.0.0", model=model),
         category=EvaluationCategory.CODE_REVIEW,
     )
     context.metrics = metrics
@@ -271,16 +291,9 @@ def sample_test_entry() -> TestEntry:
 
 
 @pytest.fixture
-def plugin_root(tmp_path: Path) -> Generator[Path]:
-    """Redirect the plugin root to a temp dir, so tests never write into the repo's own `.bcbench/`."""
-    from dataclasses import replace
-
-    from bcbench.agent.shared import plugin
-
-    root = tmp_path / "plugin-root"
-    patched = replace(plugin._config, paths=replace(plugin._config.paths, plugin_root=root))
-    with patch.object(plugin, "_config", patched):
-        yield root
+def plugin_root(tmp_path: Path) -> Path:
+    """A temp plugin root, so tests never write into the repo's own `.bcbench/`."""
+    return tmp_path / "plugin-root"
 
 
 @pytest.fixture
