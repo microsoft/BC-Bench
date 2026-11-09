@@ -25,7 +25,6 @@ SCENARIO_MANIFEST = "execution.json"
 SCENARIO_RESULT = "evaluation-run.json"
 SCENARIO_EXPORT_DIR = "app"
 SCENARIO_SYMBOL_DIR = ".bcal-symbols"
-_RESULT_SCHEMA_VERSIONS = ("1.0", "1.1")
 
 
 class BCalToolUsage(BaseModel):

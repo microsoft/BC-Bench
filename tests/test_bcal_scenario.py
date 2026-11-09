@@ -13,7 +13,6 @@ import bcbench.evaluate.bcal_scenario as scenario_evaluation
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import scenario as bcal_scenario
 from bcbench.dataset import BCalScenarioEntry
-from bcbench.evaluate.bcal_scenario import evaluate_trace
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationCategory, HarnessName
 from tests.conftest import create_evaluation_context
@@ -217,7 +216,7 @@ def test_trace_uses_transcript_evidence_order_and_confirmed_choice():
     entry = create_bcal_scenario_entry()
     result = bcal_scenario.BCalScenarioRunResult.model_validate(scenario_result_payload())
 
-    assertions = evaluate_trace(entry, result)
+    assertions = scenario_evaluation.evaluate_trace(entry, result)
 
     assert all(assertion.passed for assertion in assertions)
 

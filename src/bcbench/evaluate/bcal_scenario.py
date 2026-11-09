@@ -13,7 +13,7 @@ from bcbench_core.filesystem import remove_tree
 
 from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult
 from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
-from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate import base as evaluate_base
 from bcbench.operations import bootstrap_app_json
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationContext
@@ -239,7 +239,7 @@ def _archive_workspace(entry: BCalScenarioEntry, app_folder: Path, result_dir: P
                 archive.write(path, path.relative_to(app_folder))
 
 
-class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
+class BCalScenarioPipeline(evaluate_base.EvaluationPipeline[BCalScenarioEntry]):
     @override
     def setup_workspace(self, entry: BCalScenarioEntry, repo_path: Path) -> None:
         if repo_path.exists():
