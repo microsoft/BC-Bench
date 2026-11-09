@@ -82,7 +82,7 @@ def write_bceval_results(
                 "input": task_input,
                 "expected": expected,
                 "output": result.output,
-                "context": result.transcript or "",
+                "context": result.transcript if result.transcript is not None else "",
                 "metadata": metadata,
                 "tags": [],
             }

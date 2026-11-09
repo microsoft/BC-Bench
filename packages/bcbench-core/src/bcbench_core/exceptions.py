@@ -1,5 +1,7 @@
 """Errors raised by bcbench-core operations."""
 
+from pydantic import JsonValue
+
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
 
@@ -126,7 +128,7 @@ class TestExecutionTimeoutExpired(Exception):
 class AgentError(Exception):
     """Agent execution errors; ``transcript`` keeps what the agent recorded before failing."""
 
-    def __init__(self, message: str, *, transcript: str | None = None) -> None:
+    def __init__(self, message: str, *, transcript: dict[str, JsonValue] | None = None) -> None:
         self.transcript = transcript
         super().__init__(message)
 

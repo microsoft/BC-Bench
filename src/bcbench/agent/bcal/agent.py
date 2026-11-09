@@ -53,7 +53,7 @@ class BCalBackendConfig(BaseModel):
 
 class _BCalScenarioResult(BaseModel):
     schema_version: Literal["1.0"] = Field(alias="schemaVersion")
-    evidence: JsonValue = None
+    evidence: dict[str, JsonValue] | None = None
 
 
 def _resolve_bcal_executable() -> str:
@@ -145,15 +145,15 @@ def _write_scenario(path: Path, prompt: str) -> None:
     path.write_text(f"{json.dumps(scenario, indent=2)}\n", encoding="utf-8")
 
 
-def _read_transcript(result_path: Path) -> str | None:
+def _read_transcript(result_path: Path) -> dict[str, JsonValue] | None:
     try:
         result = _BCalScenarioResult.model_validate_json(result_path.read_bytes())
     except (OSError, ValidationError) as exc:
         raise AgentError(f"Could not read BCal scenario result {result_path}: {exc}") from exc
-    return None if result.evidence is None else json.dumps(result.evidence)
+    return result.evidence
 
 
-def _read_transcript_after_failure(result_path: Path) -> str | None:
+def _read_transcript_after_failure(result_path: Path) -> dict[str, JsonValue] | None:
     try:
         return _read_transcript(result_path)
     except AgentError:
@@ -214,7 +214,7 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
                 logger.exception("bcal CLI execution failed")
                 raise AgentError(f"bcal CLI execution failed: {e}", transcript=_read_transcript_after_failure(result_path)) from None
 
-            transcript: str | None = _read_transcript(result_path)
+            transcript: dict[str, JsonValue] | None = _read_transcript(result_path)
 
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
         return AgentResult(metrics=AgentMetrics(execution_time=execution_time), experiment=ExperimentConfiguration(), transcript=transcript)

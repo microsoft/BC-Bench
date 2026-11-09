@@ -144,8 +144,7 @@ class TestRunBcalAgent:
         assert scenarios == [{"schemaVersion": "1.0", "steps": [{"id": "benchmark-prompt", "type": "user", "text": "Create a customer extension"}]}]
         assert "--include-evidence" in captured["args"]
         assert not any(arg.startswith("--prompt=") for arg in captured["args"])
-        assert result.transcript is not None
-        assert json.loads(result.transcript) == EVIDENCE
+        assert result.transcript == EVIDENCE
 
     def test_transcript_is_none_without_evidence(self, workspace: Path):
         with (
@@ -178,8 +177,7 @@ class TestRunBcalAgent:
         ):
             _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
-        transcript = exc_info.value.transcript
-        assert (json.loads(transcript) if transcript else None) == (EVIDENCE if writes_result else None)
+        assert exc_info.value.transcript == (EVIDENCE if writes_result else None)
 
 
 class TestRunBcalPrompt:

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Self, cast, override
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, JsonValue, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext
@@ -27,7 +27,7 @@ class BaseEvaluationResult(BaseModel):
     category: EvaluationCategory
     tier: DatasetTier = DatasetTier.GOLD
     agent_version: str | None = None
-    transcript: str | None = None
+    transcript: dict[str, JsonValue] | None = None
 
     timeout: bool = False
 

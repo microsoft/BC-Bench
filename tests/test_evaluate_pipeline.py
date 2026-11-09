@@ -109,21 +109,21 @@ class TestExecuteAgentTimeout:
 class TestRunAgentTranscript:
     def test_copies_transcript_from_result(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
-        harness = StubHarness[BugFixEntry](AgentResult(transcript='{"trace": []}'))
+        harness = StubHarness[BugFixEntry](AgentResult(transcript={"trace": []}))
 
         EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
 
-        assert ctx.transcript == '{"trace": []}'
+        assert ctx.transcript == {"trace": []}
 
     def test_copies_transcript_from_agent_error(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
         harness = MagicMock(spec=StubHarness)
-        harness.run.side_effect = AgentError("agent failed", transcript='{"trace": []}')
+        harness.run.side_effect = AgentError("agent failed", transcript={"trace": []})
 
         with pytest.raises(AgentError, match="agent failed"):
             EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
 
-        assert ctx.transcript == '{"trace": []}'
+        assert ctx.transcript == {"trace": []}
 
 
 class TestExecuteEvaluateError:
