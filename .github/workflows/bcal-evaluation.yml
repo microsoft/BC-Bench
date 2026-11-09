@@ -472,6 +472,7 @@ jobs:
           offered_ids = {
               "variant-offered-tools-complete",
               "variant-activate-skill-offered",
+              "variant-activate-skill-not-offered",
               "variant-offered-tool-count",
               "variant-offered-tool-schema-hash",
           }
@@ -480,7 +481,8 @@ jobs:
               for line in path.read_text(encoding="utf-8").splitlines():
                   row = json.loads(line)
                   assertions = [item for item in row["trace_assertions"] if item["assertion_id"] not in offered_ids]
-                  events = row.get("canonical_trace", {}).get("events", [])
+                  trace = row.get("canonical_trace") or {}
+                  events = trace.get("events", [])
                   assertions.extend(assertion.model_dump(mode="json") for assertion in _offered_tool_assertions(events))
                   row["trace_assertions"] = assertions
                   row["trace_compliance"] = all(item["passed"] for item in assertions)
