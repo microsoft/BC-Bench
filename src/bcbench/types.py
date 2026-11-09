@@ -640,6 +640,11 @@ class EvaluationContext[E: BaseDatasetEntry]:
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
 
+    cohort_name: str | None = None
+    cohort_sha256: str | None = None
+    repetition_index: int | None = None
+    repetition_count: int | None = None
+
     # Agent execution metrics
     metrics: AgentMetrics | None = None
 

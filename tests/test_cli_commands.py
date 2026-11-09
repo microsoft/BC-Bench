@@ -140,10 +140,18 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
             run_id="bcal-run",
             llm_command=" python bridge.py ",
             llm_model=llm_model,
+            cohort_name="55-chat-completion-policy",
+            cohort_sha256="a" * 64,
+            repetition_index=2,
+            repetition_count=3,
         )
 
     assert captured["context"].agent.model == expected_model
     assert captured["context"].agent.version == "18.0.1.2-beta"
+    assert captured["context"].cohort_name == "55-chat-completion-policy"
+    assert captured["context"].cohort_sha256 == "a" * 64
+    assert captured["context"].repetition_index == 2
+    assert captured["context"].repetition_count == 3
 
 
 def _option_names(command: click.Command) -> set[str]:
