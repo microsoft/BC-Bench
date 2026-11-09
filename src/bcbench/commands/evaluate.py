@@ -37,6 +37,7 @@ from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline, NL2ALPipeli
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results.nl2al import NL2ALResult
 from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
 
 logger = logging.getLogger(__name__)
@@ -249,7 +250,7 @@ def evaluate_bcal(
     try:
         pipeline.execute(context, harness)
     except AgentError as exc:
-        result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
+        result = NL2ALResult.create_failure(context, output="", error_message=str(exc))
         pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
         raise typer.Exit(code=1) from exc

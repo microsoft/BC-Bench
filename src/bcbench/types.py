@@ -290,6 +290,7 @@ class EvaluationCategory(StrEnum):
         from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.codereview import CodeReviewResult
+        from bcbench.results.nl2al import NL2ALResult
         from bcbench.results.testgeneration import TestGenerationResult
 
         match self:
@@ -300,7 +301,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewResult
             case EvaluationCategory.NL2AL:
-                return JudgeBasedEvaluationResult
+                return NL2ALResult
             case EvaluationCategory.DATA_QUERY:
                 return ExecutionBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_ADVISOR:

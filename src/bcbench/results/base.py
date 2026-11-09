@@ -101,6 +101,11 @@ class BaseEvaluationResult(BaseModel):
         return {}
 
     @property
+    def scorer_output(self) -> str:
+        """Output sent to the scorer, without changing the persisted artifact."""
+        return self.output
+
+    @property
     def display_row(self) -> dict[str, str]:
         """Extra columns for per-instance detail tables.
 

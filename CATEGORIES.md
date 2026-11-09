@@ -23,6 +23,8 @@ Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py).
 
 Keep dataset entry classes and result classes focused on typed data. Put category-specific behavior in the pipeline.
 
+Result classes can override `scorer_output` and `export_metadata` to project their recorded data for bc-eval without changing the saved `output` or `transcript`. For BCal NL2AL results, this puts validated compilation facts beside the exact git diff in a scorer-only JSON envelope; the full scenario result remains in `context`. Step-level `compileSucceeded` takes precedence. Legacy trace fallback requires complete, ordered evidence with matching execution identity and a correlated outcome for the latest compilation attempt; otherwise compilation stays unknown. Other harnesses and results without transcripts keep their raw output.
+
 ## Checklist
 
 Use the existing implementations as examples: `bug-fix` and `test-generation` for execution-based categories, `code-review` and `nl2al` for judge-based ones.

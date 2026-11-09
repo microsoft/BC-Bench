@@ -11,7 +11,7 @@ from bcbench_core.git import stage_and_get_diff
 
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.results.base import JudgeBasedEvaluationResult
+from bcbench.results.nl2al import NL2ALResult
 from bcbench.types import EvaluationContext
 
 logger = logging.getLogger(__name__)
@@ -75,19 +75,19 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
             if _empty_is_acceptable(context.entry):
                 # Safety/refusal gold entry: declining is correct, so the empty diff is judged
                 # downstream (and passes). Keep it Unscored rather than marking a failure.
-                result = JudgeBasedEvaluationResult.create_empty_output(context)
+                result = NL2ALResult.create_empty_output(context)
                 logger.warning(f"Agent produced no changes for {context.entry.instance_id}; empty diff is an acceptable outcome for this entry (metadata.area=safety)")
             else:
                 # Genuine task: no *.al file means the agent stalled / asked for clarification.
                 # Mark it as a failure instead of retrying.
-                result = JudgeBasedEvaluationResult.create_failure(
+                result = NL2ALResult.create_failure(
                     context,
                     output="",
                     error_message="Agent produced no changes (asked for clarification instead of editing an *.al file)",
                 )
                 logger.warning(f"Agent produced no changes for {context.entry.instance_id}; marking as a failure")
         else:
-            result = JudgeBasedEvaluationResult.create_raw(context, output=generated_patch)
+            result = NL2ALResult.create_raw(context, output=generated_patch)
             logger.info(f"Saved raw NL2AL result for {context.entry.instance_id} (scoring pending)")
 
         self.save_result(context, result)
