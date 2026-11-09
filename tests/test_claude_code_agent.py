@@ -3,8 +3,10 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-from bcbench.agent.claude.agent import run_claude_code
-from bcbench.types import EvaluationCategory
+from bcbench_core.agent.harness import AgentRequest
+
+from bcbench.agent.claude.agent import ClaudeHarness
+from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import create_dataset_entry
 
 
@@ -23,10 +25,10 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
         patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(None, None)),
         patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
         patch(
-            "bcbench.agent.claude.agent.setup_instructions_from_config",
+            "bcbench.agent.claude.agent.setup_instructions",
             return_value=False,
         ),
-        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_skills", return_value=False),
         patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
         patch(
@@ -34,13 +36,8 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=b"{}\n", stderr=b""),
         ) as mock_run,
     ):
-        run_claude_code(
-            entry=create_dataset_entry(),
-            model="claude-test-model",
-            category=EvaluationCategory.BUG_FIX,
-            repo_path=repo_path,
-            output_dir=output_dir,
-        )
+        harness = ClaudeHarness(model="claude-test-model", category=EvaluationCategory.BUG_FIX, agent_config=AgentConfig(), plugin_root=tmp_path / "plugins")
+        harness.run(AgentRequest(task=create_dataset_entry(), work_dir=repo_path, output_dir=output_dir))
 
     assert mock_run.call_args.args[0] == [
         "claude",

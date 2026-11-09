@@ -11,11 +11,9 @@ from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import BuildError, BuildTimeoutExpired
 from bcbench_core.filesystem import remove_tree
 
-from bcbench.config import get_config
 from bcbench.operations.setup_operations import bootstrap_app_json
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 
 # --- data-query category: compile + run an AL query and capture its rows via a wrapped API query ---
@@ -160,7 +158,7 @@ finally {
 )
 
 
-def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: Literal["generated", "gold"], company: str) -> list[dict[str, object]]:
+def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: Literal["generated", "gold"], company: str, timeout: int = 15 * 60) -> list[dict[str, object]]:
     """Compile + publish an AL query (wrapped as an API query) to the container and return its rows.
 
     Builds a throwaway app under ``work_root/.bcbench-query-<suffix>``, compiles + publishes it,
@@ -210,13 +208,13 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
             capture_output=True,
             check=True,
             text=True,
-            timeout=_config.timeout.execute_query,
+            timeout=timeout,
         )
     except subprocess.CalledProcessError as e:
         logger.debug(f"Query compile/publish/fetch failed ({suffix}): {e.stdout}\n{e.stderr}")
         raise BuildError(f"query-{suffix}", (e.stdout or "") + (e.stderr or "")) from None
     except subprocess.TimeoutExpired:
-        raise BuildTimeoutExpired(f"query-{suffix}", _config.timeout.execute_query) from None
+        raise BuildTimeoutExpired(f"query-{suffix}", timeout) from None
 
     rows = json.loads(result_file.read_text(encoding="utf-8-sig") or "[]")
     return cast(list[dict[str, object]], rows if isinstance(rows, list) else [rows])

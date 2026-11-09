@@ -11,7 +11,7 @@ from bcbench.agent.shared.altool_paths import (
 )
 from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AgentHarness, AgentRuntimeConfig, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, EvaluationCategory, HarnessName
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ def _build_lsp_args(project_paths: list[str], package_cache_paths: list[str], as
     return args
 
 
-def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict[str, object]:
+def _lsp_config_for(harness: HarnessName, args: list[str]) -> dict[str, object]:
     """Build the agent-specific `.lsp.json` content.
 
     Both agents launch the same `al launchlspserver` process — only the surrounding LSP-routing schema differs:
@@ -68,9 +68,9 @@ def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict[str, object]
     """
     server = {"command": "al", "args": args}
     match harness:
-        case AgentHarness.COPILOT:
+        case HarnessName.COPILOT:
             return {"lspServers": {"altool": {**server, "fileExtensions": {".al": "al"}}}}
-        case AgentHarness.CLAUDE:
+        case HarnessName.CLAUDE:
             return {"altool": {**server, "extensionToLanguage": {".al": "al"}}}
         case _:
             raise AgentError(f"Unsupported agent type for AL LSP config: {harness}")
@@ -80,7 +80,8 @@ def build_al_lsp_plugin(
     entry: BaseDatasetEntry,
     category: EvaluationCategory,
     repo_path: Path,
-    harness: AgentHarness,
+    harness: HarnessName,
+    plugin_root: Path,
     runtime: AgentRuntimeConfig | None,
 ) -> Path | None:
     """Build a per-task AL-LSP plugin folder, return its path or None.
@@ -91,7 +92,7 @@ def build_al_lsp_plugin(
     ``.lsp.json`` differs (see :func:`_lsp_config_for`).
     """
     if runtime is None or not runtime.al_lsp:
-        remove_agent_plugin(_AL_LSP_PLUGIN_FOLDER)
+        remove_agent_plugin(plugin_root, _AL_LSP_PLUGIN_FOLDER)
         return None
 
     container: ContainerConfig = runtime.container
@@ -100,6 +101,6 @@ def build_al_lsp_plugin(
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
     lsp_config = _lsp_config_for(harness, args)
 
-    plugin_dir = write_agent_plugin(_AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
+    plugin_dir = write_agent_plugin(plugin_root, _AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
     logger.debug(f"AL LSP configuration for {harness.value}: {lsp_config}")
     return plugin_dir

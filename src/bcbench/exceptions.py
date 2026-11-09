@@ -1,14 +1,5 @@
 """Custom exceptions for BC-Bench operations."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from bcbench_core.agent.metrics import AgentMetrics
-
-    from bcbench.types import ExperimentConfiguration
-
 __all__ = [
     "BCBenchError",
     "CollectionError",
@@ -84,15 +75,6 @@ class NoTestsExtractedError(BCBenchError):
 
     def __init__(self) -> None:
         message = "No tests extracted from the generated patch."
-        super().__init__(message)
-
-
-class AgentTimeoutError(BCBenchError):
-    """Agent execution timeout errors."""
-
-    def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None) -> None:
-        self.metrics = metrics
-        self.config = config
         super().__init__(message)
 
 

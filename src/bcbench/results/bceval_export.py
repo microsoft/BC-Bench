@@ -7,10 +7,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
+
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExpectedOutput
 
 logger = logging.getLogger(__name__)
 
@@ -75,11 +77,6 @@ def write_bceval_results(
                 "run_id": run_id,
                 "project": result.project,
                 "error_message": result.error_message,
-                "bcal_failure_code": result.bcal_failure.code if result.bcal_failure else None,
-                "bcal_failure_message": result.bcal_failure.message if result.bcal_failure else None,
-                "bcal_failure_step_id": result.bcal_failure.step_id if result.bcal_failure else None,
-                "bcal_failure_retryable": result.bcal_failure.retryable if result.bcal_failure else None,
-                "bcal_terminal_reason": result.bcal_failure.message if result.bcal_failure and result.bcal_failure.code == "incomplete_execution" else None,
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
                 **_experiment_metadata(result.experiment, git_ref, benchmark_version),
             }
@@ -89,7 +86,7 @@ def write_bceval_results(
                 "input": task_input,
                 "expected": expected,
                 "output": result.output,
-                "context": result.evidence if result.evidence is not None else "",
+                "context": result.transcript if result.transcript is not None else "",
                 "metadata": metadata,
                 "tags": [],
             }

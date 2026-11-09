@@ -9,10 +9,11 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, override
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from pydantic import BaseModel, Field
 
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory
 
 if TYPE_CHECKING:
     from rich.console import RenderableType

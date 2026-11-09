@@ -5,12 +5,16 @@ import logging
 from pathlib import Path
 from typing import Any, Self, cast, override
 
-from pydantic import BaseModel, model_validator
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from pydantic import BaseModel, JsonValue, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AnyAgentMetrics, BCalExecutionIdentity, BCalScenarioFailure, DatasetTier, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
+
+# Per-instance result files are JSON Lines
+RESULT_FILE_SUFFIX = ".jsonl"
 
 
 class BaseEvaluationResult(BaseModel):
@@ -23,13 +27,11 @@ class BaseEvaluationResult(BaseModel):
     category: EvaluationCategory
     tier: DatasetTier = DatasetTier.GOLD
     agent_version: str | None = None
+    transcript: dict[str, JsonValue] | None = None
     cohort_name: str | None = None
     cohort_sha256: str | None = None
     repetition_index: int | None = None
     repetition_count: int | None = None
-    execution_identity: BCalExecutionIdentity | None = None
-    evidence: dict[str, Any] | None = None
-    bcal_failure: BCalScenarioFailure | None = None
 
     timeout: bool = False
 
@@ -41,31 +43,29 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
-        metrics_contract = context.agent_name.metrics_contract
+        metrics_contract = context.agent.harness.metrics_contract
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
         elif type(context.metrics) is not metrics_contract.metrics_type:
-            raise TypeError(f"{context.agent_name} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
+            raise TypeError(f"{context.agent.harness} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
         elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(context.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         return {
             "instance_id": context.entry.instance_id,
             "project": context.entry.extract_project_name(),
-            "model": context.model.replace(".", "-"),
+            "model": (context.agent.model or "").replace(".", "-"),
             "category": context.category,
             "tier": context.tier,
-            "agent_name": context.agent_name,
-            "agent_version": context.agent_version,
+            "agent_name": context.agent.harness,
+            "agent_version": context.agent.version,
             "cohort_name": context.cohort_name,
             "cohort_sha256": context.cohort_sha256,
             "repetition_index": context.repetition_index,
             "repetition_count": context.repetition_count,
-            "execution_identity": context.execution_identity,
-            "evidence": context.evidence,
-            "bcal_failure": context.bcal_failure,
             "metrics": context.metrics,
             "experiment": context.experiment,
+            "transcript": context.transcript,
         }
 
     @model_validator(mode="after")

@@ -10,8 +10,7 @@ from bcbench_core.filesystem import remove_tree
 from bcbench_core.git import stage_and_get_diff
 
 from bcbench.dataset import NL2ALEntry
-from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.github_actions import github_log_group
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
@@ -68,14 +67,8 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: AgentRunner[NL2ALEntry]) -> None:
-        # Single attempt — retries are disabled. An empty diff (the agent asked for clarification
-        # instead of editing) is scored as a failure in evaluate(), not re-run.
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
-
-    @override
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
+        # Single attempt, no retries: an empty diff (the agent asked for clarification instead of editing) is scored here, not re-run.
         try:
             generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
         except EmptyDiffError:
