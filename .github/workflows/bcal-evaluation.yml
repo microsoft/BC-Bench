@@ -109,6 +109,7 @@ jobs:
               "bcal-report-skill-publication-recovery-v3-20261108",
               f"{expected_ref}-publication-recovery-v1",
               f"{expected_ref}-publication-recovery-v2",
+              f"{expected_ref}-publication-recovery-v3",
           }
           if publication_source and os.environ["GITHUB_REF_NAME"] not in recovery_refs:
               raise SystemExit("Publication recovery must run from its immutable recovery ref.")
@@ -358,7 +359,7 @@ jobs:
         env:
           EXPECTED_ENTRIES: ${{ needs.validate-selection.outputs.entries }}
         run: |
-          python - <<'PY'
+          uv run python - <<'PY'
           import json
           import os
           from pathlib import Path
