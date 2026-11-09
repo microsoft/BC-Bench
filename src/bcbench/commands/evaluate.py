@@ -341,7 +341,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         logger.info("Mock pipeline: Skipping setup")
 
     @override
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarness[BaseDatasetEntry, HarnessName]) -> None:
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarness[BaseDatasetEntry, HarnessName]) -> AgentResult:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 
@@ -354,7 +354,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             None,
             AgentMetrics(prompt_tokens=500, completion_tokens=100, tool_usage={"bash": 3, "view": 2, "edit": 1, "search": 5}),
         ]
-        context.metrics = random.choice(metrics_scenarios)
+        metrics: AgentMetrics | None = random.choice(metrics_scenarios)
 
         # Randomize experiment configuration to test different scenarios
         experiment_config_scenarios: list[ExperimentConfiguration | None] = [
@@ -366,10 +366,11 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             ExperimentConfiguration(custom_agent="custom-agent-v1"),
             ExperimentConfiguration(plugins=["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99"]),
         ]
-        context.experiment = random.choice(experiment_config_scenarios)
+        experiment: ExperimentConfiguration | None = random.choice(experiment_config_scenarios)
 
-        logger.info(f"Using agent metrics: {context.metrics}")
-        logger.info(f"Using experiment configuration: {context.experiment}")
+        logger.info(f"Using agent metrics: {metrics}")
+        logger.info(f"Using experiment configuration: {experiment}")
+        return AgentResult(metrics=metrics, experiment=experiment)
 
     @override
     def evaluate(self, context: EvaluationContext[BaseDatasetEntry]) -> None:

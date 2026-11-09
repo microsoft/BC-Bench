@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.results.bugfix import BugFixResult
@@ -15,7 +16,7 @@ def _missing_metric_warnings(caplog) -> list[str]:
 class TestExpectedMetricsWarning:
     def test_no_warning_when_agent_does_not_collect_metric(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=HarnessName.BCAL)
-        context.metrics = AgentMetrics(execution_time=12.0)
+        context.agent_result = AgentResult(metrics=AgentMetrics(execution_time=12.0))
 
         with caplog.at_level(logging.WARNING):
             BugFixResult.create_success(context, "patch")
@@ -24,7 +25,7 @@ class TestExpectedMetricsWarning:
 
     def test_warns_when_bcal_execution_time_is_missing(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=HarnessName.BCAL)
-        context.metrics = AgentMetrics(llm_duration=5.0)
+        context.agent_result = AgentResult(metrics=AgentMetrics(llm_duration=5.0))
 
         with caplog.at_level(logging.WARNING):
             BugFixResult.create_success(context, "patch")
@@ -33,7 +34,7 @@ class TestExpectedMetricsWarning:
 
     def test_warns_when_expected_metric_is_missing(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=HarnessName.COPILOT)
-        context.metrics = AgentMetrics(execution_time=12.0, llm_duration=5.0, ai_credits=1.25, tool_usage={"bash": 1})
+        context.agent_result = AgentResult(metrics=AgentMetrics(execution_time=12.0, llm_duration=5.0, ai_credits=1.25, tool_usage={"bash": 1}))
 
         with caplog.at_level(logging.WARNING):
             BugFixResult.create_success(context, "patch")
@@ -42,12 +43,14 @@ class TestExpectedMetricsWarning:
 
     def test_optional_pr_review_diagnostics_do_not_warn(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=HarnessName.PR_REVIEW)
-        context.metrics = PRReviewMetrics(
-            execution_time=12.0,
-            prompt_tokens=100,
-            completion_tokens=10,
-            total_tokens=110,
-            ai_credits=0.25,
+        context.agent_result = AgentResult(
+            metrics=PRReviewMetrics(
+                execution_time=12.0,
+                prompt_tokens=100,
+                completion_tokens=10,
+                total_tokens=110,
+                ai_credits=0.25,
+            )
         )
 
         with caplog.at_level(logging.WARNING):
@@ -57,7 +60,7 @@ class TestExpectedMetricsWarning:
 
     def test_rejects_metrics_type_not_registered_for_harness(self, tmp_path):
         context = create_evaluation_context(tmp_path, agent_name=HarnessName.PR_REVIEW)
-        context.metrics = AgentMetrics(execution_time=12.0)
+        context.agent_result = AgentResult(metrics=AgentMetrics(execution_time=12.0))
 
         with pytest.raises(TypeError, match="BC PR Review must use PRReviewMetrics"):
             BugFixResult.create_success(context, "patch")

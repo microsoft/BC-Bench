@@ -238,7 +238,7 @@ def create_codereview_result(
         agent=AgentIdentity[HarnessName](harness=agent_name, version="1.0.0", model=model),
         category=EvaluationCategory.CODE_REVIEW,
     )
-    context.metrics = metrics
+    context.agent_result = AgentResult(metrics=metrics)
 
     generated_comments = parse_review_output(output)
     if generated_comments is None:

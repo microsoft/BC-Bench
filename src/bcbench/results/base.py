@@ -40,11 +40,11 @@ class BaseEvaluationResult(BaseModel):
     @classmethod
     def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
         metrics_contract = context.agent.harness.metrics_contract
-        if not context.metrics:
+        if not context.agent_result.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
-        elif type(context.metrics) is not metrics_contract.metrics_type:
-            raise TypeError(f"{context.agent.harness} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
-        elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(context.metrics, name) is None):
+        elif type(context.agent_result.metrics) is not metrics_contract.metrics_type:
+            raise TypeError(f"{context.agent.harness} must use {metrics_contract.metrics_type.__name__}, got {type(context.agent_result.metrics).__name__}")
+        elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(context.agent_result.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         return {
@@ -55,9 +55,9 @@ class BaseEvaluationResult(BaseModel):
             "tier": context.tier,
             "agent_name": context.agent.harness,
             "agent_version": context.agent.version,
-            "metrics": context.metrics,
-            "experiment": context.experiment,
-            "transcript": context.transcript,
+            "metrics": context.agent_result.metrics,
+            "experiment": context.agent_result.experiment,
+            "transcript": context.agent_result.transcript,
         }
 
     @classmethod

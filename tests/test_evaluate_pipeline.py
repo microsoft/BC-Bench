@@ -15,6 +15,7 @@ from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results.bugfix import BugFixResult
 from bcbench.types import AgentConfig, EvaluationCategory, EvaluationContext, HarnessName
 from tests.conftest import StubHarness, create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
@@ -36,12 +37,11 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
         self.setup_called = True
 
     @override
-    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> None:
+    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> AgentResult:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
-        result = harness.run(context.agent_request())
-        context.metrics, context.experiment = result.metrics, result.experiment
+        return super().run_agent(context, harness)
 
     @override
     def evaluate(self, context: EvaluationContext[E]) -> None:
@@ -73,13 +73,38 @@ class TestExecuteHappyPath:
         assert pipeline.run_agent_called
         assert pipeline.evaluate_called
 
+    def test_retains_complete_agent_result_before_evaluation(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        agent_result = AgentResult(
+            response="agent answer",
+            metrics=AgentMetrics(execution_time=1.0),
+            experiment=ExperimentConfiguration(custom_instructions=True),
+            transcript={"trace": []},
+        )
+        pipeline = _StubPipeline[BugFixEntry]()
+
+        def check_agent_result(context):
+            assert context.agent_result is agent_result
+
+        with patch.object(pipeline, "evaluate") as evaluate:
+            evaluate.side_effect = check_agent_result
+            pipeline.execute(ctx, StubHarness(agent_result))
+
+        assert ctx.agent_result is agent_result
+        persisted = BugFixResult.create_success(ctx, "patch")
+        pipeline.save_result(ctx, persisted)
+        restored = _read_only_result(ctx)
+        assert restored.metrics == agent_result.metrics
+        assert restored.experiment == agent_result.experiment
+        assert restored.transcript == agent_result.transcript
+
 
 class TestExecuteAgentTimeout:
     def test_persists_timeout_result_and_skips_evaluate(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
         timeout_metrics = AgentMetrics(execution_time=600.0)
         timeout_config = ExperimentConfiguration(custom_instructions=True)
-        pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config))
+        pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config, transcript={"trace": []}))
 
         pipeline.execute(ctx, _noop_harness())
 
@@ -89,6 +114,8 @@ class TestExecuteAgentTimeout:
         assert result.error_message == "Agent timed out"
         assert result.metrics == timeout_metrics
         assert result.experiment == timeout_config
+        assert result.transcript == {"trace": []}
+        assert ctx.agent_result == AgentResult(metrics=timeout_metrics, experiment=timeout_config, transcript={"trace": []})
 
     def test_persists_category_specific_timeout_result(self, tmp_path):
         entry = create_nl2al_entry()
@@ -107,13 +134,15 @@ class TestExecuteAgentTimeout:
 
 
 class TestRunAgentTranscript:
-    def test_copies_transcript_from_result(self, tmp_path):
+    def test_returns_result_without_mutating_context(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
+        original_result = ctx.agent_result
         harness = StubHarness[BugFixEntry](AgentResult(transcript={"trace": []}))
 
-        EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
+        result = EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
 
-        assert ctx.transcript == {"trace": []}
+        assert result is harness.result
+        assert ctx.agent_result is original_result
 
     def test_copies_transcript_from_agent_error(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
@@ -121,9 +150,9 @@ class TestRunAgentTranscript:
         harness.run.side_effect = AgentError("agent failed", transcript={"trace": []})
 
         with pytest.raises(AgentError, match="agent failed"):
-            EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
+            _StubPipeline[BugFixEntry]().execute(ctx, harness)
 
-        assert ctx.transcript == {"trace": []}
+        assert ctx.agent_result.transcript == {"trace": []}
 
 
 class TestExecuteEvaluateError:
