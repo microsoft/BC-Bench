@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,6 +15,23 @@ from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.dataset import NL2ALEntry
 from tests.conftest import create_nl2al_entry
+
+
+def _arg_path(args: list[str], flag: str) -> Path:
+    return Path(next(arg.removeprefix(f"{flag}=") for arg in args if arg.startswith(f"{flag}=")))
+
+
+RESULT: dict[str, object] = {
+    "schemaVersion": "1.0",
+    "executionIdentity": {"productVersion": "1.2.3"},
+    "completed": True,
+    "steps": [{"id": "benchmark-prompt", "type": "user", "status": "succeeded", "compileSucceeded": True}],
+    "evidence": {"contractVersion": "1.0", "trace": {"events": [{"type": "tool", "name": "compile"}]}},
+}
+
+
+def _write_result(args: list[str], result: dict[str, object] = RESULT) -> None:
+    _arg_path(args, "--result").write_text(json.dumps(result), encoding="utf-8")
 
 
 @pytest.fixture
@@ -61,6 +79,7 @@ class TestRunBcalAgent:
 
         def fake_run(args: list[str], **_: object) -> MagicMock:
             captured["args"] = args
+            _write_result(args)
             mock = MagicMock()
             mock.returncode = 0
             return mock
@@ -94,6 +113,7 @@ class TestRunBcalAgent:
 
         def fake_run(args: list[str], **_: object) -> MagicMock:
             captured["args"] = args
+            _write_result(args)
             mock = MagicMock()
             mock.returncode = 0
             return mock
@@ -107,6 +127,77 @@ class TestRunBcalAgent:
         assert "--llm-backend=external-command" in captured["args"]
         assert "--llm-command=python bridge.py" in captured["args"]
         assert not any(a.startswith("--deployment=") for a in captured["args"])
+
+    def test_runs_one_step_scenario_and_returns_result_as_transcript(self, workspace: Path):
+        entry = create_nl2al_entry(nl_prompt="Create a customer extension")
+        captured: dict[str, list[str]] = {}
+        scenarios: list[object] = []
+
+        def fake_run(args: list[str], **_: object) -> MagicMock:
+            captured["args"] = args
+            scenarios.append(json.loads(_arg_path(args, "--scenario").read_text(encoding="utf-8")))
+            _write_result(args)
+            return MagicMock(returncode=0)
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+        ):
+            result = _run_bcal(entry, workspace, BCalBackendConfig(command="python bridge.py"))
+
+        assert scenarios == [{"schemaVersion": "1.0", "steps": [{"id": "benchmark-prompt", "type": "user", "text": "Create a customer extension"}]}]
+        assert "--include-evidence" in captured["args"]
+        assert not any(arg.startswith("--prompt=") for arg in captured["args"])
+        assert result.transcript == RESULT
+
+    def test_unsupported_result_schema_fails(self, workspace: Path):
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=lambda args, **_: _write_result(args, {**RESULT, "schemaVersion": "2.0"})),
+            pytest.raises(AgentError, match="Unsupported BCal scenario result"),
+        ):
+            _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
+
+    def test_accepts_result_schema_1_1_from_older_builds(self, workspace: Path):
+        result_1_1 = {**RESULT, "schemaVersion": "1.1"}
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=lambda args, **_: _write_result(args, result_1_1)),
+        ):
+            result = _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
+
+        assert result.transcript == result_1_1
+
+    def test_missing_result_after_success_fails(self, workspace: Path):
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", return_value=MagicMock(returncode=0)),
+            pytest.raises(AgentError, match="Could not read BCal scenario result"),
+        ):
+            _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
+
+    @pytest.mark.parametrize("writes_result", [True, False])
+    @pytest.mark.parametrize(
+        ("failure", "expected_error"),
+        [
+            (subprocess.CalledProcessError(returncode=1, cmd=["bcal"]), AgentError),
+            (subprocess.TimeoutExpired(cmd=["bcal"], timeout=1), AgentTimeoutError),
+        ],
+    )
+    def test_failure_keeps_transcript_when_available(self, workspace: Path, writes_result: bool, failure: Exception, expected_error: type[AgentError]):
+        def fake_run(args: list[str], **_: object) -> None:
+            if writes_result:
+                _write_result(args)
+            raise failure
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+            pytest.raises(expected_error) as exc_info,
+        ):
+            _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
+
+        assert exc_info.value.transcript == (RESULT if writes_result else None)
 
 
 class TestRunBcalPrompt:

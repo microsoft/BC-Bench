@@ -168,6 +168,25 @@ class TestWriteBcevalResults:
         assert "metadata" in data
         assert "tags" in data
 
+    @pytest.mark.parametrize("transcript", [{"trace": {"events": []}}, None])
+    def test_writes_transcript_to_context(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir, transcript):
+        sample_bugfix_result_with_metrics.transcript = transcript
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[sample_bugfix_result_with_metrics],
+                out_dir=tmp_path,
+                run_id="transcript",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        row = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))
+        assert row["context"] == (transcript if transcript is not None else "")
+
     def test_skips_results_without_matching_dataset_entry(self, tmp_path, sample_dataset_file):
         output_dir = tmp_path / "output"
         output_dir.mkdir()
