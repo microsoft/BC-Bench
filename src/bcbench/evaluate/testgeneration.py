@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.bc import build_and_publish_projects, run_test_suite
 from bcbench_core.dataset import TestEntry
 from bcbench_core.exceptions import BuildError, TestExecutionError
@@ -64,7 +65,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         set_runtime_version(context.repo_path, context.entry.project_paths)
 
     @override
-    def evaluate(self, context: EvaluationContext[TestGenEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[TestGenEntry], agent_result: AgentResult) -> None:
         container = context.get_container()
         test_projects, app_projects = categorize_projects(context.entry.project_paths)
 
@@ -104,23 +105,23 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             )
             run_test_suite(generated_tests, "Pass", container)
 
-            result = TestGenerationResult.create_success(context, generated_patch)
+            result = TestGenerationResult.create_success(context, agent_result, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
 
         except BuildError as e:
-            result = TestGenerationResult.create_build_failure(context, generated_patch, str(e))
+            result = TestGenerationResult.create_build_failure(context, agent_result, generated_patch, str(e))
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
         except TestExecutionError as e:
             if e.expectation == "Fail":
-                result = TestGenerationResult.create_pre_patch_failure(context, generated_patch, "Generated tests Passed pre-patch\n" + str(e))
+                result = TestGenerationResult.create_pre_patch_failure(context, agent_result, generated_patch, "Generated tests Passed pre-patch\n" + str(e))
             else:
-                result = TestGenerationResult.create_post_patch_failure(context, generated_patch, "Generated tests Failed post-patch\n" + str(e))
+                result = TestGenerationResult.create_post_patch_failure(context, agent_result, generated_patch, "Generated tests Failed post-patch\n" + str(e))
 
             logger.exception(f"Tests failed during evaluation of {context.entry.instance_id}")
 
         except NoTestsExtractedError:
-            result = TestGenerationResult.create_no_tests_extracted(context, generated_patch, "No tests extracted from generated patch")
+            result = TestGenerationResult.create_no_tests_extracted(context, agent_result, generated_patch, "No tests extracted from generated patch")
             raise
 
         finally:

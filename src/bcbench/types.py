@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 import yaml
 from bcbench_core.agent.customization import CustomAgentsConfig, ToggleConfig
-from bcbench_core.agent.harness import AgentIdentity, AgentRequest, AgentResult
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
@@ -638,8 +638,6 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
-
-    agent_result: AgentResult = field(default_factory=AgentResult)
 
     def get_container(self) -> ContainerConfig:
         if self.container is None:

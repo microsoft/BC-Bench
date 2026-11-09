@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Self, cast, override
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
 from pydantic import BaseModel, JsonValue, model_validator
 
 from bcbench.dataset import BaseDatasetEntry
@@ -38,13 +39,13 @@ class BaseEvaluationResult(BaseModel):
     experiment: ExperimentConfiguration | None = None
 
     @classmethod
-    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
+    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> dict[str, Any]:
         metrics_contract = context.agent.harness.metrics_contract
-        if not context.agent_result.metrics:
+        if not agent_result.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
-        elif type(context.agent_result.metrics) is not metrics_contract.metrics_type:
-            raise TypeError(f"{context.agent.harness} must use {metrics_contract.metrics_type.__name__}, got {type(context.agent_result.metrics).__name__}")
-        elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(context.agent_result.metrics, name) is None):
+        elif type(agent_result.metrics) is not metrics_contract.metrics_type:
+            raise TypeError(f"{context.agent.harness} must use {metrics_contract.metrics_type.__name__}, got {type(agent_result.metrics).__name__}")
+        elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(agent_result.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         return {
@@ -55,14 +56,14 @@ class BaseEvaluationResult(BaseModel):
             "tier": context.tier,
             "agent_name": context.agent.harness,
             "agent_version": context.agent.version,
-            "metrics": context.agent_result.metrics,
-            "experiment": context.agent_result.experiment,
-            "transcript": context.agent_result.transcript,
+            "metrics": agent_result.metrics,
+            "experiment": agent_result.experiment,
+            "transcript": agent_result.transcript,
         }
 
     @classmethod
-    def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:
-        return cls(**cls._base_fields(context), timeout=True, error_message="Agent timed out")
+    def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> Self:
+        return cls(**cls._base_fields(context, agent_result), timeout=True, error_message="Agent timed out")
 
     def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file
@@ -122,17 +123,17 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     build: bool = False
 
     @classmethod
-    def create_success[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str) -> Self:
-        return cls(**cls._base_fields(context), output=output, resolved=True, build=True)
+    def create_success[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output, resolved=True, build=True)
 
     @classmethod
-    def create_build_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str, error_message: str) -> Self:
-        return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)
+    def create_build_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, error_message: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output, error_message=error_message, resolved=False, build=False)
 
     @classmethod
-    def create_result[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str, *, build: bool, resolved: bool, error_message: str | None = None) -> Self:
+    def create_result[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, *, build: bool, resolved: bool, error_message: str | None = None) -> Self:
         """General factory for execution outcomes, e.g. compiled+ran but produced the wrong result (build=True, resolved=False)."""
-        return cls(**cls._base_fields(context), output=output, build=build, resolved=resolved, error_message=error_message)
+        return cls(**cls._base_fields(context, agent_result), output=output, build=build, resolved=resolved, error_message=error_message)
 
     @property
     @override
@@ -170,8 +171,8 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
 
     @classmethod
     @override
-    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> dict[str, Any]:
-        return {**super()._base_fields(context), "judge_model": context.category.judge_model}
+    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> dict[str, Any]:
+        return {**super()._base_fields(context, agent_result), "judge_model": context.category.judge_model}
 
     @property
     @override
@@ -187,16 +188,16 @@ class JudgeBasedEvaluationResult(JudgeScoredEvaluationResult):
     """
 
     @classmethod
-    def create_raw[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str) -> Self:
-        return cls(**cls._base_fields(context), output=output)
+    def create_raw[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output)
 
     @classmethod
-    def create_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], output: str, error_message: str) -> Self:
-        return cls(**cls._base_fields(context), output=output, error_message=error_message)
+    def create_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, error_message: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output, error_message=error_message)
 
     @classmethod
-    def create_empty_output[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:
-        return cls(**cls._base_fields(context), output="")
+    def create_empty_output[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output="")
 
     @property
     @override

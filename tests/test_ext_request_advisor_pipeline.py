@@ -1,3 +1,5 @@
+from bcbench_core.agent.harness import AgentResult
+
 from bcbench.evaluate.ext_request_advisor import ADVISOR_RESULT_FILE, ExtRequestAdvisorPipeline
 from bcbench.results.base import RESULT_FILE_SUFFIX, JudgeBasedEvaluationResult
 from bcbench.types import EvaluationCategory
@@ -20,7 +22,7 @@ def _read_result(context) -> JudgeBasedEvaluationResult:
 def test_empty_advisor_output_persists_failure(tmp_path):
     context = _advisor_context(tmp_path)
 
-    ExtRequestAdvisorPipeline().evaluate(context)
+    ExtRequestAdvisorPipeline().evaluate(context, AgentResult())
 
     assert _read_result(context).output == ""
 
@@ -31,7 +33,7 @@ def test_advisor_json_persists_as_raw_output(tmp_path):
     context.repo_path.mkdir()
     (context.repo_path / ADVISOR_RESULT_FILE).write_text(output, encoding="utf-8")
 
-    ExtRequestAdvisorPipeline().evaluate(context)
+    ExtRequestAdvisorPipeline().evaluate(context, AgentResult())
 
     assert _read_result(context).output == output
 

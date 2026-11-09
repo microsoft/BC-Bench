@@ -50,7 +50,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             return harness.run(context.agent_request())
 
     @abstractmethod
-    def evaluate(self, context: EvaluationContext[E]) -> None:
+    def evaluate(self, context: EvaluationContext[E], agent_result: AgentResult) -> None:
         """Evaluate results: e.g. apply patches, build, run tests.
 
         Implementation should raise category-specific exceptions on failure.
@@ -80,21 +80,22 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         self.setup(context)
 
         try:
-            context.agent_result = self.run_agent(context, harness)
+            agent_result = self.run_agent(context, harness)
         except AgentTimeoutError as e:
-            context.agent_result = AgentResult(metrics=e.metrics, experiment=e.config, transcript=e.transcript)
-            result = context.category.result_class.create_agent_timeout_failure(context)
+            agent_result = AgentResult(metrics=e.metrics, experiment=e.config, transcript=e.transcript)
+            logger.info(f"Agent metrics: {agent_result.metrics}")
+            logger.info(f"Experiment configuration: {agent_result.experiment}")
+            result = context.category.result_class.create_agent_timeout_failure(context, agent_result)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
             return
-        except AgentError as e:
-            context.agent_result = AgentResult(transcript=e.transcript)
+        except AgentError:
+            logger.exception("Agent execution failed")
             raise
-        finally:
-            logger.info(f"Agent metrics: {context.agent_result.metrics}")
-            logger.info(f"Experiment configuration: {context.agent_result.experiment}")
 
-        self.evaluate(context)
+        logger.info(f"Agent metrics: {agent_result.metrics}")
+        logger.info(f"Experiment configuration: {agent_result.experiment}")
+        self.evaluate(context, agent_result)
 
     def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.

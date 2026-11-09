@@ -15,6 +15,7 @@ from io import StringIO
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import ValidationError
 from rich.console import Console
@@ -181,7 +182,7 @@ class TestFromJsonDispatch:
 class TestJudgeScoredValidation:
     def test_restores_missing_judge_model_for_timeout(self, tmp_path):
         ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
-        payload = BaseEvaluationResult.create_agent_timeout_failure(ctx).model_dump(mode="json")
+        payload = BaseEvaluationResult.create_agent_timeout_failure(ctx, AgentResult()).model_dump(mode="json")
 
         loaded = JudgeBasedEvaluationResult.model_validate(payload)
 
@@ -190,7 +191,7 @@ class TestJudgeScoredValidation:
 
     def test_rejects_missing_judge_model_for_non_timeout(self, tmp_path):
         ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
-        payload = JudgeBasedEvaluationResult.create_raw(ctx, "output").model_dump(mode="json")
+        payload = JudgeBasedEvaluationResult.create_raw(ctx, AgentResult(), "output").model_dump(mode="json")
         del payload["judge_model"]
 
         with pytest.raises(ValidationError, match="judge_model"):
@@ -205,7 +206,7 @@ class TestJudgeScoredValidation:
 class TestCreateAgentTimeout:
     def test_timeout_sets_fields(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
-        result = BugFixResult.create_agent_timeout_failure(ctx)
+        result = BugFixResult.create_agent_timeout_failure(ctx, AgentResult())
         assert result.timeout is True
         assert result.error_message == "Agent timed out"
         assert result.status_label == "Timeout"

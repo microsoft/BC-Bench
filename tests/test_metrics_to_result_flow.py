@@ -42,14 +42,14 @@ class TestCopilotMetricsToResultFlow:
         return create_evaluation_context(tmp_path, agent_name=HarnessName.COPILOT, model="gpt-4o")
 
     def test_full_metrics_flow_to_success_result(self, sample_context):
-        sample_context.agent_result = AgentResult(
+        agent_result = AgentResult(
             metrics=_parse_full_metrics(
                 execution_time=225.2,
                 llm_duration=34.5,
             )
         )
 
-        result = BugFixResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, agent_result, "test_patch")
 
         assert result.instance_id == sample_context.entry.instance_id
         assert result.resolved is True
@@ -75,8 +75,8 @@ class TestCopilotMetricsToResultFlow:
             ]
         )
 
-        sample_context.agent_result = AgentResult(metrics=metrics)
-        result = BugFixResult.create_success(sample_context, "test_patch")
+        agent_result = AgentResult(metrics=metrics)
+        result = BugFixResult.create_success(sample_context, agent_result, "test_patch")
 
         assert result.metrics is not None
         assert result.metrics.execution_time == 90.0
@@ -86,21 +86,21 @@ class TestCopilotMetricsToResultFlow:
 
     def test_metrics_flow_with_no_metrics(self, sample_context):
         metrics, _ = parse_output([json.dumps({"type": "assistant.idle", "data": {}})])
-        sample_context.agent_result = AgentResult(metrics=metrics)
+        agent_result = AgentResult(metrics=metrics)
 
-        result = BugFixResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, agent_result, "test_patch")
 
         assert result.metrics is None
 
     def test_metrics_flow_to_test_failure_result(self, sample_context):
-        sample_context.agent_result = AgentResult(
+        agent_result = AgentResult(
             metrics=_parse_full_metrics(
                 execution_time=135.5,
                 llm_duration=45.0,
             )
         )
 
-        result = BugFixResult.create_test_failure(sample_context, "test_patch")
+        result = BugFixResult.create_test_failure(sample_context, agent_result, "test_patch")
 
         assert result.resolved is False
         assert result.build is True
@@ -111,14 +111,14 @@ class TestCopilotMetricsToResultFlow:
         assert result.metrics.completion_tokens is None
 
     def test_metrics_flow_to_build_failure_result(self, sample_context):
-        sample_context.agent_result = AgentResult(
+        agent_result = AgentResult(
             metrics=_parse_full_metrics(
                 execution_time=310.3,
                 llm_duration=80.0,
             )
         )
 
-        result = BugFixResult.create_build_failure(sample_context, "test_patch", "Build failed: src/app")
+        result = BugFixResult.create_build_failure(sample_context, agent_result, "test_patch", "Build failed: src/app")
 
         assert result.resolved is False
         assert result.build is False
@@ -128,15 +128,16 @@ class TestCopilotMetricsToResultFlow:
         assert result.metrics.prompt_tokens is None
         assert result.metrics.completion_tokens is None
 
-    def test_context_without_agent_metrics_set(self, sample_context):
-        result = BugFixResult.create_success(sample_context, "test_patch")
+    def test_result_without_agent_metrics(self, sample_context):
+        agent_result = AgentResult()
+        result = BugFixResult.create_success(sample_context, agent_result, "test_patch")
 
         assert result.metrics is None
 
     def test_context_with_empty_metrics_dict(self, sample_context):
-        sample_context.agent_result = AgentResult(metrics=AgentMetrics())
+        agent_result = AgentResult(metrics=AgentMetrics())
 
-        result = BugFixResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, agent_result, "test_patch")
 
         assert result.metrics is not None
         assert result.metrics.execution_time is None
@@ -144,7 +145,7 @@ class TestCopilotMetricsToResultFlow:
         assert result.metrics.completion_tokens is None
 
     def test_metrics_with_non_integer_tokens_are_converted(self, sample_context):
-        sample_context.agent_result = AgentResult(
+        agent_result = AgentResult(
             metrics=AgentMetrics(
                 execution_time=150.5,
                 prompt_tokens=12500,
@@ -152,7 +153,7 @@ class TestCopilotMetricsToResultFlow:
             )
         )
 
-        result = BugFixResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, agent_result, "test_patch")
 
         assert result.metrics is not None
         assert isinstance(result.metrics.prompt_tokens, int)
@@ -161,14 +162,14 @@ class TestCopilotMetricsToResultFlow:
         assert result.metrics.completion_tokens == 3200
 
     def test_metrics_flow_preserves_other_result_fields(self, sample_context):
-        sample_context.agent_result = AgentResult(
+        agent_result = AgentResult(
             metrics=_parse_full_metrics(
                 execution_time=60.0,
                 llm_duration=20.0,
             )
         )
 
-        result = BugFixResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, agent_result, "test_patch")
 
         assert result.metrics is not None
         assert result.metrics.execution_time == 60.0
