@@ -337,6 +337,7 @@ jobs:
       BCBENCH_PACKAGE_SOURCE_SHA: ${{ needs.validate-selection.outputs.package-source-sha }}
       BCBENCH_VARIANT_PATCH_SHA: ${{ needs.validate-selection.outputs.variant-patch-sha }}
       BCBENCH_EXPECTED_ACTIVATION_MODE: ${{ needs.validate-selection.outputs.activation-mode }}
+      BCBENCH_BCAL_SKILL_ACTIVATION_POLICY: ${{ needs.validate-selection.outputs.activation-policy }}
       BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE: ${{ needs.validate-selection.outputs.activation-source }}
       BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE: ${{ needs.validate-selection.outputs.require-offered-tool-evidence }}
     steps:
