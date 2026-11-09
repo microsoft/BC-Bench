@@ -16,7 +16,7 @@ from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_result
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
 _config = get_config()
@@ -915,7 +915,7 @@ class TestCodeReviewLeaderboardAggregate:
 
 class TestCodeReviewPipeline:
     def test_pipeline_instantiates(self):
-        pipeline = EvaluationCategory.CODE_REVIEW.pipeline
+        pipeline = EvaluationCategory.CODE_REVIEW.pipeline(AgentConfig())
         assert pipeline is not None
 
     def test_entry_class_is_codereview(self):

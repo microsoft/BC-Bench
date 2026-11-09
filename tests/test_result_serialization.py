@@ -1,11 +1,12 @@
 import json
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from bcbench.types import BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, HarnessName, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
@@ -280,7 +281,7 @@ class TestCategorySerialization:
 
     def test_pr_review_metrics_round_trip(self, tmp_path):
         original = create_codereview_result(
-            agent_name=AgentHarness.PR_REVIEW,
+            agent_name=HarnessName.PR_REVIEW,
             metrics=PRReviewMetrics(
                 execution_time=10.0,
                 api_calls=2,

@@ -6,12 +6,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, override
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.scoring import pass_hat_k
 from bcbench_core.stats import bootstrap_ci
 from pydantic import BaseModel, field_validator
 
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory
 
 logger = logging.getLogger(__name__)
 

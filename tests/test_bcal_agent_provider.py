@@ -8,14 +8,16 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest
 from bcbench_core.agent.metrics import AgentMetrics
-from bcbench_core.exceptions import AgentError
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
 
 from bcbench.agent.bcal import BCalBackendConfig, BCalRunResult, BCalScenarioError
 from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.commands import evaluate
-from bcbench.exceptions import AgentTimeoutError
-from bcbench.types import AgentHarness, BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.dataset import NL2ALEntry
+from bcbench.types import BCalExecutionIdentity, BCalScenarioFailure, EvaluationCategory, EvaluationContext, HarnessName
 from tests.conftest import create_nl2al_entry
 
 EXECUTION_IDENTITY: dict[str, object] = {
@@ -105,7 +107,27 @@ class TestCliArgs:
         assert not any(a.startswith("--deployment=") for a in args)
 
 
+def _run_bcal(entry: NL2ALEntry, workspace: Path, backend_config: BCalBackendConfig) -> BCalRunResult:
+    return bcal_agent.BCalHarness(backend_config).run(AgentRequest(task=entry, work_dir=workspace, output_dir=workspace))
+
+
 class TestRunBcalAgent:
+    @pytest.mark.parametrize(("request_timeout", "expected_timeout"), [(None, 42), (7, 7)])
+    def test_scenario_timeout_uses_harness_or_request_limit(self, workspace: Path, request_timeout: int | None, expected_timeout: int):
+        harness = bcal_agent.BCalHarness(BCalBackendConfig(command="python bridge.py"), timeout=42)
+        request = AgentRequest(task=create_nl2al_entry(), work_dir=workspace, output_dir=workspace, timeout=request_timeout)
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=subprocess.TimeoutExpired(cmd=["bcal"], timeout=expected_timeout)) as run,
+            pytest.raises(AgentTimeoutError) as exc_info,
+        ):
+            harness.run(request)
+
+        assert run.call_args.kwargs["timeout"] == expected_timeout
+        assert exc_info.value.metrics is not None
+        assert exc_info.value.metrics.execution_time == expected_timeout
+
     def test_passes_external_command_to_bcal(self, workspace: Path):
         entry = create_nl2al_entry()
         captured: dict[str, list[str]] = {}
@@ -121,15 +143,9 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=fake_run),
         ):
-            result = bcal_agent.run_bcal_agent(
-                entry=entry,
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(
-                    command="python bridge.py",
-                    model="gpt-5",
-                ),
-            )
+            result = _run_bcal(entry, workspace, BCalBackendConfig(command="python bridge.py", model="gpt-5"))
 
+        assert result.metrics is not None
         assert result.metrics.execution_time is not None
         args = captured["args"]
         assert "--deployment=gpt-5" in args
@@ -163,11 +179,7 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=fake_run),
         ):
-            bcal_agent.run_bcal_agent(
-                entry=entry,
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            _run_bcal(entry, workspace, BCalBackendConfig(command="python bridge.py"))
 
         assert captured_scenario == {
             "schemaVersion": "1.0",
@@ -184,7 +196,7 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             pytest.raises(AgentError),
         ):
-            bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace, backend_config=BCalBackendConfig())
+            _run_bcal(entry, workspace, BCalBackendConfig())
 
     def test_external_command_model_is_optional(self, workspace: Path):
         entry = create_nl2al_entry()
@@ -201,11 +213,7 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=fake_run),
         ):
-            bcal_agent.run_bcal_agent(
-                entry=entry,
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            _run_bcal(entry, workspace, BCalBackendConfig(command="python bridge.py"))
 
         assert "--llm-backend=external-command" in captured["args"]
         assert "--llm-command=python bridge.py" in captured["args"]
@@ -216,11 +224,7 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=lambda args, **_: _write_result_from_args(args)),
         ):
-            result = bcal_agent.run_bcal_agent(
-                entry=create_nl2al_entry(),
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            result = _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
         assert result.evidence == EVIDENCE
         assert result.execution_identity.product_version == "1.2.3"
@@ -231,11 +235,7 @@ class TestRunBcalAgent:
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
             patch.object(subprocess, "run", side_effect=lambda args, **_: _write_result_from_args(args, evidence=None)),
         ):
-            result = bcal_agent.run_bcal_agent(
-                entry=create_nl2al_entry(),
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            result = _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
         assert result.evidence is None
 
@@ -245,11 +245,7 @@ class TestRunBcalAgent:
             patch.object(subprocess, "run", return_value=MagicMock(returncode=0)),
             pytest.raises(AgentError, match="did not create the scenario result file"),
         ):
-            bcal_agent.run_bcal_agent(
-                entry=create_nl2al_entry(),
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
     def test_malformed_result_fails_clearly(self, workspace: Path):
         def fake_run(args: list[str], **_: object) -> None:
@@ -261,11 +257,7 @@ class TestRunBcalAgent:
             patch.object(subprocess, "run", side_effect=fake_run),
             pytest.raises(AgentError, match="not valid UTF-8 JSON"),
         ):
-            bcal_agent.run_bcal_agent(
-                entry=create_nl2al_entry(),
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
     def test_incompatible_result_fails_clearly(self, workspace: Path):
         with (
@@ -273,11 +265,7 @@ class TestRunBcalAgent:
             patch.object(subprocess, "run", side_effect=lambda args, **_: _write_result_from_args(args, schema_version="2.0")),
             pytest.raises(AgentError, match=r"incompatible with contract 1\.0"),
         ):
-            bcal_agent.run_bcal_agent(
-                entry=create_nl2al_entry(),
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
     def test_nonzero_exit_includes_structured_failure_and_process_output(self, workspace: Path):
         top_failure: dict[str, object] = {"code": "scenario_failed", "message": "Scenario execution failed", "stepId": "benchmark-prompt"}
@@ -303,11 +291,7 @@ class TestRunBcalAgent:
             patch.object(subprocess, "run", side_effect=fake_run),
             pytest.raises(BCalScenarioError) as exc_info,
         ):
-            bcal_agent.run_bcal_agent(
-                entry=create_nl2al_entry(),
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
         message = str(exc_info.value)
         assert "BCal scenario exited with status 1" in message
@@ -333,11 +317,7 @@ class TestRunBcalAgent:
             patch.object(subprocess, "run", side_effect=failure),
             pytest.raises(BCalScenarioError) as exc_info,
         ):
-            bcal_agent.run_bcal_agent(
-                entry=create_nl2al_entry(),
-                repo_path=workspace,
-                backend_config=BCalBackendConfig(command="python bridge.py"),
-            )
+            _run_bcal(create_nl2al_entry(), workspace, BCalBackendConfig(command="python bridge.py"))
 
         assert "Scenario result: not created" in str(exc_info.value)
         assert "Unrecognized command or argument '--include-evidence'." in str(exc_info.value)
@@ -348,8 +328,7 @@ class TestRunBcalAgent:
             entry=entry,
             repo_path=workspace,
             result_dir=tmp_path,
-            agent_name=AgentHarness.BCAL,
-            model="external-command",
+            agent=AgentIdentity(harness=HarnessName.BCAL, version="1.2.3", model="external-command"),
             category=EvaluationCategory.NL2AL,
         )
         run_result = BCalRunResult(
@@ -359,11 +338,12 @@ class TestRunBcalAgent:
             evidence=EVIDENCE,
         )
 
-        with patch.object(evaluate, "run_bcal_agent", return_value=run_result):
-            metrics, experiment = evaluate._run_bcal_for_evaluation(context, BCalBackendConfig(command="python bridge.py"))
+        harness = bcal_agent.BCalHarness(BCalBackendConfig(command="python bridge.py"))
+        with patch.object(bcal_agent.BCalHarness, "run", return_value=run_result) as run:
+            result = evaluate._BCalEvaluationHarness(harness, context).run(context.agent_request())
 
-        assert metrics == run_result.metrics
-        assert experiment == run_result.experiment
+        run.assert_called_once_with(context.agent_request())
+        assert result == run_result
         assert context.execution_identity == run_result.execution_identity
         assert context.evidence == EVIDENCE
 
@@ -373,8 +353,7 @@ class TestRunBcalAgent:
             entry=entry,
             repo_path=workspace,
             result_dir=tmp_path,
-            agent_name=AgentHarness.BCAL,
-            model="external-command",
+            agent=AgentIdentity(harness=HarnessName.BCAL, version="1.2.3", model="external-command"),
             category=EvaluationCategory.NL2AL,
         )
         scenario_result = bcal_agent._BCalScenarioResult.model_validate(
@@ -399,11 +378,12 @@ class TestRunBcalAgent:
             }
         )
 
+        harness = bcal_agent.BCalHarness(BCalBackendConfig(command="python bridge.py"))
         with (
-            patch.object(evaluate, "run_bcal_agent", side_effect=BCalScenarioError("failed", scenario_result)),
+            patch.object(bcal_agent.BCalHarness, "run", side_effect=BCalScenarioError("failed", scenario_result)),
             pytest.raises(BCalScenarioError, match="failed"),
         ):
-            evaluate._run_bcal_for_evaluation(context, BCalBackendConfig(command="python bridge.py"))
+            evaluate._BCalEvaluationHarness(harness, context).run(context.agent_request())
 
         assert context.execution_identity == scenario_result.execution_identity
         assert context.evidence == EVIDENCE
@@ -419,8 +399,7 @@ class TestRunBcalAgent:
             entry=create_nl2al_entry(),
             repo_path=workspace,
             result_dir=tmp_path,
-            agent_name=AgentHarness.BCAL,
-            model="external-command",
+            agent=AgentIdentity(harness=HarnessName.BCAL, version="1.2.3", model="external-command"),
             category=EvaluationCategory.NL2AL,
             bcal_failure=BCalScenarioFailure(
                 code="incomplete_execution",
@@ -441,8 +420,7 @@ class TestRunBcalAgent:
             entry=create_nl2al_entry(),
             repo_path=workspace,
             result_dir=tmp_path,
-            agent_name=AgentHarness.BCAL,
-            model="external-command",
+            agent=AgentIdentity(harness=HarnessName.BCAL, version="1.2.3", model="external-command"),
             category=EvaluationCategory.NL2AL,
             bcal_failure=BCalScenarioFailure(
                 code="incomplete_execution",
@@ -459,8 +437,7 @@ class TestRunBcalAgent:
             entry=create_nl2al_entry(),
             repo_path=workspace,
             result_dir=tmp_path,
-            agent_name=AgentHarness.BCAL,
-            model="external-command",
+            agent=AgentIdentity(harness=HarnessName.BCAL, version="1.2.3", model="external-command"),
             category=EvaluationCategory.NL2AL,
             bcal_failure=BCalScenarioFailure(code="compile_failed", message="Generated AL did not compile"),
         )
