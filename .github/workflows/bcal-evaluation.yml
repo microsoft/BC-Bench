@@ -108,6 +108,7 @@ jobs:
           recovery_refs = {
               "bcal-report-skill-publication-recovery-v3-20261108",
               f"{expected_ref}-publication-recovery-v1",
+              f"{expected_ref}-publication-recovery-v2",
           }
           if publication_source and os.environ["GITHUB_REF_NAME"] not in recovery_refs:
               raise SystemExit("Publication recovery must run from its immutable recovery ref.")
@@ -289,8 +290,6 @@ jobs:
           BCBENCH_PACKAGE_SOURCE_SHA: ${{ needs.validate-selection.outputs.package-source-sha }}
           BCBENCH_VARIANT_PATCH_SHA: ${{ needs.validate-selection.outputs.variant-patch-sha }}
           BCBENCH_EXPECTED_ACTIVATION_MODE: ${{ needs.validate-selection.outputs.activation-mode }}
-          BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE: ${{ needs.validate-selection.outputs.activation-source }}
-          BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE: ${{ needs.validate-selection.outputs.require-offered-tool-evidence }}
           BCBENCH_BCAL_SKILL_ACTIVATION_POLICY: ${{ needs.validate-selection.outputs.activation-policy }}
           BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE: ${{ needs.validate-selection.outputs.activation-source }}
           BCBENCH_BCAL_EXPECTED_ACTIVATION_MODE: ${{ needs.validate-selection.outputs.activation-mode }}
@@ -336,6 +335,8 @@ jobs:
       BCBENCH_PACKAGE_SOURCE_SHA: ${{ needs.validate-selection.outputs.package-source-sha }}
       BCBENCH_VARIANT_PATCH_SHA: ${{ needs.validate-selection.outputs.variant-patch-sha }}
       BCBENCH_EXPECTED_ACTIVATION_MODE: ${{ needs.validate-selection.outputs.activation-mode }}
+      BCBENCH_BCAL_SKILL_ACTIVATION_SOURCE: ${{ needs.validate-selection.outputs.activation-source }}
+      BCBENCH_BCAL_REQUIRE_OFFERED_TOOL_EVIDENCE: ${{ needs.validate-selection.outputs.require-offered-tool-evidence }}
     steps:
       - name: Checkout immutable study ref
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
