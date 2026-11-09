@@ -117,7 +117,7 @@ def test_all_categories_handled_in_get_expected_output(
         elif entry_cls is DataQueryEntry:
             entry = sample_data_query_entry
         elif entry_cls is BCalScenarioEntry:
-            entry = entry_cls.load(category.dataset_path)[0]
+            entry = entry_cls.load(category.dataset_path())[0]
         elif entry_cls is ExtRequestAdvisorEntry:
             entry = sample_ext_advisor_entry
         elif entry_cls is ExtRequestImplementEntry:

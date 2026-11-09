@@ -7,6 +7,7 @@ from bcbench.types import DatasetTier
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 SELECTED_TIER = "${{ inputs.tier || 'gold' }}"
+SELECTED_CATEGORY = "${{ inputs.category || 'bcal-scenario' }}"
 
 
 def _workflow_text(name: str) -> str:
@@ -41,21 +42,21 @@ def test_bcal_threads_selected_tier_through_every_job():
     assert workflow["env"]["TIER"] == SELECTED_TIER
     assert workflow["jobs"]["get-entries"]["with"]["tier"] == SELECTED_TIER
     assert workflow["jobs"]["summarize-results"]["with"]["tier"] == SELECTED_TIER
-    assert '--category nl2al --tier "$env:TIER" --github-output version' in text
-    assert 'evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER"' in text
+    assert f'--category "{SELECTED_CATEGORY}" --tier "$env:TIER" --github-output version' in text
+    assert f'evaluate bcal "${{{{ matrix.entry }}}}" --category "{SELECTED_CATEGORY}" --tier "$env:TIER"' in text
 
 
 def test_bcal_downloads_symbols_from_the_selected_tier():
     step = _step(_workflow("bcal-evaluation.yml"), "evaluate-with-bcal", "Download BC Application symbols")
 
-    assert '-Category nl2al -Tier "$env:TIER"' in step["run"]
+    assert f'-Category "{SELECTED_CATEGORY}" -Tier "$env:TIER"' in step["run"]
 
 
 def test_bcal_run_identity_includes_tier_and_package_selection():
     workflow = _workflow("bcal-evaluation.yml")
 
-    assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ${{{{ inputs.bcal-feed || 'official' }}}}@${{{{ inputs.bcal-version || 'latest' }}}} ")
-    assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}"
+    assert workflow["run-name"].startswith(f"BCal {SELECTED_CATEGORY} {SELECTED_TIER} ${{{{ inputs.bcal-feed || 'official' }}}}@${{{{ inputs.bcal-version || 'latest' }}}} ")
+    assert workflow["concurrency"]["group"] == f"bcal-evaluation-{SELECTED_CATEGORY}-${{{{ inputs.test-run && 'test' || 'full' }}}}"
 
 
 def test_bcal_completion_review_model_offers_external_models_or_none():

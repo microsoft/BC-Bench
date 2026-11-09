@@ -380,13 +380,13 @@ class EvaluationCategory(StrEnum):
 
     def pipeline(self, agent_config: AgentConfig) -> EvaluationPipeline[Any]:
         from bcbench.evaluate import (
+            BCalScenarioPipeline,
             BugFixPipeline,
             CodeReviewPipeline,
             DataQueryPipeline,
             ExtRequestAdvisorPipeline,
             ExtRequestImplementPipeline,
             ExtRequestTriagePipeline,
-            BCalScenarioPipeline,
             NL2ALPipeline,
             TestGenerationPipeline,
         )

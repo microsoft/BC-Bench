@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import zipfile
 from pathlib import Path
+from typing import override
 
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME, copy_symbol_apps
 from bcbench_core.filesystem import remove_tree
@@ -13,9 +14,9 @@ from bcbench_core.filesystem import remove_tree
 from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult
 from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
 from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.operations import bootstrap_app_json
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationContext
-from bcbench.operations import bootstrap_app_json
 
 _MUTATION_TOOLS = frozenset({"write_file", "edit_file", "create_file", "apply_patch", "replace_text", "patch_text"})
 _TEXT_EXTENSIONS = frozenset({".al", ".json", ".md", ".txt", ".xml", ".yml", ".yaml", ".ps1", ".toml"})
@@ -48,13 +49,24 @@ def _normalize_state(value: object) -> str:
 
 
 def _result_tool_events(result: BCalScenarioRunResult) -> list[tuple[float, str]]:
+    if result.evidence and result.evidence.trace:
+        evidence_events = [
+            (
+                event.sequence if event.sequence is not None else event.index if event.index is not None else float(position),
+                _normalize_tool(event.name or event.type),
+            )
+            for position, event in enumerate(result.evidence.trace.events)
+            if event.name or event.type
+        ]
+        if evidence_events:
+            return [
+                *evidence_events,
+                *((float(interaction.sequence), "ask_user") for interaction in result.interactions if interaction.matched),
+            ]
+
     events: list[tuple[float, str]] = []
     for step_index, step in enumerate(result.steps):
-        events.extend(
-            (step_index * 1000 + tool_index, _normalize_tool(usage.name))
-            for tool_index, usage in enumerate(step.tool_usage)
-            if usage.started
-        )
+        events.extend((step_index * 1000 + tool_index, _normalize_tool(usage.name)) for tool_index, usage in enumerate(step.tool_usage) if usage.started)
     events.extend((float(interaction.sequence), "ask_user") for interaction in result.interactions if interaction.matched)
     return events
 
@@ -83,11 +95,7 @@ def evaluate_trace_assertion(assertion: BCalTraceAssertion, result: BCalScenario
             passed = bool(before_positions and after_positions and min(before_positions) < min(after_positions))
             message = f"Expected {before!r} before {after!r}"
         case "compile_after_final_mutation":
-            mutation_steps = [
-                index
-                for index, step in enumerate(result.steps)
-                if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)
-            ]
+            mutation_steps = [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
             compile_steps = [index for index, step in enumerate(result.steps) if step.compile_succeeded is True]
             passed = bool(compile_steps) and (not mutation_steps or max(compile_steps) >= max(mutation_steps))
             message = "Expected a successful compile after the final workspace mutation"
@@ -106,11 +114,7 @@ def evaluate_trace_assertion(assertion: BCalTraceAssertion, result: BCalScenario
         case "no_mutation_before_step" | "mutation_after_step":
             step_indices = {step.id: index for index, step in enumerate(result.steps)}
             boundary = step_indices.get(assertion.step_id or "")
-            mutation_indices = [
-                index
-                for index, step in enumerate(result.steps)
-                if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)
-            ]
+            mutation_indices = [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
             if assertion.type == "no_mutation_before_step":
                 passed = boundary is not None and all(index >= boundary for index in mutation_indices)
                 message = f"Expected no workspace mutations before step {assertion.step_id!r}"
@@ -168,10 +172,7 @@ def _textual_workspace(app_folder: Path) -> dict[str, str]:
     return {
         path.relative_to(app_folder).as_posix(): path.read_text(encoding="utf-8", errors="replace")
         for path in sorted(app_folder.rglob("*"))
-        if path.is_file()
-        and path.suffix.lower() in _TEXT_EXTENSIONS
-        and ALPACKAGES_DIRNAME not in path.parts
-        and ".bcbench-build" not in path.parts
+        if path.is_file() and path.suffix.lower() in _TEXT_EXTENSIONS and ALPACKAGES_DIRNAME not in path.parts and ".bcbench-build" not in path.parts
     }
 
 
@@ -239,6 +240,7 @@ def _archive_workspace(entry: BCalScenarioEntry, app_folder: Path, result_dir: P
 
 
 class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
+    @override
     def setup_workspace(self, entry: BCalScenarioEntry, repo_path: Path) -> None:
         if repo_path.exists():
             remove_tree(repo_path)
@@ -252,9 +254,11 @@ class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
         )
         _git_init_and_commit(repo_path)
 
+    @override
     def setup(self, context: EvaluationContext[BCalScenarioEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
 
+    @override
     def evaluate(self, context: EvaluationContext[BCalScenarioEntry]) -> None:
         if context.transcript is None:
             raise ValueError("BCal scenario harness did not provide a transcript")

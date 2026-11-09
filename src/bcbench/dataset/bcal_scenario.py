@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Self, override
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
@@ -157,12 +157,15 @@ class BCalScenarioEntry(BaseDatasetEntry):
         return self
 
     @property
+    @override
     def customization_profile(self) -> str:
         return "bcal"
 
+    @override
     def get_task(self) -> str:
         return "\n\n".join(step.text for step in self.steps if isinstance(step, BCalUserStep))
 
+    @override
     def get_expected_output(self) -> Checklist:
         forbidden: list[ChecklistAssertion] = [{"text": f"Forbidden behavior is absent: {text}", "level": "critical"} for text in self.evaluation.forbidden_assertions]
         return {"assertions": [*self.evaluation.artifact_assertions, *forbidden]}

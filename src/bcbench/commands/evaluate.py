@@ -31,12 +31,20 @@ from bcbench.cli_options import (
     resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BCalScenarioEntry, BaseDatasetEntry
+from bcbench.dataset import BaseDatasetEntry, BCalScenarioEntry
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
+from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
-from bcbench.results import BCalScenarioEvaluationResult, BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results import (
+    BaseEvaluationResult,
+    BCalScenarioEvaluationResult,
+    CodeReviewResult,
+    ExecutionBasedEvaluationResult,
+    IndependentBuildResult,
+    JudgeBasedEvaluationResult,
+    TraceAssertionResult,
+)
 from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
 
 logger = logging.getLogger(__name__)
@@ -399,6 +407,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
                 scenarios = ["raw", "empty"]
+            case EvaluationCategory.BCAL_SCENARIO | EvaluationCategory.BCAL_FEATURE:
+                scenarios = ["bcal-success", "bcal-fail"]
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
                 scenarios = ["raw", "empty"]
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
@@ -425,6 +435,17 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
             case "empty":
                 result = JudgeBasedEvaluationResult.create_empty_output(context)
+            case "bcal-success":
+                result = BCalScenarioEvaluationResult.create(
+                    context,
+                    output="MOCK_BCAL_SCENARIO_OUTPUT",
+                    scenario_completed=True,
+                    independent_build=IndependentBuildResult(status="not_attempted", message="Mock evaluation"),
+                    trace_assertions=[TraceAssertionResult(assertion_id="mock", passed=True, message="Mock trace passed")],
+                    runtime_status=None,
+                )
+            case "bcal-fail":
+                result = BCalScenarioEvaluationResult.create_harness_failure(context, "Mock BCal harness failure")
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

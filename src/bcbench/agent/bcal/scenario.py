@@ -144,6 +144,27 @@ class BCalExportResult(BaseModel):
     message: str | None = None
 
 
+class BCalTraceEvent(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    type: str
+    name: str | None = None
+    sequence: float | None = None
+    index: float | None = None
+
+
+class BCalEvidenceTrace(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    events: list[BCalTraceEvent] = Field(default_factory=list)
+
+
+class BCalEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    trace: BCalEvidenceTrace | None = None
+
+
 class BCalScenarioRunResult(BaseModel):
     model_config = ConfigDict(frozen=True, extra="allow")
 
@@ -154,6 +175,7 @@ class BCalScenarioRunResult(BaseModel):
     tool_usage: list[BCalToolUsage] = Field(default_factory=list, alias="toolUsage")
     totals: BCalTotals
     export: BCalExportResult
+    evidence: BCalEvidence | None = None
     failure: BCalFailure | None = None
 
 

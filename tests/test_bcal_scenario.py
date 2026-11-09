@@ -4,6 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.harness import AgentRequest
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentError
 from pydantic import ValidationError
 
 import bcbench.evaluate.bcal_scenario as scenario_evaluation
@@ -11,9 +14,8 @@ from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import scenario as bcal_scenario
 from bcbench.dataset import BCalScenarioEntry
 from bcbench.evaluate.bcal_scenario import evaluate_trace
-from bcbench.exceptions import AgentError
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
-from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory
+from bcbench.types import EvaluationCategory, HarnessName
 from tests.conftest import create_evaluation_context
 
 
@@ -55,7 +57,7 @@ def create_bcal_scenario_entry(**overrides) -> BCalScenarioEntry:
     return BCalScenarioEntry.model_validate(payload | overrides)
 
 
-def scenario_result_payload(*, completed: bool = True) -> dict:
+def scenario_result_payload(*, completed: bool = True) -> dict[str, object]:
     return {
         "schemaVersion": "1.0",
         "completed": completed,
@@ -85,6 +87,14 @@ def scenario_result_payload(*, completed: bool = True) -> dict:
             }
         ],
         "toolUsage": [{"name": "write_file", "started": 1, "completed": 1, "succeeded": 1, "failed": 0}],
+        "evidence": {
+            "contractVersion": "1.0",
+            "trace": {
+                "events": [
+                    {"type": "tool", "name": "write_file", "sequence": 2},
+                ]
+            },
+        },
         "totals": {
             "steps": 1,
             "successfulSteps": 1,
@@ -96,17 +106,12 @@ def scenario_result_payload(*, completed: bool = True) -> dict:
             "durationMs": 100,
         },
         "export": {"attempted": True, "success": True, "path": "app", "filesExported": 1, "message": None},
-        "sessionArchive": {
-            "attempted": True,
-            "success": True,
-            "path": "session",
-            "fileName": "session.zip",
-            "entriesExported": 2,
-            "chatEntryPath": "chat.json",
-            "message": None,
-        },
         "failure": None,
     }
+
+
+def _arg_path(args: list[str], flag: str) -> Path:
+    return Path(next(arg.removeprefix(f"{flag}=") for arg in args if arg.startswith(f"{flag}=")))
 
 
 def test_execution_manifest_redacts_hidden_evaluation(tmp_path: Path):
@@ -146,29 +151,28 @@ def test_run_scenario_uses_contract_and_collects_metrics(tmp_path: Path):
     (tmp_path / ".bcal-symbols" / ".alpackages").mkdir(parents=True)
     captured: list[str] = []
 
-    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess:
+    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         captured.extend(args)
-        result_path = Path(args[args.index("--result") + 1])
-        result_path.write_text(json.dumps(scenario_result_payload()), encoding="utf-8")
+        _arg_path(args, "--result").write_text(json.dumps(scenario_result_payload()), encoding="utf-8")
         return subprocess.CompletedProcess(args, 1, stdout="scenario failed after preserving result", stderr="")
 
     with (
         patch.object(bcal_scenario, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
         patch.object(subprocess, "run", side_effect=fake_run),
     ):
-        metrics, _ = bcal_scenario.run_bcal_scenario(
-            entry,
-            tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py", model="gpt-5"),
+        result = bcal_scenario.BCalScenarioHarness(
+            BCalBackendConfig(command="python bridge.py", model="gpt-5"),
+        ).run(
+            AgentRequest(task=entry, work_dir=tmp_path, output_dir=tmp_path),
         )
 
-    assert captured[captured.index("--scenario") + 1].endswith("execution.json")
-    assert captured[captured.index("--result") + 1].endswith("evaluation-run.json")
-    assert captured[captured.index("--exportfolder") + 1].endswith("app")
-    assert metrics.prompt_tokens == 10
-    assert metrics.completion_tokens == 20
-    assert metrics.turn_count == 1
-    assert metrics.tool_usage == {"write_file": 1}
+    assert _arg_path(captured, "--scenario").name == "execution.json"
+    assert _arg_path(captured, "--result").name == "evaluation-run.json"
+    assert _arg_path(captured, "--exportfolder").name == "app"
+    assert result.metrics is not None
+    assert result.metrics.execution_time is not None
+    assert result.transcript is not None
+    assert bcal_scenario.BCalScenarioRunResult.model_validate(result.transcript).totals.input_tokens == 10
 
 
 def test_nonzero_exit_without_result_is_harness_failure(tmp_path: Path):
@@ -180,10 +184,10 @@ def test_nonzero_exit_without_result_is_harness_failure(tmp_path: Path):
         patch.object(subprocess, "run", return_value=subprocess.CompletedProcess(["bcal"], 2, stdout="", stderr="bad contract")),
         pytest.raises(AgentError, match=r"without writing evaluation-run\.json"),
     ):
-        bcal_scenario.run_bcal_scenario(
-            entry,
-            tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+        bcal_scenario.BCalScenarioHarness(
+            BCalBackendConfig(command="python bridge.py"),
+        ).run(
+            AgentRequest(task=entry, work_dir=tmp_path, output_dir=tmp_path),
         )
 
 
@@ -193,8 +197,8 @@ def test_export_failure_in_structured_result_is_harness_failure(tmp_path: Path):
     payload = scenario_result_payload(completed=False)
     payload["export"] = {"attempted": True, "success": False, "path": None, "filesExported": 0, "message": "export failed"}
 
-    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess:
-        Path(args[args.index("--result") + 1]).write_text(json.dumps(payload), encoding="utf-8")
+    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        _arg_path(args, "--result").write_text(json.dumps(payload), encoding="utf-8")
         return subprocess.CompletedProcess(args, 1, stdout="", stderr="")
 
     with (
@@ -202,35 +206,25 @@ def test_export_failure_in_structured_result_is_harness_failure(tmp_path: Path):
         patch.object(subprocess, "run", side_effect=fake_run),
         pytest.raises(AgentError, match="harness failure: export failed"),
     ):
-        bcal_scenario.run_bcal_scenario(
-            entry,
-            tmp_path,
-            BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+        bcal_scenario.BCalScenarioHarness(
+            BCalBackendConfig(command="python bridge.py"),
+        ).run(
+            AgentRequest(task=entry, work_dir=tmp_path, output_dir=tmp_path),
         )
 
 
-def test_trace_uses_chat_order_and_confirmed_choice(tmp_path: Path):
+def test_trace_uses_transcript_evidence_order_and_confirmed_choice():
     entry = create_bcal_scenario_entry()
     result = bcal_scenario.BCalScenarioRunResult.model_validate(scenario_result_payload())
-    chat = tmp_path / "chat.json"
-    chat.write_text(
-        json.dumps(
-            [
-                {"type": "tool_call", "toolName": "ask_user", "sequence": 1},
-                {"type": "tool_call", "toolName": "write_file", "sequence": 2},
-            ]
-        ),
-        encoding="utf-8",
-    )
 
-    assertions = evaluate_trace(entry, result, chat)
+    assertions = evaluate_trace(entry, result)
 
     assert all(assertion.passed for assertion in assertions)
 
 
 def test_pilot_datasets_have_expected_entries_and_hidden_contracts():
-    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path)
-    features = BCalScenarioEntry.load(EvaluationCategory.BCAL_FEATURE.dataset_path)
+    scenarios = BCalScenarioEntry.load(EvaluationCategory.BCAL_SCENARIO.dataset_path())
+    features = BCalScenarioEntry.load(EvaluationCategory.BCAL_FEATURE.dataset_path())
 
     assert {entry.instance_id for entry in scenarios} == {
         "bcal-scenario__integration-choice-1",
@@ -261,7 +255,7 @@ def test_structured_result_exposes_deterministic_metrics(tmp_path: Path):
     context = create_evaluation_context(
         tmp_path,
         entry=entry,
-        agent_name=AgentHarness.BCAL,
+        agent_name=HarnessName.BCAL,
         category=EvaluationCategory.BCAL_SCENARIO,
     )
     context.metrics = AgentMetrics(execution_time=1, prompt_tokens=10, completion_tokens=20, turn_count=1, tool_usage={"write_file": 1})
