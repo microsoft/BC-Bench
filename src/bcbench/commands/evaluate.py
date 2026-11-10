@@ -249,7 +249,7 @@ def evaluate_bcal(
     try:
         pipeline.execute(context, harness)
     except AgentError as exc:
-        result = JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
+        result = JudgeBasedEvaluationResult.create_failure(context, AgentResult(transcript=exc.transcript), output="", error_message=str(exc))
         pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
         raise typer.Exit(code=1) from exc
@@ -341,7 +341,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         logger.info("Mock pipeline: Skipping setup")
 
     @override
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarness[BaseDatasetEntry, HarnessName]) -> None:
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarness[BaseDatasetEntry, HarnessName]) -> AgentResult:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 
@@ -354,7 +354,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             None,
             AgentMetrics(prompt_tokens=500, completion_tokens=100, tool_usage={"bash": 3, "view": 2, "edit": 1, "search": 5}),
         ]
-        context.metrics = random.choice(metrics_scenarios)
+        metrics: AgentMetrics | None = random.choice(metrics_scenarios)
 
         # Randomize experiment configuration to test different scenarios
         experiment_config_scenarios: list[ExperimentConfiguration | None] = [
@@ -366,13 +366,14 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             ExperimentConfiguration(custom_agent="custom-agent-v1"),
             ExperimentConfiguration(plugins=["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99"]),
         ]
-        context.experiment = random.choice(experiment_config_scenarios)
+        experiment: ExperimentConfiguration | None = random.choice(experiment_config_scenarios)
 
-        logger.info(f"Using agent metrics: {context.metrics}")
-        logger.info(f"Using experiment configuration: {context.experiment}")
+        logger.info(f"Using agent metrics: {metrics}")
+        logger.info(f"Using experiment configuration: {experiment}")
+        return AgentResult(metrics=metrics, experiment=experiment)
 
     @override
-    def evaluate(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[BaseDatasetEntry], agent_result: AgentResult) -> None:
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
@@ -398,17 +399,17 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         result: BaseEvaluationResult
         match scenario:
             case "success":
-                result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
+                result = ExecutionBasedEvaluationResult.create_success(context, agent_result, "MOCK_PATCH_CONTENT")
             case "build-fail":
-                result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
+                result = ExecutionBasedEvaluationResult.create_build_failure(context, agent_result, "MOCK_PATCH_CONTENT", "Mock build failure")
             case "invalid":
-                result = CodeReviewResult.create_invalid(context, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
+                result = CodeReviewResult.create_invalid(context, agent_result, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
             case "valid":
-                result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[], matched_pairs=[], ignored_comments=[], ignored_matched_pairs=[])
+                result = CodeReviewResult.create(context, agent_result, output="[]", expected_comments=[], generated_comments=[], matched_pairs=[], ignored_comments=[], ignored_matched_pairs=[])
             case "raw":
-                result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
+                result = JudgeBasedEvaluationResult.create_raw(context, agent_result, output="MOCK_PATCH_CONTENT")
             case "empty":
-                result = JudgeBasedEvaluationResult.create_empty_output(context)
+                result = JudgeBasedEvaluationResult.create_empty_output(context, agent_result)
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

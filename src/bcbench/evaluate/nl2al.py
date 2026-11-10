@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.artifacts import copy_symbol_apps
 from bcbench_core.exceptions import EmptyDiffError
 from bcbench_core.filesystem import remove_tree
@@ -67,7 +68,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[NL2ALEntry], agent_result: AgentResult) -> None:
         # Single attempt, no retries: an empty diff (the agent asked for clarification instead of editing) is scored here, not re-run.
         try:
             generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
@@ -75,19 +76,20 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
             if _empty_is_acceptable(context.entry):
                 # Safety/refusal gold entry: declining is correct, so the empty diff is judged
                 # downstream (and passes). Keep it Unscored rather than marking a failure.
-                result = JudgeBasedEvaluationResult.create_empty_output(context)
+                result = JudgeBasedEvaluationResult.create_empty_output(context, agent_result)
                 logger.warning(f"Agent produced no changes for {context.entry.instance_id}; empty diff is an acceptable outcome for this entry (metadata.area=safety)")
             else:
                 # Genuine task: no *.al file means the agent stalled / asked for clarification.
                 # Mark it as a failure instead of retrying.
                 result = JudgeBasedEvaluationResult.create_failure(
                     context,
+                    agent_result,
                     output="",
                     error_message="Agent produced no changes (asked for clarification instead of editing an *.al file)",
                 )
                 logger.warning(f"Agent produced no changes for {context.entry.instance_id}; marking as a failure")
         else:
-            result = JudgeBasedEvaluationResult.create_raw(context, output=generated_patch)
+            result = JudgeBasedEvaluationResult.create_raw(context, agent_result, output=generated_patch)
             logger.info(f"Saved raw NL2AL result for {context.entry.instance_id} (scoring pending)")
 
         self.save_result(context, result)

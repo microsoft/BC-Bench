@@ -9,6 +9,7 @@ import click
 import pytest
 import typer
 from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentError
 from typer.main import get_command
 from typer.testing import CliRunner
 
@@ -148,6 +149,34 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
 
 def _option_names(command: click.Command) -> set[str]:
     return {option for parameter in command.params if isinstance(parameter, click.Option) for option in (*parameter.opts, *parameter.secondary_opts)}
+
+
+def test_evaluate_bcal_preserves_failure_transcript(tmp_path):
+    entry = create_nl2al_entry()
+    error = AgentError("agent failed", transcript={"trace": ["failure evidence"]})
+
+    with (
+        patch.object(EvaluationCategory, "dataset_path", return_value=tmp_path / "nl2al.jsonl"),
+        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock) as entry_class,
+        patch.object(evaluate_commands.NL2ALPipeline, "execute", side_effect=error),
+        patch("bcbench.agent.bcal.agent.get_bcal_version", return_value="18.0.1.2-beta"),
+    ):
+        entry_class.return_value.load.return_value = [entry]
+        with pytest.raises(typer.Exit) as raised:
+            evaluate_commands.evaluate_bcal(
+                entry_id=entry.instance_id,
+                repo_path=tmp_path / "repo",
+                output_dir=tmp_path / "results",
+                run_id="bcal-run",
+                llm_command="python bridge.py",
+                llm_model=None,
+            )
+
+    assert raised.value.__cause__ is error
+    result_file = tmp_path / "results" / "bcal-run" / f"{entry.instance_id}.jsonl"
+    payload = json.loads(result_file.read_text(encoding="utf-8"))
+    assert payload["error_message"] == "agent failed"
+    assert payload["transcript"] == error.transcript
 
 
 @pytest.mark.parametrize("command_group", ["run", "evaluate"])
