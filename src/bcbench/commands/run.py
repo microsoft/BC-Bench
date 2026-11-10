@@ -30,7 +30,7 @@ from bcbench.dataset import NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate import CodeReviewPipeline, NL2ALPipeline
 from bcbench.paths import SHARED_CONFIG_FILE
-from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory
+from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -80,10 +80,14 @@ def run_copilot(
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     agent_config = AgentConfig.from_file(config_path)
-    category.pipeline(agent_config).setup_workspace(entry, repo_path)
-
     harness = CopilotHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
-    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir))
+    context = EvaluationContext(entry=entry, repo_path=repo_path, result_dir=output_dir, agent=harness.identity(), category=category, tier=tier, container=runtime.container if runtime else None)
+    if (definition := category.definition) is None:
+        # Transitional: remove once every category is migrated
+        category.pipeline(agent_config).setup_workspace(entry, repo_path)
+    else:
+        definition.make(agent_config).prepare_workspace(context)
+    harness.run(context.agent_request())
 
 
 @run_app.command("claude")
@@ -128,10 +132,14 @@ def run_claude(
     )
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     agent_config = AgentConfig.from_file(config_path)
-    category.pipeline(agent_config).setup_workspace(entry, repo_path)
-
     harness = ClaudeHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
-    harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=output_dir))
+    context = EvaluationContext(entry=entry, repo_path=repo_path, result_dir=output_dir, agent=harness.identity(), category=category, tier=tier, container=runtime.container if runtime else None)
+    if (definition := category.definition) is None:
+        # Transitional: remove once every category is migrated
+        category.pipeline(agent_config).setup_workspace(entry, repo_path)
+    else:
+        definition.make(agent_config).prepare_workspace(context)
+    harness.run(context.agent_request())
 
 
 @run_app.command("pr-review")

@@ -211,6 +211,7 @@ def agent_command_category(tmp_path):
     return entry, SimpleNamespace(
         dataset_path=lambda _tier=None: tmp_path / "dataset.jsonl",
         entry_class=EntryClass,
+        definition=None,
         pipeline=lambda _agent_config: Pipeline(),
         requires_container=False,
     )

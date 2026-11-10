@@ -4,7 +4,8 @@ import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import TypeAdapter
 
-from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
+from bcbench.categories.ext_request_advisor import ExtRequestAdvisorEntry
+from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentConfig, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, HarnessName, PRReviewMetrics
 
@@ -62,10 +63,9 @@ def test_pr_review_metrics_extend_generic_metrics():
     assert HarnessName.PR_REVIEW.metrics_contract.metrics_type is PRReviewMetrics
 
 
-def test_all_categories_have_pipelines():
+def test_all_categories_have_pipelines_or_definitions():
     for category in EvaluationCategory:
-        pipeline = category.pipeline(AgentConfig())
-        assert pipeline is not None
+        assert category.definition is not None or category.pipeline(AgentConfig()) is not None
 
 
 def test_all_categories_have_entry_classes():
