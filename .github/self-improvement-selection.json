@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "7c98b750c200d88ed0a81daaea5e71184a3af01b",
+  "datasetHash": "87B881CD369228C8275F98D9DCA5BD233266E99FDCDE63D87EEB1FC9B7EFFFE3",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "neg-pr11555-20261020",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/11555#discussion_r4219148268"
+  ],
+  "entryIds": [
+    "synthetic__breaking-return-value-add-01"
+  ],
+  "newEntryIds": [
+    "synthetic__breaking-return-value-add-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__breaking-return-value-add-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/11555#discussion_r4219148268",
+          "purpose": "false_positive_guard",
+          "file": "src/System Application/App/SharePoint/src/graph/helpers/SharePointGraphParser.Codeunit.al",
+          "lineStart": 212,
+          "lineEnd": 212,
+          "rationale": "The bot flagged changing ParseListItemFieldValueSet from void to Boolean-returning as a breaking signature change, but the developer explicitly rejected this (thumbs-down, 'Adding a return value to a procedure that had none is not a breaking change'). AL callers may invoke a function-returning procedure as a statement and discard the result, so existing subscribers/callers that ignored the previous void return keep compiling and behaving identically; only removing/renaming/retyping parameters breaks the published contract and subscriber binding. The new entry copies the exact pipeline-validated source file patch/repo/baseCommit for this comment's target range (lines 207-229, including line 212) with expected_comments=[], so no finding is expected or ignored there, guarding the boundary between a true breaking-signature change and a harmless added return value."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "280F744D24BC9E70AA1FB2167C0EE971A15C1120EF0C4607C281AFF0CCE1E7C9",
+      "instanceId": "synthetic__breaking-return-value-add-01"
+    }
+  ],
+  "sourceSnapshots": [
+    {
+      "commentUrl": "https://github.com/microsoft/BCApps/pull/11555#discussion_r4219148268",
+      "repo": "microsoft/BCApps",
+      "file": "src/System Application/App/SharePoint/src/graph/helpers/SharePointGraphParser.Codeunit.al",
+      "prBaseCommit": "9fd8818a6f7c8cb8338fd1c08359e461338fd333",
+      "headCommit": "816361cfbd05d44659e964710ac51a822af94afc",
+      "reviewCommit": "816361cfbd05d44659e964710ac51a822af94afc",
+      "baseCommit": "9fd8818a6f7c8cb8338fd1c08359e461338fd333",
+      "lineStart": 212,
+      "lineEnd": 212,
+      "patch": "diff --git a/src/System Application/App/SharePoint/src/graph/helpers/SharePointGraphParser.Codeunit.al b/src/System Application/App/SharePoint/src/graph/helpers/SharePointGraphParser.Codeunit.al\n--- a/src/System Application/App/SharePoint/src/graph/helpers/SharePointGraphParser.Codeunit.al\t\n+++ b/src/System Application/App/SharePoint/src/graph/helpers/SharePointGraphParser.Codeunit.al\t\n@@ -207,20 +207,29 @@ codeunit 9122 \"SharePoint Graph Parser\"\n     /// </summary>\n     /// <param name=\"FieldsJsonObject\">The fieldValueSet JSON to parse. Column values are name/value pairs at the root, without a listItem envelope.</param>\n     /// <param name=\"GraphListItem\">The record to populate. Id and ListId must be set by the caller.</param>\n+    /// <returns>True if the fieldValueSet contains at least one column value; otherwise false. A successful PATCH always echoes the updated columns, so a response without any column value is not a fieldValueSet.</returns>\n     /// <remarks>The @odata.context annotation is not stored as a field value, so the stored fields match the shape of the expanded fields object stored by GetListItem.</remarks>\n-    procedure ParseListItemFieldValueSet(FieldsJsonObject: JsonObject; var GraphListItem: Record \"SharePoint Graph List Item\" temporary)\n+    procedure ParseListItemFieldValueSet(FieldsJsonObject: JsonObject; var GraphListItem: Record \"SharePoint Graph List Item\" temporary): Boolean\n     var\n         SanitizedFieldsObject: JsonObject;\n         JsonToken: JsonToken;\n         FieldKey: Text;\n+        HasColumnValues: Boolean;\n     begin\n-        foreach FieldKey in FieldsJsonObject.Keys() do\n+        foreach FieldKey in FieldsJsonObject.Keys() do begin\n             if FieldKey <> '@odata.context' then begin\n                 FieldsJsonObject.Get(FieldKey, JsonToken);\n                 SanitizedFieldsObject.Add(FieldKey, JsonToken);\n             end;\n+            if not FieldKey.StartsWith('@odata.') then\n+                HasColumnValues := true;\n+        end;\n+\n+        if not HasColumnValues then\n+            exit(false);\n \n         ParseFields(SanitizedFieldsObject, GraphListItem);\n+        exit(true);\n     end;\n \n     local procedure ParseFields(FieldsJsonObject: JsonObject; var GraphListItem: Record \"SharePoint Graph List Item\" temporary)\n"
+    }
+  ]
+}
