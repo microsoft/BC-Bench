@@ -10,7 +10,7 @@ This doc is a map; the source files and their comments are the source of truth. 
 
 ## Architecture
 
-Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py). It is the category registry. Each enum value maps to the pieces the rest of the CLI and workflows consume:
+Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py). It is the category registry. Categories are moving to their own `CategoryDefinition` in [src/bcbench/categories/](src/bcbench/categories/) (`extensibility-request-advisor` so far), which the `EvaluationCategory` properties delegate to. Each enum value maps to the pieces the rest of the CLI and workflows consume:
 
 - `dataset_path(tier)` — the dataset file for raw tasks. Every category has a `gold` dataset (default); a category may also define a harder held-out `challenge` dataset (currently only NL2AL). Commands pick one with `--tier`, and results record it. Keep `Get-BCBenchDatasetPath` in `scripts/BenchmarkUtils.psm1` in sync.
 - `entry_class` — the typed Python model for one dataset row (aka one task).
@@ -30,7 +30,7 @@ Use the existing implementations as examples: `bug-fix` and `test-generation` fo
 1. Add the enum value and mappings in [src/bcbench/types.py](src/bcbench/types.py).
 2. Add the category dataset JSONL and entry class in [src/bcbench/dataset/dataset_entry.py](src/bcbench/dataset/dataset_entry.py).
 3. Add a result class under [src/bcbench/results/](src/bcbench/results/) and map it from `EvaluationCategory.result_class`.
-4. Add a pipeline under [src/bcbench/evaluate/](src/bcbench/evaluate/).
+4. Add a pipeline under [src/bcbench/evaluate/](src/bcbench/evaluate/), or, for a category in [src/bcbench/categories/](src/bcbench/categories/), one module holding its entry, `bcbench_core.evaluation.Category` and definition.
 5. Add the prompt template to [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml).
 6. Add the category to workflow choice lists in [.github/workflows/](.github/workflows/), especially evaluation workflows and CI category selection.
 7. Add docs, leaderboard data, notebooks, and tests for the category where relevant.

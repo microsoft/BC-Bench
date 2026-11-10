@@ -122,7 +122,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
 
         except NoTestsExtractedError:
             result = TestGenerationResult.create_no_tests_extracted(context, agent_result, generated_patch, "No tests extracted from generated patch")
-            raise
+            logger.warning(f"No tests extracted from the generated patch for {context.entry.instance_id}")
 
         finally:
             if result is not None:

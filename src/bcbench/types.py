@@ -15,6 +15,7 @@ from bcbench_core.container import ContainerConfig
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
 if TYPE_CHECKING:
+    from bcbench.categories.definition import CategoryDefinition
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
@@ -231,8 +232,21 @@ class EvaluationCategory(StrEnum):
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
+    @property
+    def definition(self) -> CategoryDefinition[Any] | None:
+        """The category's own definition once migrated to `bcbench.categories`; the properties below delegate to it.
+
+        Transitional: once every category is migrated, the `match` tables below go and callers can use the definition directly.
+        """
+        from bcbench.categories.registry import category_definition
+
+        return category_definition(self)
+
     def dataset_path(self, tier: DatasetTier = DatasetTier.GOLD) -> Path:
         from bcbench.config import get_config
+
+        if (definition := self.definition) is not None:
+            return definition.dataset_path(get_config().paths.dataset_dir, tier)
 
         match self, tier:
             case EvaluationCategory.NL2AL, DatasetTier.CHALLENGE:
@@ -251,8 +265,6 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "nl2al.jsonl"
             case EvaluationCategory.DATA_QUERY:
                 return get_config().paths.dataset_dir / "dataquery.jsonl"
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return get_config().paths.dataset_dir / "extensibility_request_advisor.jsonl"
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return get_config().paths.dataset_dir / "extensibility_request_implement.jsonl"
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -262,7 +274,10 @@ class EvaluationCategory(StrEnum):
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
+
+        if (definition := self.definition) is not None:
+            return definition.base_entry_type
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -275,8 +290,6 @@ class EvaluationCategory(StrEnum):
                 return NL2ALEntry
             case EvaluationCategory.DATA_QUERY:
                 return DataQueryEntry
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return ExtRequestAdvisorEntry
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ExtRequestImplementEntry
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -291,6 +304,9 @@ class EvaluationCategory(StrEnum):
         from bcbench.results.codereview import CodeReviewResult
         from bcbench.results.testgeneration import TestGenerationResult
 
+        if (definition := self.definition) is not None:
+            return definition.result_type
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixResult
@@ -302,8 +318,6 @@ class EvaluationCategory(StrEnum):
                 return JudgeBasedEvaluationResult
             case EvaluationCategory.DATA_QUERY:
                 return ExecutionBasedEvaluationResult
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -317,6 +331,9 @@ class EvaluationCategory(StrEnum):
         from bcbench.results.codereview import CodeReviewResultSummary
         from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
 
+        if (definition := self.definition) is not None:
+            return definition.summary_type
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ExecutionBasedEvaluationResultSummary
@@ -328,8 +345,6 @@ class EvaluationCategory(StrEnum):
                 return JudgeBasedEvaluationResultSummary
             case EvaluationCategory.DATA_QUERY:
                 return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedEvaluationResultSummary
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedEvaluationResultSummary
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -342,6 +357,9 @@ class EvaluationCategory(StrEnum):
         """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
         from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
 
+        if (definition := self.definition) is not None:
+            return definition.aggregate_type
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ExecutionBasedLeaderboardAggregate
@@ -353,8 +371,6 @@ class EvaluationCategory(StrEnum):
                 return JudgeBasedLeaderboardAggregate
             case EvaluationCategory.DATA_QUERY:
                 return ExecutionBasedLeaderboardAggregate
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return JudgeBasedLeaderboardAggregate
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedLeaderboardAggregate
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -363,16 +379,19 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     def pipeline(self, agent_config: AgentConfig) -> EvaluationPipeline[Any]:
+        # Transitional: removed with the pipelines once every category is migrated
         from bcbench.evaluate import (
             BugFixPipeline,
             CodeReviewPipeline,
             DataQueryPipeline,
-            ExtRequestAdvisorPipeline,
             ExtRequestImplementPipeline,
             ExtRequestTriagePipeline,
             NL2ALPipeline,
             TestGenerationPipeline,
         )
+
+        if self.definition is not None:
+            raise ValueError(f"{self.value} is evaluated through its category definition")
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -385,8 +404,6 @@ class EvaluationCategory(StrEnum):
                 return NL2ALPipeline()
             case EvaluationCategory.DATA_QUERY:
                 return DataQueryPipeline()
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return ExtRequestAdvisorPipeline()
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ExtRequestImplementPipeline()
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -400,12 +417,21 @@ class EvaluationCategory(StrEnum):
         from bcbench.config import get_config
 
         judge = get_config().judge
+        if (definition := self.definition) is not None:
+            match definition.judge:
+                case None:
+                    return None
+                case "code-review":
+                    return judge.code_review_model
+                case "lm-checklist":
+                    return judge.lm_checklist_model
+
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return None
             case EvaluationCategory.CODE_REVIEW:
                 return judge.code_review_model
-            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return judge.lm_checklist_model
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -417,6 +443,9 @@ class EvaluationCategory(StrEnum):
 
         Used for uploading evaluation results to long term storage.
         """
+        if (definition := self.definition) is not None:
+            return list(definition.evaluators)
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ["resolution_rate", "build_rate"]
@@ -428,8 +457,6 @@ class EvaluationCategory(StrEnum):
                 return ["lm_checklist"]
             case EvaluationCategory.DATA_QUERY:
                 return ["resolution_rate", "build_rate"]
-            case EvaluationCategory.EXT_REQUEST_ADVISOR:
-                return ["lm_checklist"]
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ["lm_checklist"]
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -440,12 +467,15 @@ class EvaluationCategory(StrEnum):
     @property
     def core_score(self) -> str:
         """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
+        if (definition := self.definition) is not None:
+            return definition.core_score
+
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "ResolutionRate"
             case EvaluationCategory.CODE_REVIEW:
                 return "F1Score"
-            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "test_passed"
             case EvaluationCategory.DATA_QUERY:
                 return "ResolutionRate"
@@ -455,10 +485,13 @@ class EvaluationCategory(StrEnum):
     @property
     def requires_container(self) -> bool:
         """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
+        if (definition := self.definition) is not None:
+            return definition.requires_container
+
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return True
-            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return False
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -467,6 +500,9 @@ class EvaluationCategory(StrEnum):
     def pass_on_bc_container_credentials(self) -> bool:
         # Categories that simulate development scenarios (e.g. Bug Fix) should have direct container access
         # While categories that simulate production scenarios (e.g. Data Query) should only use exposed access methods, e.g. BC MCP
+        if (definition := self.definition) is not None:
+            return definition.pass_bc_credentials
+
         match self:
             case EvaluationCategory.DATA_QUERY:
                 return False
@@ -475,7 +511,6 @@ class EvaluationCategory(StrEnum):
                 | EvaluationCategory.TEST_GENERATION
                 | EvaluationCategory.CODE_REVIEW
                 | EvaluationCategory.NL2AL
-                | EvaluationCategory.EXT_REQUEST_ADVISOR
                 | EvaluationCategory.EXT_REQUEST_IMPLEMENT
                 | EvaluationCategory.EXT_REQUEST_TRIAGE
             ):
@@ -496,10 +531,13 @@ class EvaluationCategory(StrEnum):
 
         Only categories that require building BaseApp needs self-hosted runners.
         """
+        if (definition := self.definition) is not None:
+            return definition.runner
+
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return "GitHub-BCBench"
-            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "ubuntu-latest"
             case EvaluationCategory.NL2AL:
                 return "windows-latest"

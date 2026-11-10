@@ -7,6 +7,7 @@ import typer
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.evaluation import evaluate_task
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
 
@@ -35,8 +36,10 @@ from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
+from bcbench.github_actions import github_log_group
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results.base import RESULT_FILE_SUFFIX
 from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
 
 logger = logging.getLogger(__name__)
@@ -101,8 +104,13 @@ def evaluate_copilot(
         tier=tier,
     )
 
-    pipeline = category.pipeline(agent_config)
-    pipeline.execute(context, harness)
+    if (definition := category.definition) is None:
+        # Transitional: remove once every category is migrated
+        category.pipeline(agent_config).execute(context, harness)
+    else:
+        with github_log_group(f"{context.agent.harness} -- Entry: {entry_id}"):
+            result: BaseEvaluationResult = evaluate_task(definition.make(agent_config), context, harness, context.agent_request(), on_timeout=definition.timeout_result)
+        result.save(run_dir, f"{entry_id}{RESULT_FILE_SUFFIX}")
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -164,8 +172,13 @@ def evaluate_claude_code(
         tier=tier,
     )
 
-    pipeline = category.pipeline(agent_config)
-    pipeline.execute(context, harness)
+    if (definition := category.definition) is None:
+        # Transitional: remove once every category is migrated
+        category.pipeline(agent_config).execute(context, harness)
+    else:
+        with github_log_group(f"{context.agent.harness} -- Entry: {entry_id}"):
+            result: BaseEvaluationResult = evaluate_task(definition.make(agent_config), context, harness, context.agent_request(), on_timeout=definition.timeout_result)
+        result.save(run_dir, f"{entry_id}{RESULT_FILE_SUFFIX}")
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
