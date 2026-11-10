@@ -1,16 +1,17 @@
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-from bcbench_core.agent.harness import AgentIdentity
+from bcbench_core.agent.harness import AgentIdentity, AgentResult
 from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import BuildError
 
-from bcbench.categories.data_query import DataQueryCategory, DataQueryEntry, _load_answer_rows, result_sets_match
+from bcbench.categories.data_query import ANSWER_FILE, GENERATED_QUERY_FILE, DataQueryCategory, DataQueryEntry, _load_answer_rows, result_sets_match
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.operations import dataquery_operations, wrap_query_as_api
 from bcbench.types import EvaluationCategory, EvaluationContext, HarnessName
-from tests.conftest import create_data_query_entry
+from tests.conftest import create_data_query_entry, create_evaluation_context
 
 
 class TestResultSetsMatch:
@@ -133,6 +134,76 @@ class TestLoadAnswerRows:
     def test_non_object_rows_raise(self, tmp_path):
         with pytest.raises(TypeError, match="must be JSON objects"):
             _load_answer_rows(self._write(tmp_path, "[1, 2, 3]"))
+
+
+@pytest.mark.parametrize("method", ["prepare_workspace", "prepare"])
+def test_data_query_preparation_clears_workspace_in_place(tmp_path, method):
+    context = create_evaluation_context(tmp_path, entry=create_data_query_entry(), category=EvaluationCategory.DATA_QUERY)
+    context.repo_path.mkdir()
+    (context.repo_path / ANSWER_FILE).write_text("stale", encoding="utf-8")
+    (context.repo_path / "nested").mkdir()
+    (context.repo_path / "nested" / GENERATED_QUERY_FILE).write_text("stale", encoding="utf-8")
+    original_inode = context.repo_path.stat().st_ino
+
+    getattr(DataQueryCategory(), method)(context)
+
+    assert list(context.repo_path.iterdir()) == []
+    assert context.repo_path.stat().st_ino == original_inode
+
+
+@pytest.mark.parametrize(
+    ("answer", "build", "resolved", "error"),
+    [
+        (None, False, False, "No answer.json produced"),
+        ("not json", False, False, "not valid JSON"),
+        ("[1]", False, False, "must be JSON objects"),
+        ("42", False, False, "must be a JSON array"),
+        ("[]", True, False, "Result set mismatch"),
+        ('[{"Total":43}]', True, False, "Result set mismatch"),
+        ('[{"Total":42}]', True, True, None),
+        ('{"value":[{"Total":42.0}]}', True, True, None),
+    ],
+)
+def test_data_query_grading_preserves_agent_outcomes(tmp_path, monkeypatch, answer, build, resolved, error):
+    context = create_evaluation_context(tmp_path, entry=create_data_query_entry(), category=EvaluationCategory.DATA_QUERY)
+    context.repo_path.mkdir()
+    (context.repo_path / GENERATED_QUERY_FILE).write_text("  generated query\n", encoding="utf-8")
+    if answer is not None:
+        (context.repo_path / ANSWER_FILE).write_text(answer, encoding="utf-8")
+    monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *_args, **_kwargs: [{"Total": 42}])
+
+    result = DataQueryCategory().grade(context, AgentResult())
+
+    assert result.build is build
+    assert result.resolved is resolved
+    assert result.output == "generated query"
+    if error:
+        assert result.error_message is not None
+        assert error in result.error_message
+    else:
+        assert result.error_message is None
+    assert not context.result_dir.exists()
+
+
+@pytest.mark.parametrize("ordered", [False, True])
+def test_data_query_grading_honors_entry_ordering(tmp_path, monkeypatch, ordered):
+    context = create_evaluation_context(tmp_path, entry=create_data_query_entry(ordered=ordered), category=EvaluationCategory.DATA_QUERY)
+    context.repo_path.mkdir()
+    (context.repo_path / ANSWER_FILE).write_text('[{"No":"B"},{"No":"A"}]', encoding="utf-8")
+    monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *_args, **_kwargs: [{"No": "A"}, {"No": "B"}])
+
+    result = DataQueryCategory().grade(context, AgentResult())
+
+    assert result.build
+    assert result.resolved is not ordered
+    assert result.output == ""
+
+
+@pytest.mark.parametrize("failure", [EmptyGoldResultError("dataquery__example-1"), RuntimeError("gold query failed")])
+def test_data_query_gold_errors_propagate_before_missing_answer(tmp_path, failure):
+    context = create_evaluation_context(tmp_path, entry=create_data_query_entry(), category=EvaluationCategory.DATA_QUERY)
+    with patch.object(DataQueryCategory, "_gold_rows", side_effect=failure), pytest.raises(type(failure)):
+        DataQueryCategory().grade(context, AgentResult())
 
 
 class TestWrapQueryAsApi:
