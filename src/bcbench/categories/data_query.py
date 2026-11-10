@@ -3,23 +3,56 @@ import logging
 from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import override
+from typing import Annotated, override
 
 from bcbench_core.agent.harness import AgentResult
+from bcbench_core.evaluation import Category
 from bcbench_core.filesystem import clear_directory
+from pydantic import Field
 
-from bcbench.dataset import DataQueryEntry
-from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.categories.definition import CategoryDefinition
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.results.base import ExecutionBasedEvaluationResult
-from bcbench.types import EvaluationContext
+from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
+from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
+from bcbench.types import DatasetTier, EvaluationCategory, EvaluationContext
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["DataQueryPipeline", "result_sets_match"]
+__all__ = ["ANSWER_FILE", "DEFINITION", "GENERATED_QUERY_FILE", "DataQueryCategory", "DataQueryEntry", "result_sets_match"]
 
 GENERATED_QUERY_FILE = "query.al"
 ANSWER_FILE = "answer.json"
+
+
+class DataQueryEntry(BaseDatasetEntry):
+    """Dataset entry for the data-query category — answer a BC data question using the data tools.
+
+    Execution-based: the agent retrieves the actual data (writing the rows to answer.json, plus the
+    query it used to query.al); evaluation compares those rows to the entry's expected rows, computed
+    on demand by running ``gold_query`` against the fixed Contoso container. The workspace is
+    scaffolded by the category, so there is no repo or commit.
+    """
+
+    nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
+    gold_query: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
+    # Whether row order is significant when comparing result sets (e.g. the question asks for a
+    # specific ranking). Defaults to False: result sets are compared order-insensitively.
+    ordered: bool = False
+
+    @property
+    @override
+    def customization_profile(self) -> str:
+        return "dataquery"
+
+    @override
+    def get_task(self) -> str:
+        return self.nl_prompt
+
+    @override
+    def get_expected_output(self) -> str:
+        return self.gold_query
 
 
 def _load_answer_rows(answer_file: Path) -> list[Mapping[str, object]]:
@@ -84,8 +117,8 @@ def result_sets_match(generated: Sequence[Mapping[str, object]], gold: Sequence[
     return _normalize_rows(generated, ordered) == _normalize_rows(gold, ordered)
 
 
-class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
-    """Pipeline for the data-query category — generate an AL query, evaluate deterministically.
+class DataQueryCategory(Category[EvaluationContext[DataQueryEntry], ExecutionBasedEvaluationResult]):
+    """Generate an AL query, evaluate deterministically.
 
     The agent answers a data question by retrieving the ACTUAL data with the BC data tools and writing
     the rows to ``answer.json`` (plus the ``query.al`` it used, kept only for inspection). Evaluation
@@ -96,48 +129,45 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
     """
 
     @override
-    def setup_workspace(self, entry: DataQueryEntry, repo_path: Path) -> None:
+    def prepare_workspace(self, task: EvaluationContext[DataQueryEntry]) -> None:
         # The workspace is shared into the running container, so its contents are cleared in place.
-        clear_directory(repo_path)
+        clear_directory(task.repo_path)
 
     @override
-    def setup(self, context: EvaluationContext[DataQueryEntry]) -> None:
-        self.setup_workspace(context.entry, context.repo_path)
+    def prepare(self, task: EvaluationContext[DataQueryEntry]) -> None:
+        self.prepare_workspace(task)
 
     @override
-    def evaluate(self, context: EvaluationContext[DataQueryEntry], agent_result: AgentResult) -> None:
-        query_file = context.repo_path / GENERATED_QUERY_FILE
+    def grade(self, task: EvaluationContext[DataQueryEntry], result: AgentResult) -> ExecutionBasedEvaluationResult:
+        query_file = task.repo_path / GENERATED_QUERY_FILE
         # query.al is only an inspection artifact now; scoring is on the data the agent retrieved.
         generated_query = query_file.read_text(encoding="utf-8").strip() if query_file.exists() else ""
-        answer_file = context.repo_path / ANSWER_FILE
+        answer_file = task.repo_path / ANSWER_FILE
 
         # Gold rows come first and deliberately fail loudly (see _gold_rows): a gold query that can't
         # compile/run is a harness/dataset bug and must red the job. Everything below this line is the
         # AGENT's own outcome, recorded as build=False (not raised) so a model that fails the task shows
         # up honestly in the results/leaderboard instead of aborting the whole matrix job.
-        gold_rows = self._gold_rows(context)
+        gold_rows = self._gold_rows(task)
 
         if not answer_file.exists():
             # The agent finished without writing answer.json = it failed the task. This is a real,
             # measured benchmark outcome (build=False), not a hidden harness error, so we record it and
             # keep CI green rather than failing the job.
-            logger.warning(f"Agent produced no {ANSWER_FILE} for {context.entry.instance_id}")
-            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, agent_result, output=generated_query, error_message=f"No {ANSWER_FILE} produced"))
-            return
+            logger.warning(f"Agent produced no {ANSWER_FILE} for {task.entry.instance_id}")
+            return ExecutionBasedEvaluationResult.create_build_failure(task, result, output=generated_query, error_message=f"No {ANSWER_FILE} produced")
 
         try:
             agent_rows = _load_answer_rows(answer_file)
         except (ValueError, TypeError) as e:
             # Malformed answer.json is likewise the agent's failure, recorded as build=False.
-            logger.warning(f"Unusable {ANSWER_FILE} for {context.entry.instance_id}: {e}")
-            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, agent_result, output=generated_query, error_message=str(e)))
-            return
+            logger.warning(f"Unusable {ANSWER_FILE} for {task.entry.instance_id}: {e}")
+            return ExecutionBasedEvaluationResult.create_build_failure(task, result, output=generated_query, error_message=str(e))
 
-        resolved = result_sets_match(agent_rows, gold_rows, context.entry.ordered)
+        resolved = result_sets_match(agent_rows, gold_rows, task.entry.ordered)
         error_message = None if resolved else f"Result set mismatch: answer {len(agent_rows)} rows vs gold {len(gold_rows)} rows"
-        result = ExecutionBasedEvaluationResult.create_result(context, agent_result, output=generated_query, build=True, resolved=resolved, error_message=error_message)
-        logger.info(f"{context.entry.instance_id}: build=True resolved={resolved}")
-        self.save_result(context, result)
+        logger.info(f"{task.entry.instance_id}: build=True resolved={resolved}")
+        return ExecutionBasedEvaluationResult.create_result(task, result, output=generated_query, build=True, resolved=resolved, error_message=error_message)
 
     def _gold_rows(self, context: EvaluationContext[DataQueryEntry]) -> Sequence[Mapping[str, object]]:
         """The expected rows: run the entry's gold query live against the container's fixed dataset.
@@ -159,3 +189,20 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
             # non-empty answer, so treat this as a harness/environment failure and fail loudly.
             raise EmptyGoldResultError(context.entry.instance_id)
         return rows
+
+
+DEFINITION: CategoryDefinition[DataQueryEntry] = CategoryDefinition(
+    category=EvaluationCategory.DATA_QUERY,
+    dataset_files={DatasetTier.GOLD: "dataquery.jsonl"},
+    entry_type=DataQueryEntry,
+    result_type=ExecutionBasedEvaluationResult,
+    summary_type=ExecutionBasedEvaluationResultSummary,
+    aggregate_type=ExecutionBasedLeaderboardAggregate,
+    evaluators=("resolution_rate", "build_rate"),
+    core_score="ResolutionRate",
+    judge=None,
+    runner="GitHub-BCBench",
+    requires_container=True,
+    pass_bc_credentials=False,
+    make=lambda _agent_config: DataQueryCategory(),
+)

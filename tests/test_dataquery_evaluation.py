@@ -6,8 +6,7 @@ from bcbench_core.agent.harness import AgentIdentity
 from bcbench_core.container import ContainerConfig
 from bcbench_core.exceptions import BuildError
 
-from bcbench.dataset import DataQueryEntry
-from bcbench.evaluate.dataquery import DataQueryPipeline, _load_answer_rows, result_sets_match
+from bcbench.categories.data_query import DataQueryCategory, DataQueryEntry, _load_answer_rows, result_sets_match
 from bcbench.exceptions import EmptyGoldResultError
 from bcbench.operations import dataquery_operations, wrap_query_as_api
 from bcbench.types import EvaluationCategory, EvaluationContext, HarnessName
@@ -98,13 +97,13 @@ class TestGoldRowsEmptyGuard:
         monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: [])
 
         with pytest.raises(EmptyGoldResultError):
-            DataQueryPipeline()._gold_rows(self._context(tmp_path))
+            DataQueryCategory()._gold_rows(self._context(tmp_path))
 
     def test_non_empty_gold_returned(self, tmp_path, monkeypatch):
         rows = [{"CountryRegionCode": "US", "CustomerCount": 3}]
         monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: rows)
 
-        assert DataQueryPipeline()._gold_rows(self._context(tmp_path)) == rows
+        assert DataQueryCategory()._gold_rows(self._context(tmp_path)) == rows
 
 
 class TestLoadAnswerRows:
