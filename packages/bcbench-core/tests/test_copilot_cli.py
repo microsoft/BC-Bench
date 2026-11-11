@@ -27,7 +27,6 @@ def test_invoke_copilot_defaults_to_none_tool_argument_and_no_custom_instruction
         "--available-tools=none",
         "--disable-builtin-mcps",
         "--no-auto-update",
-        "--secret-env-vars=COPILOT_GITHUB_TOKEN",
         "--no-custom-instructions",
         "--model=test-model",
         "--prompt=do the task",
@@ -107,9 +106,9 @@ def _command_for(options: CopilotOptions, tmp_path: Path) -> list[str]:
 
 
 def test_invoke_copilot_adds_logging_only_with_a_log_dir(tmp_path: Path):
-    assert _command_for(CopilotOptions(), tmp_path)[8:-1] == []
-    assert _command_for(CopilotOptions(log_dir=tmp_path), tmp_path)[8:-1] == ["--log-level=debug", f"--log-dir={tmp_path.resolve()}"]
-    assert _command_for(CopilotOptions(mcp_config_json='{"mcpServers":{}}'), tmp_path)[8:-1] == ['--additional-mcp-config={"mcpServers":{}}']
+    assert _command_for(CopilotOptions(), tmp_path)[7:-1] == []
+    assert _command_for(CopilotOptions(log_dir=tmp_path), tmp_path)[7:-1] == ["--log-level=debug", f"--log-dir={tmp_path.resolve()}"]
+    assert _command_for(CopilotOptions(mcp_config_json='{"mcpServers":{}}'), tmp_path)[7:-1] == ['--additional-mcp-config={"mcpServers":{}}']
 
 
 def test_invoke_copilot_does_not_grant_plugin_directory_access(tmp_path: Path):
@@ -151,7 +150,6 @@ def test_invoke_copilot_runs_a_configured_session_without_caller_built_arguments
         "--allow-all-tools",
         "--disable-builtin-mcps",
         "--no-auto-update",
-        "--secret-env-vars=COPILOT_GITHUB_TOKEN",
         "--model=test-model",
         "--log-level=debug",
         f"--log-dir={(tmp_path / 'logs').resolve()}",

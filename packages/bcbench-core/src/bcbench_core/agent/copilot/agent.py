@@ -47,8 +47,6 @@ def invoke_copilot(prompt: str, model: str, work_dir: Path, timeout: int, env: M
         "--disable-builtin-mcps",
         # Reproducible runs: the CLI version is the one that was installed and recorded
         "--no-auto-update",
-        # The agent's shell and MCP processes never need the Copilot token
-        "--secret-env-vars=COPILOT_GITHUB_TOKEN",
         *(() if options.custom_instructions else ("--no-custom-instructions",)),
         f"--model={model}",
         *log_args,
