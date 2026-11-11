@@ -52,25 +52,25 @@ class ExtRequestAdvisorCategory(Category[EvaluationContext[ExtRequestAdvisorEntr
     """No BC container, no build, no tests."""
 
     @override
-    def prepare_workspace(self, task: EvaluationContext[ExtRequestAdvisorEntry]) -> None:
-        setup_repo_prebuild(task.entry, task.repo_path)
-        (task.repo_path / ADVISOR_RESULT_FILE).unlink(missing_ok=True)
+    def prepare_workspace(self, context: EvaluationContext[ExtRequestAdvisorEntry]) -> None:
+        setup_repo_prebuild(context.entry, context.repo_path)
+        (context.repo_path / ADVISOR_RESULT_FILE).unlink(missing_ok=True)
 
     @override
-    def prepare(self, task: EvaluationContext[ExtRequestAdvisorEntry]) -> None:
-        self.prepare_workspace(task)
+    def prepare(self, context: EvaluationContext[ExtRequestAdvisorEntry]) -> None:
+        self.prepare_workspace(context)
 
     @override
-    def grade(self, task: EvaluationContext[ExtRequestAdvisorEntry], result: AgentResult) -> JudgeBasedEvaluationResult:
-        result_path = task.repo_path / ADVISOR_RESULT_FILE
+    def grade(self, context: EvaluationContext[ExtRequestAdvisorEntry], result: AgentResult) -> JudgeBasedEvaluationResult:
+        result_path = context.repo_path / ADVISOR_RESULT_FILE
         raw = result_path.read_text(encoding="utf-8").strip() if result_path.exists() else ""
 
         if not raw:
-            logger.warning(f"Agent produced no {ADVISOR_RESULT_FILE} for {task.entry.instance_id}")
-            return JudgeBasedEvaluationResult.create_empty_output(task, result)
+            logger.warning(f"Agent produced no {ADVISOR_RESULT_FILE} for {context.entry.instance_id}")
+            return JudgeBasedEvaluationResult.create_empty_output(context, result)
 
-        logger.info(f"Saved raw extensibility-request-advisor result for {task.entry.instance_id} (scoring pending)")
-        return JudgeBasedEvaluationResult.create_raw(task, result, output=raw)
+        logger.info(f"Saved raw extensibility-request-advisor result for {context.entry.instance_id} (scoring pending)")
+        return JudgeBasedEvaluationResult.create_raw(context, result, output=raw)
 
 
 DEFINITION: CategoryDefinition[ExtRequestAdvisorEntry] = CategoryDefinition(

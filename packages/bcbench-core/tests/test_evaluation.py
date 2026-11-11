@@ -17,16 +17,16 @@ class RecordingCategory:
     calls: list[str] = field(default_factory=list)
     results: list[AgentResult] = field(default_factory=list)
 
-    def prepare_workspace(self, task: str) -> None:
+    def prepare_workspace(self, context: str) -> None:
         self.calls.append("prepare_workspace")
 
-    def prepare(self, task: str) -> None:
+    def prepare(self, context: str) -> None:
         self.calls.append("prepare")
 
-    def grade(self, task: str, result: AgentResult) -> str:
+    def grade(self, context: str, result: AgentResult) -> str:
         self.calls.append("grade")
         self.results.append(result)
-        return f"graded {task}"
+        return f"graded {context}"
 
 
 @dataclass
@@ -47,8 +47,8 @@ class StubHarness:
         return self.result or AgentResult()
 
 
-def _timed_out(task: str, observed: AgentResult) -> str:
-    raise AssertionError(f"{task} must not time out")
+def _timed_out(context: str, observed: AgentResult) -> str:
+    raise AssertionError(f"{context} must not time out")
 
 
 def _request(tmp_path: Path) -> AgentRequest[str]:
@@ -75,8 +75,8 @@ def test_timeout_skips_grading_and_keeps_what_was_observed(tmp_path: Path):
 
     observed: list[tuple[str, AgentResult]] = []
 
-    def on_timeout(task: str, result: AgentResult) -> str:
-        observed.append((task, result))
+    def on_timeout(context: str, result: AgentResult) -> str:
+        observed.append((context, result))
         return "timed out"
 
     graded = evaluate_task(category, "task-1", harness, _request(tmp_path), on_timeout=on_timeout)
