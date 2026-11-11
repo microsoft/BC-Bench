@@ -169,6 +169,13 @@ cheaply against the already-captured `trials.jsonl`.
   The bridge uses M365 LLM API / `LLM_API_*`, not the retired CAPI bridge or `CAPI_*` variables.
   Its built-in defaults use `az login` with certificate-read and Key Vault Crypto User permissions.
   Stateless bridge requests send the service's documented sticky-routing `opt-out` header.
+  `gpt-56-reasoning-sol` uses the Responses API because Chat Completions rejects its combination
+  of reasoning and function tools. This requires a BCal build that round-trips the optional
+  `choices[0].message.provider_context` onto subsequent assistant messages. The bridge preserves
+  exact provider output (including encrypted reasoning) and tool-call IDs in that context, with
+  `store=false`; it does not disable reasoning or retain a shared conversation pointer on disk.
+  Other model aliases keep the existing Chat Completions path. Missing or mismatched continuation
+  context fails the trial rather than silently dropping reasoning.
 - A **Foundry Hub project** for scoring + upload (`AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`,
   `AZURE_PROJECT_NAME`) plus `az login`. Not required for `--dry-run` or `--skip-evaluation`.
   `--no-upload` still contacts Azure evaluators; it is not offline scoring.

@@ -19,12 +19,13 @@ _TAXONOMY_INFERENCE_STEP = "HostAgent"
 # Reasoning effort (not all models support this parameter), different models might have different available values:
 # Set to None to omit the parameter entirely (lets the model/service use its own default).
 _DEFAULT_REASONING_EFFORT: str | None = None
+_RESPONSES_CONTEXT = "bcbench.responses.v1"
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
     model_dump = getattr(value, "model_dump", None)
     if callable(model_dump):
-        dumped = model_dump(mode="json", exclude_none=True)
+        dumped = model_dump(mode="json", exclude_none=True, by_alias=True)
         if isinstance(dumped, dict):
             return cast(dict[str, object], dumped)
 
@@ -38,6 +39,109 @@ def _to_jsonable(value: object) -> dict[str, object]:
         return cast(dict[str, object], value)
 
     raise TypeError(f"Unsupported response type from bc_eval LLM API bridge: {type(value)!r}")
+
+
+def _object(value: object, description: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{description} must be a JSON object.")
+    return cast(dict[str, object], value)
+
+
+def _objects(value: object, description: str) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        raise TypeError(f"{description} must be an array.")
+    return [_object(item, description) for item in value]
+
+
+def _responses_input(messages: list[dict[str, object]], model: str) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    pending_calls: set[str] = set()
+    for message in messages:
+        role = message.get("role")
+        if role == "assistant":
+            context = message.get("provider_context")
+            if not isinstance(context, dict) or context.get("format") != _RESPONSES_CONTEXT or context.get("model") != model:
+                raise ValueError("Responses assistant history requires matching provider_context. Use a BCal build with opaque provider-context support.")
+            output = _objects(context.get("output"), "Provider output")
+            calls = _objects(message.get("tool_calls", []), "Assistant tool calls")
+            output_ids = {item["call_id"] for item in output if item.get("type") == "function_call"}
+            if output_ids != {call["id"] for call in calls} or pending_calls:
+                raise ValueError("Responses provider context does not match the assistant tool-call history.")
+            for call_id in output_ids:
+                if not isinstance(call_id, str):
+                    raise TypeError("Responses function call IDs must be strings.")
+                pending_calls.add(call_id)
+            items.extend(output)
+        elif role == "tool":
+            call_id = message.get("tool_call_id")
+            if not isinstance(call_id, str) or call_id not in pending_calls:
+                raise ValueError("Tool result has no matching Responses function call.")
+            pending_calls.remove(call_id)
+            items.append({"type": "function_call_output", "call_id": call_id, "output": message.get("content", "")})
+        elif role in ("system", "developer", "user"):
+            items.append({"role": role, "content": message.get("content", "")})
+        else:
+            raise ValueError(f"Unsupported message role: {role!r}")
+    if pending_calls:
+        raise ValueError("Responses history is missing tool results.")
+    return items
+
+
+def _responses_tools(tools: object) -> list[dict[str, object]]:
+    converted: list[dict[str, object]] = []
+    for tool in _objects(tools, "Tools"):
+        if tool.get("type") != "function":
+            raise ValueError("The BCal Responses bridge only supports function tools.")
+        function = _object(tool.get("function"), "Function tool")
+        # Responses defaults to strict schemas; Chat Completions does not.
+        converted.append({"type": "function", **function, "strict": function.get("strict", False)})
+    return converted
+
+
+def _responses_completion(response: dict[str, object], model: str) -> dict[str, object]:
+    if response.get("status") != "completed":
+        raise RuntimeError(f"Responses request did not complete: {response.get('status')}; {response.get('error') or response.get('incomplete_details')}")
+    output = _objects(response.get("output"), "Response output")
+    text: list[str] = []
+    calls: list[dict[str, object]] = []
+    for item in output:
+        kind = item.get("type")
+        if kind == "reasoning":
+            if not item.get("encrypted_content"):
+                raise RuntimeError("Responses returned reasoning without encrypted continuation content.")
+        elif kind == "function_call":
+            calls.append({"id": item["call_id"], "type": "function", "function": {"name": item["name"], "arguments": item["arguments"]}})
+        elif kind == "message":
+            for content in _objects(item.get("content"), "Response message content"):
+                content_type = content.get("type")
+                if content_type not in ("output_text", "refusal"):
+                    raise ValueError(f"Unsupported Responses content type: {content_type!r}")
+                value = content.get("text" if content_type == "output_text" else "refusal")
+                if not isinstance(value, str):
+                    raise TypeError("Response message text must be a string.")
+                text.append(value)
+        else:
+            raise ValueError(f"Unsupported Responses output type: {kind!r}")
+    usage = _object(response.get("usage"), "Response usage")
+    message: dict[str, object] = {
+        "role": "assistant",
+        "content": "\n".join(text) or None,
+        "provider_context": {"format": _RESPONSES_CONTEXT, "model": model, "output": output},
+    }
+    if calls:
+        message["tool_calls"] = calls
+    return {
+        "id": response.get("id"),
+        "model": response.get("model"),
+        "choices": [{"index": 0, "finish_reason": "tool_calls" if calls else "stop", "message": message}],
+        "usage": {
+            "prompt_tokens": usage.get("input_tokens", 0),
+            "completion_tokens": usage.get("output_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+            "prompt_tokens_details": usage.get("input_tokens_details", {}),
+            "completion_tokens_details": usage.get("output_tokens_details", {}),
+        },
+    }
 
 
 def _load_request(input_stream: BinaryIO) -> dict[str, object]:
@@ -95,17 +199,35 @@ def main() -> int:
         settings=settings,
         credential=_local_certificate_credential(settings.tenant_id, settings.client_id),
     )
-    kwargs: dict[str, object] = {
+    headers = {"x-sticky-route-session-ticket": "opt-out"}
+    reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
+    if model == "gpt-56-reasoning-sol":
+        kwargs: dict[str, object] = {
+            "model": model,
+            "input": _responses_input(_objects(messages, "Messages"), model),
+            "max_output_tokens": request.get("max_completion_tokens", 16384),
+            "store": False,
+            "include": ["reasoning.encrypted_content"],
+            "extra_headers": headers,
+        }
+        if request.get("tools"):
+            kwargs["tools"] = _responses_tools(request["tools"])
+        if reasoning_effort is not None:
+            kwargs["reasoning"] = {"effort": reasoning_effort}
+        response = client.responses.create(**kwargs)
+        json.dump(_responses_completion(_to_jsonable(response), model), sys.stdout)
+        return 0
+
+    kwargs = {
         "model": model,
         "messages": messages,
         "max_completion_tokens": request.get("max_completion_tokens", 16384),
         # The bridge is a fresh process per turn and cannot retain opaque routing tickets.
-        "extra_headers": {"x-sticky-route-session-ticket": "opt-out"},
+        "extra_headers": headers,
     }
     if request.get("tools"):
         kwargs["tools"] = request["tools"]
 
-    reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
     if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
 
