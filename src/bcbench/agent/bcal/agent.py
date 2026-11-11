@@ -291,8 +291,8 @@ def _require_completed(transcript: dict[str, JsonValue], *, metrics: AgentMetric
         raise AgentError("BCal scenario did not complete successfully; exported files are diagnostics only.", transcript=transcript, metrics=metrics, config=config)
 
 
-def _run_bcal_process(args: list[str], *, timeout: int, stdout: TextIO | int = subprocess.PIPE) -> subprocess.CompletedProcess[str]:
-    with subprocess.Popen(args, stdout=stdout, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", start_new_session=os.name != "nt") as process:
+def _run_bcal_process(args: list[str], *, timeout: int, stdout: TextIO | int = subprocess.PIPE, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    with subprocess.Popen(args, stdout=stdout, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", start_new_session=os.name != "nt", env=env) as process:
         try:
             output, _ = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:

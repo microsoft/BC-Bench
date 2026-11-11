@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -201,6 +202,17 @@ def test_process_nonzero_exit_preserves_output():
         bcal_agent._run_bcal_process([sys.executable, "-c", "import sys; print('diagnostic'); sys.exit(7)"], timeout=10)
     assert error.value.returncode == 7
     assert error.value.stdout.strip() == "diagnostic"
+
+
+def test_process_receives_only_the_selected_child_environment(monkeypatch):
+    monkeypatch.setenv("BCBENCH_TEST_CHILD_ENV", "parent")
+    result = bcal_agent._run_bcal_process(
+        [sys.executable, "-c", "import os; print(os.environ['BCBENCH_TEST_CHILD_ENV'])"],
+        timeout=10,
+        env={**os.environ, "BCBENCH_TEST_CHILD_ENV": "child"},
+    )
+    assert result.stdout.strip() == "child"
+    assert os.environ["BCBENCH_TEST_CHILD_ENV"] == "parent"
 
 
 class TestRunBcalAgent:
