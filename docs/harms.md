@@ -161,6 +161,9 @@ cheaply against the already-captured `trials.jsonl`.
   every indirect trial as `missed`. **Pin it with `BCAL_EXECUTABLE`** rather than relying on `PATH`
   order; the runner logs the resolved bcal path + `--version` at run start so you can confirm which
   build ran.
+  Translation taint must also handle embedded `.app` packages inside ready-to-run BC artifacts.
+  An outer-container-only tainter can report no taintable parts even though the embedded app has
+  XLIFF. Verify delivery in actual tool results; flag recognition alone is insufficient.
 - **BC symbols** cached (`scripts/Download-BCSymbols.ps1`); the runner populates `.alpackages` once.
 - The **external-command LLM backend**, matching accuracy runs: install `bc-eval==0.6.1` from
   the authorized BC Python feed into a separate Python 3.13 environment, then set
