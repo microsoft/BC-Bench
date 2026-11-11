@@ -24,7 +24,7 @@ from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from bcbench.dataset import NL2ALEntry
-from bcbench.types import BCalAgentRuntime, HarnessName
+from bcbench.types import BCalAgentPlanning, BCalAgentRuntime, HarnessName
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ class BCalBackendConfig(BaseModel):
     command: str | None = None
     model: str | None = None
     agent_runtime: BCalAgentRuntime = BCalAgentRuntime.LEGACY
+    agent_planning: BCalAgentPlanning | None = None
     sdk_provider: Literal["openai"] | None = None
     sdk_base_url: str | None = None
     sdk_model: str | None = None
@@ -61,6 +62,8 @@ class BCalBackendConfig(BaseModel):
         return value
 
     def cli_args(self) -> list[str]:
+        if self.agent_runtime == BCalAgentRuntime.LEGACY and self.agent_planning == BCalAgentPlanning.COPILOT:
+            raise AgentError("Copilot planning requires --agent-runtime=copilot-sdk; no automatic planning fallback is allowed.")
         sdk_values = (self.sdk_provider, self.sdk_base_url, self.sdk_model, self.sdk_api_key_env)
         if self.agent_runtime == BCalAgentRuntime.LEGACY and any(value is not None for value in (*sdk_values, self.sdk_reasoning_effort, self.sdk_max_model_requests, self.sdk_timeout_seconds)):
             raise AgentError("SDK provider settings require --agent-runtime=copilot-sdk.")
@@ -76,7 +79,7 @@ class BCalBackendConfig(BaseModel):
             endpoint = urlsplit(self.endpoint)
             if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
                 raise AgentError("Azure OpenAI endpoint must use HTTPS and contain no credentials, query, or fragment.")
-        args: list[str] = []
+        args: list[str] = [f"--agent-planning={self.planning_identity()['planningMode']}"] if self.agent_planning is not None or self.agent_runtime == BCalAgentRuntime.COPILOT_SDK else []
         if self.agent_runtime == BCalAgentRuntime.COPILOT_SDK:
             if not all(sdk_values):
                 raise AgentError("copilot-sdk requires explicit SDK provider, base URL, model, and API-key environment variable.")
@@ -115,6 +118,17 @@ class BCalBackendConfig(BaseModel):
             args.append(f"--deployment={self.model}")
         return args
 
+    def planning_identity(self) -> dict[str, JsonValue]:
+        sdk = self.agent_runtime == BCalAgentRuntime.COPILOT_SDK
+        planning = self.agent_planning or (BCalAgentPlanning.COPILOT if sdk else BCalAgentPlanning.BCAL)
+        copilot = planning == BCalAgentPlanning.COPILOT
+        return {
+            "requestedPlanningMode": planning.value if self.agent_planning is not None or sdk else None,
+            "planningMode": planning.value,
+            "planningMechanism": "copilot-sdk-native" if copilot else "bcal-structured",
+            "completionPolicy": "copilot-self-review+bcal-invariants" if copilot else "bcal-whole-result-review",
+        }
+
     def experiment(self, timeout: int, transcript: dict[str, JsonValue] | None = None) -> ExperimentConfiguration:
         main_model = self.sdk_model if self.agent_runtime == BCalAgentRuntime.COPILOT_SDK else self.model
         legacy_provider = self.llm_provider or self.backend
@@ -129,8 +143,9 @@ class BCalBackendConfig(BaseModel):
             "commandSha256": hashlib.sha256(self.command.encode()).hexdigest() if self.command else None,
         }
         execution: dict[str, JsonValue] = {
-            "schemaVersion": "1.0",
+            "schemaVersion": "1.1",
             "agentRuntime": self.agent_runtime.value,
+            "planning": self.planning_identity(),
             "main": {
                 "provider": self.inference_provider or legacy_provider,
                 "wireApi": "responses" if self.agent_runtime == BCalAgentRuntime.COPILOT_SDK else legacy_wire_api,
@@ -340,9 +355,14 @@ def _require_completed(transcript: dict[str, JsonValue], *, metrics: AgentMetric
     ):
         raise AgentError("BCal scenario did not complete successfully; exported files are diagnostics only.", transcript=transcript, metrics=metrics, config=config)
     execution = config.execution or {}
-    if execution.get("agentRuntime") != "copilot-sdk":
-        return
     identity = transcript.get("runtimeIdentity")
+    planning = execution.get("planning")
+    if isinstance(identity, dict) and identity.get("agentRuntime") not in (None, execution.get("agentRuntime")):
+        raise AgentError("BCal runtime identity differs from the requested runtime; exported files are diagnostics only.", transcript=transcript, metrics=metrics, config=config)
+    if execution.get("agentRuntime") != "copilot-sdk":
+        if isinstance(identity, dict) and isinstance(planning, dict) and any(key in identity for key in planning) and any(identity.get(key) != value for key, value in planning.items()):
+            raise AgentError("BCal planning policy differs from the requested configuration; exported files are diagnostics only.", transcript=transcript, metrics=metrics, config=config)
+        return
     evidence = transcript.get("agentRuntimeEvidence")
     main = execution.get("main")
     auxiliary = execution.get("auxiliary")
@@ -352,6 +372,8 @@ def _require_completed(transcript: dict[str, JsonValue], *, metrics: AgentMetric
         or identity.get("agentRuntime") != "copilot-sdk"
         or identity.get("mainProvider") != "openai"
         or identity.get("mainProtocol") != "responses"
+        or not isinstance(planning, dict)
+        or any(identity.get(key) != value for key, value in planning.items())
         or any(not isinstance(value := identity.get(name), str) or not value for name in ("sdkPackageVersion", "sdkRuntimeVersion"))
         or any(not isinstance(value := identity.get(name), str) or len(value) != 64 or any(char not in "0123456789abcdef" for char in value) for name in ("systemPromptSha256", "toolCatalogSha256"))
         or not isinstance(main, dict)
@@ -377,6 +399,7 @@ def _require_completed(transcript: dict[str, JsonValue], *, metrics: AgentMetric
             or turn.get("turn") != index
             or turn.get("terminalState") != "completed"
             or turn.get("domainCompleted") is not True
+            or any(turn.get(key) != value for key, value in planning.items())
             for index, turn in enumerate(evidence, start=1)
         )
     ):

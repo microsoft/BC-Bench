@@ -96,6 +96,8 @@ def test_runtime_provider_and_prompt_identity_stay_separate() -> None:
         {"agentRuntime": "copilot-sdk", "provider": "m365"},
         {"agentRuntime": "copilot-sdk", "provider": "azure"},
         {"agentRuntime": "copilot-sdk", "provider": "m365", "promptHash": "different"},
+        {"agentRuntime": "copilot-sdk", "provider": "m365", "planning": {"planningMode": "copilot", "completionPolicy": "copilot-self-review+bcal-invariants"}},
+        {"agentRuntime": "copilot-sdk", "provider": "m365", "planning": {"planningMode": "bcal", "completionPolicy": "bcal-whole-result-review"}},
     ]
     results = [first.model_copy(update={"experiment": ExperimentConfiguration(execution=config)}) for config in configs]
     summaries = [EvaluationResultSummary.from_results([result], f"run-{index}") for index, result in enumerate(results)]

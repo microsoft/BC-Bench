@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 import typer
 from bcbench_core.container import ContainerConfig
 
-from bcbench.types import AgentRuntimeConfig, BCalAgentRuntime, DatasetTier, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, BCalAgentPlanning, BCalAgentRuntime, DatasetTier, EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here
@@ -50,6 +50,9 @@ EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Cate
 TierOption = Annotated[DatasetTier, typer.Option(help="Only use dataset entries whose metadata.tier matches")]
 
 BCalRuntimeOption = Annotated[BCalAgentRuntime, typer.Option("--agent-runtime", envvar="BCAL_AGENT_RUNTIME", help="BCal orchestration runtime; legacy remains the default")]
+BCalPlanningOption = Annotated[
+    BCalAgentPlanning | None, typer.Option("--agent-planning", help="Planning/self-review policy: SDK defaults to copilot; legacy requires bcal. No automatic fallback or environment override")
+]
 BCalSdkProvider = Annotated[Literal["openai"] | None, typer.Option("--sdk-provider", envvar="BCAL_SDK_PROVIDER", help="Explicit supported SDK provider type (Responses API)")]
 BCalSdkBaseUrl = Annotated[str | None, typer.Option("--sdk-base-url", envvar="BCAL_SDK_BASE_URL", help="SDK provider base URL ending in /v1; never include credentials")]
 BCalSdkModel = Annotated[str | None, typer.Option("--sdk-model", envvar="BCAL_SDK_MODEL", help="Explicit main SDK wire model; --llm-model remains legacy/auxiliary")]

@@ -28,6 +28,7 @@ __all__ = [
     "AgentConfig",
     "AgentMetricsContract",
     "AnyAgentMetrics",
+    "BCalAgentPlanning",
     "BCalAgentRuntime",
     "Checklist",
     "ChecklistAssertion",
@@ -55,6 +56,11 @@ type ChecklistLevel = Literal["critical", "expected", "aspirational"]
 class BCalAgentRuntime(StrEnum):
     LEGACY = "legacy"
     COPILOT_SDK = "copilot-sdk"
+
+
+class BCalAgentPlanning(StrEnum):
+    COPILOT = "copilot"
+    BCAL = "bcal"
 
 
 class ChecklistAssertion(TypedDict):

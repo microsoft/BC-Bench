@@ -16,6 +16,7 @@ the default, or establish that the SDK meets an evaluation acceptance gate.
 | Option / environment variable | Meaning |
 |---|---|
 | `--agent-runtime` / `BCAL_AGENT_RUNTIME` | `legacy` or `copilot-sdk`; default `legacy` |
+| `--agent-planning` (no environment override) | `copilot` or `bcal`; SDK defaults to `copilot`, legacy to `bcal` |
 | `--sdk-provider` / `BCAL_SDK_PROVIDER` | Explicit SDK provider type: currently `openai`, Responses only |
 | `--sdk-base-url` / `BCAL_SDK_BASE_URL` | Provider base ending in `/v1`; HTTPS, or HTTP on loopback only |
 | `--sdk-model` / `BCAL_SDK_MODEL` | Explicit main SDK wire model |
@@ -31,10 +32,25 @@ the default, or establish that the SDK meets an evaluation acceptance gate.
 | `--llm-provider` / `BCAL_LLM_PROVIDER` | Non-secret legacy/auxiliary provider attribution |
 | `--llm-wire-api` / `BCAL_LLM_WIRE_API` | Known legacy/auxiliary protocol, recorded as metadata only |
 
-SDK selection does **not** disable completion assessment, app-name generation,
-RDLC customization, or optional safety inference. Configure these routes
-explicitly through the legacy/auxiliary options. SDK and auxiliary models may
-differ. `BCAL_COMPLETION_REVIEW_MODEL` remains a separate auxiliary setting.
+SDK `copilot` planning means the SDK-driven model owns planning, revision, and
+self-review using native planning state. BCAL still enforces deterministic AL,
+approval, fresh compilation, terminal and export invariants; native completion
+intent alone is not success. BCAL's specialized planning and auxiliary whole-result
+review are absent in this mode. This is a **planning/self-review policy experiment**,
+not an otherwise-identical orchestration comparison.
+
+Select `--agent-planning=bcal` with the SDK only for an explicitly authorized
+compatibility experiment retaining BCAL planning/whole-result review.
+Legacy plus `copilot` is invalid. Bench always emits an explicit planning flag
+for SDK execution; omitted legacy planning leaves the official default argv
+unchanged. There is no automatic fallback or within-attempt policy switch.
+Native plan-to-autopilot transitions change execution phase, not planning policy.
+
+App-name generation, RDLC customization and requested safety inference remain
+separately configured and attributed through the legacy/auxiliary options.
+SDK and auxiliary models may differ. `BCAL_COMPLETION_REVIEW_MODEL` configures
+BCAL whole-result review where that policy applies; it does not add that review
+to Copilot self-review.
 An external command's underlying protocol is unknown unless explicitly
 attributed; it is not assumed to be Responses.
 
@@ -85,6 +101,10 @@ SDK-enabled `bcal-version`, the appropriate existing official/experiment feed,
 and explicit `sdk-model` and auxiliary `external-model`. Scheduled runs remain
 legacy. Feed selection, symbols, entry prompts, exports, and downstream judges
 are unchanged. An SDK version range, `latest`, or missing version is rejected.
+The workflow's `agent-planning=runtime-default` input resolves by runtime;
+explicit choices are passed through the CLI, never a planning environment
+override. SDK summaries are labeled as experiments and distinguish native
+planning from BCAL compatibility.
 SDK workflow dispatch is restricted to `test-run=true` (two entries in the
 selected tier), at most four concurrent workers. Use a fixed-entry/repeat
 manifest for an approved bounded pilot; full-dataset SDK dispatch is not enabled.
@@ -124,6 +144,14 @@ not evidence of successful task completion.
 SDK runs additionally require matching runtime/model/reasoning/auxiliary
 configuration, successful export, and one ordered runtime-evidence record per
 user turn with `terminalState=completed` and `domainCompleted=true`.
+Execution metadata schema `1.1` groups the requested/effective planning mode,
+mechanism and completion policy. SDK `runtimeIdentity` and every evidence turn
+must match `requestedPlanningMode`, `planningMode`, `planningMechanism` and
+`completionPolicy`; missing or contradictory policy evidence fails the attempt.
+The requested value records the actual emitted BCAL CLI flag, including Bench's
+explicit SDK default. Native policy is `copilot-sdk-native` with
+`copilot-self-review+bcal-invariants`; compatibility policy is `bcal-structured`
+with `bcal-whole-result-review`. Do not merge scores across these policies.
 An outer timeout terminates BCAL's owned process tree (Windows PID-targeted
 `taskkill /T`, or a dedicated POSIX process group), not only the parent process.
 Cleanup failures remain explicit errors with `cleanup-unverified` diagnostics;
@@ -154,6 +182,10 @@ Use the same existing gold/challenge entries, symbols, prompts, judges, and
 explicit auxiliary configuration for both runtimes. Pin package/runtime/SDK
 versions, providers, wire models, reasoning, prompt/catalog identities and
 budgets. Label chat-versus-Responses and other unavoidable provider confounders.
+For native-planning experiments, record the changed planning/self-review policy
+and its distinct system-prompt/tool-catalog hashes rather than requiring hash
+equality with legacy BCAL planning. Verify actual model-authored native planning
+and guarded completion in the immutable package before admitting task runs.
 Operational smoke outcomes do not replace downstream checklist judging or
 establish statistical non-inferiority.
 

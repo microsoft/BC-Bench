@@ -102,7 +102,7 @@ def test_experimental_feed_runs_are_published_as_experiments():
     job = _workflow("bcal-evaluation.yml")["jobs"]["summarize-results"]
     summarize = _workflow("summarize-results.yml")
 
-    assert job["with"]["experiment"] == "${{ inputs.bcal-feed == 'experiment' }}"
+    assert job["with"]["experiment"] == "${{ inputs.bcal-feed == 'experiment' || inputs.agent-runtime == 'copilot-sdk' }}"
     assert summarize[True]["workflow_call"]["inputs"]["experiment"]["default"] is False
     assert "${{ inputs.experiment && '--eval-run-type experiment' || '' }}" in _step(summarize, "summarize-results", "Upload result using bceval")["run"]
 
@@ -139,6 +139,22 @@ def test_sdk_provider_is_owned_authenticated_and_separate_from_auxiliary():
     assert step["env"]["BCAL_LLM_WIRE_API"] == "chat-completions"
     assert step["env"]["LLM_API_ENVIRONMENT"] == "TEST"
     assert "gh auth" not in script
+
+
+def test_planning_policy_is_selected_explicitly_without_changing_legacy_schedule():
+    workflow = _workflow("bcal-evaluation.yml")
+    planning = workflow[True]["workflow_dispatch"]["inputs"]["agent-planning"]
+    assert planning["default"] == "runtime-default"
+    assert planning["options"] == ["runtime-default", "copilot", "bcal"]
+    assert "BCAL_AGENT_PLANNING" not in workflow["env"]
+    guard = _step(workflow, "evaluate-with-bcal", "Validate planning selection")["run"]
+    assert 'BCAL_AGENT_RUNTIME -eq "legacy"' in guard
+    assert 'REQUESTED_AGENT_PLANNING -eq "copilot"' in guard
+    run = _step(workflow, "evaluate-with-bcal", "Run BCal for entry ${{ matrix.entry }}")["run"]
+    assert 'if ($env:REQUESTED_AGENT_PLANNING -ne "runtime-default")' in run
+    assert '@("--agent-planning", $env:REQUESTED_AGENT_PLANNING)' in run
+    assert "@planningArgs" in run
+    assert "inputs.agent-planning" in workflow["jobs"]["summarize-results"]["with"]["agent"]
 
 
 def test_diagnostics_upload_on_failure_never_includes_private_credentials():

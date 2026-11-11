@@ -50,6 +50,7 @@ def test_scan_only_exposes_external_command_options():
         "--llm-command",
         "--llm-model",
         "--agent-runtime",
+        "--agent-planning",
         "--sdk-provider",
         "--sdk-base-url",
         "--sdk-model",
@@ -82,6 +83,7 @@ def test_scan_forwards_sdk_contract_and_persists_terminal_metadata(tmp_path: Pat
             "language": next(iter(redteam.SupportedLanguages)),
             "risk_category": [next(iter(redteam.RiskCategory))],
             "agent_runtime": BCalAgentRuntime.COPILOT_SDK,
+            "agent_planning": "bcal",
             "sdk_provider": "openai",
             "sdk_base_url": "http://127.0.0.1:8123/v1",
             "sdk_model": "main-model",
@@ -105,11 +107,13 @@ def test_scan_forwards_sdk_contract_and_persists_terminal_metadata(tmp_path: Pat
     config = build.call_args.kwargs["backend_config"]
     assert "--sdk-max-model-requests=12" in config.cli_args()
     assert "--sdk-timeout-seconds=180" in config.cli_args()
+    assert "--agent-planning=bcal" in config.cli_args()
     metadata = json.loads((tmp_path / "scorecard.execution.json").read_text())
     assert metadata["scanTerminal"] == ("failed" if fails else "completed")
     assert metadata["bcalVersion"] == "sdk-test-package"
     assert metadata["model"] == "main-model"
     assert metadata["execution"]["main"]["provider"] == "main-provider"
+    assert metadata["execution"]["planning"]["planningMode"] == "bcal"
     assert metadata["execution"]["auxiliary"]["provider"] == "auxiliary-provider"
     assert "not-a-real-key" not in json.dumps(metadata)
 

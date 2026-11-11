@@ -181,6 +181,13 @@ def test_evaluate_bcal_preserves_failure_transcript(tmp_path):
     assert payload["experiment"]["execution"]["agentRuntime"] == "legacy"
 
 
+@pytest.mark.parametrize("command", [["run", "bcal"], ["evaluate", "bcal"], ["redteam", "scan"]])
+def test_bcal_planning_rejects_unknown_policies_at_cli_boundary(command):
+    result = CliRunner().invoke(app, [*command, "--agent-planning", "notapolicy"])
+    assert result.exit_code == 2
+    assert "notapolicy" in result.output
+
+
 @pytest.mark.parametrize("command_group", ["run", "evaluate"])
 def test_bcal_commands_only_expose_external_command_options(command_group):
     root = get_command(app)
@@ -195,6 +202,7 @@ def test_bcal_commands_only_expose_external_command_options(command_group):
         "--llm-backend",
         "--llm-endpoint",
         "--agent-runtime",
+        "--agent-planning",
         "--sdk-provider",
         "--sdk-base-url",
         "--sdk-model",
@@ -221,6 +229,7 @@ def test_bcal_commands_forward_main_runtime_and_auxiliary_identity(tmp_path, mon
         "llm_command": "python auxiliary.py",
         "llm_model": "auxiliary-model",
         "agent_runtime": BCalAgentRuntime.COPILOT_SDK,
+        "agent_planning": "bcal",
         "sdk_provider": "openai",
         "sdk_base_url": "http://127.0.0.1:8123/v1",
         "sdk_model": "main-model",
@@ -246,6 +255,7 @@ def test_bcal_commands_forward_main_runtime_and_auxiliary_identity(tmp_path, mon
         harness = run.call_args.args[0] if command_group == "run" else pipeline.return_value.execute.call_args.args[1]
         assert harness.identity().model == "main-model"
     assert harness.backend_config.model == "auxiliary-model"
+    assert "--agent-planning=bcal" in harness.backend_config.cli_args()
     assert harness.backend_config.inference_provider == "main-provider"
     assert harness.backend_config.llm_provider == "auxiliary-provider"
     assert harness.backend_config.llm_wire_api == "chat-completions"

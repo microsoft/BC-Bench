@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} [${{ inputs.agent-runtime || 'legacy' }}] (${{ inputs.agent-runtime == 'copilot-sdk' && inputs.sdk-model || inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} [${{ inputs.agent-runtime || 'legacy' }}/${{ inputs.agent-planning != 'runtime-default' && inputs.agent-planning || inputs.agent-runtime == 'copilot-sdk' && 'copilot' || 'bcal' }}] (${{ inputs.agent-runtime == 'copilot-sdk' && inputs.sdk-model || inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && (inputs.agent-runtime != 'copilot-sdk' || inputs.agent-planning == 'bcal') && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -36,6 +36,15 @@ on:
         options:
           - legacy
           - copilot-sdk
+      agent-planning:
+        description: "Planning/self-review policy; runtime-default means legacy=bcal, SDK=copilot. Never automatic fallback"
+        required: false
+        default: runtime-default
+        type: choice
+        options:
+          - runtime-default
+          - copilot
+          - bcal
       sdk-model:
         description: "Explicit main Responses wire model; external-model remains the auxiliary model"
         required: false
@@ -78,7 +87,7 @@ on:
           - "gpt-56-reasoning-sol"
           - "gpt-55-chat"
       completion-review-model:
-        description: "Separate model for BCal's completion review; none uses external-model"
+        description: "BCAL planning's whole-result review model; none uses external-model. Unused by Copilot self-review"
         required: false
         default: "none"
         type: choice
@@ -150,6 +159,15 @@ jobs:
           }
           if ($env:BCAL_REQUESTED_VERSION -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
             throw "copilot-sdk requires an exact SDK-enabled BCAL package version, not latest or a version range."
+          }
+
+      - name: Validate planning selection
+        env:
+          REQUESTED_AGENT_PLANNING: ${{ inputs.agent-planning || 'runtime-default' }}
+        shell: pwsh
+        run: |
+          if ($env:BCAL_AGENT_RUNTIME -eq "legacy" -and $env:REQUESTED_AGENT_PLANNING -eq "copilot") {
+            throw "Copilot planning requires copilot-sdk; no automatic planning fallback is allowed."
           }
 
       - name: Install bcal CLI from internal feed
@@ -236,6 +254,7 @@ jobs:
           REQUESTED_SDK_REASONING_EFFORT: ${{ inputs.sdk-reasoning-effort || 'default' }}
           REQUESTED_SDK_MAX_MODEL_REQUESTS: ${{ inputs.sdk-max-model-requests }}
           REQUESTED_SDK_TIMEOUT_SECONDS: ${{ inputs.sdk-timeout-seconds }}
+          REQUESTED_AGENT_PLANNING: ${{ inputs.agent-planning || 'runtime-default' }}
           BCAL_INFERENCE_PROVIDER: bc-eval-m365-test@0.6.1
           BCAL_LLM_PROVIDER: bc-eval-m365-test@0.6.1
           BCAL_LLM_WIRE_API: chat-completions
@@ -252,6 +271,10 @@ jobs:
           $readyFile = "$env:RUNNER_TEMP\bcal-sdk-ready.json"
           # SDK flags must not affect scheduled or manually selected legacy runs.
           $sdkModel = $env:REQUESTED_SDK_MODEL
+          $planningArgs = @()
+          if ($env:REQUESTED_AGENT_PLANNING -ne "runtime-default") {
+            $planningArgs = @("--agent-planning", $env:REQUESTED_AGENT_PLANNING)
+          }
           try {
             if ($env:BCAL_AGENT_RUNTIME -eq "copilot-sdk") {
               $env:BCAL_SDK_MODEL = $sdkModel
@@ -284,7 +307,7 @@ jobs:
               if ($health.status -ne "ready") { throw "SDK inference provider health check failed." }
               $env:BCAL_SDK_BASE_URL = "$($ready.base_url)/v1"
             }
-            uv run bcbench evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+            uv run bcbench evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" @planningArgs
             if ($LASTEXITCODE -ne 0) { throw "BCal evaluation failed (exit $LASTEXITCODE)." }
           } finally {
             if ($proxy -and -not $proxy.HasExited) { Stop-Process -Id $proxy.Id -Force }
@@ -317,10 +340,10 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
       model: ${{ inputs.agent-runtime == 'copilot-sdk' && inputs.sdk-model || inputs.external-model || 'gpt-55-chat' }}
-      agent: ${{ inputs.agent-runtime == 'copilot-sdk' && 'BCal-copilot-sdk' || 'BCal-external-command' }}
+      agent: ${{ inputs.agent-runtime == 'copilot-sdk' && format('BCal-copilot-sdk-{0}', inputs.agent-planning == 'bcal' && 'bcal' || 'copilot') || 'BCal-external-command' }}
       mock: ${{ inputs.test-run || false }}
       category: nl2al
       tier: ${{ inputs.tier || 'gold' }}
-      experiment: ${{ inputs.bcal-feed == 'experiment' }}
+      experiment: ${{ inputs.bcal-feed == 'experiment' || inputs.agent-runtime == 'copilot-sdk' }}
       skip-leaderboard: true
     secrets: inherit

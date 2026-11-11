@@ -14,7 +14,7 @@ import pytest
 from bcbench_core.agent.harness import AgentRequest, AgentResult
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
 
-from bcbench.agent.bcal import BCalAgentRuntime, BCalBackendConfig
+from bcbench.agent.bcal import BCalAgentPlanning, BCalAgentRuntime, BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.dataset import NL2ALEntry
 from tests.conftest import create_nl2al_entry
@@ -32,9 +32,17 @@ RESULT: dict[str, object] = {
     "evidence": {"contractVersion": "1.0", "trace": {"events": [{"type": "tool", "name": "compile"}]}},
 }
 
+SDK_PLANNING = {
+    "requestedPlanningMode": "copilot",
+    "planningMode": "copilot",
+    "planningMechanism": "copilot-sdk-native",
+    "completionPolicy": "copilot-self-review+bcal-invariants",
+}
+
 SDK_RESULT: dict[str, object] = {
     **RESULT,
     "runtimeIdentity": {
+        **SDK_PLANNING,
         "contractVersion": "1",
         "agentRuntime": "copilot-sdk",
         "mainProvider": "openai",
@@ -53,6 +61,7 @@ SDK_RESULT: dict[str, object] = {
     },
     "agentRuntimeEvidence": [
         {
+            **SDK_PLANNING,
             "contractVersion": "1",
             "turn": 1,
             "terminalState": "completed",
@@ -128,12 +137,26 @@ def sdk_config(monkeypatch) -> BCalBackendConfig:
 def test_sdk_main_and_auxiliary_flags_are_separate(sdk_config):
     args = sdk_config.cli_args()
     assert "--agent-runtime=copilot-sdk" in args
+    assert "--agent-planning=copilot" in args
     assert "--sdk-provider=openai" in args
     assert "--sdk-model=gpt-55-chat" in args
     assert "--sdk-api-key-env=TEST_SDK_KEY" in args
     assert "--deployment=auxiliary-model" in args
     assert "--llm-command=python auxiliary.py" in args
     assert "not-a-real-key" not in str(args)
+
+
+def test_legacy_rejects_copilot_planning_without_fallback():
+    with pytest.raises(AgentError, match="no automatic planning fallback"):
+        BCalBackendConfig(command="python bridge.py", agent_planning=BCalAgentPlanning.COPILOT).cli_args()
+
+
+def test_sdk_compatibility_planning_is_explicit_and_grouped_separately(sdk_config):
+    compatibility = sdk_config.model_copy(update={"agent_planning": BCalAgentPlanning.BCAL})
+    assert "--agent-planning=bcal" in compatibility.cli_args()
+    assert "--agent-planning=copilot" not in compatibility.cli_args()
+    assert compatibility.experiment(1500) != sdk_config.experiment(1500)
+    assert compatibility.experiment(1500).execution["planning"]["completionPolicy"] == "bcal-whole-result-review"
 
 
 def test_sdk_can_use_azure_auxiliary_without_external_command(sdk_config):
@@ -429,6 +452,48 @@ class TestRunBcalAgent:
         assert result.metrics.tool_usage == {"list_files": 1}
         assert result.metrics.ai_credits is None
 
+    def test_explicit_sdk_bcal_planning_accepts_matching_policy(self, workspace: Path, sdk_config):
+        config = sdk_config.model_copy(update={"agent_planning": BCalAgentPlanning.BCAL})
+        policy = config.planning_identity()
+        transcript = {
+            **SDK_RESULT,
+            "runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], **policy},
+            "agentRuntimeEvidence": [{**SDK_RESULT["agentRuntimeEvidence"][0], **policy}],
+        }
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="bcal"),
+            patch.object(bcal_agent, "_run_bcal_process", side_effect=lambda args, **_: _write_result(args, transcript)),
+        ):
+            result = _run_bcal(create_nl2al_entry(), workspace, config)
+        assert result.experiment.execution["planning"] == policy
+
+    @pytest.mark.parametrize(("key", "value"), [("planningMode", "copilot"), ("agentRuntime", "copilot-sdk")])
+    def test_legacy_rejects_observed_runtime_or_policy_changes(self, workspace: Path, key, value):
+        config = BCalBackendConfig(command="python bridge.py", agent_planning=BCalAgentPlanning.BCAL)
+        transcript = {**RESULT, "runtimeIdentity": {"agentRuntime": "legacy", **config.planning_identity(), key: value}}
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="bcal"),
+            patch.object(bcal_agent, "_run_bcal_process", side_effect=lambda args, **_: _write_result(args, transcript)),
+            pytest.raises(AgentError, match="diagnostics only"),
+        ):
+            _run_bcal(create_nl2al_entry(), workspace, config)
+
+    def test_sdk_rejects_mid_attempt_policy_change_even_when_final_turn_matches(self, workspace: Path, sdk_config):
+        transcript = {
+            **SDK_RESULT,
+            "steps": [*RESULT["steps"], {**RESULT["steps"][0], "id": "second-prompt"}],
+            "agentRuntimeEvidence": [
+                {**SDK_RESULT["agentRuntimeEvidence"][0], "planningMode": "bcal"},
+                {**SDK_RESULT["agentRuntimeEvidence"][0], "turn": 2},
+            ],
+        }
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="bcal"),
+            patch.object(bcal_agent, "_run_bcal_process", side_effect=lambda args, **_: _write_result(args, transcript)),
+            pytest.raises(AgentError, match="diagnostics only"),
+        ):
+            _run_bcal(create_nl2al_entry(), workspace, sdk_config)
+
     @pytest.mark.parametrize("redteam", [False, True])
     @pytest.mark.parametrize(
         "changes",
@@ -443,6 +508,10 @@ class TestRunBcalAgent:
             {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "reasoningEffort": "none"}},
             {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "systemPromptSha256": None}},
             {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "sdkRuntimeVersion": None}},
+            {"runtimeIdentity": {key: value for key, value in SDK_RESULT["runtimeIdentity"].items() if key not in SDK_PLANNING}},
+            {"agentRuntimeEvidence": [{key: value for key, value in SDK_RESULT["agentRuntimeEvidence"][0].items() if key not in SDK_PLANNING}]},
+            *({"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], key: "unexpected-policy"}} for key in SDK_PLANNING),
+            *({"agentRuntimeEvidence": [{**SDK_RESULT["agentRuntimeEvidence"][0], key: "unexpected-policy"}]} for key in SDK_PLANNING),
             {"export": {"attempted": False, "success": False}},
         ],
     )
