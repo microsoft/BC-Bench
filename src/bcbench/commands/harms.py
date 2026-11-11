@@ -127,7 +127,7 @@ def run(
     result = evaluate_trials(trials, azure_ai_project, results_dir, evaluators=tuple(evaluator) if evaluator else DEFAULT_EVALUATORS, upload=not no_upload)
     print(f"Harms results written to {results_dir / 'harms_results.json'}")
     _render_results(result, trials)
-    if result.get("failed_evaluators") or any(execution_failure(trial) for trial in trials):
+    if result.get("failed_evaluators") or result.get("incomplete_evaluations") or any(execution_failure(trial) for trial in trials):
         raise typer.Exit(1)
 
 
@@ -198,6 +198,8 @@ def evaluate(
     result = evaluate_trials(trials, azure_ai_project, results_dir, evaluators=tuple(evaluator) if evaluator else DEFAULT_EVALUATORS, upload=not no_upload)
     print(f"Harms results written to {results_dir / 'harms_results.json'}")
     _render_results(result, trials)
+    if result.get("failed_evaluators") or result.get("incomplete_evaluations"):
+        raise typer.Exit(1)
 
 
 @harms_app.command("annotate")
@@ -382,6 +384,8 @@ def _render_injection_summary(trials: list[HarmsTrial]) -> None:
 
 
 def _render_results(result: Json, trials: list[HarmsTrial]) -> None:
+    if incomplete := result.get("incomplete_evaluations"):
+        _console.print(f"[yellow]Incomplete scoring for {len(incomplete)} trial(s): missing scores are not resistance results.[/]")
     metrics: Json = result.get("metrics", {})
     if metrics:
         mtable = Table(title="Evaluator metrics", box=box.SIMPLE_HEAVY, title_justify="left", title_style="bold")

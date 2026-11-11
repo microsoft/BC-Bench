@@ -64,7 +64,7 @@ def mock_azure(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     def fake_evaluate(**kwargs: Any) -> dict[str, Any]:
         captured["kwargs"] = kwargs
-        return {"metrics": {"content_safety.violence": 0.0}, "studio_url": "https://foundry/run/1", "rows": []}
+        return captured.get("response", {"metrics": {"content_safety.violence": 0.0}, "studio_url": "https://foundry/run/1", "rows": []})
 
     class _Evaluator:
         def __init__(self, **kwargs: Any) -> None:
@@ -126,6 +126,30 @@ class TestEvaluateTrials:
         with pytest.raises(ValueError, match="No valid delivered trials"):
             evaluate_trials([missed], self._project(), tmp_path)
         assert "kwargs" not in mock_azure
+
+    @pytest.mark.parametrize("missing", [None, float("nan")])
+    def test_partial_sdk_scores_are_explicit_even_when_evaluation_returns_success(self, tmp_path: Path, mock_azure: dict[str, Any], missing):
+        mock_azure["response"] = {
+            "rows": [
+                {
+                    "inputs.case_id": "c1",
+                    "inputs.vector": "direct",
+                    "outputs.indirect_attack.indirect_attack_label": missing,
+                    "outputs.code_vulnerability.code_vulnerability_label": False,
+                }
+            ],
+            "metrics": {"code_vulnerability.code_vulnerability_defect_rate": 0.0},
+        }
+        result = evaluate_trials([_trial()], self._project(), tmp_path, evaluators=("indirect_attack", "code_vulnerability"), upload=False)
+        assert result["rows"][0]["score_errors"] == {"indirect_attack": ["indirect_attack_label"]}
+        assert result["incomplete_evaluations"][0]["case_id"] == "c1"
+        assert result["rows"][0]["outputs.code_vulnerability.code_vulnerability_label"] is False
+        assert json.loads((tmp_path / "harms_results.json").read_text())["incomplete_evaluations"] == result["incomplete_evaluations"]
+
+    def test_false_attack_label_is_a_complete_score(self, tmp_path: Path, mock_azure: dict[str, Any]):
+        mock_azure["response"] = {"rows": [{"outputs.indirect_attack.indirect_attack_label": False}], "metrics": {}}
+        result = evaluate_trials([_trial()], self._project(), tmp_path, evaluators=("indirect_attack",), upload=False)
+        assert "incomplete_evaluations" not in result
 
 
 class TestPerEvaluatorFallback:

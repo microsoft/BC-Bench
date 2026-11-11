@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +27,11 @@ logger = logging.getLogger(__name__)
 #     direct trials this doubles as a UPIA manipulation signal (the attack is the prompt itself).
 #   - code_vulnerability: insecure/malicious generated AL (e.g. an exfiltration HTTP hook).
 DEFAULT_EVALUATORS = ("content_safety", "indirect_attack", "code_vulnerability")
+_REQUIRED_SCORES = {
+    "content_safety": ("violence_score", "self_harm_score", "sexual_score", "hate_unfairness_score"),
+    "indirect_attack": ("indirect_attack_label",),
+    "code_vulnerability": ("code_vulnerability_label",),
+}
 
 
 def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
@@ -135,12 +141,30 @@ def evaluate_trials(
         logger.warning(f"Combined evaluation failed ({type(exc).__name__}): {exc}. Falling back to per-evaluator scoring so partial results survive.")
         result = _evaluate_per_evaluator(_run, evaluator_map, upload_project)
 
+    _mark_incomplete_scores(result, evaluators)
     _write_result(result, results_dir / "harms_results.json")
     if url := result.get("studio_url"):
         logger.info(f"Foundry studio: {url}")
     if failed := result.get("failed_evaluators"):
         logger.warning(f"Evaluators that did not complete (network/RAI issues): {failed}. Re-run `harms evaluate` when connectivity is restored.")
     return result
+
+
+def _mark_incomplete_scores(result: dict[str, Any], evaluators: tuple[str, ...]) -> None:
+    incomplete: list[dict[str, Any]] = []
+    for row in result.get("rows", []):
+        missing: dict[str, list[str]] = {}
+        for name in evaluators:
+            for field in _REQUIRED_SCORES[name]:
+                value = row.get(f"outputs.{name}.{field}")
+                if value is None or (isinstance(value, float) and not math.isfinite(value)):
+                    missing.setdefault(name, []).append(field)
+        if missing:
+            row["score_errors"] = missing
+            incomplete.append({"case_id": row.get("inputs.case_id"), "vector": row.get("inputs.vector"), "missing_scores": missing})
+    if incomplete:
+        result["incomplete_evaluations"] = incomplete
+        logger.warning(f"{len(incomplete)} trial(s) have missing or non-finite evaluator scores. Partial metrics do not establish attack resistance.")
 
 
 def _evaluate_per_evaluator(run: Any, evaluator_map: dict[str, Any], upload_project: dict[str, str] | None) -> dict[str, Any]:  # noqa: ANN401 - SDK objects

@@ -258,6 +258,9 @@ per trial as `harm_delivered` and surfaced as the **`Valid?`** column:
 Every exported `eval_dataset.jsonl` row carries `harm_delivered` and a `valid` flag.
 Only verified, delivered trials enter `valid_eval_dataset.jsonl`, which is the Azure evaluator input.
 Missed injections and execution errors therefore cannot lower the reported attack-success rate.
+Azure SDK calls can also return partial rows without raising an exception. Missing or non-finite
+scores are recorded under `score_errors` / `incomplete_evaluations`; `harms run` and `harms evaluate`
+exit unsuccessfully while preserving the usable scores. Partial metrics are not evidence of resistance.
 The report prints a summary, e.g.
 `Validity: 6/12 result lines are valid (the agent received the harm)`.
 

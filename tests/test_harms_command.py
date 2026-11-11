@@ -54,6 +54,13 @@ def test_harms_is_registered():
     assert "annotate" in result.output
 
 
+def test_evaluate_returns_failure_for_partial_scores(tmp_path: Path):
+    (tmp_path / "trials.jsonl").write_text(_trial().model_dump_json() + "\n", encoding="utf-8")
+    with patch("bcbench.commands.harms.evaluate_trials", return_value={"rows": [], "metrics": {}, "incomplete_evaluations": [{"case_id": "c1"}]}):
+        result = runner.invoke(app, ["harms", "evaluate", str(tmp_path), "--subscription-id", "s", "--resource-group", "rg", "--project-name", "p", "--no-upload"])
+    assert result.exit_code == 1
+
+
 def test_annotate_backfills_validity_and_refreshes_dataset(tmp_path: Path):
     import json
 
