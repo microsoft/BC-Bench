@@ -42,6 +42,8 @@ SDK_RESULT: dict[str, object] = {
         "mainModel": "gpt-55-chat",
         "sdkPackageVersion": "1.0.29",
         "sdkRuntimeVersion": "1.0.107",
+        "maxModelRequests": 8,
+        "timeoutSeconds": 120,
         "systemPromptSha256": "4e5b8853404210fd7fb07e0716e46850ad578dc2feeefbcbeb2175ea84b1b664",
         "toolCatalogSha256": "82bf8db5985221eba02f89c02bc97e8c2a220eae56f525c698ce38ff72b9dcca",
         "reasoningEffort": None,
@@ -478,6 +480,16 @@ class TestRunBcalAgent:
         assert error.value.metrics.prompt_tokens == 10985
         assert error.value.metrics.completion_tokens == 41
 
+    @pytest.mark.parametrize("changes", [{"sdk_max_model_requests": 64}, {"sdk_timeout_seconds": 1200}])
+    def test_sdk_rejects_a_runtime_that_ignored_the_requested_budget(self, workspace: Path, sdk_config, changes):
+        config = sdk_config.model_copy(update=changes)
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="bcal"),
+            patch.object(bcal_agent, "_run_bcal_process", side_effect=lambda args, **_: _write_result(args, SDK_RESULT)),
+            pytest.raises(AgentError, match="identity"),
+        ):
+            _run_bcal(create_nl2al_entry(), workspace, config)
+
     @pytest.mark.parametrize("tokens", [None, -1, True, "12", 1.5])
     def test_invalid_or_unknown_token_measurements_stay_unavailable(self, tokens):
         metrics = bcal_agent._result_metrics({"totals": {"inputTokens": tokens, "outputTokens": 4}}, 1)
@@ -485,8 +497,9 @@ class TestRunBcalAgent:
         assert metrics.completion_tokens == 4
         assert metrics.total_tokens is None
 
-    def test_sdk_unavailable_usage_is_not_a_measured_zero(self):
-        transcript = {**SDK_RESULT, "totals": {"inputTokens": 0, "outputTokens": 0}, "agentRuntimeEvidence": [{"combinedUsageAvailability": "unavailable"}]}
+    @pytest.mark.parametrize("runtime", ["legacy", "copilot-sdk"])
+    def test_explicitly_unavailable_usage_is_not_a_measured_zero(self, runtime):
+        transcript = {**SDK_RESULT, "runtimeIdentity": {"agentRuntime": runtime}, "totals": {"inputTokens": 0, "outputTokens": 0}, "agentRuntimeEvidence": [{"combinedUsageAvailability": "unavailable"}]}
         metrics = bcal_agent._result_metrics(transcript, 1)
         assert metrics.prompt_tokens is None
         assert metrics.completion_tokens is None
