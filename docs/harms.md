@@ -167,14 +167,17 @@ and authorized access to the BCal and BC Python feeds. Service/feed URLs and cre
 by your organization; this repository does not grant access. Configure `LLM_API_*` as described in
 `.env.sample`, and use the same credentials for the agent and the local checklist judge.
 
-Install an **exact** BCal package version containing nested-package translation injection,
-analyzer-lifetime manifest caching and local resume support. Keep the whole installed tool directory.
+Use `Microsoft.BusinessCentral.BCal.CLI` version **`30.0.46.28048-beta`** from the approved experiment
+feed for this run. It contains nested-package translation injection, analyzer-lifetime manifest
+caching and local resume support. Keep the whole installed tool directory.
+The published `.nupkg` SHA-256 is
+`5a0d0f255ec8b69f6fae6412f7199fddf0b463437e81308986ad107ed1b2dc4d`.
 Use your organization's Azure Artifacts credential-provider setup; do not put tokens in URLs,
 command lines, committed files or reports.
 
 ```powershell
-# Set BCAL_PACKAGE_ID, BCAL_FEED_URL and BCAL_PACKAGE_VERSION to approved exact values.
-dotnet tool install $env:BCAL_PACKAGE_ID --version $env:BCAL_PACKAGE_VERSION `
+# Set BCAL_FEED_URL to your authorized experiment feed URL.
+dotnet tool install Microsoft.BusinessCentral.BCal.CLI --version 30.0.46.28048-beta `
     --tool-path .\.tools\bcal --add-source $env:BCAL_FEED_URL --interactive
 if ($LASTEXITCODE) { throw 'BCal installation failed' }
 
@@ -183,6 +186,10 @@ if ($LASTEXITCODE) { throw 'BCal installation failed' }
 .\scripts\Setup-BCalBridge.ps1 -PythonFeedUrl $env:BC_EVAL_PYTHON_FEED_URL
 .\scripts\Download-BCSymbols.ps1 -Category nl2al -Tier gold -InstanceId nl2al__move-name-customer-card-2
 ```
+
+For the accuracy workflow, select `bcal-feed: experiment`, `bcal-version: 30.0.46.28048-beta`
+and `external-model: gpt-56-ceres`; keep `test-run: true` for preflight. Do not select the latest
+prerelease when comparing runs.
 
 Commit the checkout before evaluating. Use paths without spaces for the checkout/bridge, a fresh
 results directory, and the exact downloaded BC artifact version. The wrapper records the source
