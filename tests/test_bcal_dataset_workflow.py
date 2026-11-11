@@ -105,3 +105,50 @@ def test_experimental_feed_runs_are_published_as_experiments():
     assert job["with"]["experiment"] == "${{ inputs.bcal-feed == 'experiment' }}"
     assert summarize[True]["workflow_call"]["inputs"]["experiment"]["default"] is False
     assert "${{ inputs.experiment && '--eval-run-type experiment' || '' }}" in _step(summarize, "summarize-results", "Upload result using bceval")["run"]
+
+
+def test_sdk_runtime_is_opt_in_and_requires_exact_package():
+    workflow = _workflow("bcal-evaluation.yml")
+    runtime = workflow[True]["workflow_dispatch"]["inputs"]["agent-runtime"]
+    assert runtime["default"] == "legacy"
+    assert runtime["options"] == ["legacy", "copilot-sdk"]
+    assert workflow["env"]["BCAL_AGENT_RUNTIME"] == "${{ inputs.agent-runtime || 'legacy' }}"
+    guard = _step(workflow, "evaluate-with-bcal", "Validate explicit SDK package selection")
+    assert guard["if"] == "inputs.agent-runtime == 'copilot-sdk'"
+    assert "BCAL_REQUESTED_VERSION -notmatch" in guard["run"]
+    assert "requires an exact SDK-enabled" in guard["run"]
+    assert "SDK_SMOKE_RUN" in guard["run"]
+    assert "full-dataset SDK runs are not enabled" in guard["run"]
+    assert workflow["jobs"]["evaluate-with-bcal"]["strategy"]["max-parallel"] == "${{ inputs.agent-runtime == 'copilot-sdk' && 4 || 32 }}"
+    assert workflow["jobs"]["get-entries"]["with"]["test-run"] == "${{ inputs.agent-runtime == 'copilot-sdk' || inputs.test-run || false }}"
+
+
+def test_sdk_provider_is_owned_authenticated_and_separate_from_auxiliary():
+    workflow = _workflow("bcal-evaluation.yml")
+    step = _step(workflow, "evaluate-with-bcal", "Run BCal for entry ${{ matrix.entry }}")
+    script = step["run"]
+    assert script.count("$proxy = Start-Process") == 1
+    assert 'if ($env:BCAL_AGENT_RUNTIME -eq "copilot-sdk")' in script
+    assert '"--wire-api", "responses"' in script
+    assert "RandomNumberGenerator" in script
+    assert 'BCAL_SDK_API_KEY_ENV = "BCAL_SDK_PROXY_KEY"' in script
+    assert "Invoke-RestMethod" in script
+    assert "finally {" in script
+    assert "Stop-Process -Id $proxy.Id" in script
+    assert "bc_eval_llm_api_bridge.py" in script
+    assert step["env"]["BCAL_LLM_WIRE_API"] == "chat-completions"
+    assert step["env"]["LLM_API_ENVIRONMENT"] == "TEST"
+    assert "gh auth" not in script
+
+
+def test_diagnostics_upload_on_failure_never_includes_private_credentials():
+    workflow = _workflow("bcal-evaluation.yml")
+    upload = _step(workflow, "evaluate-with-bcal", "Upload evaluation results")
+    assert upload["if"] == "always()"
+    assert "*.bcal/**" in upload["with"]["path"]
+    assert "sdk-provider/*.log" in upload["with"]["path"]
+    assert ".pfx" not in upload["with"]["path"]
+    assert "RUNNER_TEMP" not in upload["with"]["path"]
+    cleanup = _step(workflow, "evaluate-with-bcal", "Remove staged evaluation certificate")
+    assert cleanup["if"] == "always()"
+    assert 'Remove-Item -LiteralPath "$env:RUNNER_TEMP\\llm-api-cert.pfx"' in cleanup["run"]

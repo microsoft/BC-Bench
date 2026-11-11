@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} [${{ inputs.agent-runtime || 'legacy' }}] (${{ inputs.agent-runtime == 'copilot-sdk' && inputs.sdk-model || inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -28,8 +28,48 @@ on:
         required: false
         default: ""
         type: string
+      agent-runtime:
+        description: "BCal orchestration runtime; SDK evaluations require an exact SDK-enabled package version"
+        required: false
+        default: legacy
+        type: choice
+        options:
+          - legacy
+          - copilot-sdk
+      sdk-model:
+        description: "Explicit main Responses wire model; external-model remains the auxiliary model"
+        required: false
+        default: "gpt-55-chat"
+        type: choice
+        options:
+          - "gpt-56-reasoning-nano-luna"
+          - "gpt-56-reasoning-sol"
+          - "gpt-55-chat"
+      sdk-reasoning-effort:
+        description: "Main SDK reasoning effort; default leaves the model/runtime default unchanged"
+        required: false
+        default: "default"
+        type: choice
+        options:
+          - "default"
+          - "none"
+          - "low"
+          - "medium"
+          - "high"
+          - "xhigh"
+          - "max"
+      sdk-max-model-requests:
+        description: "SDK upstream HTTP admission cap, including retries/compaction; not tool calls"
+        required: false
+        default: 64
+        type: number
+      sdk-timeout-seconds:
+        description: "SDK deadline in seconds, shorter than Bench's 1500-second process timeout"
+        required: false
+        default: 1200
+        type: number
       external-model:
-        description: "Model alias to use through the bc-eval M365 LLM API client"
+        description: "Legacy main / SDK auxiliary model through the bc-eval M365 LLM API client"
         required: false
         default: "gpt-55-chat"
         type: choice
@@ -64,12 +104,13 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
   TIER: ${{ inputs.tier || 'gold' }}
   BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
+  BCAL_AGENT_RUNTIME: ${{ inputs.agent-runtime || 'legacy' }}
 
 jobs:
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
-      test-run: ${{ inputs.test-run || false }}
+      test-run: ${{ inputs.agent-runtime == 'copilot-sdk' || inputs.test-run || false }}
       category: nl2al
       tier: ${{ inputs.tier || 'gold' }}
 
@@ -88,7 +129,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 32
+      max-parallel: ${{ inputs.agent-runtime == 'copilot-sdk' && 4 || 32 }}
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -97,6 +138,19 @@ jobs:
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
+
+      - name: Validate explicit SDK package selection
+        if: inputs.agent-runtime == 'copilot-sdk'
+        env:
+          SDK_SMOKE_RUN: ${{ inputs.test-run }}
+        shell: pwsh
+        run: |
+          if ($env:SDK_SMOKE_RUN -ne "true") {
+            throw "SDK workflow dispatch is smoke-only. Use an approved fixed-entry/repeat manifest for a bounded pilot; full-dataset SDK runs are not enabled."
+          }
+          if ($env:BCAL_REQUESTED_VERSION -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
+            throw "copilot-sdk requires an exact SDK-enabled BCAL package version, not latest or a version range."
+          }
 
       - name: Install bcal CLI from internal feed
         uses: $/.github/actions/install-bcal
@@ -178,6 +232,14 @@ jobs:
           BCAL_COMPLETION_REVIEW_MODEL: ${{ inputs.completion-review-model != 'none' && inputs.completion-review-model || '' }}
           LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
           LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+          REQUESTED_SDK_MODEL: ${{ inputs.sdk-model || 'gpt-55-chat' }}
+          REQUESTED_SDK_REASONING_EFFORT: ${{ inputs.sdk-reasoning-effort || 'default' }}
+          REQUESTED_SDK_MAX_MODEL_REQUESTS: ${{ inputs.sdk-max-model-requests }}
+          REQUESTED_SDK_TIMEOUT_SECONDS: ${{ inputs.sdk-timeout-seconds }}
+          BCAL_INFERENCE_PROVIDER: bc-eval-m365-test@0.6.1
+          BCAL_LLM_PROVIDER: bc-eval-m365-test@0.6.1
+          BCAL_LLM_WIRE_API: chat-completions
+          LLM_API_ENVIRONMENT: TEST
         shell: pwsh
         run: |
           $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
@@ -186,14 +248,64 @@ jobs:
           }
           $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-llm-api-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py"
 
-          uv run bcbench evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          $proxy = $null
+          $readyFile = "$env:RUNNER_TEMP\bcal-sdk-ready.json"
+          # SDK flags must not affect scheduled or manually selected legacy runs.
+          $sdkModel = $env:REQUESTED_SDK_MODEL
+          try {
+            if ($env:BCAL_AGENT_RUNTIME -eq "copilot-sdk") {
+              $env:BCAL_SDK_MODEL = $sdkModel
+              $env:BCAL_SDK_MAX_MODEL_REQUESTS = $env:REQUESTED_SDK_MAX_MODEL_REQUESTS
+              $env:BCAL_SDK_TIMEOUT_SECONDS = $env:REQUESTED_SDK_TIMEOUT_SECONDS
+              if ($env:REQUESTED_SDK_REASONING_EFFORT -ne "default") {
+                $env:BCAL_SDK_REASONING_EFFORT = $env:REQUESTED_SDK_REASONING_EFFORT
+              }
+              $env:BCAL_SDK_PROVIDER = "openai"
+              $env:BCAL_SDK_API_KEY_ENV = "BCAL_SDK_PROXY_KEY"
+              $env:BCAL_SDK_PROXY_KEY = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+              Write-Output "::add-mask::$env:BCAL_SDK_PROXY_KEY"
+              New-Item -ItemType Directory -Force "$env:EVALUATION_RESULTS_DIR\sdk-provider" | Out-Null
+              Remove-Item -LiteralPath $readyFile -Force -ErrorAction SilentlyContinue
+              $proxyArgs = @(
+                "$env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_sdk_proxy.py",
+                "--model", $sdkModel, "--wire-api", "responses", "--ready-file", $readyFile
+              )
+              $proxy = Start-Process "$env:GITHUB_WORKSPACE\.bcal-llm-api-venv\Scripts\python.exe" `
+                -ArgumentList $proxyArgs -PassThru -NoNewWindow `
+                -RedirectStandardOutput "$env:EVALUATION_RESULTS_DIR\sdk-provider\stdout.log" `
+                -RedirectStandardError "$env:EVALUATION_RESULTS_DIR\sdk-provider\stderr.log"
+              for ($attempt = 0; $attempt -lt 60 -and -not (Test-Path -LiteralPath $readyFile); $attempt++) {
+                if ($proxy.HasExited) { throw "SDK inference provider exited before readiness; inspect provider diagnostics." }
+                Start-Sleep -Milliseconds 500
+              }
+              if (-not (Test-Path -LiteralPath $readyFile)) { throw "SDK inference provider did not become ready." }
+              $ready = Get-Content -LiteralPath $readyFile -Raw | ConvertFrom-Json
+              $health = Invoke-RestMethod "$($ready.base_url)/health" -Headers @{ Authorization = "Bearer $env:BCAL_SDK_PROXY_KEY" } -TimeoutSec 5
+              if ($health.status -ne "ready") { throw "SDK inference provider health check failed." }
+              $env:BCAL_SDK_BASE_URL = "$($ready.base_url)/v1"
+            }
+            uv run bcbench evaluate bcal "${{ matrix.entry }}" --tier "$env:TIER" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+            if ($LASTEXITCODE -ne 0) { throw "BCal evaluation failed (exit $LASTEXITCODE)." }
+          } finally {
+            if ($proxy -and -not $proxy.HasExited) { Stop-Process -Id $proxy.Id -Force }
+            Remove-Item -LiteralPath $readyFile -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:\BCAL_SDK_PROXY_KEY -ErrorAction SilentlyContinue
+          }
+
+      - name: Remove staged evaluation certificate
+        if: always()
+        shell: pwsh
+        run: Remove-Item -LiteralPath "$env:RUNNER_TEMP\llm-api-cert.pfx" -Force -ErrorAction SilentlyContinue
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+          path: |
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.bcal/**
+            ${{ env.EVALUATION_RESULTS_DIR }}/sdk-provider/*.log
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
@@ -204,8 +316,8 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
-      model: ${{ inputs.external-model || 'gpt-55-chat' }}
-      agent: BCal-external-command
+      model: ${{ inputs.agent-runtime == 'copilot-sdk' && inputs.sdk-model || inputs.external-model || 'gpt-55-chat' }}
+      agent: ${{ inputs.agent-runtime == 'copilot-sdk' && 'BCal-copilot-sdk' || 'BCal-external-command' }}
       mock: ${{ inputs.test-run || false }}
       category: nl2al
       tier: ${{ inputs.tier || 'gold' }}

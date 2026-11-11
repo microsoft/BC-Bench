@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
 import subprocess
 import threading
@@ -20,8 +21,9 @@ from typer.main import get_command
 pytest.importorskip("azure.ai.evaluation.red_team")
 
 from bcbench import redteam
-from bcbench.agent.bcal import BCalBackendConfig
+from bcbench.agent.bcal import BCalAgentRuntime, BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
+from bcbench.commands import redteam as redteam_commands
 from bcbench.commands.redteam import _asr_table, _attack_result, _rows_table, redteam_app
 
 
@@ -44,8 +46,72 @@ def test_scan_only_exposes_external_command_options():
     assert isinstance(root, click.Group)
     options = _option_names(root.commands["scan"])
 
-    assert {"--llm-command", "--llm-model"} <= options
+    assert {
+        "--llm-command",
+        "--llm-model",
+        "--agent-runtime",
+        "--sdk-provider",
+        "--sdk-base-url",
+        "--sdk-model",
+        "--sdk-api-key-env",
+        "--sdk-reasoning-effort",
+        "--sdk-max-model-requests",
+        "--sdk-timeout-seconds",
+        "--inference-provider",
+        "--llm-provider",
+        "--llm-wire-api",
+    } <= options
     assert options.isdisjoint({"--backend", "--endpoint", "--deployment"})
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_scan_forwards_sdk_contract_and_persists_terminal_metadata(tmp_path: Path, monkeypatch, fails):
+    monkeypatch.setenv("TEST_SDK_KEY", "not-a-real-key")
+    output = tmp_path / "scorecard"
+    with (
+        patch.object(redteam, "build_bcal_target") as build,
+        patch.object(redteam, "run_scan", side_effect=AgentError("scan failed") if fails else None),
+        patch.object(redteam_commands, "_load_scorecard"),
+        patch.object(redteam_commands, "_render_scorecard"),
+        patch.object(bcal_agent, "get_bcal_version", return_value="sdk-test-package"),
+    ):
+        args = {
+            "subscription_id": "test-subscription",
+            "resource_group": "test-group",
+            "project_name": "test-project",
+            "language": next(iter(redteam.SupportedLanguages)),
+            "risk_category": [next(iter(redteam.RiskCategory))],
+            "agent_runtime": BCalAgentRuntime.COPILOT_SDK,
+            "sdk_provider": "openai",
+            "sdk_base_url": "http://127.0.0.1:8123/v1",
+            "sdk_model": "main-model",
+            "sdk_api_key_env": "TEST_SDK_KEY",
+            "sdk_reasoning_effort": "low",
+            "sdk_max_model_requests": 12,
+            "sdk_timeout_seconds": 180,
+            "inference_provider": "main-provider",
+            "llm_command": "python auxiliary.py",
+            "llm_model": "auxiliary-model",
+            "llm_provider": "auxiliary-provider",
+            "llm_wire_api": "chat-completions",
+            "output": output,
+            "scan_name": "fixed-test-scan",
+        }
+        if fails:
+            with pytest.raises(AgentError, match="scan failed"):
+                redteam_commands.scan(**args)
+        else:
+            redteam_commands.scan(**args)
+    config = build.call_args.kwargs["backend_config"]
+    assert "--sdk-max-model-requests=12" in config.cli_args()
+    assert "--sdk-timeout-seconds=180" in config.cli_args()
+    metadata = json.loads((tmp_path / "scorecard.execution.json").read_text())
+    assert metadata["scanTerminal"] == ("failed" if fails else "completed")
+    assert metadata["bcalVersion"] == "sdk-test-package"
+    assert metadata["model"] == "main-model"
+    assert metadata["execution"]["main"]["provider"] == "main-provider"
+    assert metadata["execution"]["auxiliary"]["provider"] == "auxiliary-provider"
+    assert "not-a-real-key" not in json.dumps(metadata)
 
 
 def test_bcal_target_uses_advanced_async_callback_signature(bcal_target: redteam.RedTeamCallback):
@@ -113,7 +179,7 @@ def test_bcal_target_runs_concurrent_prompts_in_parallel(bcal_target: redteam.Re
 
     with (
         patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
-        patch.object(subprocess, "run", side_effect=wait_for_other_process),
+        patch.object(bcal_agent, "_run_bcal_process", side_effect=wait_for_other_process),
     ):
         results = asyncio.run(run_concurrently())
 

@@ -13,7 +13,7 @@ from bcbench_core.agent.experiment import ExperimentConfiguration
 from pydantic import BaseModel, Field
 
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import EvaluationCategory
+from bcbench.types import EvaluationCategory, HarnessName
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -50,12 +50,13 @@ class EvaluationResultSummary(BaseModel, ABC):
     agent_version: str | None = None
 
     average_duration: float
-    average_prompt_tokens: float
-    average_completion_tokens: float
+    average_prompt_tokens: float | None
+    average_completion_tokens: float | None
     average_llm_duration: float | None = None
     # None rather than 0.0 when unavailable: only Copilot reports credits, and 0.0 would read as "free"
     average_ai_credits: float | None = None
     average_tool_usage: dict[str, float] | None = None
+    usage_availability: dict[str, int] | None = None
 
     github_run_id: str | None = None
     experiment: ExperimentConfiguration | None = None
@@ -87,6 +88,17 @@ class EvaluationResultSummary(BaseModel, ABC):
 
         first_result = results[0]
         experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
+        if any(result.agent_name == HarnessName.BCAL for result in results):
+            execution = first_result.experiment.execution if first_result.experiment else None
+            if any(
+                (result.experiment.execution if result.experiment else None) != execution
+                or result.agent_version != first_result.agent_version
+                or result.model != first_result.model
+                or result.agent_name != first_result.agent_name
+                for result in results
+            ):
+                raise ValueError("Cannot summarize mixed BCal execution identities; separate runtime, provider, versions and configuration first.")
+        unavailable_usage = None if first_result.agent_name == HarnessName.BCAL else 0.0
 
         return {
             "total": len(results),
@@ -96,11 +108,19 @@ class EvaluationResultSummary(BaseModel, ABC):
             "agent_name": first_result.agent_name,
             "agent_version": first_result.agent_version,
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
-            "average_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
-            "average_completion_tokens": sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
-            "average_llm_duration": sum(llm_durations) / len(llm_durations) if llm_durations else 0.0,
+            "average_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else unavailable_usage,
+            "average_completion_tokens": sum(completion_tokens) / len(completion_tokens) if completion_tokens else unavailable_usage,
+            "average_llm_duration": sum(llm_durations) / len(llm_durations) if llm_durations else unavailable_usage,
             "average_ai_credits": sum(ai_credits) / len(ai_credits) if ai_credits else None,
             "average_tool_usage": calculate_average_tool_usage(tool_usages) if tool_usages else None,
+            "usage_availability": {
+                "runs": len(results),
+                "prompt_tokens": len(prompt_tokens),
+                "completion_tokens": len(completion_tokens),
+                "llm_duration": len(llm_durations),
+            }
+            if first_result.agent_name == HarnessName.BCAL
+            else None,
             "github_run_id": run_id,
             "experiment": experiment,
             "benchmark_version": get_benchmark_version(),
@@ -132,6 +152,8 @@ class EvaluationResultSummary(BaseModel, ABC):
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
         if data["average_tool_usage"] is None:
             del data["average_tool_usage"]
+        if data["usage_availability"] is None:
+            del data["usage_availability"]
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:

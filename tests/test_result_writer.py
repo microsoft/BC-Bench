@@ -17,6 +17,31 @@ class TestWriteBcevalResults:
         "metrics",
         [
             None,
+            AgentMetrics(execution_time=2),
+            AgentMetrics(prompt_tokens=0, completion_tokens=0, total_tokens=0, llm_duration=0, tool_usage={}, turn_count=0),
+            AgentMetrics(prompt_tokens=20, completion_tokens=5, total_tokens=25, tool_usage={"compile": 1}),
+            AgentMetrics(prompt_tokens=20),
+        ],
+    )
+    def test_bcal_export_distinguishes_unavailable_measurements_from_compatibility_fields(self, tmp_path, metrics):
+        result = create_codereview_result(agent_name=HarnessName.BCAL, metrics=metrics)
+        with patch.object(CodeReviewEntry, "load", return_value=[create_codereview_entry()]):
+            write_bceval_results([result], tmp_path, "run", "results.jsonl", EvaluationCategory.CODE_REVIEW)
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        measurements = metadata["agent_measurements"]
+        expected = (metrics or AgentMetrics()).model_dump(mode="json", exclude={"kind"})
+        assert measurements["metrics"] == expected
+        assert measurements["availability"] == {name: value is not None for name, value in expected.items()}
+        assert measurements["schemaVersion"] == "1.0"
+        assert measurements["flatFields"] == "bc-eval-0.6.1-numeric-compatibility"
+        assert isinstance(metadata["prompt_tokens"], int)
+        assert isinstance(metadata["completion_tokens"], int)
+
+    @pytest.mark.parametrize(
+        "metrics",
+        [
+            None,
             PRReviewMetrics(execution_time=232.257560403),
             PRReviewMetrics(prompt_tokens=0, completion_tokens=0, total_tokens=0, ai_credits=0.0),
             PRReviewMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178, ai_credits=1.75),
@@ -39,6 +64,7 @@ class TestWriteBcevalResults:
 
         metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
         assert metadata["ai_credits"] == (metrics.ai_credits if metrics is not None else None)
+        assert "agent_measurements" not in metadata
         # bc-eval 0.6.1 adds these fields before invoking our custom metric callback.
         assert isinstance(metadata["prompt_tokens"], int)
         assert isinstance(metadata["completion_tokens"], int)

@@ -15,7 +15,22 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from bcbench.agent.bcal import BCalBackendConfig
+from bcbench.agent.bcal import BCalAgentRuntime, BCalBackendConfig, BCalHarness
+from bcbench.cli_options import (
+    BCalInferenceProvider,
+    BCalLlmBackend,
+    BCalLlmEndpoint,
+    BCalLlmProvider,
+    BCalLlmWireApi,
+    BCalRuntimeOption,
+    BCalSdkApiKeyEnv,
+    BCalSdkBaseUrl,
+    BCalSdkMaxModelRequests,
+    BCalSdkModel,
+    BCalSdkProvider,
+    BCalSdkReasoningEffort,
+    BCalSdkTimeoutSeconds,
+)
 from bcbench.config import get_config
 
 # Loose JSON alias (aliasing keeps `Any` out of function signatures, satisfying ANN401).
@@ -52,6 +67,19 @@ def scan(
     target: Annotated[RedTeamTarget, typer.Option(help="Agent under test")] = RedTeamTarget.BCAL,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal.")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal.")] = None,
+    agent_runtime: BCalRuntimeOption = BCalAgentRuntime.LEGACY,
+    sdk_provider: BCalSdkProvider = None,
+    sdk_base_url: BCalSdkBaseUrl = None,
+    sdk_model: BCalSdkModel = None,
+    sdk_api_key_env: BCalSdkApiKeyEnv = None,
+    sdk_reasoning_effort: BCalSdkReasoningEffort = None,
+    sdk_max_model_requests: BCalSdkMaxModelRequests = None,
+    sdk_timeout_seconds: BCalSdkTimeoutSeconds = None,
+    inference_provider: BCalInferenceProvider = None,
+    llm_provider: BCalLlmProvider = None,
+    llm_wire_api: BCalLlmWireApi = None,
+    llm_backend: BCalLlmBackend = "external-command",
+    llm_endpoint: BCalLlmEndpoint = None,
     output: Annotated[Path, typer.Option(help="Where the SDK writes the scan output. It creates a *directory* at this path holding evaluation_results.json.")] = _config.paths.redteam_scorecard,
     scan_name: Annotated[str | None, typer.Option(help="Scan name shown in the shared Foundry project. Defaults to bcbench-redteam-<timestamp>.")] = None,
 ) -> None:
@@ -74,31 +102,61 @@ def scan(
     scan_name = scan_name or f"bcbench-redteam-{datetime.now(UTC):%Y%m%d-%H%M%S}"
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    # Only support NL2AL for now, we will think about extensibility later.
-    scan_target = build_bcal_target(
-        package_cache_path=_config.paths.evaluation_results_path / "redteam" / ALPACKAGES_DIRNAME,
-        export_base=output.parent / "bcal-exports",
-        backend_config=BCalBackendConfig(
-            command=llm_command,
-            model=llm_model,
-        ),
+    backend = BCalBackendConfig(
+        command=llm_command,
+        model=llm_model,
+        agent_runtime=agent_runtime,
+        sdk_provider=sdk_provider,
+        sdk_base_url=sdk_base_url,
+        sdk_model=sdk_model,
+        sdk_api_key_env=sdk_api_key_env,
+        sdk_reasoning_effort=sdk_reasoning_effort,
+        sdk_max_model_requests=sdk_max_model_requests,
+        sdk_timeout_seconds=sdk_timeout_seconds,
+        inference_provider=inference_provider,
+        llm_provider=llm_provider,
+        llm_wire_api=llm_wire_api,
+        backend=llm_backend,
+        endpoint=llm_endpoint,
     )
+    harness = BCalHarness(backend)
+    identity = harness.identity()
+    metadata = {
+        "schemaVersion": "1.0",
+        "scanName": scan_name,
+        "bcalVersion": identity.version,
+        "model": identity.model,
+        "execution": backend.experiment(harness.timeout).execution,
+        "scanTerminal": "started",
+    }
+    metadata_path = output.parent / f"{output.name}.execution.json"
+    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-    run_scan(
-        target=scan_target,
-        azure_ai_project={
-            "subscription_id": subscription_id,
-            "resource_group_name": resource_group,
-            "project_name": project_name,
-        },
-        output_path=output,
-        scan_name=scan_name,
-        seeds_path=seeds,
-        risk_categories=risk_category,
-        attack_strategies=attack_strategy,
-        language=language,
-        is_agent_target=agent_target,
-    )
+    metadata["scanTerminal"] = "failed"
+    try:
+        scan_target = build_bcal_target(
+            package_cache_path=_config.paths.evaluation_results_path / "redteam" / ALPACKAGES_DIRNAME,
+            export_base=output.parent / "bcal-exports",
+            backend_config=backend,
+        )
+        run_scan(
+            target=scan_target,
+            azure_ai_project={
+                "subscription_id": subscription_id,
+                "resource_group_name": resource_group,
+                "project_name": project_name,
+            },
+            output_path=output,
+            scan_name=scan_name,
+            seeds_path=seeds,
+            risk_categories=risk_category,
+            attack_strategies=attack_strategy,
+            language=language,
+            is_agent_target=agent_target,
+        )
+        metadata["scanTerminal"] = "completed"
+    finally:
+        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     _console.print(f"Red team scan output written to {output}")
     _render_scorecard(_load_scorecard(output))
 

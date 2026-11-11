@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentResult
+from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.commands.result import _rebuild_aggregates, result_update
@@ -86,3 +87,43 @@ def test_version_does_not_replace_existing_grouping_dimensions() -> None:
         first.model_copy(update={"judge_model": "different-judge"}),
     ]
     assert len(_rebuild_aggregates(variants)) == len(variants)
+
+
+def test_runtime_provider_and_prompt_identity_stay_separate() -> None:
+    first = create_bugfix_result().model_copy(update={"agent_name": HarnessName.BCAL})
+    configs = [
+        {"agentRuntime": "legacy", "provider": "m365"},
+        {"agentRuntime": "copilot-sdk", "provider": "m365"},
+        {"agentRuntime": "copilot-sdk", "provider": "azure"},
+        {"agentRuntime": "copilot-sdk", "provider": "m365", "promptHash": "different"},
+    ]
+    results = [first.model_copy(update={"experiment": ExperimentConfiguration(execution=config)}) for config in configs]
+    summaries = [EvaluationResultSummary.from_results([result], f"run-{index}") for index, result in enumerate(results)]
+    assert len(_rebuild_aggregates(summaries)) == len(configs)
+    with pytest.raises(ValueError, match="mixed BCal execution identities"):
+        EvaluationResultSummary.from_results(results, "mixed")
+
+
+def test_missing_bcal_usage_is_unavailable_not_measured_zero() -> None:
+    result = create_bugfix_result().model_copy(update={"agent_name": HarnessName.BCAL, "metrics": None})
+    summary = EvaluationResultSummary.from_results([result], "run")
+    assert summary.average_prompt_tokens is None
+    assert summary.average_completion_tokens is None
+    assert summary.average_llm_duration is None
+    assert summary.usage_availability == {"runs": 1, "prompt_tokens": 0, "completion_tokens": 0, "llm_duration": 0}
+
+
+def test_partial_bcal_usage_excludes_missing_runs_but_keeps_measured_zero() -> None:
+    base = create_bugfix_result().model_copy(update={"agent_name": HarnessName.BCAL})
+    results = [
+        base.model_copy(update={"metrics": None}),
+        base.model_copy(update={"metrics": AgentMetrics(prompt_tokens=0, completion_tokens=0, llm_duration=0)}),
+        base.model_copy(update={"metrics": AgentMetrics(prompt_tokens=40, completion_tokens=10)}),
+    ]
+    summary = EvaluationResultSummary.from_results(results, "run")
+    assert summary.average_prompt_tokens == 20
+    assert summary.average_completion_tokens == 5
+    assert summary.average_llm_duration == 0
+    assert summary.usage_availability == {"runs": 3, "prompt_tokens": 2, "completion_tokens": 2, "llm_duration": 1}
+    restored = EvaluationResultSummary.from_json(summary.to_dict())
+    assert restored.usage_availability == summary.usage_availability

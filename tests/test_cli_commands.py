@@ -13,6 +13,7 @@ from bcbench_core.exceptions import AgentError
 from typer.main import get_command
 from typer.testing import CliRunner
 
+from bcbench.agent.bcal import BCalAgentRuntime, BCalHarness
 from bcbench.cli import _redteam_extra_installed, app
 from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtime
 from bcbench.commands import evaluate as evaluate_commands
@@ -177,6 +178,7 @@ def test_evaluate_bcal_preserves_failure_transcript(tmp_path):
     payload = json.loads(result_file.read_text(encoding="utf-8"))
     assert payload["error_message"] == "agent failed"
     assert payload["transcript"] == error.transcript
+    assert payload["experiment"]["execution"]["agentRuntime"] == "legacy"
 
 
 @pytest.mark.parametrize("command_group", ["run", "evaluate"])
@@ -187,8 +189,69 @@ def test_bcal_commands_only_expose_external_command_options(command_group):
     assert isinstance(group, click.Group)
     options = _option_names(group.commands["bcal"])
 
-    assert {"--llm-command", "--llm-model"} <= options
+    assert {
+        "--llm-command",
+        "--llm-model",
+        "--llm-backend",
+        "--llm-endpoint",
+        "--agent-runtime",
+        "--sdk-provider",
+        "--sdk-base-url",
+        "--sdk-model",
+        "--sdk-api-key-env",
+        "--sdk-reasoning-effort",
+        "--sdk-max-model-requests",
+        "--sdk-timeout-seconds",
+        "--inference-provider",
+        "--llm-provider",
+        "--llm-wire-api",
+    } <= options
     assert options.isdisjoint({"--backend", "--endpoint", "--deployment"})
+
+
+@pytest.mark.parametrize("command_group", ["run", "evaluate"])
+def test_bcal_commands_forward_main_runtime_and_auxiliary_identity(tmp_path, monkeypatch, command_group):
+    entry = create_nl2al_entry()
+    monkeypatch.setenv("TEST_SDK_KEY", "not-a-real-key")
+    commands = run_commands if command_group == "run" else evaluate_commands
+    command = commands.run_bcal if command_group == "run" else commands.evaluate_bcal
+    options = {
+        "entry_id": entry.instance_id,
+        "repo_path": tmp_path / "repo",
+        "llm_command": "python auxiliary.py",
+        "llm_model": "auxiliary-model",
+        "agent_runtime": BCalAgentRuntime.COPILOT_SDK,
+        "sdk_provider": "openai",
+        "sdk_base_url": "http://127.0.0.1:8123/v1",
+        "sdk_model": "main-model",
+        "sdk_api_key_env": "TEST_SDK_KEY",
+        "sdk_reasoning_effort": "low",
+        "sdk_max_model_requests": 12,
+        "sdk_timeout_seconds": 180,
+        "inference_provider": "main-provider",
+        "llm_provider": "auxiliary-provider",
+        "llm_wire_api": "chat-completions",
+    }
+    if command_group == "evaluate":
+        options.update(output_dir=tmp_path / "results", run_id="sdk-test")
+    with (
+        patch.object(EvaluationCategory, "dataset_path", return_value=tmp_path / "nl2al.jsonl"),
+        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock) as entry_class,
+        patch.object(commands, "NL2ALPipeline") as pipeline,
+        patch.object(BCalHarness, "run", autospec=True) as run,
+        patch("bcbench.agent.bcal.agent.get_bcal_version", return_value="sdk-test-version"),
+    ):
+        entry_class.return_value.load.return_value = [entry]
+        command(**options)
+        harness = run.call_args.args[0] if command_group == "run" else pipeline.return_value.execute.call_args.args[1]
+        assert harness.identity().model == "main-model"
+    assert harness.backend_config.model == "auxiliary-model"
+    assert harness.backend_config.inference_provider == "main-provider"
+    assert harness.backend_config.llm_provider == "auxiliary-provider"
+    assert harness.backend_config.llm_wire_api == "chat-completions"
+    assert harness.backend_config.sdk_reasoning_effort == "low"
+    assert harness.backend_config.sdk_max_model_requests == 12
+    assert harness.backend_config.sdk_timeout_seconds == 180
 
 
 @pytest.fixture

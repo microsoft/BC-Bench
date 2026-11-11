@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import EvaluationCategory, ExpectedOutput
+from bcbench.types import EvaluationCategory, ExpectedOutput, HarnessName
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,15 @@ def write_bceval_results(
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
                 **_experiment_metadata(result.experiment, git_ref, benchmark_version),
             }
+            if result.agent_name == HarnessName.BCAL:
+                # bc-eval 0.6.1 requires numeric flat fields for sums/pricing; preserve authoritative nullable measurements separately.
+                measurements = (result.metrics or AgentMetrics()).model_dump(mode="json", exclude={"kind"})
+                metadata["agent_measurements"] = {
+                    "schemaVersion": "1.0",
+                    "metrics": measurements,
+                    "availability": {name: value is not None for name, value in measurements.items()},
+                    "flatFields": "bc-eval-0.6.1-numeric-compatibility",
+                }
 
             bceval_result = {
                 "id": result.instance_id,

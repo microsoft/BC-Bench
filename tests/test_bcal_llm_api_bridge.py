@@ -128,6 +128,7 @@ def test_main_passes_local_certificate_credential_to_llm_api_client(monkeypatch,
         "model": "gpt-56-ceres",
         "messages": [{"role": "user", "content": "hi"}],
         "max_completion_tokens": 16384,
+        "extra_headers": {"x-sticky-route-session-ticket": ""},
         "tools": tools,
     }
 

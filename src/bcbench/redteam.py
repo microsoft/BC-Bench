@@ -64,6 +64,7 @@ def _message_content(message: object) -> str:
 def build_bcal_target(package_cache_path: Path, export_base: Path, backend_config: BCalBackendConfig) -> RedTeamCallback:
     """Wrap the nl2al (BCal) as a red-team target callback."""
 
+    backend_config.cli_args()
     category = EvaluationCategory.NL2AL
     # bcal always requires --page/--audience, but red teaming has no dataset entry of its own at the moment.
     entry = category.entry_class.load(category.dataset_path())[0]

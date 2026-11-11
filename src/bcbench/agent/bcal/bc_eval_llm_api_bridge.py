@@ -99,6 +99,7 @@ def main() -> int:
         "model": model,
         "messages": messages,
         "max_completion_tokens": request.get("max_completion_tokens", 16384),
+        "extra_headers": {"x-sticky-route-session-ticket": ""},
     }
     if request.get("tools"):
         kwargs["tools"] = request["tools"]

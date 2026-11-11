@@ -7,8 +7,22 @@ import typer
 from bcbench_core.agent.harness import AgentRequest
 
 from bcbench.agent import BCalBackendConfig, BCalHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
+from bcbench.agent.bcal import BCalAgentRuntime
 from bcbench.cli_options import (
     AgentConfigPath,
+    BCalInferenceProvider,
+    BCalLlmBackend,
+    BCalLlmEndpoint,
+    BCalLlmProvider,
+    BCalLlmWireApi,
+    BCalRuntimeOption,
+    BCalSdkApiKeyEnv,
+    BCalSdkBaseUrl,
+    BCalSdkMaxModelRequests,
+    BCalSdkModel,
+    BCalSdkProvider,
+    BCalSdkReasoningEffort,
+    BCalSdkTimeoutSeconds,
     ClaudeCodeModel,
     ContainerCompany,
     ContainerMcpUrl,
@@ -179,6 +193,19 @@ def run_bcal(
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    agent_runtime: BCalRuntimeOption = BCalAgentRuntime.LEGACY,
+    sdk_provider: BCalSdkProvider = None,
+    sdk_base_url: BCalSdkBaseUrl = None,
+    sdk_model: BCalSdkModel = None,
+    sdk_api_key_env: BCalSdkApiKeyEnv = None,
+    sdk_reasoning_effort: BCalSdkReasoningEffort = None,
+    sdk_max_model_requests: BCalSdkMaxModelRequests = None,
+    sdk_timeout_seconds: BCalSdkTimeoutSeconds = None,
+    inference_provider: BCalInferenceProvider = None,
+    llm_provider: BCalLlmProvider = None,
+    llm_wire_api: BCalLlmWireApi = None,
+    llm_backend: BCalLlmBackend = "external-command",
+    llm_endpoint: BCalLlmEndpoint = None,
 ) -> None:
     """
     Run BCal dotnet tool on a single nl2al entry to generate AL code.
@@ -190,7 +217,24 @@ def run_bcal(
     """
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
+    backend = BCalBackendConfig(
+        command=llm_command,
+        model=llm_model,
+        agent_runtime=agent_runtime,
+        sdk_provider=sdk_provider,
+        sdk_base_url=sdk_base_url,
+        sdk_model=sdk_model,
+        sdk_api_key_env=sdk_api_key_env,
+        sdk_reasoning_effort=sdk_reasoning_effort,
+        sdk_max_model_requests=sdk_max_model_requests,
+        sdk_timeout_seconds=sdk_timeout_seconds,
+        inference_provider=inference_provider,
+        llm_provider=llm_provider,
+        llm_wire_api=llm_wire_api,
+        backend=llm_backend,
+        endpoint=llm_endpoint,
+    )
+    backend.cli_args()
     NL2ALPipeline().setup_workspace(entry, repo_path)
-
-    harness = BCalHarness(BCalBackendConfig(command=llm_command, model=llm_model))
+    harness = BCalHarness(backend)
     harness.run(AgentRequest(task=entry, work_dir=repo_path, output_dir=repo_path))
