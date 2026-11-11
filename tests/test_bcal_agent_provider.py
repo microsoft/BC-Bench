@@ -204,6 +204,19 @@ def test_process_nonzero_exit_preserves_output():
     assert error.value.stdout.strip() == "diagnostic"
 
 
+def test_process_cleanup_timeout_is_not_reported_as_a_clean_timeout():
+    process = MagicMock(pid=123)
+    process.communicate.side_effect = [subprocess.TimeoutExpired(["bcal"], 10), subprocess.TimeoutExpired(["bcal"], 30)]
+    with (
+        patch.object(bcal_agent.subprocess, "Popen") as popen,
+        patch.object(bcal_agent.subprocess, "run"),
+        patch.object(bcal_agent.os, "killpg", create=True),
+    ):
+        popen.return_value.__enter__.return_value = process
+        with pytest.raises(AgentError, match=r"did not finish termination.*cleanup is unverified"):
+            bcal_agent._run_bcal_process(["bcal"], timeout=10)
+
+
 def test_process_receives_only_the_selected_child_environment(monkeypatch):
     monkeypatch.setenv("BCBENCH_TEST_CHILD_ENV", "parent")
     result = bcal_agent._run_bcal_process(

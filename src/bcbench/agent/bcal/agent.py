@@ -308,7 +308,10 @@ def _run_bcal_process(args: list[str], *, timeout: int, stdout: TextIO | int = s
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     logger.info("Owned BCal process group already exited: %s", process.pid)
-            output, _ = process.communicate(timeout=30)
+            try:
+                output, _ = process.communicate(timeout=30)
+            except subprocess.TimeoutExpired:
+                raise AgentError(f"Owned BCal process tree did not finish termination (PID {process.pid}); runtime cleanup is unverified.") from None
             raise subprocess.TimeoutExpired(args, timeout, output=output) from None
         if process.returncode:
             raise subprocess.CalledProcessError(process.returncode, args, output=output)
