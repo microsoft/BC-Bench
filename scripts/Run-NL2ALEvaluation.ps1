@@ -36,6 +36,7 @@ try {
         throw "Results directory already exists: $ResultsDirectory"
     }
     $artifactRoot = & $python -c 'import sys; from bcbench_core.artifacts import resolve_artifact_version_root; p=resolve_artifact_version_root("28.0"); assert p is not None and p.name == sys.argv[1], p; print(p)' $ArtifactVersion
+    $datasetPath = & $python -c 'import sys; from bcbench.types import EvaluationCategory as C, DatasetTier as T; print(C.NL2AL.dataset_path(T(sys.argv[1])))' $Tier
     $commit = git rev-parse HEAD
     if (git status --porcelain --untracked-files=no) { throw 'Commit tracked changes before recording an evaluation revision.' }
     $out = (New-Item -ItemType Directory -Path $ResultsDirectory).FullName
@@ -56,7 +57,7 @@ try {
         artifact_version = $ArtifactVersion
         package_hashes = @(Get-ChildItem -LiteralPath $artifactRoot -Recurse -File -Filter *.app |
             Get-FileHash -Algorithm SHA256 | Select-Object Path, Hash)
-        input_hashes = @(Get-FileHash .\dataset\nl2al.jsonl, .\dataset\harms\comprehensive.harms.yaml |
+        input_hashes = @(Get-FileHash $datasetPath, .\dataset\harms\comprehensive.harms.yaml |
             Select-Object Path, Hash)
     } | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 "$out\protocol.json"
 

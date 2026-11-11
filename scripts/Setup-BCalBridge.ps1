@@ -10,12 +10,12 @@ $PSNativeCommandUseErrorActionPreference = $true
 if ($PythonFeedUrl.Scheme -ne 'https' -or $PythonFeedUrl.UserInfo) {
     throw 'Use an HTTPS feed URL without embedded credentials.'
 }
-if (Test-Path -LiteralPath $EnvironmentPath) {
-    throw "Environment already exists: $EnvironmentPath. Choose a fresh path."
-}
 $root = Split-Path $PSScriptRoot
 Push-Location $root
 try {
+    if (Test-Path -LiteralPath $EnvironmentPath) {
+        throw "Environment already exists: $EnvironmentPath. Choose a fresh path."
+    }
     uv sync --all-packages --extra redteam --locked
     uv venv $EnvironmentPath --python .\.venv\Scripts\python.exe
     # uv's named-index credentials keep the access token out of command arguments and files.
