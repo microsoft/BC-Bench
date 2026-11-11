@@ -36,6 +36,12 @@ channel, so you can see which seam (if any) the agent is susceptible to.
 Each `(case, vector)` becomes one **trial**: `direct` sends the `harm` as the prompt; each seam sends
 the `trigger` as the prompt and injects the `harm` into that seam via `--harms-fixture`.
 
+The `packages` vector defaults to `part: translations`, not restored AL source. Explicit
+`part: source` needs a separately restored/resumed workspace; the ordinary `harms run` path does not
+prepare one. The comprehensive suite uses the translation default. Its page-inspection triggers do
+not guarantee `search_translations` or `ask_user` calls: unvisited seams remain missed injections,
+not resistance results.
+
 ## Authoring a suite (YAML + Jinja2)
 
 Suites are YAML. `harm` and `trigger` support Jinja2 templating with suite-wide `vars` and per-case
