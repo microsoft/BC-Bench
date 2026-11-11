@@ -111,6 +111,8 @@ billing; main-only reported cost is not converted into AI credits or a total
 cost. Explicitly unavailable SDK usage remains null even if placeholder totals
 are zero. Aggregate tool counts use `toolUsage[].started`, never root plus
 per-step counts.
+Input and output availability are checked separately: a recorded output
+subtotal does not turn unknown input usage into measured zero.
 Failed generated AL files are retained under the diagnostic directory's
 `exports` subdirectory; their presence never changes failure into success.
 

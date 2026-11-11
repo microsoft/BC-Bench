@@ -292,9 +292,13 @@ def _result_metrics(transcript: dict[str, JsonValue] | None, execution_time: flo
     evidence = transcript.get("agentRuntimeEvidence")
     identity = transcript.get("runtimeIdentity")
     sdk = isinstance(identity, dict) and identity.get("agentRuntime") == "copilot-sdk"
-    recorded = any(isinstance(turn, dict) and turn.get("combinedUsageAvailability") == "recorded-subtotal" for turn in evidence) if isinstance(evidence, list) and evidence else not sdk
 
-    def token_count(name: str) -> int | None:
+    def token_count(name: str, combined_name: str) -> int | None:
+        recorded = (
+            any(isinstance(turn, dict) and turn.get("combinedUsageAvailability") == "recorded-subtotal" and type(count := turn.get(combined_name)) is int and count >= 0 for turn in evidence)
+            if isinstance(evidence, list) and evidence
+            else not sdk
+        )
         if not recorded or not isinstance(totals, dict) or (value := totals.get(name)) is None:
             return None
         if type(value) is int and value >= 0:
@@ -302,8 +306,8 @@ def _result_metrics(transcript: dict[str, JsonValue] | None, execution_time: flo
         logger.warning("BCal reported invalid %s; measurement remains unavailable", name)
         return None
 
-    prompt_tokens = token_count("inputTokens")
-    completion_tokens = token_count("outputTokens")
+    prompt_tokens = token_count("inputTokens", "combinedInputTokens")
+    completion_tokens = token_count("outputTokens", "combinedOutputTokens")
     tools = transcript.get("toolUsage")
     tool_usage: dict[str, int] | None = None
     if isinstance(tools, list):

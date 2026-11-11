@@ -509,6 +509,18 @@ class TestRunBcalAgent:
         assert metrics.prompt_tokens is None
         assert metrics.completion_tokens is None
 
+    @pytest.mark.parametrize(("input_tokens", "output_tokens"), [(None, 0), (0, None)])
+    def test_partial_usage_preserves_unknown_and_measured_zero_per_field(self, input_tokens, output_tokens):
+        transcript = {
+            **SDK_RESULT,
+            "totals": {"inputTokens": 0, "outputTokens": 0},
+            "agentRuntimeEvidence": [{"combinedUsageAvailability": "recorded-subtotal", "combinedInputTokens": input_tokens, "combinedOutputTokens": output_tokens}],
+        }
+        metrics = bcal_agent._result_metrics(transcript, 1)
+        assert metrics.prompt_tokens == input_tokens
+        assert metrics.completion_tokens == output_tokens
+        assert metrics.total_tokens is None
+
     @pytest.mark.parametrize("writes_result", [True, False])
     @pytest.mark.parametrize(
         ("failure", "expected_error"),
