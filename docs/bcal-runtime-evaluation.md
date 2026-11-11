@@ -186,6 +186,12 @@ For native-planning experiments, record the changed planning/self-review policy
 and its distinct system-prompt/tool-catalog hashes rather than requiring hash
 equality with legacy BCAL planning. Verify actual model-authored native planning
 and guarded completion in the immutable package before admitting task runs.
+Native SDK tool metadata differs between Plan and Autopilot. Its
+`toolCatalogSha256` must bind both actual catalogs as a fixed, mode-indexed set,
+not only the initialization Autopilot catalog. BCAL compatibility retains its
+catalog serialization. Retain the actual catalogs and exact hash-input bytes
+for independent reproduction; an execution-phase transition does not change
+the planning mode or completion policy.
 Operational smoke outcomes do not replace downstream checklist judging or
 establish statistical non-inferiority.
 
