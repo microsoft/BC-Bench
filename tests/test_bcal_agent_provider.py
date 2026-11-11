@@ -32,6 +32,43 @@ RESULT: dict[str, object] = {
     "evidence": {"contractVersion": "1.0", "trace": {"events": [{"type": "tool", "name": "compile"}]}},
 }
 
+SDK_RESULT: dict[str, object] = {
+    **RESULT,
+    "runtimeIdentity": {
+        "contractVersion": "1",
+        "agentRuntime": "copilot-sdk",
+        "mainProvider": "openai",
+        "mainProtocol": "responses",
+        "mainModel": "gpt-55-chat",
+        "sdkPackageVersion": "1.0.29",
+        "sdkRuntimeVersion": "1.0.107",
+        "systemPromptSha256": "4e5b8853404210fd7fb07e0716e46850ad578dc2feeefbcbeb2175ea84b1b664",
+        "toolCatalogSha256": "82bf8db5985221eba02f89c02bc97e8c2a220eae56f525c698ce38ff72b9dcca",
+        "reasoningEffort": None,
+        "auxiliaryProvider": "external-command",
+        "auxiliaryProtocol": "chat-completions",
+        "auxiliaryModel": "auxiliary-model",
+    },
+    "agentRuntimeEvidence": [
+        {
+            "contractVersion": "1",
+            "turn": 1,
+            "terminalState": "completed",
+            "domainCompleted": True,
+            "usageAvailability": "measured",
+            "inputTokens": 33186,
+            "outputTokens": 222,
+            "cost": 0,
+            "combinedInputTokens": 36748,
+            "combinedOutputTokens": 527,
+            "combinedUsageAvailability": "recorded-subtotal",
+        }
+    ],
+    "totals": {"inputTokens": 36748, "outputTokens": 527},
+    "toolUsage": [{"name": "list_files", "started": 1, "completed": 1}],
+    "export": {"attempted": True, "success": True},
+}
+
 
 def _write_result(args: list[str], result: dict[str, object] = RESULT) -> None:
     _arg_path(args, "--result").write_text(json.dumps(result), encoding="utf-8")
@@ -380,10 +417,79 @@ class TestRunBcalAgent:
     def test_sdk_harness_uses_same_scenario_contract(self, workspace: Path, sdk_config):
         with (
             patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
-            patch.object(bcal_agent, "_run_bcal_process", side_effect=lambda args, **_: _write_result(args)),
+            patch.object(bcal_agent, "_run_bcal_process", side_effect=lambda args, **_: _write_result(args, SDK_RESULT)),
         ):
             result = _run_bcal(create_nl2al_entry(), workspace, sdk_config)
         assert result.experiment.execution["agentRuntime"] == "copilot-sdk"
+        assert result.metrics.prompt_tokens == 36748
+        assert result.metrics.completion_tokens == 527
+        assert result.metrics.total_tokens == 37275
+        assert result.metrics.tool_usage == {"list_files": 1}
+        assert result.metrics.ai_credits is None
+
+    @pytest.mark.parametrize("redteam", [False, True])
+    @pytest.mark.parametrize(
+        "changes",
+        [
+            {"agentRuntimeEvidence": None},
+            {"agentRuntimeEvidence": [{**SDK_RESULT["agentRuntimeEvidence"][0], "terminalState": "budget-exceeded", "domainCompleted": False}]},
+            {"agentRuntimeEvidence": [{**SDK_RESULT["agentRuntimeEvidence"][0], "domainCompleted": False}]},
+            {"agentRuntimeEvidence": [*SDK_RESULT["agentRuntimeEvidence"], *SDK_RESULT["agentRuntimeEvidence"]]},
+            {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "agentRuntime": "legacy"}},
+            {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "mainModel": "unexpected-model"}},
+            {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "auxiliaryModel": "unexpected-model"}},
+            {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "reasoningEffort": "none"}},
+            {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "systemPromptSha256": None}},
+            {"runtimeIdentity": {**SDK_RESULT["runtimeIdentity"], "sdkRuntimeVersion": None}},
+            {"export": {"attempted": False, "success": False}},
+        ],
+    )
+    def test_sdk_false_success_is_rejected_consistently(self, workspace: Path, sdk_config, changes, redteam):
+        transcript = {**SDK_RESULT, **changes}
+
+        def run(args, **_):
+            _write_result(args, transcript)
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="bcal"),
+            patch.object(bcal_agent, "_run_bcal_process", side_effect=run),
+        ):
+            if redteam:
+                with pytest.raises(AgentError, match="diagnostics only"):
+                    bcal_agent.run_bcal_prompt(create_nl2al_entry(), "attack", workspace, workspace / "export", sdk_config)
+            else:
+                with pytest.raises(AgentError, match="diagnostics only"):
+                    _run_bcal(create_nl2al_entry(), workspace, sdk_config)
+
+    def test_sdk_failure_preserves_combined_usage_without_scoring_exports(self, workspace: Path, sdk_config):
+        transcript = {**SDK_RESULT, "completed": False, "totals": {"inputTokens": 10985, "outputTokens": 41}, "export": {"attempted": False, "success": False}}
+
+        def fail(args, **_):
+            _write_result(args, transcript)
+            raise subprocess.CalledProcessError(1, args)
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="bcal"),
+            patch.object(bcal_agent, "_run_bcal_process", side_effect=fail),
+            pytest.raises(AgentError) as error,
+        ):
+            _run_bcal(create_nl2al_entry(), workspace, sdk_config)
+        assert error.value.metrics.prompt_tokens == 10985
+        assert error.value.metrics.completion_tokens == 41
+
+    @pytest.mark.parametrize("tokens", [None, -1, True, "12", 1.5])
+    def test_invalid_or_unknown_token_measurements_stay_unavailable(self, tokens):
+        metrics = bcal_agent._result_metrics({"totals": {"inputTokens": tokens, "outputTokens": 4}}, 1)
+        assert metrics.prompt_tokens is None
+        assert metrics.completion_tokens == 4
+        assert metrics.total_tokens is None
+
+    def test_sdk_unavailable_usage_is_not_a_measured_zero(self):
+        transcript = {**SDK_RESULT, "totals": {"inputTokens": 0, "outputTokens": 0}, "agentRuntimeEvidence": [{"combinedUsageAvailability": "unavailable"}]}
+        metrics = bcal_agent._result_metrics(transcript, 1)
+        assert metrics.prompt_tokens is None
+        assert metrics.completion_tokens is None
 
     @pytest.mark.parametrize("writes_result", [True, False])
     @pytest.mark.parametrize(
@@ -417,7 +523,7 @@ class TestRunBcalAgent:
 @pytest.mark.parametrize("completed", [True, False])
 def test_sdk_redteam_checks_terminal_result(tmp_path: Path, sdk_config, completed):
     def run(args, **_):
-        _write_result(args, {**RESULT, "completed": completed})
+        _write_result(args, {**SDK_RESULT, "completed": completed})
         return subprocess.CompletedProcess(args, 0, stdout="assistant response", stderr="")
 
     with patch.object(bcal_agent, "_resolve_bcal_executable", return_value="bcal"), patch.object(bcal_agent, "_run_bcal_process", side_effect=run):

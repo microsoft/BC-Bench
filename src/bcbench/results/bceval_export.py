@@ -80,11 +80,18 @@ def write_bceval_results(
             if result.agent_name == HarnessName.BCAL:
                 # bc-eval 0.6.1 requires numeric flat fields for sums/pricing; preserve authoritative nullable measurements separately.
                 measurements = (result.metrics or AgentMetrics()).model_dump(mode="json", exclude={"kind"})
+                runtime_evidence = result.transcript.get("agentRuntimeEvidence") if isinstance(result.transcript, dict) else None
                 metadata["agent_measurements"] = {
-                    "schemaVersion": "1.0",
+                    "schemaVersion": "1.1",
                     "metrics": measurements,
                     "availability": {name: value is not None for name, value in measurements.items()},
                     "flatFields": "bc-eval-0.6.1-numeric-compatibility",
+                    "tokenScope": "reported-combined-subtotal-not-complete-billing",
+                    "runtimeUsageAvailability": [
+                        {"turn": turn.get("turn"), "main": turn.get("usageAvailability"), "combined": turn.get("combinedUsageAvailability")}
+                        for turn in (runtime_evidence if isinstance(runtime_evidence, list) else [])
+                        if isinstance(turn, dict)
+                    ],
                 }
 
             bceval_result = {

@@ -105,6 +105,12 @@ The packaged runtime's stable `runtimeIdentity` is grouped separately from
 per-turn `agentRuntimeEvidence`; terminal outcomes, model admissions, usage,
 iterations and tool calls never become grouping dimensions. SDK evidence usage
 is main-only and must not be added again to combined main/auxiliary totals.
+Bench reads `totals.inputTokens` and `totals.outputTokens` once, including on
+failed turns. These are recorded combined subtotals, not complete governed
+billing; main-only reported cost is not converted into AI credits or a total
+cost. Explicitly unavailable SDK usage remains null even if placeholder totals
+are zero. Aggregate tool counts use `toolUsage[].started`, never root plus
+per-step counts.
 Failed generated AL files are retained under the diagnostic directory's
 `exports` subdirectory; their presence never changes failure into success.
 
@@ -113,6 +119,9 @@ steps must be present, and every step must have succeeded. Timeout, nonzero
 exit, malformed/missing result, abort, unresolved input, or incomplete steps
 remain agent errors even if generated AL exists. Such exports are diagnostic,
 not evidence of successful task completion.
+SDK runs additionally require matching runtime/model/reasoning/auxiliary
+configuration, successful export, and one ordered runtime-evidence record per
+user turn with `terminalState=completed` and `domainCompleted=true`.
 An outer timeout terminates BCAL's owned process tree (Windows PID-targeted
 `taskkill /T`, or a dedicated POSIX process group), not only the parent process.
 Cleanup failures remain explicit errors with `cleanup-unverified` diagnostics;
@@ -125,7 +134,9 @@ legacy runs with attributed SDK runs.
 BCAL summary `usage_availability` records how many runs actually supplied each
 averaged usage metric, so partial measurements are not presented as full coverage.
 Downstream bc-eval exports carry authoritative nullable BCAL metrics and per-field
-availability in versioned `metadata.agent_measurements`. The pinned bc-eval
+availability in versioned `metadata.agent_measurements`. Export schema `1.1`
+also labels token subtotal scope and preserves each turn's
+main and combined usage availability. The pinned bc-eval
 `0.6.1` scorer requires numeric flat token fields for addition and price lookup;
 those legacy compatibility fields can contain placeholders. Do not interpret
 their token/cost estimates as measurements when `agent_measurements` marks the

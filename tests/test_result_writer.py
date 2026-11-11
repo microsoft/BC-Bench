@@ -33,10 +33,21 @@ class TestWriteBcevalResults:
         expected = (metrics or AgentMetrics()).model_dump(mode="json", exclude={"kind"})
         assert measurements["metrics"] == expected
         assert measurements["availability"] == {name: value is not None for name, value in expected.items()}
-        assert measurements["schemaVersion"] == "1.0"
+        assert measurements["schemaVersion"] == "1.1"
+        assert measurements["tokenScope"] == "reported-combined-subtotal-not-complete-billing"
         assert measurements["flatFields"] == "bc-eval-0.6.1-numeric-compatibility"
         assert isinstance(metadata["prompt_tokens"], int)
         assert isinstance(metadata["completion_tokens"], int)
+
+    def test_bcal_export_retains_partial_main_and_combined_subtotal_scope(self, tmp_path):
+        result = create_codereview_result(agent_name=HarnessName.BCAL, metrics=AgentMetrics(prompt_tokens=10985, completion_tokens=41))
+        result.transcript = {"agentRuntimeEvidence": [{"turn": 1, "usageAvailability": "partial", "combinedUsageAvailability": "recorded-subtotal"}]}
+        with patch.object(CodeReviewEntry, "load", return_value=[create_codereview_entry()]):
+            write_bceval_results([result], tmp_path, "run", "results.jsonl", EvaluationCategory.CODE_REVIEW)
+        measurements = json.loads((tmp_path / "results.jsonl").read_text())["metadata"]["agent_measurements"]
+        assert measurements["runtimeUsageAvailability"] == [{"turn": 1, "main": "partial", "combined": "recorded-subtotal"}]
+        assert measurements["metrics"]["prompt_tokens"] == 10985
+        assert measurements["metrics"]["completion_tokens"] == 41
 
     @pytest.mark.parametrize(
         "metrics",

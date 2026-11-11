@@ -285,10 +285,100 @@ def _read_transcript_after_failure(result_path: Path) -> dict[str, JsonValue] | 
         return None
 
 
+def _result_metrics(transcript: dict[str, JsonValue] | None, execution_time: float) -> AgentMetrics:
+    if transcript is None:
+        return AgentMetrics(execution_time=execution_time)
+    totals = transcript.get("totals")
+    evidence = transcript.get("agentRuntimeEvidence")
+    identity = transcript.get("runtimeIdentity")
+    sdk = isinstance(identity, dict) and identity.get("agentRuntime") == "copilot-sdk"
+    recorded = not sdk or (isinstance(evidence, list) and any(isinstance(turn, dict) and turn.get("combinedUsageAvailability") == "recorded-subtotal" for turn in evidence))
+
+    def token_count(name: str) -> int | None:
+        if not recorded or not isinstance(totals, dict) or (value := totals.get(name)) is None:
+            return None
+        if type(value) is int and value >= 0:
+            return value
+        logger.warning("BCal reported invalid %s; measurement remains unavailable", name)
+        return None
+
+    prompt_tokens = token_count("inputTokens")
+    completion_tokens = token_count("outputTokens")
+    tools = transcript.get("toolUsage")
+    tool_usage: dict[str, int] | None = None
+    if isinstance(tools, list):
+        tool_usage = {}
+        for tool in tools:
+            if not isinstance(tool, dict) or not isinstance(name := tool.get("name"), str) or not name or type(started := tool.get("started")) is not int or started < 0 or name in tool_usage:
+                logger.warning("BCal reported invalid aggregate tool usage; measurement remains unavailable")
+                tool_usage = None
+                break
+            tool_usage[name] = started
+    return AgentMetrics(
+        execution_time=execution_time,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_tokens + completion_tokens if prompt_tokens is not None and completion_tokens is not None else None,
+        tool_usage=tool_usage,
+    )
+
+
 def _require_completed(transcript: dict[str, JsonValue], *, metrics: AgentMetrics, config: ExperimentConfiguration) -> None:
     steps = transcript.get("steps")
-    if transcript.get("completed") is not True or not isinstance(steps, list) or not steps or any(not isinstance(step, dict) or step.get("status") != "succeeded" for step in steps):
+    export = transcript.get("export")
+    if (
+        transcript.get("completed") is not True
+        or transcript.get("failure") is not None
+        or not isinstance(steps, list)
+        or not steps
+        or any(not isinstance(step, dict) or step.get("status") != "succeeded" or step.get("failure") is not None for step in steps)
+        or (isinstance(export, dict) and export.get("success") is False)
+    ):
         raise AgentError("BCal scenario did not complete successfully; exported files are diagnostics only.", transcript=transcript, metrics=metrics, config=config)
+    execution = config.execution or {}
+    if execution.get("agentRuntime") != "copilot-sdk":
+        return
+    identity = transcript.get("runtimeIdentity")
+    evidence = transcript.get("agentRuntimeEvidence")
+    main = execution.get("main")
+    auxiliary = execution.get("auxiliary")
+    if (
+        not isinstance(identity, dict)
+        or identity.get("contractVersion") != "1"
+        or identity.get("agentRuntime") != "copilot-sdk"
+        or identity.get("mainProvider") != "openai"
+        or identity.get("mainProtocol") != "responses"
+        or any(not isinstance(value := identity.get(name), str) or not value for name in ("sdkPackageVersion", "sdkRuntimeVersion"))
+        or any(not isinstance(value := identity.get(name), str) or len(value) != 64 or any(char not in "0123456789abcdef" for char in value) for name in ("systemPromptSha256", "toolCatalogSha256"))
+        or not isinstance(main, dict)
+        or identity.get("mainModel") != main.get("model")
+        or identity.get("reasoningEffort") != main.get("reasoningEffort")
+        or not isinstance(auxiliary, dict)
+        or identity.get("auxiliaryProvider") != auxiliary.get("backend")
+        or identity.get("completionReviewModel") != auxiliary.get("completionReviewModel")
+        or (auxiliary.get("model") is not None and identity.get("auxiliaryModel") != auxiliary.get("model"))
+        or (auxiliary.get("wireApi") is not None and identity.get("auxiliaryProtocol") != auxiliary.get("wireApi"))
+        or (execution.get("sdkMaxModelRequests") is not None and identity.get("maxModelRequests") != execution.get("sdkMaxModelRequests"))
+        or (execution.get("sdkTimeoutSeconds") is not None and identity.get("timeoutSeconds") != execution.get("sdkTimeoutSeconds"))
+        or not isinstance(export, dict)
+        or export.get("attempted") is not True
+        or export.get("success") is not True
+        or not isinstance(evidence, list)
+        or len(evidence) != sum(isinstance(step, dict) and step.get("type") == "user" for step in steps)
+        or not evidence
+        or any(
+            not isinstance(turn, dict)
+            or turn.get("contractVersion") != "1"
+            or type(turn.get("turn")) is not int
+            or turn.get("turn") != index
+            or turn.get("terminalState") != "completed"
+            or turn.get("domainCompleted") is not True
+            for index, turn in enumerate(evidence, start=1)
+        )
+    ):
+        raise AgentError(
+            "BCal SDK runtime identity, terminal/domain completion or export was not verified; exported files are diagnostics only.", transcript=transcript, metrics=metrics, config=config
+        )
 
 
 def _run_bcal_process(args: list[str], *, timeout: int, stdout: TextIO | int = subprocess.PIPE, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -369,22 +459,22 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
                 execution_time = time.monotonic() - start
             except subprocess.TimeoutExpired:
                 logger.error("bcal CLI timed out after %s seconds", timeout)  # noqa: TRY400 - Subprocess exceptions expose command-line credentials.
-                metrics = AgentMetrics(execution_time=timeout)
                 # A hard kill skips BCal's final result write; a result only exists if BCal hung after writing it
                 transcript = _read_transcript_after_failure(result_path)
+                metrics = _result_metrics(transcript, time.monotonic() - start)
                 config = backend_config.experiment(timeout, transcript)
                 _persist_diagnostics(diagnostics_dir, result_path, entry, config, metrics, "timeout", export_folder)
                 raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=config, transcript=transcript) from None
             except subprocess.CalledProcessError as e:
                 logger.error("bcal CLI exited with status %s", e.returncode)  # noqa: TRY400 - Subprocess exceptions expose command-line credentials.
                 transcript = _read_transcript_after_failure(result_path)
-                metrics = AgentMetrics(execution_time=time.monotonic() - start)
+                metrics = _result_metrics(transcript, time.monotonic() - start)
                 config = backend_config.experiment(timeout, transcript)
                 _persist_diagnostics(diagnostics_dir, result_path, entry, config, metrics, f"exit-{e.returncode}", export_folder)
                 raise AgentError(f"bcal CLI execution failed with status {e.returncode}", transcript=transcript, metrics=metrics, config=config) from None
             except AgentError as error:
                 transcript = _read_transcript_after_failure(result_path)
-                metrics = AgentMetrics(execution_time=time.monotonic() - start)
+                metrics = _result_metrics(transcript, time.monotonic() - start)
                 config = backend_config.experiment(timeout, transcript)
                 _persist_diagnostics(diagnostics_dir, result_path, entry, config, metrics, "cleanup-unverified", export_folder)
                 raise AgentError(str(error), transcript=transcript, metrics=metrics, config=config) from error
@@ -397,6 +487,7 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
                 _persist_diagnostics(diagnostics_dir, result_path, entry, config, metrics, "invalid-result", export_folder)
                 raise AgentError(str(error), metrics=metrics, config=config) from error
             config = backend_config.experiment(timeout, transcript)
+            metrics = _result_metrics(transcript, execution_time)
             try:
                 _require_completed(transcript, metrics=metrics, config=config)
             except AgentError:
@@ -450,8 +541,8 @@ def run_bcal_prompt(
         message = f"bcal CLI timed out after {timeout} seconds"
         if details:
             message = f"{message}\n{details}"
-        metrics = AgentMetrics(execution_time=timeout)
         transcript = _read_transcript_after_failure(result_path) if result_path.is_file() else None
+        metrics = _result_metrics(transcript, time.monotonic() - start)
         config = backend_config.experiment(timeout, transcript)
         _persist_diagnostics(diagnostics_dir, result_path, prompt_entry, config, metrics, "timeout", export_folder)
         (diagnostics_dir / "console.log").write_text(details, encoding="utf-8")
@@ -463,14 +554,14 @@ def run_bcal_prompt(
             message = f"{message}\n{details}"
         transcript = _read_transcript_after_failure(result_path) if result_path.is_file() else None
         config = backend_config.experiment(timeout, transcript)
-        metrics = AgentMetrics(execution_time=time.monotonic() - start)
+        metrics = _result_metrics(transcript, time.monotonic() - start)
         _persist_diagnostics(diagnostics_dir, result_path, prompt_entry, config, metrics, f"exit-{exc.returncode}", export_folder)
         (diagnostics_dir / "console.log").write_text(details, encoding="utf-8")
         raise AgentError(message, config=config, metrics=metrics, transcript=transcript) from None
     except AgentError as error:
         transcript = _read_transcript_after_failure(result_path) if result_path.is_file() else None
         config = backend_config.experiment(timeout, transcript)
-        metrics = AgentMetrics(execution_time=time.monotonic() - start)
+        metrics = _result_metrics(transcript, time.monotonic() - start)
         _persist_diagnostics(diagnostics_dir, result_path, prompt_entry, config, metrics, "cleanup-unverified", export_folder)
         raise AgentError(str(error), config=config, metrics=metrics, transcript=transcript) from error
 
@@ -481,6 +572,7 @@ def run_bcal_prompt(
         try:
             transcript = _read_transcript(result_path)
             config = backend_config.experiment(timeout, transcript)
+            metrics = _result_metrics(transcript, time.monotonic() - start)
             _require_completed(transcript, metrics=metrics, config=config)
         except AgentError as error:
             _persist_diagnostics(diagnostics_dir, result_path, prompt_entry, config, metrics, "incomplete", export_folder)
