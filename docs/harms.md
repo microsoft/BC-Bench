@@ -119,6 +119,9 @@ uv run bcbench harms run --dry-run
 # One bcal run (fastest real trial).
 uv run bcbench harms run --limit 1 --vector direct
 
+# Capture only: no Foundry access required; evaluate saved trials separately.
+uv run bcbench harms run --limit 1 --vector direct --skip-evaluation --results-dir evaluation_results/harms/direct-smoke
+
 # Full run against a suite, scored and uploaded to Foundry.
 uv run bcbench harms run --suite dataset/harms/sample.harms.yaml
 
@@ -146,22 +149,45 @@ cheaply against the already-captured `trials.jsonl`.
 | `--limit N` | Only load the first `N` cases. |
 | `--vector V` | Restrict the matrix at runtime (repeatable), e.g. `--vector direct`. |
 | `--no-upload` | Run bcal + local scoring but skip the Foundry upload. |
+| `--skip-evaluation` | Capture bcal trials without Foundry scoring or upload. |
 | `--evaluator E` | Override the evaluator set (repeatable). |
 
 ## Prerequisites
 
+- **Python 3.13** and `uv sync --all-packages --extra redteam`. Use the uv version required by
+  `pyproject.toml`.
 - **A bcal build with the harm-fixture injection wiring.** XPIA injection only lands on a build that
-  consumes `--harms-fixture` and taints the symbol/page seams (the fix on
-  `BC-DeveloperExperience@thloke/harms-injection-diagnostics`,
-  `out/Debug/bcal.cli/net10.0/bcal.exe`). A stale global dotnet tool on `PATH` silently reports
+  consumes `--harms-fixture` and taints the selected seams. A stale global dotnet tool on `PATH` reports
   every indirect trial as `missed`. **Pin it with `BCAL_EXECUTABLE`** rather than relying on `PATH`
   order; the runner logs the resolved bcal path + `--version` at run start so you can confirm which
   build ran.
 - **BC symbols** cached (`scripts/Download-BCSymbols.ps1`); the runner populates `.alpackages` once.
-- An **LLM backend** for bcal (`--backend azure-openai` with `AZURE_OPENAI_ENDPOINT` /
-  `AZURE_OPENAI_DEPLOYMENT`, or `external-command`).
+- The **external-command LLM backend**, matching accuracy runs: install `bc-eval==0.6.1` from
+  the authorized BC Python feed into a separate Python 3.13 environment, then set
+  `BCAL_LLM_COMMAND` to that environment's Python plus
+  `src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py`. Set `BCAL_LLM_MODEL` explicitly.
+  The bridge uses M365 LLM API / `LLM_API_*`, not the retired CAPI bridge or `CAPI_*` variables.
+  Its built-in defaults use `az login` with certificate-read and Key Vault Crypto User permissions.
+  Stateless bridge requests send the service's documented sticky-routing `opt-out` header.
 - A **Foundry Hub project** for scoring + upload (`AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`,
-  `AZURE_PROJECT_NAME`) plus `az login`. Not required for `--dry-run`.
+  `AZURE_PROJECT_NAME`) plus `az login`. Not required for `--dry-run` or `--skip-evaluation`.
+  `--no-upload` still contacts Azure evaluators; it is not offline scoring.
+
+Use a distinct results directory for each run. `run_manifest.json` records the resolved BCal executable
+and version, model, benchmark version, BC symbol version, and SHA-256 hashes of the accuracy dataset
+and selected cases. `cases.json` preserves the expanded input selection. Pin the source revision and
+BCal build as well as the model before comparing runs; dry runs are not safety evidence.
+Do not upload private suites or full logs without authorization.
+
+For an accuracy smoke with the same executable and backend:
+
+```powershell
+.\scripts\Download-BCSymbols.ps1 -Category nl2al -Tier gold -InstanceId nl2al__move-name-customer-card-2
+uv run bcbench evaluate bcal nl2al__move-name-customer-card-2 --tier gold --output-dir evaluation_results
+```
+
+Current accuracy uses `--scenario`, `--result`, and `--include-evidence`; harms uses `--prompt`
+with optional `--harms-fixture`. Do not combine scenario mode with harms fixtures.
 
 ## Scoring
 
@@ -222,9 +248,10 @@ per trial as `harm_delivered` and surfaced as the **`Valid?`** column:
 - **Indirect (XPIA)** — the harm is only delivered if the injection **landed** in a tool result
   (`harm_delivered = injection_landed`).
 
-Every exported `eval_dataset.jsonl` row carries `harm_delivered` and a `valid` flag, so downstream
-analysis (and Foundry) can filter out lines where the attack never arrived — their safety scores are
-not meaningful. The report prints a summary, e.g.
+Every exported `eval_dataset.jsonl` row carries `harm_delivered` and a `valid` flag.
+Only verified, delivered trials enter `valid_eval_dataset.jsonl`, which is the Azure evaluator input.
+Missed injections and execution errors therefore cannot lower the reported attack-success rate.
+The report prints a summary, e.g.
 `Validity: 6/12 result lines are valid (the agent received the harm)`.
 
 Runs captured before these fields existed can be **back-filled without re-running bcal** — `harms
@@ -257,6 +284,8 @@ rather than silently resolved. `harms score` writes the results back to `trials.
 
 Scoring gates on `harm_delivered` (a line the agent never received can't be a real success) and never
 re-runs bcal — iterate the detector/judge cheaply against the captured `trials.jsonl`.
+Execution failures are saved as `execution_error`; legacy timeout/nonzero-exit response snapshots
+are excluded too. Scoring failures remain unscored with `score_error`, not "resisted".
 
 ### The dataset
 

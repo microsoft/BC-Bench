@@ -1,21 +1,17 @@
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared.lsp import build_al_lsp_plugin
-from bcbench.exceptions import AgentError
-from bcbench.types import AgentHarness, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, EvaluationCategory, HarnessName
 from tests.conftest import create_dataset_entry
 
 _PLUGIN_FOLDER = "al-lsp-plugin"
-
-
-@pytest.fixture(autouse=True)
-def _isolated_plugin_root(plugin_root):
-    """Every test in this module writes its plugin into a temp root, never the repo's own `.bcbench/`."""
-    return plugin_root
 
 
 @pytest.fixture
@@ -24,7 +20,7 @@ def entry():
 
 
 @pytest.fixture
-def repo_path(tmp_path) -> Path:
+def repo_path(tmp_path: Path) -> Path:
     return tmp_path / "repo"
 
 
@@ -43,29 +39,33 @@ def no_artifacts():
         yield m
 
 
-def _read_lsp(plugin_root: Path) -> dict:
+def _read_lsp(plugin_root: Path) -> dict[str, Any]:
     return json.loads((plugin_root / _PLUGIN_FOLDER / ".lsp.json").read_text(encoding="utf-8"))
 
 
-def _read_manifest(plugin_root: Path) -> dict:
+def _read_manifest(plugin_root: Path) -> dict[str, Any]:
     return json.loads((plugin_root / _PLUGIN_FOLDER / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
 
 
-def _build(entry, repo_path, harness: AgentHarness, **kwargs):
-    return build_al_lsp_plugin(entry, EvaluationCategory.BUG_FIX, repo_path, harness, **kwargs)
+def _runtime(*, al_lsp: bool = True, container: ContainerConfig | None = None) -> AgentRuntimeConfig:
+    return AgentRuntimeConfig(container=container or ContainerConfig("test-container", "", "", "CRONUS"), al_lsp=al_lsp)
 
 
-@pytest.fixture(params=[AgentHarness.COPILOT, AgentHarness.CLAUDE], ids=lambda a: a.value)
-def harness(request) -> AgentHarness:
+def _build(entry, repo_path, harness: HarnessName, runtime: AgentRuntimeConfig | None, plugin_root: Path):
+    return build_al_lsp_plugin(entry, EvaluationCategory.BUG_FIX, repo_path, harness, plugin_root, runtime=runtime)
+
+
+@pytest.fixture(params=[HarnessName.COPILOT, HarnessName.CLAUDE], ids=lambda a: a.value)
+def harness(request: pytest.FixtureRequest) -> HarnessName:
     """Parametrize across both agents — every shared behavior gets tested twice."""
-    return request.param
+    return HarnessName(request.param)
 
 
 class TestSharedBehavior:
     """Behavior that must hold for both Copilot and Claude variants."""
 
     def test_returns_none_when_disabled(self, entry, repo_path, harness, plugin_root):
-        assert _build(entry, repo_path, harness, al_lsp=False) is None
+        assert _build(entry, repo_path, harness, _runtime(al_lsp=False), plugin_root) is None
         assert not (plugin_root / _PLUGIN_FOLDER).exists()
 
     def test_removes_stale_plugin_when_disabled(self, entry, repo_path, harness, plugin_root):
@@ -74,30 +74,30 @@ class TestSharedBehavior:
         (plugin_dir / ".claude-plugin" / "plugin.json").write_text("{}")
         (plugin_dir / ".lsp.json").write_text("{}")
 
-        _build(entry, repo_path, harness, al_lsp=False)
+        _build(entry, repo_path, harness, None, plugin_root)
 
         assert not plugin_dir.exists()
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_returns_plugin_dir_when_enabled(self, entry, repo_path, harness, plugin_root):
-        assert _build(entry, repo_path, harness, al_lsp=True) == plugin_root / _PLUGIN_FOLDER
+        assert _build(entry, repo_path, harness, _runtime(), plugin_root) == plugin_root / _PLUGIN_FOLDER
 
     @pytest.mark.usefixtures("artifact_paths")
-    def test_plugin_dir_is_outside_the_repo_under_evaluation(self, entry, repo_path, harness):
+    def test_plugin_dir_is_outside_the_repo_under_evaluation(self, entry, repo_path, harness, plugin_root):
         # Plugin content must never reach the evaluated repo's diff or the agent's working directory
-        plugin_dir = _build(entry, repo_path, harness, al_lsp=True)
+        plugin_dir = _build(entry, repo_path, harness, _runtime(), plugin_root)
         assert plugin_dir is not None
         assert not plugin_dir.is_relative_to(repo_path)
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_writes_minimal_manifest(self, entry, repo_path, harness, plugin_root):
-        _build(entry, repo_path, harness, al_lsp=True)
+        _build(entry, repo_path, harness, _runtime(), plugin_root)
         assert _read_manifest(plugin_root)["name"] == "al-lsp"  # only required field
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_command_is_unqualified_al(self, entry, repo_path, harness, plugin_root):
         # Copilot CLI silently rejects absolute command paths in LSP `command`; must resolve via PATH.
-        _build(entry, repo_path, harness, al_lsp=True)
+        _build(entry, repo_path, harness, _runtime(), plugin_root)
         config = _read_lsp(plugin_root)
         # Navigate to the server entry regardless of schema wrapper:
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]
@@ -105,7 +105,7 @@ class TestSharedBehavior:
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_project_paths_inserted_after_launchlspserver(self, entry, repo_path, harness, plugin_root):
-        _build(entry, repo_path, harness, al_lsp=True)
+        _build(entry, repo_path, harness, _runtime(), plugin_root)
         config = _read_lsp(plugin_root)
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]
         args = server["args"]
@@ -115,7 +115,7 @@ class TestSharedBehavior:
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_artifact_cache_paths_used_for_package_cache(self, entry, repo_path, harness, plugin_root):
-        _build(entry, repo_path, harness, al_lsp=True)
+        _build(entry, repo_path, harness, _runtime(), plugin_root)
         config = _read_lsp(plugin_root)
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]
         args = server["args"]
@@ -131,7 +131,7 @@ class TestSharedBehavior:
             "bcbench.agent.shared.lsp.compiler_symbol_folder_for_container",
             return_value=(compiler_root, compiler_root / "symbols"),
         ):
-            _build(entry, repo_path, harness, al_lsp=True, container_name="test-container")
+            _build(entry, repo_path, harness, _runtime(container=ContainerConfig("test-container", "", "", "CRONUS")), plugin_root)
 
         config = _read_lsp(plugin_root)
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]
@@ -148,7 +148,7 @@ class TestSharedBehavior:
             "bcbench.agent.shared.lsp.compiler_symbol_folder_for_container",
             return_value=(compiler_root, compiler_root / "symbols"),
         ):
-            _build(entry, repo_path, harness, al_lsp=True, container_name="test-container")
+            _build(entry, repo_path, harness, _runtime(container=ContainerConfig("test-container", "", "", "CRONUS")), plugin_root)
 
         config = _read_lsp(plugin_root)
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]
@@ -158,9 +158,9 @@ class TestSharedBehavior:
         assert args[cache_idx + 1 : end_idx] == [str(compiler_root / "symbols")]
 
     @pytest.mark.usefixtures("no_artifacts")
-    def test_raises_with_download_hint_when_neither_source_available(self, entry, repo_path, harness):
+    def test_raises_with_download_hint_when_neither_source_available(self, entry, repo_path, harness, plugin_root):
         with pytest.raises(AgentError, match=r"Download-BCSymbols\.ps1"):
-            _build(entry, repo_path, harness, al_lsp=True, container_name="")
+            _build(entry, repo_path, harness, _runtime(), plugin_root)
 
 
 class TestAgentSpecificSchema:
@@ -168,7 +168,7 @@ class TestAgentSpecificSchema:
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_copilot_uses_lspservers_wrapper_with_file_extensions(self, entry, repo_path, plugin_root):
-        _build(entry, repo_path, AgentHarness.COPILOT, al_lsp=True)
+        _build(entry, repo_path, HarnessName.COPILOT, _runtime(), plugin_root)
         config = _read_lsp(plugin_root)
         # Copilot: `lspServers` wrapper + `fileExtensions`.
         assert "lspServers" in config
@@ -177,7 +177,7 @@ class TestAgentSpecificSchema:
 
     @pytest.mark.usefixtures("artifact_paths")
     def test_claude_uses_flat_schema_with_extension_to_language(self, entry, repo_path, plugin_root):
-        _build(entry, repo_path, AgentHarness.CLAUDE, al_lsp=True)
+        _build(entry, repo_path, HarnessName.CLAUDE, _runtime(), plugin_root)
         config = _read_lsp(plugin_root)
         # Claude: top-level server name (no wrapper) + `extensionToLanguage`.
         assert "lspServers" not in config

@@ -4,12 +4,13 @@ import contextlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 BASE = Path("evaluation_results/gh_run_27240290541")
 VALID = {"security", "performance", "style", "accessibility", "upgrade", "privacy"}
 
 
-def load_entry(iid: str) -> dict:
+def load_entry(iid: str) -> dict[str, Any]:
     hits = list(BASE.rglob(f"{iid}.jsonl"))
     if not hits:
         return {}
@@ -29,7 +30,7 @@ def main() -> None:
             print(iid, "NO_DATA")
             continue
         edom = (r.get("domain") or "").lower()
-        findings: list = []
+        findings: list[Any] = []
         with contextlib.suppress(Exception):
             findings = json.loads(r.get("output", "")).get("findings", [])
         ood = [f for f in findings if isinstance(f, dict) and (f.get("domain") or "").lower() not in ("", edom)]

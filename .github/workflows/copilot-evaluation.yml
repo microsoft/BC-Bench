@@ -18,8 +18,8 @@ on:
           - "gpt-5.6-terra"
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
-          - "mai-code-1-flash-picker"
-          - "gemini-3.6-flash"
+          - "mai-code-1.1-flash"
+          - "gemini-3.7-flash"
       category:
         description: "Evaluation category to run"
         required: false
@@ -29,6 +29,8 @@ on:
           - "bug-fix"
           - "test-generation"
           - "code-review"
+          - "data-query"
+          - "extensibility-request-advisor"
           - "extensibility-request-implement"
           - "extensibility-request-triage"
       test-run:
@@ -43,6 +45,11 @@ on:
         type: boolean
       al-lsp:
         description: "Enable AL LSP server"
+        required: false
+        default: false
+        type: boolean
+      bc-mcp:
+        description: "Enable the Business Central MCP server"
         required: false
         default: false
         type: boolean
@@ -71,6 +78,15 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
+  pin-commit:
+    uses: $/.github/workflows/pin-evaluation-commit.yml
+    permissions:
+      contents: write
+    with:
+      agent: copilot
+      test-run: ${{ inputs.test-run }}
+      repeat: ${{ inputs.repeat }}
+
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
@@ -98,7 +114,7 @@ jobs:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup BC Container and Repository
         id: setup-env
@@ -112,23 +128,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-container: ${{ needs.get-entries.outputs.requires-container != 'true' }}
           skip-repo: ${{ needs.get-entries.outputs.requires-repo != 'true' }}
+          bc-mcp: ${{ inputs.bc-mcp }}
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
 
       - name: Install AL Tool
         if: ${{ inputs.al-mcp || inputs.al-lsp }}
         shell: pwsh
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta --framework "net${{ steps.setup-env.outputs.al_tool_dotnet_version }}"
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install evaluation CLIs
-        uses: $/.github/actions/install-eval-clis
+        uses: $/.github/actions/install-agent-harnesses
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
@@ -145,10 +158,11 @@ jobs:
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
             ${{ inputs.al-mcp && '--al-mcp' || '' }} `
-            ${{ inputs.al-lsp && '--al-lsp' || '' }}
+            ${{ inputs.al-lsp && '--al-lsp' || '' }} `
+            ${{ inputs.bc-mcp && '--bc-mcp' || '' }}
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
@@ -171,8 +185,8 @@ jobs:
     secrets: inherit
 
   requeue:
-    needs: summarize-results
-    if: ${{ !inputs.test-run }}
+    needs: [summarize-results, pin-commit]
+    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
@@ -180,5 +194,6 @@ jobs:
     with:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
+      existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "bc-mcp": "${{ inputs.bc-mcp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

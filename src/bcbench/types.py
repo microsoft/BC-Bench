@@ -5,11 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+import yaml
+from bcbench_core.agent.customization import CustomAgentsConfig, ToggleConfig
+from bcbench_core.agent.harness import AgentIdentity, AgentRequest
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.container import ContainerConfig
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
 if TYPE_CHECKING:
+    from bcbench.categories.definition import CategoryDefinition
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
@@ -17,21 +23,28 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
-    "AgentHarness",
-    "AgentMetrics",
-    "BCalLLMBackend",
+    "AL_MCP_SERVER_NAME",
+    "BC_MCP_SERVER_NAME",
+    "AgentConfig",
+    "AgentMetricsContract",
+    "AnyAgentMetrics",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
     "CommitSha",
-    "ContainerConfig",
+    "DatasetTier",
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
-    "ExperimentConfiguration",
+    "HarnessName",
+    "HttpMcpServer",
     "JudgeCalibrationReport",
+    "McpServerConfig",
+    "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
+    "StdioMcpServer",
+    "TestGenerationInput",
 ]
 
 
@@ -52,68 +65,38 @@ class Checklist(TypedDict):
 type ExpectedOutput = str | Checklist
 
 # A full git commit SHA: branches and tags move, so only a SHA pins content reproducibly
+# Reproducible only when fetchable from the recorded remote
 type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
 
 
-class AgentMetrics(BaseModel):
-    """Metrics collected during agent execution.
+class PRReviewMetrics(AgentMetrics):
+    kind: Literal["pr-review"] = "pr-review"
 
-    Separates runtime execution data from experiment configuration.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    # Total execution time in seconds
-    execution_time: float | None = None
-    llm_duration: float | None = None
-
-    turn_count: int | None = None
-
-    # Token usage from LLM calls
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-
-    # Tool usage statistics from agent logs
-    tool_usage: dict[str, int] | None = None
+    cached_tokens: int | None = Field(default=None, ge=0)
+    cache_creation_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    api_calls: int | None = Field(default=None, ge=0)
+    failed_api_calls: int | None = Field(default=None, ge=0)
+    usage_api_calls: int | None = Field(default=None, ge=0)
+    usage_complete: bool | None = None
+    malformed_records: int | None = Field(default=None, ge=0)
+    copilot_cli_version: str | None = None
 
 
-class ExperimentConfiguration(BaseModel):
-    """Configuration for agent experiment execution.
+type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]
 
-    This encapsulates experiment-related configuration that agents use,
-    making it easier to add new configuration options without changing function signatures.
-    """
 
-    model_config = ConfigDict(frozen=True)
+@dataclass(frozen=True)
+class AgentMetricsContract:
+    metrics_type: type[AgentMetrics]
+    required_fields: frozenset[str]
 
-    # MCP server names used in experiment (if any)
-    mcp_servers: list[str] | None = None
-
-    # Whether the AL LSP server was enabled for this experiment
-    al_lsp_enabled: bool = False
-
-    # Custom instructions enabled in experiment
-    custom_instructions: bool = False
-
-    # Skills enabled in experiment
-    skills_enabled: bool = False
-
-    # Custom agent name used in experiment (if any)
-    custom_agent: str | None = None
-
-    # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
-    plugins: list[str] | None = None
-
-    def is_empty(self) -> bool:
-        """Check if this configuration has all default/empty values.
-
-        An empty configuration means no special experiment settings were used.
-        This is useful for comparing with None (no experiment) vs default experiment.
-        """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+    def __post_init__(self) -> None:
+        if unknown_fields := self.required_fields - self.metrics_type.model_fields.keys():
+            raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
@@ -160,32 +143,34 @@ class PluginConfig(BaseModel):
         return self
 
 
-class AgentHarness(StrEnum):
+class HarnessName(StrEnum):
     """Agents that can be evaluated, and the metrics each of them is able to report."""
 
     COPILOT = "GitHub Copilot"
     CLAUDE = "Claude Code"
     BCAL = "BCal"
     MOCK = "mock-agent"
+    PR_REVIEW = "BC PR Review"
 
     @property
-    def expected_metrics(self) -> frozenset[str]:
-        """Metrics this agent should always report.
+    def metrics_contract(self) -> AgentMetricsContract:
+        """Metrics schema and fields this harness must populate.
 
-        Only these are warned about when missing, so agents that never collect a metric don't emit a warning for every single instance of a run.
+        The model defines which fields may be reported. The required subset
+        controls which missing values produce warnings.
         """
 
         match self:
-            case AgentHarness.COPILOT:
-                expected = AgentMetrics(
+            case HarnessName.COPILOT:
+                metrics = AgentMetrics(
                     execution_time=None,
+                    llm_duration=None,
+                    ai_credits=None,
                     turn_count=None,
-                    prompt_tokens=None,
-                    completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.CLAUDE | AgentHarness.MOCK:
-                expected = AgentMetrics(
+            case HarnessName.CLAUDE | HarnessName.MOCK:
+                metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
                     turn_count=None,
@@ -193,31 +178,45 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL:
-                expected = AgentMetrics(execution_time=None)
+            case HarnessName.BCAL:
+                metrics = AgentMetrics(execution_time=None)
+            case HarnessName.PR_REVIEW:
+                metrics = PRReviewMetrics(
+                    execution_time=None,
+                    prompt_tokens=None,
+                    completion_tokens=None,
+                    total_tokens=None,
+                    ai_credits=None,
+                )
             case _:
-                raise ValueError(f"Unknown AgentHarness: {self}")
+                raise ValueError(f"Unknown HarnessName: {self}")
 
-        return frozenset(expected.model_fields_set)
+        return AgentMetricsContract(type(metrics), frozenset(metrics.model_fields_set))
 
     @property
     def instruction_filename(self) -> str:
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 return "copilot-instructions.md"
-            case AgentHarness.CLAUDE:
+            case HarnessName.CLAUDE:
                 return "CLAUDE.md"
             case _:
                 raise ValueError(f"{self.value} does not support repository instructions")
 
     def get_target_dir(self, repo_path: Path) -> Path:
         match self:
-            case AgentHarness.COPILOT:
+            case HarnessName.COPILOT:
                 return repo_path / ".github"
-            case AgentHarness.CLAUDE:
+            case HarnessName.CLAUDE:
                 return repo_path / ".claude"
             case _:
                 raise ValueError(f"{self.value} does not support repository setup")
+
+
+class DatasetTier(StrEnum):
+    # Every category has a gold dataset; a category may optionally define a harder held-out challenge dataset.
+    GOLD = "gold"
+    CHALLENGE = "challenge"
 
 
 class EvaluationCategory(StrEnum):
@@ -225,15 +224,35 @@ class EvaluationCategory(StrEnum):
     TEST_GENERATION = "test-generation"
     CODE_REVIEW = "code-review"
     NL2AL = "nl2al"
+    DATA_QUERY = "data-query"
+    # Single-shot proxy for the interactive advisor: classify, assess feasibility, and draft an issue.
+    EXT_REQUEST_ADVISOR = "extensibility-request-advisor"
     # Implement an approved extensibility request (add an event/extension point) as an AL code change.
-    # The sibling ext-advisor category is planned but not yet implemented.
     EXT_REQUEST_IMPLEMENT = "extensibility-request-implement"
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
     @property
-    def dataset_path(self) -> Path:
+    def definition(self) -> CategoryDefinition[Any] | None:
+        """The category's own definition once migrated to `bcbench.categories`; the properties below delegate to it.
+
+        Transitional: once every category is migrated, the `match` tables below go and callers can use the definition directly.
+        """
+        from bcbench.categories.registry import category_definition
+
+        return category_definition(self)
+
+    def dataset_path(self, tier: DatasetTier = DatasetTier.GOLD) -> Path:
         from bcbench.config import get_config
+
+        if (definition := self.definition) is not None:
+            return definition.dataset_path(get_config().paths.dataset_dir, tier)
+
+        match self, tier:
+            case EvaluationCategory.NL2AL, DatasetTier.CHALLENGE:
+                return get_config().paths.dataset_dir / "nl2al_challenge.jsonl"
+            case _, DatasetTier.CHALLENGE:
+                raise ValueError(f"{self.value} has no {tier.value} dataset")
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -244,6 +263,8 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "codereview.jsonl"
             case EvaluationCategory.NL2AL:
                 return get_config().paths.dataset_dir / "nl2al.jsonl"
+            case EvaluationCategory.DATA_QUERY:
+                return get_config().paths.dataset_dir / "dataquery.jsonl"
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return get_config().paths.dataset_dir / "extensibility_request_implement.jsonl"
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -253,7 +274,10 @@ class EvaluationCategory(StrEnum):
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, CodeReviewEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
+
+        if (definition := self.definition) is not None:
+            return definition.base_entry_type
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -264,6 +288,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewEntry
             case EvaluationCategory.NL2AL:
                 return NL2ALEntry
+            case EvaluationCategory.DATA_QUERY:
+                return DataQueryEntry
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ExtRequestImplementEntry
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -273,10 +299,13 @@ class EvaluationCategory(StrEnum):
 
     @property
     def result_class(self) -> type[BaseEvaluationResult]:
-        from bcbench.results.base import JudgeBasedEvaluationResult
+        from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.codereview import CodeReviewResult
         from bcbench.results.testgeneration import TestGenerationResult
+
+        if (definition := self.definition) is not None:
+            return definition.result_type
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -287,6 +316,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResult
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResult
+            case EvaluationCategory.DATA_QUERY:
+                return ExecutionBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -300,6 +331,9 @@ class EvaluationCategory(StrEnum):
         from bcbench.results.codereview import CodeReviewResultSummary
         from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
 
+        if (definition := self.definition) is not None:
+            return definition.summary_type
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ExecutionBasedEvaluationResultSummary
@@ -309,6 +343,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResultSummary
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResultSummary
+            case EvaluationCategory.DATA_QUERY:
+                return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedEvaluationResultSummary
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -321,6 +357,9 @@ class EvaluationCategory(StrEnum):
         """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
         from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
 
+        if (definition := self.definition) is not None:
+            return definition.aggregate_type
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ExecutionBasedLeaderboardAggregate
@@ -330,6 +369,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewLeaderboardAggregate
             case EvaluationCategory.NL2AL:
                 return JudgeBasedLeaderboardAggregate
+            case EvaluationCategory.DATA_QUERY:
+                return ExecutionBasedLeaderboardAggregate
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedLeaderboardAggregate
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -337,23 +378,61 @@ class EvaluationCategory(StrEnum):
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
-    @property
-    def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, ExtRequestImplementPipeline, ExtRequestTriagePipeline, NL2ALPipeline, TestGenerationPipeline
+    def pipeline(self, agent_config: AgentConfig) -> EvaluationPipeline[Any]:
+        # Transitional: removed with the pipelines once every category is migrated
+        from bcbench.evaluate import (
+            BugFixPipeline,
+            CodeReviewPipeline,
+            DataQueryPipeline,
+            ExtRequestImplementPipeline,
+            ExtRequestTriagePipeline,
+            NL2ALPipeline,
+            TestGenerationPipeline,
+        )
+
+        if self.definition is not None:
+            raise ValueError(f"{self.value} is evaluated through its category definition")
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationPipeline()
+                return TestGenerationPipeline(agent_config.prompt.test_generation_input)
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewPipeline()
             case EvaluationCategory.NL2AL:
                 return NL2ALPipeline()
+            case EvaluationCategory.DATA_QUERY:
+                return DataQueryPipeline()
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ExtRequestImplementPipeline()
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return ExtRequestTriagePipeline()
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def judge_model(self) -> str | None:
+        """Pinned LLM judge model for this category, or None for categories scored without a judge."""
+        from bcbench.config import get_config
+
+        judge = get_config().judge
+        if (definition := self.definition) is not None:
+            match definition.judge:
+                case None:
+                    return None
+                case "code-review":
+                    return judge.code_review_model
+                case "lm-checklist":
+                    return judge.lm_checklist_model
+
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
+                return None
+            case EvaluationCategory.CODE_REVIEW:
+                return judge.code_review_model
+            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return judge.lm_checklist_model
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -364,6 +443,9 @@ class EvaluationCategory(StrEnum):
 
         Used for uploading evaluation results to long term storage.
         """
+        if (definition := self.definition) is not None:
+            return list(definition.evaluators)
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ["resolution_rate", "build_rate"]
@@ -373,6 +455,8 @@ class EvaluationCategory(StrEnum):
                 return ["precision_score", "recall_score", "f1_score", "valid_review_output"]
             case EvaluationCategory.NL2AL:
                 return ["lm_checklist"]
+            case EvaluationCategory.DATA_QUERY:
+                return ["resolution_rate", "build_rate"]
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ["lm_checklist"]
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -383,6 +467,9 @@ class EvaluationCategory(StrEnum):
     @property
     def core_score(self) -> str:
         """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
+        if (definition := self.definition) is not None:
+            return definition.core_score
+
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "ResolutionRate"
@@ -390,17 +477,44 @@ class EvaluationCategory(StrEnum):
                 return "F1Score"
             case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "test_passed"
+            case EvaluationCategory.DATA_QUERY:
+                return "ResolutionRate"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def requires_container(self) -> bool:
         """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
+        if (definition := self.definition) is not None:
+            return definition.requires_container
+
         match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return True
             case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return False
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def pass_on_bc_container_credentials(self) -> bool:
+        # Categories that simulate development scenarios (e.g. Bug Fix) should have direct container access
+        # While categories that simulate production scenarios (e.g. Data Query) should only use exposed access methods, e.g. BC MCP
+        if (definition := self.definition) is not None:
+            return definition.pass_bc_credentials
+
+        match self:
+            case EvaluationCategory.DATA_QUERY:
+                return False
+            case (
+                EvaluationCategory.BUG_FIX
+                | EvaluationCategory.TEST_GENERATION
+                | EvaluationCategory.CODE_REVIEW
+                | EvaluationCategory.NL2AL
+                | EvaluationCategory.EXT_REQUEST_IMPLEMENT
+                | EvaluationCategory.EXT_REQUEST_TRIAGE
+            ):
+                return True
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -417,8 +531,11 @@ class EvaluationCategory(StrEnum):
 
         Only categories that require building BaseApp needs self-hosted runners.
         """
+        if (definition := self.definition) is not None:
+            return definition.runner
+
         match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return "GitHub-BCBench"
             case EvaluationCategory.CODE_REVIEW | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "ubuntu-latest"
@@ -428,11 +545,100 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
 
-@dataclass(frozen=True)
-class ContainerConfig:
+type TestGenerationInput = Literal["problem-statement", "gold-patch", "both"]
+
+
+class PromptConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    include_project_paths: StrictBool = False
+    test_generation_input: TestGenerationInput = Field(default="problem-statement", alias="test-generation-input")
+    templates: dict[EvaluationCategory, str] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_templates(cls, data: object) -> object:
+        # config.yaml keys each prompt template as `<category>-template`
+        if not isinstance(data, dict):
+            return data
+        if "templates" in data:
+            raise ValueError("Prompt templates must be configured as `<category>-template` keys, not `templates`")
+        settings = {key: value for key, value in data.items() if not key.endswith("-template")}
+        templates = {key.removesuffix("-template"): value for key, value in data.items() if key.endswith("-template")}
+        return {**settings, "templates": templates}
+
+
+class HttpMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["http"]
     name: str
-    username: str
-    password: str
+    url: str
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+class StdioMcpServer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["stdio"]
+    name: str
+    command: str
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+type McpServerConfig = Annotated[HttpMcpServer | StdioMcpServer, Field(discriminator="type")]
+
+AL_MCP_SERVER_NAME = "altool"
+BC_MCP_SERVER_NAME = "bcmcp"
+
+
+class McpConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    servers: tuple[McpServerConfig, ...] = ()
+
+    @model_validator(mode="after")
+    def check_reserved_server_types(self) -> McpConfig:
+        # build_mcp_config customizes these servers by name and relies on their transport type
+        for server in self.servers:
+            if server.name == AL_MCP_SERVER_NAME and not isinstance(server, StdioMcpServer):
+                raise ValueError(f"MCP server '{AL_MCP_SERVER_NAME}' must be of type 'stdio'")
+            if server.name == BC_MCP_SERVER_NAME and not isinstance(server, HttpMcpServer):
+                raise ValueError(f"MCP server '{BC_MCP_SERVER_NAME}' must be of type 'http'")
+        return self
+
+
+class AgentConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    prompt: PromptConfig = Field(default_factory=PromptConfig)
+    instructions: ToggleConfig = Field(default_factory=ToggleConfig)
+    skills: ToggleConfig = Field(default_factory=ToggleConfig)
+    agents: CustomAgentsConfig = Field(default_factory=CustomAgentsConfig)
+    # Kept raw: only enabled entries are validated into `PluginConfig`, since a disabled
+    # entry may point at a path that only exists on another machine.
+    plugins: tuple[dict[str, object], ...] = ()
+    mcp: McpConfig = Field(default_factory=McpConfig)
+    # Declared so typos in agent sections are rejected; their contents are validated by `JudgeConfig` and the pr-review agent
+    judges: dict[str, object] = Field(default_factory=dict)
+    pr_review: dict[str, object] = Field(default_factory=dict)
+
+    @classmethod
+    def from_file(cls, path: Path) -> AgentConfig:
+        return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+
+
+@dataclass(frozen=True)
+class AgentRuntimeConfig:
+    container: ContainerConfig
+    al_mcp: bool = False
+    al_lsp: bool = False
+    bc_mcp: bool = False
+
+    def __post_init__(self) -> None:
+        if self.bc_mcp and not self.container.mcp_url:
+            raise ValueError("An MCP URL is required when BC MCP is enabled")
 
 
 @dataclass(frozen=True)
@@ -461,28 +667,20 @@ class EvaluationContext[E: BaseDatasetEntry]:
     repo_path: Path
     result_dir: Path
 
-    # Agent metadata
-    agent_name: AgentHarness
-    model: str
+    # The agent under evaluation, resolved before running
+    agent: AgentIdentity[HarnessName]
 
     # Evaluation category
     category: EvaluationCategory
+    tier: DatasetTier = DatasetTier.GOLD
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
-
-    # Agent execution metrics
-    metrics: AgentMetrics | None = None
-
-    # Experiment configuration
-    experiment: ExperimentConfiguration | None = None
 
     def get_container(self) -> ContainerConfig:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
 
-
-class BCalLLMBackend(StrEnum):
-    AZURE_OPENAI = "azure-openai"
-    EXTERNAL_COMMAND = "external-command"
+    def agent_request(self) -> AgentRequest[E]:
+        return AgentRequest(task=self.entry, work_dir=self.repo_path, output_dir=self.result_dir)

@@ -1,7 +1,11 @@
 import logging
 
+import pytest
+from bcbench_core.agent.harness import AgentResult
+from bcbench_core.agent.metrics import AgentMetrics
+
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import AgentHarness, AgentMetrics
+from bcbench.types import HarnessName, PRReviewMetrics
 from tests.conftest import create_evaluation_context
 
 
@@ -11,42 +15,67 @@ def _missing_metric_warnings(caplog) -> list[str]:
 
 class TestExpectedMetricsWarning:
     def test_no_warning_when_agent_does_not_collect_metric(self, tmp_path, caplog):
-        context = create_evaluation_context(tmp_path, agent_name=AgentHarness.BCAL)
-        context.metrics = AgentMetrics(execution_time=12.0)
+        context = create_evaluation_context(tmp_path, agent_name=HarnessName.BCAL)
+        agent_result = AgentResult(metrics=AgentMetrics(execution_time=12.0))
 
         with caplog.at_level(logging.WARNING):
-            BugFixResult.create_success(context, "patch")
+            BugFixResult.create_success(context, agent_result, "patch")
 
         assert _missing_metric_warnings(caplog) == []
 
     def test_warns_when_bcal_execution_time_is_missing(self, tmp_path, caplog):
-        context = create_evaluation_context(tmp_path, agent_name=AgentHarness.BCAL)
-        context.metrics = AgentMetrics(llm_duration=5.0)
+        context = create_evaluation_context(tmp_path, agent_name=HarnessName.BCAL)
+        agent_result = AgentResult(metrics=AgentMetrics(llm_duration=5.0))
 
         with caplog.at_level(logging.WARNING):
-            BugFixResult.create_success(context, "patch")
+            BugFixResult.create_success(context, agent_result, "patch")
 
         assert _missing_metric_warnings(caplog) == [f"Result for {context.entry.instance_id} missing metrics: execution_time"]
 
     def test_warns_when_expected_metric_is_missing(self, tmp_path, caplog):
-        context = create_evaluation_context(tmp_path, agent_name=AgentHarness.COPILOT)
-        context.metrics = AgentMetrics(execution_time=12.0, llm_duration=5.0, prompt_tokens=100, completion_tokens=10, tool_usage={"bash": 1})
+        context = create_evaluation_context(tmp_path, agent_name=HarnessName.COPILOT)
+        agent_result = AgentResult(metrics=AgentMetrics(execution_time=12.0, llm_duration=5.0, ai_credits=1.25, tool_usage={"bash": 1}))
 
         with caplog.at_level(logging.WARNING):
-            BugFixResult.create_success(context, "patch")
+            BugFixResult.create_success(context, agent_result, "patch")
 
         assert _missing_metric_warnings(caplog) == [f"Result for {context.entry.instance_id} missing metrics: turn_count"]
 
-    def test_warns_when_no_metrics_at_all(self, tmp_path, caplog):
-        context = create_evaluation_context(tmp_path, agent_name=AgentHarness.BCAL)
+    def test_optional_pr_review_diagnostics_do_not_warn(self, tmp_path, caplog):
+        context = create_evaluation_context(tmp_path, agent_name=HarnessName.PR_REVIEW)
+        agent_result = AgentResult(
+            metrics=PRReviewMetrics(
+                execution_time=12.0,
+                prompt_tokens=100,
+                completion_tokens=10,
+                total_tokens=110,
+                ai_credits=0.25,
+            )
+        )
 
         with caplog.at_level(logging.WARNING):
-            BugFixResult.create_success(context, "patch")
+            BugFixResult.create_success(context, agent_result, "patch")
+
+        assert _missing_metric_warnings(caplog) == []
+
+    def test_rejects_metrics_type_not_registered_for_harness(self, tmp_path):
+        context = create_evaluation_context(tmp_path, agent_name=HarnessName.PR_REVIEW)
+        agent_result = AgentResult(metrics=AgentMetrics(execution_time=12.0))
+
+        with pytest.raises(TypeError, match="BC PR Review must use PRReviewMetrics"):
+            BugFixResult.create_success(context, agent_result, "patch")
+
+    def test_warns_when_no_metrics_at_all(self, tmp_path, caplog):
+        context = create_evaluation_context(tmp_path, agent_name=HarnessName.BCAL)
+        agent_result = AgentResult()
+
+        with caplog.at_level(logging.WARNING):
+            BugFixResult.create_success(context, agent_result, "patch")
 
         assert any("no agent metrics" in record.message for record in caplog.records)
 
     def test_agent_name_serializes_as_plain_string(self, tmp_path):
-        context = create_evaluation_context(tmp_path, agent_name=AgentHarness.BCAL)
-        result = BugFixResult.create_success(context, "patch")
+        context = create_evaluation_context(tmp_path, agent_name=HarnessName.BCAL)
+        result = BugFixResult.create_success(context, AgentResult(), "patch")
 
         assert result.model_dump(mode="json")["agent_name"] == "BCal"

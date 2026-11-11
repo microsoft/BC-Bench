@@ -28,6 +28,7 @@ def _trial(*, case_id: str = "c1", vector: HarmsVector = HarmsVector.DIRECT, exe
         fixture_path=None,
         export_dir="e",
         log_path=None,
+        harm_delivered=True if executed else None,
     )
 
 
@@ -70,13 +71,10 @@ def mock_azure(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             captured.setdefault("evaluator_kwargs", []).append(kwargs)
 
     eval_mod = types.ModuleType("azure.ai.evaluation")
-    eval_mod.evaluate = fake_evaluate  # type: ignore[attr-defined]
-    eval_mod.ContentSafetyEvaluator = _Evaluator  # type: ignore[attr-defined]
-    eval_mod.IndirectAttackEvaluator = _Evaluator  # type: ignore[attr-defined]
-    eval_mod.CodeVulnerabilityEvaluator = _Evaluator  # type: ignore[attr-defined]
+    eval_mod.__dict__.update(evaluate=fake_evaluate, ContentSafetyEvaluator=_Evaluator, IndirectAttackEvaluator=_Evaluator, CodeVulnerabilityEvaluator=_Evaluator)
 
     identity_mod = types.ModuleType("azure.identity")
-    identity_mod.DefaultAzureCredential = lambda *a, **k: object()  # type: ignore[attr-defined]
+    identity_mod.__dict__["DefaultAzureCredential"] = lambda *a, **k: object()
 
     monkeypatch.setitem(sys.modules, "azure.ai.evaluation", eval_mod)
     monkeypatch.setitem(sys.modules, "azure.identity", identity_mod)
@@ -114,6 +112,21 @@ class TestEvaluateTrials:
         evaluate_trials([trial], self._project(), tmp_path)
         assert mock_azure["kwargs"]["azure_ai_project"] == self._project()
 
+    def test_only_delivered_successful_trials_reach_evaluator(self, tmp_path: Path, mock_azure: dict[str, Any]):
+        missed = _trial(case_id="missed", vector=HarmsVector.SYMBOLS).model_copy(update={"harm_delivered": False})
+        timeout = _trial(case_id="timeout", response="(bcal timed out after 1500s)")
+        failed = _trial(case_id="failed").model_copy(update={"execution_error": "Access denied"})
+        evaluate_trials([_trial(case_id="valid"), missed, timeout, failed], self._project(), tmp_path)
+        rows = [json.loads(line) for line in Path(mock_azure["kwargs"]["data"]).read_text(encoding="utf-8").splitlines()]
+        assert [row["case_id"] for row in rows] == ["valid"]
+        assert len((tmp_path / "eval_dataset.jsonl").read_text(encoding="utf-8").splitlines()) == 4
+
+    def test_no_delivered_trials_fails_before_sdk_call(self, tmp_path: Path, mock_azure: dict[str, Any]):
+        missed = _trial(vector=HarmsVector.SYMBOLS).model_copy(update={"harm_delivered": False})
+        with pytest.raises(ValueError, match="No valid delivered trials"):
+            evaluate_trials([missed], self._project(), tmp_path)
+        assert "kwargs" not in mock_azure
+
 
 class TestPerEvaluatorFallback:
     def _project(self) -> dict[str, str]:
@@ -124,12 +137,9 @@ class TestPerEvaluatorFallback:
             def __init__(self, **kwargs: Any) -> None: ...
 
         eval_mod = types.ModuleType("azure.ai.evaluation")
-        eval_mod.evaluate = fake_evaluate  # type: ignore[attr-defined]
-        eval_mod.ContentSafetyEvaluator = _Evaluator  # type: ignore[attr-defined]
-        eval_mod.IndirectAttackEvaluator = _Evaluator  # type: ignore[attr-defined]
-        eval_mod.CodeVulnerabilityEvaluator = _Evaluator  # type: ignore[attr-defined]
+        eval_mod.__dict__.update(evaluate=fake_evaluate, ContentSafetyEvaluator=_Evaluator, IndirectAttackEvaluator=_Evaluator, CodeVulnerabilityEvaluator=_Evaluator)
         identity_mod = types.ModuleType("azure.identity")
-        identity_mod.DefaultAzureCredential = lambda *a, **k: object()  # type: ignore[attr-defined]
+        identity_mod.__dict__["DefaultAzureCredential"] = lambda *a, **k: object()
         monkeypatch.setitem(sys.modules, "azure.ai.evaluation", eval_mod)
         monkeypatch.setitem(sys.modules, "azure.identity", identity_mod)
 

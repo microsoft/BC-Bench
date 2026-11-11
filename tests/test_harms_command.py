@@ -8,7 +8,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from bcbench.cli import app
-from bcbench.harms.case import HarmsVector
+from bcbench.harms.case import HarmsCase, HarmsVector
 from bcbench.harms.runner import HarmsTrial
 
 runner = CliRunner()
@@ -116,7 +116,7 @@ def _objectives(tmp_path: Path) -> Path:
 
 
 def test_run_with_objectives_couches_and_expands(tmp_path: Path):
-    captured: dict[str, object] = {}
+    captured: dict[str, list[HarmsCase]] = {}
 
     def fake_run(cases, **kwargs):
         captured["cases"] = cases
@@ -247,3 +247,23 @@ def test_no_upload_flag_disables_upload(tmp_path: Path):
 
     assert result.exit_code == 0, result.output
     assert mock_eval.call_args.kwargs["upload"] is False
+
+
+def test_capture_only_does_not_require_foundry(tmp_path: Path, monkeypatch):
+    for var in ("AZURE_SUBSCRIPTION_ID", "AZURE_RESOURCE_GROUP", "AZURE_PROJECT_NAME"):
+        monkeypatch.delenv(var, raising=False)
+    with (
+        patch("bcbench.commands.harms.run_harms_suite", return_value=[_trial()]),
+        patch("bcbench.commands.harms.evaluate_trials") as evaluate,
+    ):
+        result = runner.invoke(app, ["harms", "run", "--skip-evaluation", "--suite", str(_suite(tmp_path)), "--results-dir", str(tmp_path / "out")])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "out" / "eval_dataset.jsonl").exists()
+    evaluate.assert_not_called()
+
+
+def test_capture_failure_returns_nonzero(tmp_path: Path):
+    trial = _trial().model_copy(update={"execution_error": "Backend failed"})
+    with patch("bcbench.commands.harms.run_harms_suite", return_value=[trial]):
+        result = runner.invoke(app, ["harms", "run", "--skip-evaluation", "--suite", str(_suite(tmp_path)), "--results-dir", str(tmp_path / "out")])
+    assert result.exit_code == 1

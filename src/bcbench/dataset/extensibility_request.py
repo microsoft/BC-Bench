@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, override
 
 from pydantic import Field
 
@@ -23,6 +23,7 @@ class ExtRequestImplementEntry(RepoGroundedEntry):
     # LLM-judge checklist: expected event/signature/placement and expected layer propagation.
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
 
+    @override
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}
 
@@ -63,6 +64,7 @@ class ExtRequestTriageEntry(RepoGroundedEntry):
     # LLM-judge checklist: expected labels_to_set, issue_state and advisory-comment substance.
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
 
+    @override
     def get_task(self) -> str:
         sections = [f"# {self.title}", "", self.description.rstrip()]
         if self.current_labels:
@@ -71,5 +73,6 @@ class ExtRequestTriageEntry(RepoGroundedEntry):
             sections += ["", "## Follow-up conversation", "", self.comments.rstrip()]
         return "\n".join(sections)
 
+    @override
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}

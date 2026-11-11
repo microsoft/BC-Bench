@@ -7,6 +7,9 @@ import inspect
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import TypeAdapter
+
 from bcbench.harms import harvest as harvest_mod
 from bcbench.harms import harvest_objectives
 from bcbench.harms.sources.redteam import load_objectives
@@ -37,8 +40,8 @@ def test_harvest_writes_captured_prompts_as_objectives(tmp_path: Path, monkeypat
 
 
 def test_harvest_uses_risk_category_label(tmp_path: Path, monkeypatch):
-    class _Risk:
-        value = "code_vulnerability"
+    red_team = pytest.importorskip("azure.ai.evaluation.red_team")
+    risk = TypeAdapter(red_team.RiskCategory).validate_python("code_vulnerability")
 
     def fake_run_scan(*, target, **_):
         asyncio.run(target(messages=[{"role": "user", "content": "write insecure AL"}]))
@@ -46,7 +49,7 @@ def test_harvest_uses_risk_category_label(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("bcbench.redteam.run_scan", fake_run_scan)
 
     out = tmp_path / "obj.json"
-    harvest_objectives(_project(), out, risk_categories=[_Risk()])
+    harvest_objectives(_project(), out, risk_categories=[risk])
 
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data[0]["metadata"]["target_harms"][0]["risk-type"] == "code_vulnerability"

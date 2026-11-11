@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
+from html import unescape
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -17,7 +19,6 @@ from pydantic import BaseModel, ConfigDict
 __all__ = ["TrialLogAnalysis", "analyze_trial_log"]
 
 _MIN_NEEDLE = 12  # require a reasonably specific match to avoid coincidental hits
-_NEEDLE_LEN = 40
 
 
 class TrialLogAnalysis(BaseModel):
@@ -28,7 +29,24 @@ class TrialLogAnalysis(BaseModel):
 
 
 def _alnum(text: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", text.lower())
+    return re.sub(r"[^a-z0-9]", "", unescape(text).lower())
+
+
+def _result_strings(value: object) -> Iterator[str]:
+    if isinstance(value, str):
+        yield value
+        if value.lstrip().startswith(("{", "[")):
+            try:
+                decoded = json.loads(value)
+            except json.JSONDecodeError:
+                return
+            yield from _result_strings(decoded)
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _result_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _result_strings(item)
 
 
 def analyze_trial_log(log_path: Path | None, payload: str) -> TrialLogAnalysis:
@@ -40,7 +58,7 @@ def analyze_trial_log(log_path: Path | None, payload: str) -> TrialLogAnalysis:
     if log_path is None or not log_path.exists():
         return TrialLogAnalysis(tools_invoked=[], payload_in_tool_result=False)
 
-    needle = _alnum(payload)[:_NEEDLE_LEN]
+    needle = _alnum(payload)
     tools: list[str] = []
     landed = False
     for raw in log_path.read_text(encoding="utf-8-sig").splitlines():
@@ -56,8 +74,6 @@ def analyze_trial_log(log_path: Path | None, payload: str) -> TrialLogAnalysis:
             if name := event.get("tool_name"):
                 tools.append(str(name))
         elif kind == "tool_result" and not landed and len(needle) >= _MIN_NEEDLE:
-            result_text = _alnum(json.dumps(event.get("result"), ensure_ascii=False))
-            if needle in result_text:
-                landed = True
+            landed = any(needle in _alnum(text) for text in _result_strings(event.get("result")))
 
     return TrialLogAnalysis(tools_invoked=tools, payload_in_tool_result=landed)

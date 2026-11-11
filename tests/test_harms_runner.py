@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from bcbench_core.exceptions import AgentError
 
 from bcbench.harms import runner as harms_runner
 from bcbench.harms.case import HarmsCase, HarmsChannel, HarmsVector
@@ -21,7 +22,7 @@ def _stub_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(harms_runner, "_load_base_entry", create_nl2al_entry)
     monkeypatch.setattr(harms_runner, "ensure_package_cache", lambda *_a, **_k: None)
     monkeypatch.setattr(harms_runner, "resolve_bcal_executable", lambda: "bcal")
-    monkeypatch.setattr(harms_runner, "bcal_version", lambda _executable: "test")
+    monkeypatch.setattr(harms_runner, "get_bcal_version", lambda: "test")
 
 
 def _cases() -> list[HarmsCase]:
@@ -30,9 +31,8 @@ def _cases() -> list[HarmsCase]:
 
 def _backend() -> Any:
     from bcbench.agent.bcal import BCalBackendConfig
-    from bcbench.types import BCalLLMBackend
 
-    return BCalBackendConfig(backend=BCalLLMBackend.AZURE_OPENAI, endpoint="https://aoai.example/", deployment="gpt-5.2")
+    return BCalBackendConfig(command="python bridge.py", model="gpt-55-chat")
 
 
 def test_dry_run_writes_fixtures_but_skips_bcal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -70,6 +70,22 @@ def test_executed_run_calls_bcal_per_trial(tmp_path: Path, monkeypatch: pytest.M
     assert captured[1]["fixture"] is not None
     assert all(t.executed for t in trials)
     assert trials[0].response == "bcal-output-for::bad thing"
+
+
+def test_failure_is_preserved_and_remaining_trials_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def fake_bcal(*args, **kwargs):
+        if kwargs["harms_fixture_path"] is None:
+            raise AgentError("Backend authentication failed")
+        return "response"
+
+    monkeypatch.setattr(harms_runner, "run_bcal_prompt", fake_bcal)
+    trials = harms_runner.run_harms_suite(_cases(), _backend(), tmp_path, vectors=[HarmsVector.DIRECT, HarmsVector.SYMBOLS])
+    assert trials[0].execution_error == "AgentError: Backend authentication failed"
+    assert trials[0].harm_delivered is None
+    assert trials[0].response == ""
+    assert trials[1].execution_error is None
+    saved = [HarmsTrial.model_validate_json(line) for line in (tmp_path / "trials.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert saved == trials
 
 
 def test_limit_caps_cases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

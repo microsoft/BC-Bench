@@ -1,0 +1,116 @@
+name: Contamination
+
+# One-shot bug localization probe inspired by The SWE-Bench Illusion (arXiv:2506.12286).
+# The model receives the repository name and bug report, but no repository contents or tools, and predicts one repository-relative path.
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Copilot model to evaluate"
+        required: false
+        default: "gpt-5.6-luna"
+        type: choice
+        options:
+          - "claude-sonnet-5"
+          - "claude-opus-5"
+          - "gpt-5.6-sol"
+          - "gpt-5.6-terra"
+          - "gpt-5.6-luna"
+          - "gpt-5.3-codex"
+          - "mai-code-1.1-flash"
+          - "gemini-3.7-flash"
+      category:
+        description: "Evaluation category"
+        required: false
+        default: "bug-fix"
+        type: choice
+        options:
+          - "bug-fix"
+      test-run:
+        description: "Quick run over a handful of random entries"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: contamination-${{ inputs.category || 'bug-fix' }}
+  cancel-in-progress: false
+
+env:
+  IDENTIFICATION_RESULTS_DIR: identification_results
+
+jobs:
+  get-entries:
+    uses: $/.github/workflows/get-entries.yml
+    with:
+      test-run: ${{ inputs.test-run || false }}
+      category: ${{ inputs.category || 'bug-fix' }}
+
+  identify:
+    name: ${{ matrix.entry }}
+    runs-on: ubuntu-latest
+    needs: get-entries
+    if: needs.get-entries.outputs.entries != '[]'
+    permissions:
+      contents: read
+      id-token: write
+      copilot-requests: write
+    strategy:
+      fail-fast: false
+      max-parallel: 32
+      matrix:
+        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Python with UV
+        uses: $/.github/actions/setup-python-uv
+
+      - name: Install evaluation CLIs
+        uses: $/.github/actions/install-agent-harnesses
+
+      - name: Run contamination detection for entry ${{ matrix.entry }}
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
+
+          uv run bcbench contamination filepath-identification "${{ matrix.entry }}" `
+            --category "${{ inputs.category || 'bug-fix' }}" `
+            --model "${{ inputs.model || 'gpt-5.6-luna' }}" `
+            --output-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}"
+
+      - name: Upload identification result
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: identification-result-${{ github.run_id }}-${{ matrix.entry }}
+          path: ${{ env.IDENTIFICATION_RESULTS_DIR }}/**/*.filepath-identification.jsonl
+          retention-days: ${{ (inputs.test-run && 1) || 30 }}
+
+  summarize:
+    name: Summarize
+    runs-on: ubuntu-latest
+    needs: identify
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Python with UV
+        uses: $/.github/actions/setup-python-uv
+
+      - name: Download all identification results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ env.IDENTIFICATION_RESULTS_DIR }}/
+          merge-multiple: true
+
+      - name: Summarize contamination signal
+        run: uv run bcbench contamination summarize --results-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}"

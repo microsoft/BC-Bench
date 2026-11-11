@@ -1,53 +1,37 @@
-from collections.abc import Callable
+import logging
 from pathlib import Path
+from typing import override
 
-import yaml
+from bcbench_core.agent.harness import AgentResult
+from bcbench_core.bc import build_and_publish_projects, run_test_suite
+from bcbench_core.dataset import TestEntry
+from bcbench_core.exceptions import BuildError, TestExecutionError
+from bcbench_core.git import apply_patch, clean_project_paths, stage_and_get_diff
+from bcbench_core.projects import categorize_projects
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.config import get_config
-from bcbench.dataset import TestEntry, TestGenEntry
+from bcbench.dataset import TestGenEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
-from bcbench.github_actions import github_log_group
-from bcbench.logger import get_logger
-from bcbench.operations import (
-    apply_patch,
-    build_and_publish_projects,
-    categorize_projects,
-    clean_project_paths,
-    copy_problem_statement_folder,
-    extract_tests_from_patch,
-    setup_repo_prebuild,
-    stage_and_get_diff,
-)
-from bcbench.operations.bc_operations import run_test_suite
+from bcbench.exceptions import NoTestsExtractedError
+from bcbench.operations import copy_problem_statement_folder, extract_tests_from_patch, setup_repo_prebuild
 from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationContext
+from bcbench.types import EvaluationContext, TestGenerationInput
 
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
-__all__ = ["TestGenerationPipeline", "_get_test_generation_input_mode"]
-
-
-def _get_test_generation_input_mode() -> str:
-    config_file: Path = _config.paths.agent_share_dir / "config.yaml"
-    shared_config = yaml.safe_load(config_file.read_text())
-    input_mode: str = shared_config.get("prompt", {}).get("test-generation-input", "problem-statement")
-
-    valid_modes: set[str] = {"gold-patch", "problem-statement", "both"}
-    if input_mode not in valid_modes:
-        raise ValueError(f"Invalid test-generation-input mode: '{input_mode}'. Must be one of {valid_modes}. Note: Use hyphens, not underscores (e.g., 'gold-patch' not 'gold_patch')")
-
-    return input_mode
+__all__ = ["TestGenerationPipeline"]
 
 
 class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
     """Pipeline for test-generation evaluation category."""
 
+    def __init__(self, input_mode: TestGenerationInput) -> None:
+        # Must match the input mode the prompt was built with (AgentConfig.prompt.test_generation_input)
+        self.input_mode: TestGenerationInput = input_mode
+
     def _apply_input_postbuild(self, entry: TestGenEntry, repo_path: Path) -> None:
-        input_mode = _get_test_generation_input_mode()
+        input_mode = self.input_mode
         logger.info(f"Test generation input mode: {input_mode}")
         match input_mode:
             case "gold-patch":
@@ -60,11 +44,13 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             case _:
                 raise ValueError(f"Unhandled test generation input mode: {input_mode}")
 
+    @override
     def setup_workspace(self, entry: TestGenEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)
         self._apply_input_postbuild(entry, repo_path)
         set_runtime_version(repo_path, entry.project_paths)
 
+    @override
     def setup(self, context: EvaluationContext[TestGenEntry]) -> None:
         setup_repo_prebuild(context.entry, context.repo_path)
 
@@ -78,11 +64,8 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         self._apply_input_postbuild(context.entry, context.repo_path)
         set_runtime_version(context.repo_path, context.entry.project_paths)
 
-    def run_agent(self, context: EvaluationContext[TestGenEntry], agent_runner: Callable) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
-
-    def evaluate(self, context: EvaluationContext[TestGenEntry]) -> None:
+    @override
+    def evaluate(self, context: EvaluationContext[TestGenEntry], agent_result: AgentResult) -> None:
         container = context.get_container()
         test_projects, app_projects = categorize_projects(context.entry.project_paths)
 
@@ -90,7 +73,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         # Evaluation focuses on valid changes (test code), treating unintended modifications as out-of-scope noise
         clean_project_paths(context.repo_path, app_projects)
 
-        generated_patch: str = stage_and_get_diff(context.repo_path)
+        generated_patch: str = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
 
         # Read file contents from the local repo for test extraction
         file_contents: dict[str, str] = {}
@@ -122,24 +105,24 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             )
             run_test_suite(generated_tests, "Pass", container)
 
-            result = TestGenerationResult.create_success(context, generated_patch)
+            result = TestGenerationResult.create_success(context, agent_result, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
 
         except BuildError as e:
-            result = TestGenerationResult.create_build_failure(context, generated_patch, str(e))
+            result = TestGenerationResult.create_build_failure(context, agent_result, generated_patch, str(e))
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
         except TestExecutionError as e:
             if e.expectation == "Fail":
-                result = TestGenerationResult.create_pre_patch_failure(context, generated_patch, "Generated tests Passed pre-patch\n" + str(e))
+                result = TestGenerationResult.create_pre_patch_failure(context, agent_result, generated_patch, "Generated tests Passed pre-patch\n" + str(e))
             else:
-                result = TestGenerationResult.create_post_patch_failure(context, generated_patch, "Generated tests Failed post-patch\n" + str(e))
+                result = TestGenerationResult.create_post_patch_failure(context, agent_result, generated_patch, "Generated tests Failed post-patch\n" + str(e))
 
             logger.exception(f"Tests failed during evaluation of {context.entry.instance_id}")
 
         except NoTestsExtractedError:
-            result = TestGenerationResult.create_no_tests_extracted(context, generated_patch, "No tests extracted from generated patch")
-            raise
+            result = TestGenerationResult.create_no_tests_extracted(context, agent_result, generated_patch, "No tests extracted from generated patch")
+            logger.warning(f"No tests extracted from the generated patch for {context.entry.instance_id}")
 
         finally:
             if result is not None:

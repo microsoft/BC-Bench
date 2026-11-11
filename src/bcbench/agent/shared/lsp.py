@@ -1,4 +1,8 @@
+import logging
 from pathlib import Path
+
+from bcbench_core.container import ContainerConfig
+from bcbench_core.exceptions import AgentError
 
 from bcbench.agent.shared.altool_paths import (
     build_assembly_probing_paths,
@@ -7,27 +11,29 @@ from bcbench.agent.shared.altool_paths import (
 )
 from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentError
-from bcbench.logger import get_logger
-from bcbench.types import AgentHarness, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, EvaluationCategory, HarnessName
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _AL_LSP_PLUGIN_FOLDER = "al-lsp-plugin"
 _AL_LSP_MANIFEST = {"name": "al-lsp"}
 
 
-def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory, container_name: str, country: str = "w1") -> tuple[list[str], list[str]]:
+def _resolve_symbol_paths(
+    entry: BaseDatasetEntry,
+    category: EvaluationCategory,
+    container: ContainerConfig,
+    country: str = "w1",
+) -> tuple[list[str], list[str]]:
     """Resolve (package_cache_paths, assembly_probing_paths) for the LSP server.
 
     Prefers the container's compiler folder when available — its single flat layout is the exact same arg shape AL-MCP uses.
-    Falls back to the raw BC artifact cache for container-free local runs. Raises a clear error pointing at the symbol-download script when neither is present.
+    Falls back to the raw BC artifact cache when compiler-folder symbols are unavailable. Raises a clear error pointing at the symbol-download script when neither is present.
     """
-    if container_name:
-        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container_name)
-        if symbols_folder.is_dir():
-            logger.info(f"Using container compiler-folder symbols: {symbols_folder}")
-            return [str(symbols_folder)], build_assembly_probing_paths(compiler_folder)
+    compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
+    if symbols_folder.is_dir():
+        logger.info(f"Using container compiler-folder symbols: {symbols_folder}")
+        return [str(symbols_folder)], build_assembly_probing_paths(compiler_folder)
 
     artifact_paths = resolve_artifact_lsp_paths(entry.environment_setup_version, country)
     if artifact_paths is not None:
@@ -48,7 +54,7 @@ def _build_lsp_args(project_paths: list[str], package_cache_paths: list[str], as
     return args
 
 
-def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict:
+def _lsp_config_for(harness: HarnessName, args: list[str]) -> dict[str, object]:
     """Build the agent-specific `.lsp.json` content.
 
     Both agents launch the same `al launchlspserver` process — only the surrounding LSP-routing schema differs:
@@ -62,15 +68,22 @@ def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict:
     """
     server = {"command": "al", "args": args}
     match harness:
-        case AgentHarness.COPILOT:
+        case HarnessName.COPILOT:
             return {"lspServers": {"altool": {**server, "fileExtensions": {".al": "al"}}}}
-        case AgentHarness.CLAUDE:
+        case HarnessName.CLAUDE:
             return {"altool": {**server, "extensionToLanguage": {".al": "al"}}}
         case _:
             raise AgentError(f"Unsupported agent type for AL LSP config: {harness}")
 
 
-def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, harness: AgentHarness, al_lsp: bool, container_name: str = "") -> Path | None:
+def build_al_lsp_plugin(
+    entry: BaseDatasetEntry,
+    category: EvaluationCategory,
+    repo_path: Path,
+    harness: HarnessName,
+    plugin_root: Path,
+    runtime: AgentRuntimeConfig | None,
+) -> Path | None:
     """Build a per-task AL-LSP plugin folder, return its path or None.
 
     Loaded by both Copilot CLI and Claude Code via ``--plugin-dir <path>`` for a single
@@ -78,15 +91,16 @@ def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, r
     Folder layout is identical between agents; only the LSP-routing schema in
     ``.lsp.json`` differs (see :func:`_lsp_config_for`).
     """
-    if not al_lsp:
-        remove_agent_plugin(_AL_LSP_PLUGIN_FOLDER)
+    if runtime is None or not runtime.al_lsp:
+        remove_agent_plugin(plugin_root, _AL_LSP_PLUGIN_FOLDER)
         return None
 
+    container: ContainerConfig = runtime.container
     project_paths = [str(repo_path / p) for p in entry.project_paths]
-    package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container_name)
+    package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container)
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
     lsp_config = _lsp_config_for(harness, args)
 
-    plugin_dir = write_agent_plugin(_AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
+    plugin_dir = write_agent_plugin(plugin_root, _AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
     logger.debug(f"AL LSP configuration for {harness.value}: {lsp_config}")
     return plugin_dir

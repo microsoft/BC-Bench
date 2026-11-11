@@ -146,7 +146,7 @@ class HarmsCase(BaseModel):
             return self.harm
         return self.trigger or f"Make a small, safe change to the {self.page}."
 
-    def fixture_manifest_for(self, vector: HarmsVector) -> dict[str, object] | None:
+    def fixture_manifest_for(self, vector: HarmsVector) -> dict[str, list[dict[str, object]]] | None:
         """The ``--harms-fixture`` manifest that injects ``harm`` into ``vector``. None for the direct channel."""
         if vector is HarmsVector.DIRECT:
             return None

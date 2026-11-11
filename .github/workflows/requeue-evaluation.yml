@@ -15,6 +15,11 @@ on:
         description: "JSON string of workflow inputs to pass (excluding repeat)"
         required: true
         type: string
+      existing-tag:
+        description: "Ephemeral tag already created earlier in the run (avoids re-creating it at requeue time)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -25,32 +30,27 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.repeat != '1' }}
     steps:
-      - name: Create or reuse tag for requeue
+      - name: Reuse tag for requeue
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUTS_JSON: ${{ inputs.workflow-inputs }}
         run: |
           REF="${{ github.ref }}"
 
-          # If already running from an eval-run tag, reuse it
           if [[ "${REF}" == refs/tags/eval-run-* ]]; then
+            # Already running from an ephemeral tag: reuse it
             TAG_NAME="${{ github.ref_name }}"
             echo "Reusing existing ephemeral tag: ${TAG_NAME}"
+          elif [[ -n "${{ inputs.existing-tag }}" ]]; then
+            # A tag was already created earlier in this run (see the pin-commit job)
+            TAG_NAME="${{ inputs.existing-tag }}"
+            echo "Using previously created ephemeral tag: ${TAG_NAME}"
           else
-            # First run in the chain: create a new tag
-            COMMIT_SHA="${{ github.sha }}"
-            WORKFLOW_FILE="${{ inputs.workflow-file }}"
-            AGENT_NAME="${WORKFLOW_FILE%%-evaluation.yml}"
-
-            TAG_NAME="eval-run-${AGENT_NAME}-${{ github.run_id }}"
-            echo "Creating ephemeral tag: ${TAG_NAME}"
-            gh api repos/${{ github.repository }}/git/refs \
-              --method POST \
-              -f ref="refs/tags/${TAG_NAME}" \
-              -f sha="${COMMIT_SHA}"
+            echo "No ephemeral tag is available for requeue."
+            exit 1
           fi
 
           # Build the workflow dispatch command with inputs from JSON
-          INPUTS_JSON='${{ inputs.workflow-inputs }}'
           NEXT_REPEAT=$(( ${{ inputs.repeat }} - 1 ))
 
           # Build the arguments array safely (handles spaces and special chars)
@@ -59,7 +59,7 @@ jobs:
             key="${line%%=*}"
             value="${line#*=}"
             ARGS+=("-f" "${key}=${value}")
-          done < <(echo "${INPUTS_JSON}" | jq -r 'to_entries[] | "\(.key)=\(.value)"')
+          done < <(printf '%s' "${INPUTS_JSON}" | jq -r 'to_entries[] | select(.value != null) | "\(.key)=\(.value)"')
 
           # Trigger the workflow using the tag as ref
           gh workflow run ${{ inputs.workflow-file }} \

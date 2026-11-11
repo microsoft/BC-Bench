@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from pydantic import TypeAdapter
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -29,12 +31,11 @@ from bcbench.harms import (
 )
 from bcbench.harms.case import HarmsVector
 from bcbench.harms.evaluate import DEFAULT_EVALUATORS, build_eval_dataset
-from bcbench.logger import get_logger
-from bcbench.types import BCalLLMBackend
+from bcbench.harms.runner import execution_failure, valid_trial
 
 type Json = dict[str, Any]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 _console = Console()
 
@@ -55,9 +56,6 @@ def run(
     resource_group: Annotated[str | None, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Foundry Hub resource group (required unless --dry-run).")] = None,
     project_name: Annotated[str | None, typer.Option(envvar="AZURE_PROJECT_NAME", help="Foundry Hub project name (required unless --dry-run).")] = None,
     target: Annotated[HarmsTarget, typer.Option(help="Agent under test.")] = HarmsTarget.BCAL,
-    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend.")] = BCalLLMBackend.AZURE_OPENAI,
-    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (azure-openai backend).")] = None,
-    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (azure-openai backend).")] = None,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model (external-command backend).")] = None,
     results_dir: Annotated[Path, typer.Option(help="Where to write trials, fixtures, and results.")] = _config.paths.harms_results,
@@ -65,6 +63,7 @@ def run(
     vector: Annotated[list[HarmsVector] | None, typer.Option("--vector", help="Restrict the vector matrix (repeatable), e.g. --vector direct. Overrides case/suite matrices.")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Build fixtures + eval rows but skip bcal and Foundry (instant validation).")] = False,
     no_upload: Annotated[bool, typer.Option("--no-upload", help="Run bcal + local scoring but skip the Foundry upload.")] = False,
+    skip_evaluation: Annotated[bool, typer.Option("--skip-evaluation", help="Capture trials without contacting Foundry; score later with harms evaluate.")] = False,
     evaluator: Annotated[list[str] | None, typer.Option("--evaluator", help="Override the evaluator set (repeatable): content_safety, indirect_attack, code_vulnerability.")] = None,
     objectives: Annotated[Path | None, typer.Option(help="Red-team attack objectives JSON to couch + expand instead of a YAML suite (see `harms harvest`).")] = None,
     couching: Annotated[list[str] | None, typer.Option("--couching", help="Couching template ids for --objectives (repeatable): system_override, reviewer_note, doc_comment, changelog_note.")] = None,
@@ -86,7 +85,7 @@ def run(
         uv run bcbench harms run --suite dataset/harms/comprehensive.harms.yaml
         uv run bcbench harms run --objectives dataset/redteam/attack_objectives.sample.json
     """
-    if not dry_run and not all((subscription_id, resource_group, project_name)):
+    if not dry_run and not skip_evaluation and (not subscription_id or not resource_group or not project_name):
         raise typer.BadParameter("Foundry project (AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME) is required unless --dry-run.")
 
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -99,17 +98,26 @@ def run(
 
     trials = run_harms_suite(
         cases,
-        backend_config=BCalBackendConfig(backend=backend, endpoint=endpoint, deployment=deployment, command=llm_command, model=llm_model),
+        backend_config=BCalBackendConfig(command=llm_command, model=llm_model),
         results_dir=results_dir,
         limit=limit,
         vectors=vector,
         dry_run=dry_run,
     )
 
+    build_eval_dataset(trials, results_dir / "eval_dataset.jsonl")
     if dry_run:
         _console.print(f"[yellow]Dry run[/]: planned {len(trials)} trials (bcal + Foundry skipped). Fixtures under {results_dir / 'fixtures'}.")
         _render_trials(trials)
         return
+    if skip_evaluation:
+        _render_trials(trials)
+        if any(execution_failure(trial) for trial in trials):
+            raise typer.Exit(1)
+        return
+    assert subscription_id
+    assert resource_group
+    assert project_name
 
     azure_ai_project = {
         "subscription_id": subscription_id,
@@ -119,14 +127,16 @@ def run(
     result = evaluate_trials(trials, azure_ai_project, results_dir, evaluators=tuple(evaluator) if evaluator else DEFAULT_EVALUATORS, upload=not no_upload)
     print(f"Harms results written to {results_dir / 'harms_results.json'}")
     _render_results(result, trials)
+    if result.get("failed_evaluators") or any(execution_failure(trial) for trial in trials):
+        raise typer.Exit(1)
 
 
 @harms_app.command("harvest")
 def harvest(
+    subscription_id: Annotated[str, typer.Option(envvar="AZURE_SUBSCRIPTION_ID", help="Foundry Hub subscription ID.")],
+    resource_group: Annotated[str, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Foundry Hub resource group.")],
+    project_name: Annotated[str, typer.Option(envvar="AZURE_PROJECT_NAME", help="Foundry Hub project name.")],
     output: Annotated[Path, typer.Option(help="Where to write the generated attack-objectives JSON.")] = _config.paths.harms_results / "objectives.json",
-    subscription_id: Annotated[str, typer.Option(envvar="AZURE_SUBSCRIPTION_ID", help="Foundry Hub subscription ID.")] = ...,
-    resource_group: Annotated[str, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Foundry Hub resource group.")] = ...,
-    project_name: Annotated[str, typer.Option(envvar="AZURE_PROJECT_NAME", help="Foundry Hub project name.")] = ...,
     risk_category: Annotated[
         list[str] | None, typer.Option("--risk-category", help="Risk category to generate objectives for (repeatable), e.g. code_vulnerability. Mutually exclusive with --seeds.")
     ] = None,
@@ -150,8 +160,8 @@ def harvest(
     if not seeds and not risk_category:
         raise typer.BadParameter("Provide either --seeds or --risk-category.")
 
-    risks = [RiskCategory(r) for r in risk_category] if risk_category else None
-    lang = SupportedLanguages(language) if language else None
+    risks = [TypeAdapter(RiskCategory).validate_python(r) for r in risk_category] if risk_category else None
+    lang = TypeAdapter(SupportedLanguages).validate_python(language) if language else None
     azure_ai_project = {"subscription_id": subscription_id, "resource_group_name": resource_group, "project_name": project_name}
 
     path = harvest_objectives(azure_ai_project, output, risk_categories=risks, seeds_path=seeds, language=lang, num_objectives=num_objectives)
@@ -175,7 +185,7 @@ def evaluate(
     Example:
         uv run bcbench harms evaluate evaluation_results/harms/smoke-run
     """
-    if not all((subscription_id, resource_group, project_name)):
+    if not subscription_id or not resource_group or not project_name:
         raise typer.BadParameter("Foundry project (AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME) is required.")
 
     results_dir = trials_path if trials_path.is_dir() else trials_path.parent
@@ -305,6 +315,8 @@ def _landed_cell(trial: HarmsTrial) -> str:
 
 def _valid_cell(trial: HarmsTrial) -> str:
     # A line is valid only if the agent actually received the harm (direct: always; indirect: landed).
+    if execution_failure(trial):
+        return "[red]execution failed[/]"
     if not trial.executed or trial.harm_delivered is None:
         return "-"
     return "[green]\u2713 valid[/]" if trial.harm_delivered else "[red]\u2717 invalid[/]"
@@ -312,7 +324,7 @@ def _valid_cell(trial: HarmsTrial) -> str:
 
 def _realized_cell(trial: HarmsTrial) -> str:
     # Did the agent actually produce the insecure AL? (filled by `harms score`).
-    if trial.harm_realized is None:
+    if not valid_trial(trial) or trial.score_error or trial.harm_realized is None:
         return "-"
     tag = "[red]\u2717 realized[/]" if trial.harm_realized else "[green]\u2713 resisted[/]"
     return f"{tag} [yellow]!?[/]" if trial.score_disagreement else tag
@@ -320,7 +332,7 @@ def _realized_cell(trial: HarmsTrial) -> str:
 
 def _render_asr_summary(trials: list[HarmsTrial]) -> None:
     # Attack-success rate over VALID (delivered) lines that have been scored.
-    scored = [t for t in trials if t.executed and t.harm_delivered and t.harm_realized is not None]
+    scored = [t for t in trials if valid_trial(t) and not t.score_error and t.harm_realized is not None]
     if not scored:
         return
     realized = [t for t in scored if t.harm_realized]
@@ -339,12 +351,12 @@ def _render_validity_summary(trials: list[HarmsTrial]) -> None:
     executed = [t for t in trials if t.executed]
     if not executed:
         return
-    valid = [t for t in executed if t.harm_delivered]
-    invalid = [t for t in executed if t.harm_delivered is False]
+    valid = [t for t in executed if valid_trial(t)]
+    invalid = [t for t in executed if not valid_trial(t)]
     if invalid:
         _console.print(
             f"[yellow]⚠ Validity:[/] {len(valid)}/{len(executed)} result lines are valid (the agent received the harm). "
-            f"{len(invalid)} line(s) are invalid — the harm never reached the agent, so their safety scores are not meaningful "
+            f"{len(invalid)} line(s) failed or lack verified harm delivery, so their safety scores are not meaningful "
             f"({_short(', '.join(f'{t.case_id}/{t.vector.value}' for t in invalid), 80)})."
         )
     else:

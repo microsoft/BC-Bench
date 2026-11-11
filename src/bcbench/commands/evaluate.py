@@ -1,95 +1,116 @@
+import logging
 import random
-import shutil
-from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, cast, override
 
 import typer
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.evaluation import evaluate_task
+from bcbench_core.exceptions import AgentError
+from bcbench_core.filesystem import prepare_run_dir
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
+from bcbench.agent import BCalBackendConfig, BCalHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
 from bcbench.cli_options import (
+    AgentConfigPath,
     ClaudeCodeModel,
+    ContainerCompany,
+    ContainerMcpUrl,
     ContainerName,
     ContainerPassword,
+    ContainerServerInstance,
+    ContainerServerUrl,
     ContainerUsername,
     CopilotModel,
     EvaluationCategoryOption,
     OutputDir,
+    PRReviewEnginePath,
     RepoPath,
     RunId,
+    TierOption,
+    resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
-from bcbench.evaluate import EvaluationPipeline
+from bcbench.dataset.codereview import CodeReviewEntry
+from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
-from bcbench.logger import get_logger
+from bcbench.github_actions import github_log_group
+from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.results.base import RESULT_FILE_SUFFIX
+from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
-
-
-def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
-    run_dir = output_dir / run_id
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True)
-    return run_dir
 
 
 @evaluate_app.command("copilot")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
+    server_url: ContainerServerUrl = "",
+    server_instance: ContainerServerInstance = "",
+    mcp_url: ContainerMcpUrl = None,
+    company: ContainerCompany = "",
     model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
+    bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
+    runtime = resolve_evaluation_runtime(
+        category=category,
+        container_name=container_name,
+        username=username,
+        container_password=password,
+        server_url=server_url,
+        server_instance=server_instance,
+        mcp_url=mcp_url,
+        company=company,
+        al_mcp=al_mcp,
+        al_lsp=al_lsp,
+        bc_mcp=bc_mcp,
+    )
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    agent_config = AgentConfig.from_file(config_path)
+    harness = CopilotHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
+    run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
-
-    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
 
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=container,
-        model=model,
-        agent_name=AgentHarness.COPILOT,
+        container=runtime.container if runtime else None,
+        agent=harness.identity(),
         category=category,
+        tier=tier,
     )
 
-    pipeline = category.pipeline
-    pipeline.execute(
-        context,
-        lambda ctx: run_copilot_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            al_mcp=al_mcp if ctx.container else False,
-            al_lsp=al_lsp,
-            container_name=ctx.get_container().name if ctx.container else "",
-        ),
-    )
+    if (definition := category.definition) is None:
+        # Transitional: remove once every category is migrated
+        category.pipeline(agent_config).execute(context, harness)
+    else:
+        with github_log_group(f"{context.agent.harness} -- Entry: {entry_id}"):
+            result: BaseEvaluationResult = evaluate_task(definition.make(agent_config), context, harness, context.agent_request(), on_timeout=definition.timeout_result)
+        result.save(run_dir, f"{entry_id}{RESULT_FILE_SUFFIX}")
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -99,52 +120,107 @@ def evaluate_copilot(
 def evaluate_claude_code(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
+    server_url: ContainerServerUrl = "",
+    server_instance: ContainerServerInstance = "",
+    mcp_url: ContainerMcpUrl = None,
+    company: ContainerCompany = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "claude_code_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
+    bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
+    config_path: AgentConfigPath = SHARED_CONFIG_FILE,
 ) -> None:
     """
     Evaluate Claude Code on single dataset entry.
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
+    runtime = resolve_evaluation_runtime(
+        category=category,
+        container_name=container_name,
+        username=username,
+        container_password=password,
+        server_url=server_url,
+        server_instance=server_instance,
+        mcp_url=mcp_url,
+        company=company,
+        al_mcp=al_mcp,
+        al_lsp=al_lsp,
+        bc_mcp=bc_mcp,
+    )
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    agent_config = AgentConfig.from_file(config_path)
+    harness = ClaudeHarness(model=model, category=category, agent_config=agent_config, plugin_root=_config.paths.plugin_root, runtime=runtime)
+    run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
-
-    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
 
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=container,
-        model=model,
-        agent_name=AgentHarness.CLAUDE,
+        container=runtime.container if runtime else None,
+        agent=harness.identity(),
+        category=category,
+        tier=tier,
+    )
+
+    if (definition := category.definition) is None:
+        # Transitional: remove once every category is migrated
+        category.pipeline(agent_config).execute(context, harness)
+    else:
+        with github_log_group(f"{context.agent.harness} -- Entry: {entry_id}"):
+            result: BaseEvaluationResult = evaluate_task(definition.make(agent_config), context, harness, context.agent_request(), on_timeout=definition.timeout_result)
+        result.save(run_dir, f"{entry_id}{RESULT_FILE_SUFFIX}")
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("pr-review")
+def evaluate_pr_review(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    model: CopilotModel = "gpt-5.6-luna",
+    repo_path: RepoPath = _config.paths.testbed_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    run_id: RunId = "pr_review_test_run",
+    engine_path: PRReviewEnginePath = None,
+) -> None:
+    """
+    Evaluate BC PR Review on a single code-review entry.
+
+    This production-fidelity runner is fixed to the code-review category, while the same
+    category can also run through the generic copilot and claude commands for cross-system
+    comparison. The resulting review.json is scored by the shared code-review pipeline.
+    Requires a local BC-ALAgents checkout (--engine-path or BC_PR_REVIEW_ROOT),
+    PowerShell 7+, and an authenticated Copilot CLI.
+
+    To only generate review.json without scoring, use 'bcbench run pr-review' instead.
+    """
+    category = EvaluationCategory.CODE_REVIEW
+    entry = CodeReviewEntry.load(category.dataset_path(), entry_id=entry_id)[0]
+    harness = PRReviewHarness(model=model, engine_path=engine_path)
+    run_dir = prepare_run_dir(output_dir, run_id)
+
+    logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
+
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container=None,
+        agent=harness.identity(),
         category=category,
     )
 
-    pipeline = category.pipeline
-    pipeline.execute(
-        context,
-        lambda ctx: run_claude_code(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            al_mcp=al_mcp if ctx.container else False,
-            al_lsp=al_lsp,
-            container_name=ctx.get_container().name if ctx.container else "",
-        ),
-    )
+    CodeReviewPipeline().execute(context, harness)
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -153,14 +229,12 @@ def evaluate_claude_code(
 @evaluate_app.command("bcal")
 def evaluate_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    tier: TierOption = DatasetTier.GOLD,
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "bcal_test_run",
-    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.EXTERNAL_COMMAND,
-    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
-    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
-    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (required for external-command backend)")] = None,
-    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -168,15 +242,9 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
-    run_dir = _prepare_run_dir(output_dir, run_id)
-    backend_config = BCalBackendConfig(
-        backend=backend,
-        endpoint=endpoint,
-        deployment=deployment,
-        command=llm_command,
-        model=llm_model,
-    )
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
+    run_dir = prepare_run_dir(output_dir, run_id)
+    harness = BCalHarness(BCalBackendConfig(command=llm_command, model=llm_model))
 
     logger.info(f"Running evaluation on entry {entry_id} with BCal")
 
@@ -185,19 +253,19 @@ def evaluate_bcal(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        model=backend_config.model_label(),
-        agent_name=AgentHarness.BCAL,
+        agent=harness.identity(),
         category=category,
+        tier=tier,
     )
 
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_bcal_agent(
-            entry=cast(NL2ALEntry, ctx.entry),
-            repo_path=ctx.repo_path,
-            backend_config=backend_config,
-        ),
-    )
+    pipeline = NL2ALPipeline()
+    try:
+        pipeline.execute(context, harness)
+    except AgentError as exc:
+        result = JudgeBasedEvaluationResult.create_failure(context, AgentResult(transcript=exc.transcript), output="", error_message=str(exc))
+        pipeline.save_result(context, result)
+        logger.exception("BCal execution failed for %s", entry.instance_id)
+        raise typer.Exit(code=1) from exc
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -232,14 +300,15 @@ def evaluate_judge_calibration(
 def evaluate_mock(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    tier: TierOption = DatasetTier.GOLD,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "mock_run",
 ) -> None:
     """
     Evaluate mock agent on single dataset entry for testing purposes.
     """
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
+    run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mock agent")
 
@@ -247,16 +316,26 @@ def evaluate_mock(
         entry=entry,
         repo_path=Path(),
         result_dir=run_dir,
-        model="mock-model",
-        agent_name=AgentHarness.MOCK,
+        agent=MockHarness().identity(),
         category=category,
+        tier=tier,
     )
 
     pipeline = MockEvaluationPipeline()
-    pipeline.execute(context, lambda ctx: (None, None))
+    pipeline.execute(context, MockHarness())
 
     logger.info("Mock evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
+
+
+class MockHarness(AgentHarness[BaseDatasetEntry, HarnessName]):
+    @override
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.MOCK, version="mock", model="mock-model")
+
+    @override
+    def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
+        return AgentResult()
 
 
 class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
@@ -266,13 +345,16 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
     It randomly generates different scenarios to test result handling and serialization.
     """
 
+    @override
     def setup_workspace(self, entry: BaseDatasetEntry, repo_path: Path) -> None:
         logger.info("Mock pipeline: Skipping workspace setup")
 
+    @override
     def setup(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         logger.info("Mock pipeline: Skipping setup")
 
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], agent_runner: Callable) -> None:
+    @override
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarness[BaseDatasetEntry, HarnessName]) -> AgentResult:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 
@@ -285,7 +367,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             None,
             AgentMetrics(prompt_tokens=500, completion_tokens=100, tool_usage={"bash": 3, "view": 2, "edit": 1, "search": 5}),
         ]
-        context.metrics = random.choice(metrics_scenarios)
+        metrics: AgentMetrics | None = random.choice(metrics_scenarios)
 
         # Randomize experiment configuration to test different scenarios
         experiment_config_scenarios: list[ExperimentConfiguration | None] = [
@@ -297,21 +379,25 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             ExperimentConfiguration(custom_agent="custom-agent-v1"),
             ExperimentConfiguration(plugins=["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99"]),
         ]
-        context.experiment = random.choice(experiment_config_scenarios)
+        experiment: ExperimentConfiguration | None = random.choice(experiment_config_scenarios)
 
-        logger.info(f"Using agent metrics: {context.metrics}")
-        logger.info(f"Using experiment configuration: {context.experiment}")
+        logger.info(f"Using agent metrics: {metrics}")
+        logger.info(f"Using experiment configuration: {experiment}")
+        return AgentResult(metrics=metrics, experiment=experiment)
 
-    def evaluate(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
+    @override
+    def evaluate(self, context: EvaluationContext[BaseDatasetEntry], agent_result: AgentResult) -> None:
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
         match context.category:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 scenarios = ["success", "build-fail"]
             case EvaluationCategory.CODE_REVIEW:
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
+                scenarios = ["raw", "empty"]
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
                 scenarios = ["raw", "empty"]
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 scenarios = ["raw", "empty"]
@@ -326,17 +412,17 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         result: BaseEvaluationResult
         match scenario:
             case "success":
-                result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
+                result = ExecutionBasedEvaluationResult.create_success(context, agent_result, "MOCK_PATCH_CONTENT")
             case "build-fail":
-                result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
+                result = ExecutionBasedEvaluationResult.create_build_failure(context, agent_result, "MOCK_PATCH_CONTENT", "Mock build failure")
             case "invalid":
-                result = CodeReviewResult.create_invalid(context, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
+                result = CodeReviewResult.create_invalid(context, agent_result, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
             case "valid":
-                result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[])
+                result = CodeReviewResult.create(context, agent_result, output="[]", expected_comments=[], generated_comments=[], matched_pairs=[], ignored_comments=[], ignored_matched_pairs=[])
             case "raw":
-                result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
+                result = JudgeBasedEvaluationResult.create_raw(context, agent_result, output="MOCK_PATCH_CONTENT")
             case "empty":
-                result = JudgeBasedEvaluationResult.create_empty_output(context)
+                result = JudgeBasedEvaluationResult.create_empty_output(context, agent_result)
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

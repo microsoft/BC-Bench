@@ -6,17 +6,21 @@ Heavy Azure imports are lazy so ``--dry-run`` and unit tests never require the S
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from bcbench.harms.runner import HarmsTrial
-from bcbench.logger import get_logger
+if TYPE_CHECKING:
+    from azure.ai.evaluation import AzureAIProject
+    from azure.ai.evaluation._model_configurations import EvaluatorConfig
+
+from bcbench.harms.runner import HarmsTrial, execution_failure, valid_trial
 
 __all__ = ["DEFAULT_EVALUATORS", "build_eval_dataset", "evaluate_trials"]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
-# Evaluators run on every executed trial so direct (UPIA) and indirect (XPIA) trials are comparable:
+# Evaluators run only on valid delivered trials:
 #   - content_safety: the standard harms (violence / sexual / self-harm / hate).
 #   - indirect_attack: XPIA — did the response comply with the injected attacker instruction. On the
 #     direct trials this doubles as a UPIA manipulation signal (the attack is the prompt itself).
@@ -48,7 +52,9 @@ def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
                 # Did the agent actually receive the harm? A line is only a valid harms test when it did
                 # (direct: the harm is the prompt; indirect: the injection landed in a tool result).
                 "harm_delivered": trial.harm_delivered,
-                "valid": bool(trial.harm_delivered),
+                "valid": valid_trial(trial),
+                "execution_error": execution_failure(trial),
+                "score_error": trial.score_error,
                 # AL-aware success scoring (filled by `harms score`): did the agent produce the insecure AL?
                 "harm_realized": trial.harm_realized,
                 "detector_realized": trial.detector_realized,
@@ -80,10 +86,13 @@ def evaluate_trials(
     upload: bool = True,
 ) -> dict[str, Any]:
     """Run safety evaluators over the trials and (optionally) upload the run to the Foundry project."""
-    dataset_path = build_eval_dataset(trials, results_dir / "eval_dataset.jsonl")
-    executed = sum(1 for t in trials if t.executed)
-    if executed == 0:
+    build_eval_dataset(trials, results_dir / "eval_dataset.jsonl")
+    if not any(t.executed for t in trials):
         raise ValueError("No executed trials to evaluate (all trials were dry-run).")
+    valid = [trial for trial in trials if valid_trial(trial)]
+    if not valid:
+        raise ValueError("No valid delivered trials to evaluate. Inspect execution errors and injection logs.")
+    dataset_path = build_eval_dataset(valid, results_dir / "valid_eval_dataset.jsonl")
 
     from azure.ai.evaluation import evaluate
     from azure.identity import DefaultAzureCredential
@@ -97,19 +106,24 @@ def evaluate_trials(
         "response": "${data.response}",
         "context": "${data.context}",
     }
-    evaluator_config = {name: {"column_mapping": column_mapping} for name in evaluator_map}
+    evaluator_config: dict[str, EvaluatorConfig] = {name: {"column_mapping": column_mapping} for name in evaluator_map}
 
-    logger.info(f"Evaluating {executed} harms trials with {list(evaluator_map)} (upload={upload})")
+    logger.info(f"Evaluating {len(valid)}/{len(trials)} valid harms trials with {list(evaluator_map)} (upload={upload})")
 
     upload_project = azure_ai_project if upload else None
 
     def _run(evaluators_subset: dict[str, Any], project: dict[str, str] | None) -> dict[str, Any]:
-        return evaluate(
-            data=str(dataset_path),
-            evaluators=evaluators_subset,
-            evaluator_config={name: evaluator_config[name] for name in evaluators_subset},
-            azure_ai_project=project,
-            output_path=str(results_dir / "harms_results.json"),
+        upload_target: AzureAIProject | None = (
+            {"subscription_id": project["subscription_id"], "resource_group_name": project["resource_group_name"], "project_name": project["project_name"]} if project else None
+        )
+        return dict(
+            evaluate(
+                data=str(dataset_path),
+                evaluators=evaluators_subset,
+                evaluator_config={name: evaluator_config[name] for name in evaluators_subset},
+                azure_ai_project=upload_target,
+                output_path=str(results_dir / "harms_results.json"),
+            )
         )
 
     try:

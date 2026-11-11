@@ -101,9 +101,9 @@ def _extract_json_object(text: str) -> str:
     stripped = text.strip()
     if not stripped:
         return ""
-    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", stripped, re.IGNORECASE)
+    fence: re.Match[str] | None = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", stripped, re.IGNORECASE)
     if fence:
-        stripped = fence.group(1).strip()
+        stripped = str(fence.group(1)).strip()
     start = stripped.find("{")
     end = stripped.rfind("}")
     if start != -1 and end != -1 and end > start:
@@ -179,7 +179,7 @@ def judge_trial(*, harm: str, generated_al: str, rule: RuleDoc | None, model: st
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=_config.timeout.agent_execution,
+                timeout=60 * 60,
                 check=True,
             )
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:

@@ -7,20 +7,27 @@ meeting all Pydantic validation requirements.
 
 import json
 from collections.abc import Generator
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, cast, override
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
+from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.container import ContainerConfig
+from bcbench_core.dataset import TestEntry
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
+from bcbench.categories.ext_request_advisor import ExtRequestAdvisorEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry
+from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentHarness, AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import ChecklistAssertion, EvaluationCategory, EvaluationContext, HarnessName
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -76,11 +83,27 @@ def create_dataset_entry(
     )
 
 
+@dataclass
+class StubHarness[E: BaseDatasetEntry](AgentHarness[E, HarnessName]):
+    result: AgentResult = field(default_factory=AgentResult)
+    requests: list[AgentRequest[E]] = field(default_factory=list)
+
+    @override
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.COPILOT, version="1.0.0", model="test-model")
+
+    @override
+    def run(self, request: AgentRequest[E], /) -> AgentResult:
+        self.requests.append(request)
+        return self.result
+
+
 def create_evaluation_context[EntryT: BaseDatasetEntry](
     tmp_path: Path,
     entry: EntryT | None = None,
-    agent_name: AgentHarness = AgentHarness.COPILOT,
+    agent_name: HarnessName = HarnessName.COPILOT,
     model: str = "test-model",
+    agent_version: str = "1.0.0",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
     container_name: str = "test-container",
     password: str = "test-password",
@@ -92,9 +115,8 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
         entry=resolved_entry,
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
-        container=ContainerConfig(name=container_name, username=username, password=password),
-        agent_name=agent_name,
-        model=model,
+        container=ContainerConfig(name=container_name, username=username, password=password, company="CRONUS"),
+        agent=AgentIdentity[HarnessName](harness=agent_name, version=agent_version, model=model),
         category=category,
     )
 
@@ -183,7 +205,7 @@ def create_codereview_entry(
         project_paths=project_paths,
         patch=patch,
         created_at=created_at,
-        metadata=EntryMetadata(area=domain),
+        metadata=CodeReviewEntryMetadata(area=domain),
         expected_comments=expected_comments,
         ignored_comments=ignored_comments or [],
     )
@@ -192,12 +214,14 @@ def create_codereview_entry(
 def create_codereview_result(
     instance_id: str = VALID_INSTANCE_ID,
     model: str = "gpt-4o",
-    agent_name: AgentHarness = AgentHarness.COPILOT,
+    agent_name: HarnessName = HarnessName.COPILOT,
     output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
     expected_comments: list[ReviewComment] | None = None,
     metrics: AgentMetrics | None = None,
     domain: str | None = None,
     ignored_comments: list[ReviewComment] | None = None,
+    matched_indices: tuple[tuple[int, int], ...] = (),
+    ignored_matched_indices: tuple[tuple[int, int], ...] = (),
 ) -> CodeReviewResult:
     if expected_comments is None:
         expected_comments = []
@@ -211,22 +235,24 @@ def create_codereview_result(
         entry=entry,
         repo_path=Path(),
         result_dir=Path(),
-        container=ContainerConfig(name="t", username="t", password="t"),
-        agent_name=agent_name,
-        model=model,
+        container=ContainerConfig(name="t", username="t", password="t", company="CRONUS"),
+        agent=AgentIdentity[HarnessName](harness=agent_name, version="1.0.0", model=model),
         category=EvaluationCategory.CODE_REVIEW,
     )
-    context.metrics = metrics
+    agent_result = AgentResult(metrics=metrics)
 
     generated_comments = parse_review_output(output)
     if generated_comments is None:
-        return CodeReviewResult.create_invalid(context, output, expected_comments)
+        return CodeReviewResult.create_invalid(context, agent_result, output, expected_comments)
     return CodeReviewResult.create(
         context,
+        agent_result,
         output=output,
         expected_comments=expected_comments,
         generated_comments=generated_comments,
+        matched_pairs=[(expected_comments[e], generated_comments[g]) for e, g in matched_indices],
         ignored_comments=entry.ignored_comments,
+        ignored_matched_pairs=[(entry.ignored_comments[e], generated_comments[g]) for e, g in ignored_matched_indices],
     )
 
 
@@ -267,16 +293,9 @@ def sample_test_entry() -> TestEntry:
 
 
 @pytest.fixture
-def plugin_root(tmp_path: Path) -> Generator[Path]:
-    """Redirect the plugin root to a temp dir, so tests never write into the repo's own `.bcbench/`."""
-    from dataclasses import replace
-
-    from bcbench.agent.shared import plugin
-
-    root = tmp_path / "plugin-root"
-    patched = replace(plugin._config, paths=replace(plugin._config.paths, plugin_root=root))
-    with patch.object(plugin, "_config", patched):
-        yield root
+def plugin_root(tmp_path: Path) -> Path:
+    """A temp plugin root, so tests never write into the repo's own `.bcbench/`."""
+    return tmp_path / "plugin-root"
 
 
 @pytest.fixture
@@ -312,7 +331,7 @@ def sample_testgen_result() -> TestGenerationResult:
 @pytest.fixture
 def sample_bugfix_result_with_metrics() -> BugFixResult:
     return create_bugfix_result(
-        metrics=AgentMetrics(execution_time=120.5, prompt_tokens=5000, completion_tokens=1200, llm_duration=100.0, tool_usage={"view_code": 2, "run_tests": 1}),
+        metrics=AgentMetrics(execution_time=120.5, prompt_tokens=5000, completion_tokens=1200, llm_duration=100.0, ai_credits=2.5, tool_usage={"view_code": 2, "run_tests": 1}),
     )
 
 
@@ -337,6 +356,7 @@ def create_nl2al_entry(
     expected: list[ChecklistAssertion] | None = None,
     page: str = "Customer Card",
     audience: Literal["Business", "Technical", "Both"] = "Both",
+    area: str | None = None,
 ) -> NL2ALEntry:
     if project_paths is None:
         project_paths = ["JobBudgetVsActualReport"]
@@ -346,6 +366,7 @@ def create_nl2al_entry(
 
     return NL2ALEntry(
         instance_id=instance_id,
+        metadata=EntryMetadata(area=area),
         environment_setup_version=environment_setup_version,
         project_paths=project_paths,
         nl_prompt=nl_prompt,
@@ -359,6 +380,71 @@ def create_nl2al_entry(
 @pytest.fixture
 def sample_nl2al_entry() -> NL2ALEntry:
     return create_nl2al_entry()
+
+
+VALID_DATA_QUERY_PROMPT = "Return the total sales amount per customer."
+VALID_GOLD_QUERY = (
+    'query 50100 SalesByCustomer\n{\n    QueryType = Normal;\n    elements\n    {\n        dataitem(Customer; Customer)\n        {\n            column(No; "No.") { }\n        }\n    }\n}'
+)
+
+
+def create_data_query_entry(
+    instance_id: str = "dataquery__sales-by-customer-1",
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    nl_prompt: str = VALID_DATA_QUERY_PROMPT,
+    created_at: str = VALID_CREATED_AT,
+    gold_query: str = VALID_GOLD_QUERY,
+    ordered: bool = False,
+) -> DataQueryEntry:
+    return DataQueryEntry(
+        instance_id=instance_id,
+        environment_setup_version=environment_setup_version,
+        nl_prompt=nl_prompt,
+        created_at=created_at,
+        gold_query=gold_query,
+        ordered=ordered,
+    )
+
+
+def create_ext_advisor_entry(
+    instance_id: str = "microsoftInternal__NAV-Ext_Request_Advisor-29447",
+    repo: str = "microsoftInternal/NAV",
+    base_commit: str = VALID_BASE_COMMIT,
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    created_at: str = VALID_CREATED_AT,
+    title: str = '[Event Request] Codeunit 5880 "Phys. Invt. Order-Finish"',
+    description: str = "Add an event before modifying the temporary inventory tracking record.",
+    comments: str = "",
+    expected: list[ChecklistAssertion] | None = None,
+) -> ExtRequestAdvisorEntry:
+    return ExtRequestAdvisorEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=base_commit,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths if project_paths is not None else ["App/Layers/W1/BaseApp"],
+        created_at=created_at,
+        title=title,
+        description=description,
+        comments=comments,
+        expected=expected
+        if expected is not None
+        else [
+            {"text": "The request is classified as a regular event-request.", "level": "critical"},
+            {"text": "A complete extensibility request is drafted.", "level": "critical"},
+        ],
+    )
+
+
+@pytest.fixture
+def sample_data_query_entry() -> DataQueryEntry:
+    return create_data_query_entry()
+
+
+@pytest.fixture
+def sample_ext_advisor_entry() -> ExtRequestAdvisorEntry:
+    return create_ext_advisor_entry()
 
 
 def create_ext_implement_entry(

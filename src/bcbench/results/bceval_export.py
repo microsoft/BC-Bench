@@ -3,28 +3,30 @@ Convert the result into a format that bceval can consume and upload to Braintrus
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
+
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
-from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExpectedOutput
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _experiment_metadata(experiment: ExperimentConfiguration | None, git_ref: str | None, benchmark_version: str) -> dict[str, Any]:
     """Metadata identifying whether a run is a baseline or an experiment, and its configuration.
 
     bc-eval promotes the ``EvalRunType`` key to the Kusto ``EvalRunType``/``testJobType`` fields
-    when ``--eval-run-type`` is left at its default, so no extra CLI flag is needed.
+    unless the summarize workflow overrides it with ``--eval-run-type experiment``.
     """
     is_experiment: bool = experiment is not None and not experiment.is_empty()
     return {
         "EvalRunType": "experiment" if is_experiment else "baseline",
-        "experiment": experiment.model_dump(mode="json") if (is_experiment and experiment) else None,
+        "experiment": experiment.model_dump(mode="json") if is_experiment and experiment else None,
         "git_branch": git_ref,
         "benchmark_version": benchmark_version,
     }
@@ -39,8 +41,7 @@ def write_bceval_results(
     git_ref: str | None = None,
 ) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    entry_cls = category.entry_class
-    dataset_entries: list[BaseDatasetEntry] = entry_cls.load(category.dataset_path)
+    dataset_entries: list[BaseDatasetEntry] = category.entry_class.load(category.dataset_path(results[0].tier))
     benchmark_version = get_benchmark_version()
 
     output_file = out_dir / output_filename
@@ -58,9 +59,14 @@ def write_bceval_results(
 
             metadata: dict[str, Any] = {
                 "model": result.model,
+                "tier": result.tier,
+                **matched_entry.metadata.model_dump(mode="json"),
+                "agent_version": result.agent_version,
+                **result.export_metadata,
                 "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
                 "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,
                 "llm_duration": (result.metrics.llm_duration if result.metrics else None) or 0,
+                "ai_credits": result.metrics.ai_credits if result.metrics else None,
                 "latency": (result.metrics.execution_time if result.metrics else None) or 0,
                 "turn_count": (result.metrics.turn_count if result.metrics else None) or 0,
                 **result.category_metrics,
@@ -76,7 +82,7 @@ def write_bceval_results(
                 "input": task_input,
                 "expected": expected,
                 "output": result.output,
-                "context": "",
+                "context": result.transcript if result.transcript is not None else "",
                 "metadata": metadata,
                 "tags": [],
             }

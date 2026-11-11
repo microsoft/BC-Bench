@@ -1,17 +1,18 @@
 from collections.abc import Sequence
-from typing import NamedTuple, Self
+from typing import NamedTuple, Self, override
 
 import numpy as np
+from bcbench_core.agent.harness import AgentResult
+from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
 from pydantic import Field
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
-from bcbench.dataset import ReviewComment
-from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
-from bcbench.results.summary import EvaluationResultSummary
+from bcbench.dataset import BaseDatasetEntry, ReviewComment
+from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
+from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext
 
 _METRIC_EXPLANATIONS = """\
@@ -20,7 +21,7 @@ _METRIC_EXPLANATIONS = """\
 
 - **Micro** — sums matched, scorable generated (generated minus ignored), and expected across all tasks and computes one score; tasks with many comments dominate.
 - **Macro** — computes P/R/F1 per task and averages the scores; every task counts equally regardless of comment volume. Macro precision averages over tasks where the agent commented plus negative tasks (no expected findings), where correct silence scores as perfect precision; silence on a positive task is still not rewarded. Macro recall averages only over positive tasks, since negative tasks have nothing to recall.
-- **Matched comment** — a generated comment paired with an expected one by file and line proximity (within the configured tolerance), then confirmed by an LLM judge to describe the same underlying issue.
+- **Matched comment** — a generated comment assigned one-to-one to an expected finding after an LLM judge confirms the same underlying issue. All same-file pairs are candidates; line distance only breaks assignment ties.
 - **Ignored comment** — a generated comment that matched the entry's `ignored_comments` set (acceptable-but-not-required findings). Neutral: removed from the scored generated set, so it neither earns recall nor counts against precision. Precision's denominator is scorable generated (generated minus ignored).
 - **F1** — harmonic mean of precision and recall; balances both equally. (Special case of Fβ at β=1.)
 - **Fβ** — generalized F-score with a tunable precision/recall trade-off:
@@ -42,7 +43,7 @@ _METRIC_EXPLANATIONS = """\
 _CONSOLE_METRIC_EXPLANATIONS = (
     "[bold]Micro[/bold] — volume-weighted across all comments; sums matched, scorable generated (generated minus ignored), and expected, so tasks with many comments dominate.\n"
     "[bold]Macro[/bold] — per-task P/R/F1 averaged equally; every task counts the same. Macro precision rewards correct silence on negative tasks but not on positive ones; macro recall averages only over positive tasks.\n"
-    "[bold]Matched comment[/bold] — paired by file + line proximity, then confirmed by an LLM judge to describe the same underlying issue.\n"
+    "[bold]Matched comment[/bold] — assigned one-to-one after an LLM judge confirms the same underlying issue; all same-file pairs are candidates, with line distance only breaking assignment ties.\n"
     "[bold]Ignored comment[/bold] — matched the entry's ignored_comments set; neutral, so it is removed from the scored generated set (no recall, no precision hit). Precision's denominator is scorable generated (generated minus ignored).\n"
     "[bold]F1[/bold] — harmonic mean of precision and recall (special case of Fβ at β=1).\n"
     "[bold]Fβ[/bold] — F_β = (1 + β²) · (P · R) / (β² · P + R); β<1 favors precision, β>1 favors recall.\n"
@@ -74,59 +75,48 @@ def _line_distance(line: int, start: int, end: int | None) -> int:
     return line - effective_end
 
 
-def match_comments(
+def candidate_comment_pairs(
     expected_comments: list[ReviewComment],
     generated_comments: list[ReviewComment],
 ) -> list[tuple[ReviewComment, ReviewComment]]:
-    """Pair expected and generated comments by globally optimal (file, line-proximity) assignment.
-
-    Uses minimum-cost bipartite matching so each finding lands on its closest eligible expected
-    comment, maximizing the number of matches first and minimizing total line distance second.
-    A simple order-based greedy can let an earlier-listed expected comment steal a finding that is
-    a closer (often exact-line) match for a later expected comment, understating recall.
-
-    Only same-file findings are eligible; line distance never blocks a pair and acts solely as an
-    assignment tiebreak. The LLM judge is the authoritative semantic gate applied to these pairs.
-    """
-    if not expected_comments or not generated_comments:
-        return []
-
-    num_expected = len(expected_comments)
-    num_generated = len(generated_comments)
-    cost = np.full((num_expected, num_generated), np.inf, dtype=float)
-
-    for expected_index, expected in enumerate(expected_comments):
-        expected_file = _normalize_path(expected.file)
-        for generated_index, generated in enumerate(generated_comments):
-            if _normalize_path(generated.file) != expected_file:
-                continue
-            distance = _line_distance(generated.line_start, expected.line_start, expected.line_end)
-            cost[expected_index, generated_index] = distance
-
-    finite = cost[np.isfinite(cost)]
-    sentinel = float(finite.max() + 1.0) if finite.size else 1.0
-    solvable = np.where(np.isfinite(cost), cost, sentinel)
-
-    row_indices, column_indices = linear_sum_assignment(solvable)
-    return [
-        (expected_comments[expected_index], generated_comments[generated_index])
-        for expected_index, generated_index in zip(row_indices, column_indices, strict=False)
-        if np.isfinite(cost[expected_index, generated_index])
-    ]
+    """All same-file pairs, preserving comment identity and input order without line pruning."""
+    return [(expected, generated) for expected in expected_comments for generated in generated_comments if _normalize_path(expected.file) == _normalize_path(generated.file)]
 
 
-def unmatched_generated(
-    generated_comments: list[ReviewComment],
-    matched_pairs: list[tuple[ReviewComment, ReviewComment]],
-) -> list[ReviewComment]:
-    """Generated comments not already paired in ``matched_pairs``, preserving order.
+def assign_comment_matches(
+    expected_pairs: list[tuple[ReviewComment, ReviewComment]],
+    ignored_pairs: list[tuple[ReviewComment, ReviewComment]],
+) -> tuple[list[tuple[ReviewComment, ReviewComment]], list[tuple[ReviewComment, ReviewComment]]]:
+    """Assign eligible edges by expected count, then ignored count, then total line distance."""
+    pairs = expected_pairs + ignored_pairs
+    if not pairs:
+        return [], []
 
-    Identity-based so two value-equal comments are treated as distinct; the pairs carry the
-    same ``ReviewComment`` instances that live in ``generated_comments``. Used to feed the
-    leftover findings into ignored-comment matching after expected matching has claimed its own.
-    """
-    matched_ids = {id(generated) for _, generated in matched_pairs}
-    return [generated for generated in generated_comments if id(generated) not in matched_ids]
+    # Identity, not value equality: identical-looking findings are still separate comments.
+    gold_ids = dict.fromkeys(id(gold) for gold, _ in pairs)
+    generated_ids = dict.fromkeys(id(generated) for _, generated in pairs)
+    rows = {key: index for index, key in enumerate(gold_ids)}
+    columns = {key: index for index, key in enumerate(generated_ids)}
+    edges = {(rows[id(gold)], columns[id(generated)]): (gold, generated) for gold, generated in pairs}
+    expected_edges = {(rows[id(gold)], columns[id(generated)]) for gold, generated in expected_pairs}
+    distances = {key: _line_distance(generated.line_start, gold.line_start, gold.line_end) for key, (gold, generated) in edges.items()}
+    num_gold, num_generated = len(rows), len(columns)
+
+    # One ignored match outweighs ALL possible distance savings; one expected match
+    # outweighs ALL ignored matches plus distance savings. Ineligible edges stay forbidden.
+    ignored_reward = max(distances.values()) * min(num_gold, num_generated) + 1
+    expected_reward = (num_gold + 1) * ignored_reward
+    cost = np.full((num_gold, num_generated + num_gold), np.inf)
+    cost[:, num_generated:] = 0  # Dummy columns let every gold comment remain unmatched.
+    for key, distance in distances.items():
+        cost[key] = distance - (expected_reward if key in expected_edges else ignored_reward)
+
+    row_indices, column_indices = linear_sum_assignment(cost)
+    selected = [(row, column) for row, column in zip(row_indices, column_indices, strict=True) if column < num_generated]
+    return (
+        [edges[key] for key in selected if key in expected_edges],
+        [edges[key] for key in selected if key not in expected_edges],
+    )
 
 
 def _severity_mean_absolute_error(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:
@@ -170,7 +160,7 @@ def _score_counts(matched_count: int, generated_count: int, expected_count: int,
     )
 
 
-class CodeReviewResult(BaseEvaluationResult):
+class CodeReviewResult(JudgeScoredEvaluationResult):
     """Result for the code-review category."""
 
     generated_comments: list[ReviewComment] = Field(default_factory=list)
@@ -191,24 +181,18 @@ class CodeReviewResult(BaseEvaluationResult):
     severity_mae: float = 0.0
 
     @classmethod
-    def create(
+    def create[E: BaseDatasetEntry](
         cls,
-        context: "EvaluationContext",
+        context: EvaluationContext[E],
+        agent_result: AgentResult,
         output: str,
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
-        matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
-        ignored_comments: list[ReviewComment] | None = None,
-        ignored_matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
+        *,
+        matched_pairs: list[tuple[ReviewComment, ReviewComment]],
+        ignored_comments: list[ReviewComment],
+        ignored_matched_pairs: list[tuple[ReviewComment, ReviewComment]],
     ) -> Self:
-        if matched_pairs is None:
-            matched_pairs = match_comments(expected_comments, generated_comments)
-
-        ignored_comments = ignored_comments or []
-        if ignored_matched_pairs is None:
-            unmatched_generated_comments = unmatched_generated(generated_comments, matched_pairs)
-            ignored_matched_pairs = match_comments(ignored_comments, unmatched_generated_comments)
-
         scores = _score_counts(
             matched_count=len(matched_pairs),
             generated_count=len(generated_comments),
@@ -217,7 +201,7 @@ class CodeReviewResult(BaseEvaluationResult):
         )
 
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             output=output,
             expected_comments=expected_comments,
             generated_comments=generated_comments,
@@ -236,21 +220,23 @@ class CodeReviewResult(BaseEvaluationResult):
         )
 
     @classmethod
-    def create_invalid(
+    def create_invalid[E: BaseDatasetEntry](
         cls,
-        context: "EvaluationContext",
+        context: EvaluationContext[E],
+        agent_result: AgentResult,
         output: str,
         expected_comments: list[ReviewComment],
     ) -> Self:
         """Result for output that could not be parsed into a review — scored zero."""
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             output=output,
             expected_comments=expected_comments,
             valid_review_output=False,
         )
 
     @property
+    @override
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {
             "generated_comment_count": len(self.generated_comments),
@@ -269,6 +255,7 @@ class CodeReviewResult(BaseEvaluationResult):
         }
 
     @property
+    @override
     def display_row(self) -> dict[str, str]:
         return {
             "Generated": str(len(self.generated_comments)),
@@ -280,13 +267,16 @@ class CodeReviewResult(BaseEvaluationResult):
         }
 
 
-class CodeReviewResultSummary(EvaluationResultSummary):
+class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     """
     Summary for the code-review category.
 
     Micro metrics aggregate matched/expected/generated comment counts across all results (volume-weighted).
     Macro metrics average per-task scores (each task weighted equally).
     """
+
+    average_prompt_tokens: float | None = None
+    average_completion_tokens: float | None = None
 
     generated_comment_count: int = Field(default=0, ge=0)
     expected_comment_count: int = Field(default=0, ge=0)
@@ -310,10 +300,27 @@ class CodeReviewResultSummary(EvaluationResultSummary):
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    average_total_tokens: float | None = None
+
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
 
+    def _performance_markdown(self) -> str:
+        def metric(value: float | None, digits: int = 1) -> str:
+            return f"{value:.{digits}f}" if value is not None else "n/a"
+
+        return (
+            "## Performance\n"
+            "\n"
+            "| Avg duration (s) | Avg prompt tokens | Avg completion tokens | Avg total tokens | Avg AI credits |\n"
+            "|-----------------:|------------------:|----------------------:|-----------------:|---------------:|\n"
+            f"| {self.average_duration:.1f} | {metric(self.average_prompt_tokens)} | {metric(self.average_completion_tokens)} | "
+            f"{metric(self.average_total_tokens)} | {metric(self.average_ai_credits, 4)} |\n"
+            "\n"
+        )
+
+    @override
     def render_github_metrics_markdown(self) -> str:
         micro_p = self.precision * 100
         micro_r = self.recall * 100
@@ -351,9 +358,11 @@ class CodeReviewResultSummary(EvaluationResultSummary):
             "|-------------:|-------------------------:|\n"
             f"| {self.severity_mae:.3f} | {valid_rate:.1f}% |\n"
             "\n"
+            f"{self._performance_markdown()}"
             f"{_METRIC_EXPLANATIONS}"
         )
 
+    @override
     def render_console_metrics(self) -> RenderableType:
         metric_columns = ["Precision", "Recall", "F1", "Fβ (β=0.5)", "Fβ (β=2)"]
 
@@ -397,6 +406,17 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                 ["Severity MAE", "Valid review output rate"],
                 [f"{self.severity_mae:.3f}", f"{self.valid_review_output_rate * 100:.1f}%"],
             ),
+            _build_console_table(
+                "Performance",
+                ["Avg duration (s)", "Prompt", "Completion", "Total", "AI credits"],
+                [
+                    f"{self.average_duration:.1f}",
+                    f"{self.average_prompt_tokens:.1f}" if self.average_prompt_tokens is not None else "n/a",
+                    f"{self.average_completion_tokens:.1f}" if self.average_completion_tokens is not None else "n/a",
+                    f"{self.average_total_tokens:.1f}" if self.average_total_tokens is not None else "n/a",
+                    f"{self.average_ai_credits:.4f}" if self.average_ai_credits is not None else "n/a",
+                ],
+            ),
             Panel(
                 _CONSOLE_METRIC_EXPLANATIONS,
                 title="📖 How to read these metrics",
@@ -407,6 +427,7 @@ class CodeReviewResultSummary(EvaluationResultSummary):
         )
 
     @classmethod
+    @override
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "CodeReviewResultSummary":
         summary = super().from_results(results, run_id)
         assert isinstance(summary, CodeReviewResultSummary)
@@ -453,6 +474,10 @@ class CodeReviewResultSummary(EvaluationResultSummary):
         valid_output_count: int = sum(1 for r in code_review_results if r.valid_review_output)
         valid_output_rate: float = valid_output_count / total_results
 
+        def average_metric(values: Sequence[int | float | None]) -> float | None:
+            available = [value for value in values if value is not None]
+            return sum(available) / len(available) if available else None
+
         return summary.model_copy(
             update={
                 "generated_comment_count": generated_total,
@@ -474,5 +499,9 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
                 "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
+                "average_prompt_tokens": average_metric([result.metrics.prompt_tokens if result.metrics else None for result in code_review_results]),
+                "average_completion_tokens": average_metric([result.metrics.completion_tokens if result.metrics else None for result in code_review_results]),
+                "average_total_tokens": average_metric([result.metrics.total_tokens if result.metrics else None for result in code_review_results]),
+                "average_ai_credits": average_metric([result.metrics.ai_credits if result.metrics else None for result in code_review_results]),
             }
         )

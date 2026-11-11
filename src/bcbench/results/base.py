@@ -1,15 +1,21 @@
 """Base evaluation result class with shared metrics across all evaluation categories."""
 
 import json
+import logging
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, cast, override
 
-from pydantic import BaseModel
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
+from pydantic import BaseModel, JsonValue, model_validator
 
-from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.dataset import BaseDatasetEntry
+from bcbench.types import AnyAgentMetrics, DatasetTier, EvaluationCategory, EvaluationContext
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
+
+# Per-instance result files are JSON Lines
+RESULT_FILE_SUFFIX = ".jsonl"
 
 
 class BaseEvaluationResult(BaseModel):
@@ -20,35 +26,44 @@ class BaseEvaluationResult(BaseModel):
     model: str
     agent_name: str
     category: EvaluationCategory
+    tier: DatasetTier = DatasetTier.GOLD
+    agent_version: str | None = None
+    transcript: dict[str, JsonValue] | None = None
 
     timeout: bool = False
 
     output: str = ""
     error_message: str | None = None
 
-    metrics: AgentMetrics | None = None
+    metrics: AnyAgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
 
     @classmethod
-    def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
-        if not context.metrics:
+    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> dict[str, Any]:
+        metrics_contract = context.agent.harness.metrics_contract
+        if not agent_result.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
-        elif missing_metrics := sorted(name for name in context.agent_name.expected_metrics if getattr(context.metrics, name) is None):
+        elif type(agent_result.metrics) is not metrics_contract.metrics_type:
+            raise TypeError(f"{context.agent.harness} must use {metrics_contract.metrics_type.__name__}, got {type(agent_result.metrics).__name__}")
+        elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(agent_result.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         return {
             "instance_id": context.entry.instance_id,
             "project": context.entry.extract_project_name(),
-            "model": context.model.replace(".", "-"),
+            "model": (context.agent.model or "").replace(".", "-"),
             "category": context.category,
-            "agent_name": context.agent_name,
-            "metrics": context.metrics,
-            "experiment": context.experiment,
+            "tier": context.tier,
+            "agent_name": context.agent.harness,
+            "agent_version": context.agent.version,
+            "metrics": agent_result.metrics,
+            "experiment": agent_result.experiment,
+            "transcript": agent_result.transcript,
         }
 
     @classmethod
-    def create_agent_timeout_failure(cls, context: "EvaluationContext") -> Self:
-        return cls(**cls._base_fields(context), timeout=True, error_message="Agent timed out")
+    def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> Self:
+        return cls(**cls._base_fields(context, agent_result), timeout=True, error_message="Agent timed out")
 
     def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file
@@ -79,6 +94,14 @@ class BaseEvaluationResult(BaseModel):
         return {}
 
     @property
+    def export_metadata(self) -> dict[str, str | int | float | bool | None]:
+        """Extra metadata fields for the bceval export beyond the shared ones.
+
+        Subclasses override to record category-specific provenance such as the judge model.
+        """
+        return {}
+
+    @property
     def display_row(self) -> dict[str, str]:
         """Extra columns for per-instance detail tables.
 
@@ -100,25 +123,64 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     build: bool = False
 
     @classmethod
-    def create_success(cls, context: "EvaluationContext", output: str) -> Self:
-        return cls(**cls._base_fields(context), output=output, resolved=True, build=True)
+    def create_success[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output, resolved=True, build=True)
 
     @classmethod
-    def create_build_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
-        return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)
+    def create_build_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, error_message: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output, error_message=error_message, resolved=False, build=False)
+
+    @classmethod
+    def create_result[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, *, build: bool, resolved: bool, error_message: str | None = None) -> Self:
+        """General factory for execution outcomes, e.g. compiled+ran but produced the wrong result (build=True, resolved=False)."""
+        return cls(**cls._base_fields(context, agent_result), output=output, build=build, resolved=resolved, error_message=error_message)
 
     @property
+    @override
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"
         return "Success" if self.resolved else "Failed"
 
     @property
+    @override
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {"resolved": self.resolved, "build": self.build}
 
 
-class JudgeBasedEvaluationResult(BaseEvaluationResult):
+class JudgeScoredEvaluationResult(BaseEvaluationResult):
+    """Result for categories whose scoring involves an LLM judge, recording which judge model was pinned for the run."""
+
+    judge_model: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def restore_missing_timeout_judge_model(cls, payload: object) -> object:
+        if not isinstance(payload, dict):
+            return payload
+
+        payload = cast(dict[str, object], payload)
+        if payload.get("timeout") is not True or "judge_model" in payload:
+            return payload
+
+        category = EvaluationCategory(payload["category"])
+        if (judge_model := category.judge_model) is None:
+            return payload
+
+        return {**payload, "judge_model": judge_model}
+
+    @classmethod
+    @override
+    def _base_fields[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> dict[str, Any]:
+        return {**super()._base_fields(context, agent_result), "judge_model": context.category.judge_model}
+
+    @property
+    @override
+    def export_metadata(self) -> dict[str, str | int | float | bool | None]:
+        return {"judge_model": self.judge_model}
+
+
+class JudgeBasedEvaluationResult(JudgeScoredEvaluationResult):
     """Result for categories scored by LLM-as-judge (e.g. lm_checklist).
 
     The local pipeline only persists the agent's raw output; actual scoring is performed downstream by bceval
@@ -126,18 +188,19 @@ class JudgeBasedEvaluationResult(BaseEvaluationResult):
     """
 
     @classmethod
-    def create_raw(cls, context: "EvaluationContext", output: str) -> Self:
-        return cls(**cls._base_fields(context), output=output)
+    def create_raw[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output)
 
     @classmethod
-    def create_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
-        return cls(**cls._base_fields(context), output=output, error_message=error_message)
+    def create_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, error_message: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output, error_message=error_message)
 
     @classmethod
-    def create_empty_output(cls, context: "EvaluationContext") -> Self:
-        return cls(**cls._base_fields(context), output="")
+    def create_empty_output[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output="")
 
     @property
+    @override
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"

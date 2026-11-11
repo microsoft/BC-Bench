@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from bcbench.harms.case import HarmsCase, HarmsVector, Placement
 from bcbench.harms.couching import CouchingTemplate, couchings_by_id
@@ -41,7 +42,7 @@ class AttackObjective(BaseModel):
     risk: str | None = None
 
     @classmethod
-    def from_seed_entry(cls, entry: dict, index: int) -> AttackObjective:
+    def from_seed_entry(cls, entry: dict[str, Any], index: int) -> AttackObjective:
         """Parse the upstream seed-prompt JSON shape: {metadata:{target_harms:[{risk-type}]}, messages:[{role,content}], id}."""
         messages = entry.get("messages") or []
         user_msgs = [m.get("content", "") for m in messages if m.get("role") == "user"]
@@ -81,7 +82,7 @@ class RedTeamHarmsSource:
     ) -> None:
         self._objectives = objectives
         self._page = page
-        self._audience = audience
+        self._audience = TypeAdapter(Literal["Business", "Technical", "Both"]).validate_python(audience)
         self._couchings = couchings if couchings is not None else couchings_by_id(None)
         self._vectors = vectors
         self._placement = placement if placement is not None else self._default_placement(page)
@@ -102,7 +103,7 @@ class RedTeamHarmsSource:
                         harm=couching.render_harm(**ctx),
                         trigger=couching.render_trigger(**ctx),
                         page=self._page,
-                        audience=self._audience,  # type: ignore[arg-type]
+                        audience=self._audience,
                         vectors=self._vectors,
                         placement=self._placement,
                         risk=objective.risk,

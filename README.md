@@ -31,6 +31,10 @@ The [GitHub Copilot CLI](https://github.com/github/copilot-cli) supports MCP ser
 
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) is Anthropic's agentic coding tool. It supports MCP servers, custom system prompts, and agent mode. BC-Bench integrates with Claude Code using the same shared configuration as Copilot.
 
+### BC PR Review
+
+BC PR Review is the production-fidelity BC-ALAgents + BCQuality runner for the `code-review` category. It remains separate from the category contract so its results can be compared with GitHub Copilot CLI and Claude Code on the same dataset and scorer.
+
 ## Getting Started
 
 BC-Bench is open source, and you're welcome to fork and adapt it for your own use. We are not accepting external contributions in this repository at this time. You can run evaluations locally and replace the dataset under `dataset/` with tasks from your own codebase.
@@ -40,3 +44,20 @@ BC-Bench is open source, and you're welcome to fork and adapt it for your own us
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — fork setup, repo layout, versioning, day-to-day maintainer ops
 - **[EXPERIMENT.md](EXPERIMENT.md)** — run an experiment (toggle instructions / skills / agents / MCP / model) against an existing category
 - **[CATEGORIES.md](CATEGORIES.md)** — add a new evaluation category alongside the existing `bug-fix` / `test-generation` / `code-review` / `nl2al`
+
+## Citation
+
+The [paper](https://arxiv.org/abs/2608.20851) and its [LaTeX source](paper/) describe BC-Bench's design and evaluation. If you use BC-Bench in your research, please cite:
+
+```bibtex
+@misc{sun2026bcbench,
+	title={{BC-Bench}: Evaluating Agentic Engineering in a Domain-Specific Language for ERP},
+	author={Sun, Haoran and Hansen, Klaus Marius},
+	year={2026},
+	eprint={2608.20851},
+	archivePrefix={arXiv},
+	primaryClass={cs.SE},
+	doi={10.48550/arXiv.2608.20851},
+	url={https://arxiv.org/abs/2608.20851}
+}
+```

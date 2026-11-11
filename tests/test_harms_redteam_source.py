@@ -110,6 +110,7 @@ class TestRedTeamHarmsSource:
     def test_default_placement_steers_page_inspector_to_caption(self):
         cases = RedTeamHarmsSource(self._objectives(), page="Vendor Card").load()
         manifest = cases[0].fixture_manifest_for(HarmsVector.PAGE_INSPECTOR)
+        assert manifest is not None
         injection = manifest["injections"][0]
         assert injection["object"] == "Vendor Card"
         assert injection["property"] == "Caption"
@@ -117,7 +118,9 @@ class TestRedTeamHarmsSource:
 
     def test_default_placement_also_steers_symbols(self):
         cases = RedTeamHarmsSource(self._objectives(), page="Item Card").load()
-        injection = cases[0].fixture_manifest_for(HarmsVector.SYMBOLS)["injections"][0]
+        manifest = cases[0].fixture_manifest_for(HarmsVector.SYMBOLS)
+        assert manifest is not None
+        injection = manifest["injections"][0]
         assert injection["object"] == "Item Card"
         assert injection["property"] == "Caption"
 
@@ -126,5 +129,7 @@ class TestRedTeamHarmsSource:
 
         placement = {HarmsVector.PAGE_INSPECTOR: Placement(object="Cust", property="ToolTip")}
         cases = RedTeamHarmsSource(self._objectives(), placement=placement).load()
-        injection = cases[0].fixture_manifest_for(HarmsVector.PAGE_INSPECTOR)["injections"][0]
+        manifest = cases[0].fixture_manifest_for(HarmsVector.PAGE_INSPECTOR)
+        assert manifest is not None
+        injection = manifest["injections"][0]
         assert injection["property"] == "ToolTip"

@@ -1,52 +1,86 @@
 from pathlib import Path
 
 import pytest
+from bcbench_core.agent.metrics import AgentMetrics
+from pydantic import TypeAdapter
 
-from bcbench.dataset import BugFixEntry, CodeReviewEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
+from bcbench.categories.ext_request_advisor import ExtRequestAdvisorEntry
+from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory
+from bcbench.types import AgentConfig, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, HarnessName, PRReviewMetrics
 
 
 def test_repository_harnesses_have_target_dir():
     repo_path = Path("C:/test/repo")
-    for harness in (AgentHarness.COPILOT, AgentHarness.CLAUDE):
+    for harness in (HarnessName.COPILOT, HarnessName.CLAUDE):
         target_dir = harness.get_target_dir(repo_path)
         assert isinstance(target_dir, Path)
         assert str(target_dir).startswith(str(repo_path))
 
 
 def test_repository_harnesses_have_instruction_filename():
-    for harness in (AgentHarness.COPILOT, AgentHarness.CLAUDE):
+    for harness in (HarnessName.COPILOT, HarnessName.CLAUDE):
         filename = harness.instruction_filename
         assert isinstance(filename, str)
         assert filename.endswith(".md")
 
 
-@pytest.mark.parametrize("harness", [AgentHarness.BCAL, AgentHarness.MOCK])
-def test_other_harnesses_reject_repository_setup(harness: AgentHarness):
+@pytest.mark.parametrize("harness", [HarnessName.BCAL, HarnessName.MOCK])
+def test_other_harnesses_reject_repository_setup(harness: HarnessName):
     with pytest.raises(ValueError, match="does not support repository setup"):
         harness.get_target_dir(Path("C:/test/repo"))
     with pytest.raises(ValueError, match="does not support repository instructions"):
         assert harness.instruction_filename
 
 
-def test_all_agent_names_have_expected_metrics():
-    for agent_name in AgentHarness:
-        expected = agent_name.expected_metrics
-        assert expected
-        assert expected <= AgentMetrics.model_fields.keys()
+def test_all_agent_names_have_metrics_contracts():
+    for agent_name in HarnessName:
+        contract = agent_name.metrics_contract
+        assert contract.required_fields
+        assert contract.required_fields <= contract.metrics_type.model_fields.keys()
 
 
-def test_all_categories_have_pipelines():
+def test_agent_metrics_contract_rejects_unknown_required_fields():
+    with pytest.raises(ValueError, match="does not define required fields"):
+        AgentMetricsContract(AgentMetrics, frozenset({"unknown"}))
+
+
+def test_every_harness_metrics_type_round_trips_through_the_union():
+    # Results are persisted and read back through AnyAgentMetrics, so a metrics type missing from that
+    # union, or a subclass that forgot to override `kind`, would serialize fine and then fail to load or
+    # silently downcast and drop its extra fields.
+    adapter = TypeAdapter(AnyAgentMetrics)
+    for agent_name in HarnessName:
+        metrics_type = agent_name.metrics_contract.metrics_type
+        restored = adapter.validate_python(metrics_type().model_dump(mode="json"))
+        assert type(restored) is metrics_type, f"{metrics_type.__name__} needs a unique `kind` and a place in AnyAgentMetrics"
+
+
+def test_pr_review_metrics_extend_generic_metrics():
+    assert issubclass(PRReviewMetrics, AgentMetrics)
+    assert PRReviewMetrics().kind == "pr-review"
+    assert "api_calls" not in AgentMetrics.model_fields
+    assert HarnessName.PR_REVIEW.metrics_contract.metrics_type is PRReviewMetrics
+
+
+def test_all_categories_have_pipelines_or_definitions():
     for category in EvaluationCategory:
-        pipeline = category.pipeline
-        assert pipeline is not None
+        assert category.definition is not None or category.pipeline(AgentConfig()) is not None
 
 
 def test_all_categories_have_entry_classes():
     for category in EvaluationCategory:
         entry_cls = category.entry_class
         assert entry_cls is not None
+
+
+def test_all_categories_resolve_a_judge_model():
+    from bcbench.config import get_config
+
+    judged_models = {get_config().judge.code_review_model, get_config().judge.lm_checklist_model}
+    for category in EvaluationCategory:
+        judge_model = category.judge_model
+        assert judge_model is None or judge_model in judged_models
 
 
 def test_all_categories_have_aggregate_classes():
@@ -58,7 +92,12 @@ def test_all_categories_have_aggregate_classes():
 
 
 def test_all_categories_handled_in_get_expected_output(
-    sample_dataset_entry_with_problem_statement: BugFixEntry, sample_nl2al_entry: NL2ALEntry, sample_ext_implement_entry: "ExtRequestImplementEntry", sample_ext_triage_entry: "ExtRequestTriageEntry"
+    sample_dataset_entry_with_problem_statement: BugFixEntry,
+    sample_nl2al_entry: NL2ALEntry,
+    sample_data_query_entry: DataQueryEntry,
+    sample_ext_advisor_entry: ExtRequestAdvisorEntry,
+    sample_ext_implement_entry: ExtRequestImplementEntry,
+    sample_ext_triage_entry: ExtRequestTriageEntry,
 ):
     for category in EvaluationCategory:
         entry_cls = category.entry_class
@@ -75,6 +114,10 @@ def test_all_categories_handled_in_get_expected_output(
             )
         elif entry_cls is NL2ALEntry:
             entry = sample_nl2al_entry
+        elif entry_cls is DataQueryEntry:
+            entry = sample_data_query_entry
+        elif entry_cls is ExtRequestAdvisorEntry:
+            entry = sample_ext_advisor_entry
         elif entry_cls is ExtRequestImplementEntry:
             entry = sample_ext_implement_entry
         elif entry_cls is ExtRequestTriageEntry:
@@ -108,3 +151,9 @@ def test_all_categories_have_core_score():
     for category in EvaluationCategory:
         assert isinstance(category.core_score, str)
         assert category.core_score, f"{category} must declare a non-empty core_score"
+
+
+def test_pass_on_bc_container_credentials_exhaustiveness():
+    categories_with_credentials_withheld = {EvaluationCategory.DATA_QUERY}
+    for category in EvaluationCategory:
+        assert category.pass_on_bc_container_credentials is (category not in categories_with_credentials_withheld)

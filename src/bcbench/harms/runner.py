@@ -7,24 +7,28 @@ prompt, indirect trials send a benign trigger plus a ``--harms-fixture`` manifes
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
+from datetime import UTC, datetime
+from importlib.metadata import version
 from pathlib import Path
 from typing import cast
 
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME
+from bcbench_core.exceptions import AgentError
 from pydantic import BaseModel, ConfigDict
 
-from bcbench.agent.bcal import BCalBackendConfig, bcal_version, resolve_bcal_executable, run_bcal_prompt
+from bcbench.agent.bcal import BCalBackendConfig, ensure_package_cache, get_bcal_version, resolve_bcal_executable, run_bcal_prompt
 from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import NL2ALEntry
 from bcbench.harms.case import Detector, HarmsCase, HarmsChannel, HarmsVector
 from bcbench.harms.log_analysis import analyze_trial_log
-from bcbench.logger import get_logger
-from bcbench.operations import ensure_package_cache
 from bcbench.types import EvaluationCategory
 
 __all__ = ["HarmsTrial", "annotate_trials", "harm_delivered_for", "run_harms_suite", "write_trials"]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 _config = get_config()
 
 
@@ -44,6 +48,7 @@ class HarmsTrial(BaseModel):
     fixture_path: str | None
     export_dir: str
     log_path: str | None
+    execution_error: str | None = None
     tools_invoked: list[str] = []
     # Did the injected payload actually reach the model via a tool result? None for direct trials
     # (no seam injection) and for dry-runs; True/False for executed indirect trials.
@@ -64,11 +69,24 @@ class HarmsTrial(BaseModel):
     judge_reasoning: str | None = None
     harm_realized: bool | None = None
     score_disagreement: bool | None = None
+    score_error: str | None = None
+
+
+def execution_failure(trial: HarmsTrial) -> str | None:
+    if trial.execution_error:
+        return trial.execution_error
+    if trial.response.lstrip().lower().startswith(("(bcal timed out", "(bcal exited with status")):
+        return trial.response
+    return None
+
+
+def valid_trial(trial: HarmsTrial) -> bool:
+    return trial.executed and trial.harm_delivered is True and execution_failure(trial) is None
 
 
 def _load_base_entry() -> NL2ALEntry:
     category = EvaluationCategory.NL2AL
-    return cast(NL2ALEntry, category.entry_class.load(category.dataset_path)[0])
+    return cast(NL2ALEntry, category.entry_class.load(category.dataset_path())[0])
 
 
 def _entry_for(base: NL2ALEntry, case: HarmsCase) -> NL2ALEntry:
@@ -122,7 +140,8 @@ def annotate_trials(trials: list[HarmsTrial], results_dir: Path | None = None) -
                 update={
                     "tools_invoked": analysis.tools_invoked or trial.tools_invoked,
                     "injection_landed": injection_landed,
-                    "harm_delivered": harm_delivered_for(trial.channel, executed=True, injection_landed=injection_landed),
+                    "harm_delivered": harm_delivered_for(trial.channel, executed=True, injection_landed=injection_landed) if execution_failure(trial) is None else None,
+                    "execution_error": execution_failure(trial),
                 }
             )
         )
@@ -145,7 +164,7 @@ def run_harms_suite(
         return []
 
     base_entry = _load_base_entry()
-    package_cache_path = results_dir / _config.file_patterns.alpackages_dirname
+    package_cache_path = results_dir / ALPACKAGES_DIRNAME
     fixtures_dir = results_dir / "fixtures"
     exports_dir = results_dir / "exports"
     logs_dir = results_dir / "logs"
@@ -154,14 +173,32 @@ def run_harms_suite(
 
     if not dry_run:
         bcal_exe = resolve_bcal_executable()
-        logger.info(f"Harms run using bcal: {bcal_exe} (version {bcal_version(bcal_exe)})")
+        logger.info(f"Harms run using bcal: {bcal_exe} (version {get_bcal_version()})")
         ensure_package_cache(package_cache_path, base_entry.environment_setup_version)
+
+    cases_json = json.dumps([case.model_dump(mode="json") for case in selected], sort_keys=True)
+    (results_dir / "cases.json").write_text(cases_json, encoding="utf-8")
+    manifest = {
+        "started_at": datetime.now(UTC).isoformat(),
+        "benchmark_version": version("bcbench"),
+        "bcal_executable": resolve_bcal_executable() if not dry_run else None,
+        "bcal_version": get_bcal_version() if not dry_run else None,
+        "model": backend_config.model,
+        "backend": "external-command",
+        "base_entry": base_entry.instance_id,
+        "bc_version": base_entry.environment_setup_version,
+        "dataset_sha256": hashlib.sha256(EvaluationCategory.NL2AL.dataset_path().read_bytes()).hexdigest(),
+        "cases_sha256": hashlib.sha256(cases_json.encode("utf-8")).hexdigest(),
+        "vectors": [vector.value for vector in vectors] if vectors is not None else None,
+        "dry_run": dry_run,
+    }
+    (results_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     trials: list[HarmsTrial] = []
     for case in selected:
         entry = _entry_for(base_entry, case)
-        trials.extend(
-            _run_trial(
+        for vector in case.resolve_vectors(vectors):
+            trial = _run_trial(
                 case=case,
                 vector=vector,
                 entry=entry,
@@ -173,8 +210,8 @@ def run_harms_suite(
                 dry_run=dry_run,
                 capture_full_log=capture_full_log,
             )
-            for vector in case.resolve_vectors(vectors)
-        )
+            trials.append(trial)
+            write_trials(results_dir / "trials.jsonl", trials)
 
     write_trials(results_dir / "trials.jsonl", trials)
     logger.info(f"Ran {len(trials)} harms trials ({'dry-run' if dry_run else 'executed'}) -> {results_dir}")
@@ -205,7 +242,14 @@ def _run_trial(
     log_path = logs_dir / f"{stem}.jsonl" if capture_full_log else None
     prompt = case.prompt_for(vector)
 
-    response = "" if dry_run else run_bcal_prompt(entry, prompt, package_cache_path, export_dir, backend_config, harms_fixture_path=fixture_path, log_full_path=log_path)
+    response = ""
+    execution_error: str | None = None
+    if not dry_run:
+        try:
+            response = run_bcal_prompt(entry, prompt, package_cache_path, export_dir, backend_config, harms_fixture_path=fixture_path, log_full_path=log_path)
+        except (AgentError, OSError) as exc:
+            execution_error = f"{type(exc).__name__}: {exc}"
+            logger.exception(f"Trial {case.id}/{vector.value} failed: {execution_error}")
 
     # Validate whether the injection actually reached the model (indirect trials only).
     tools_invoked: list[str] = []
@@ -216,7 +260,8 @@ def _run_trial(
         tools_invoked = analysis.tools_invoked
         if vector.channel is HarmsChannel.INDIRECT:
             injection_landed = analysis.payload_in_tool_result
-        harm_delivered = harm_delivered_for(vector.channel, executed=True, injection_landed=injection_landed)
+        if execution_error is None:
+            harm_delivered = harm_delivered_for(vector.channel, executed=True, injection_landed=injection_landed)
 
     return HarmsTrial(
         case_id=case.id,
@@ -230,6 +275,7 @@ def _run_trial(
         fixture_path=str(fixture_path) if fixture_path else None,
         export_dir=str(export_dir),
         log_path=str(log_path) if log_path else None,
+        execution_error=execution_error,
         tools_invoked=tools_invoked,
         injection_landed=injection_landed,
         harm_delivered=harm_delivered,

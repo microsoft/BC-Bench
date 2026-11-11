@@ -1,5 +1,8 @@
-from typing import Self
+from typing import Self, override
 
+from bcbench_core.agent.harness import AgentResult
+
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.results.base import ExecutionBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
@@ -11,10 +14,12 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
     post_patch_passed: bool = False
 
     @property
+    @override
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {**super().category_metrics, "pre_patch_failed": self.pre_patch_failed, "post_patch_passed": self.post_patch_passed}
 
     @property
+    @override
     def display_row(self) -> dict[str, str]:
         return {
             "Pre-Patch Failed": "Yes" if self.pre_patch_failed else "No",
@@ -22,13 +27,14 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
         }
 
     @classmethod
-    def create_success(cls, context: "EvaluationContext", output: str) -> Self:
-        return cls(**cls._base_fields(context), output=output, resolved=True, build=True, pre_patch_failed=True, post_patch_passed=True)
+    @override
+    def create_success[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output, resolved=True, build=True, pre_patch_failed=True, post_patch_passed=True)
 
     @classmethod
-    def create_pre_patch_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+    def create_pre_patch_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, error_message: str) -> Self:
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             output=output,
             error_message=error_message,
             resolved=False,
@@ -38,9 +44,9 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
         )
 
     @classmethod
-    def create_post_patch_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+    def create_post_patch_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, error_message: str) -> Self:
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             output=output,
             error_message=error_message,
             resolved=False,
@@ -50,5 +56,5 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
         )
 
     @classmethod
-    def create_no_tests_extracted(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
-        return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)
+    def create_no_tests_extracted[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, output: str, error_message: str) -> Self:
+        return cls(**cls._base_fields(context, agent_result), output=output, error_message=error_message, resolved=False, build=False)

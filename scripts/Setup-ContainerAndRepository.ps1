@@ -6,7 +6,8 @@
 #>
 
 using module .\DatasetEntry.psm1
-using module .\BCBenchUtils.psm1
+using module ..\packages\bcbench-core\src\bcbench_core\powershell\BCBenchUtils.psm1
+using module .\BenchmarkUtils.psm1
 using module .\BCContainerManagement.psm1
 
 param(
@@ -41,7 +42,10 @@ param(
     [switch]$SkipContainer,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SkipRepo
+    [switch]$SkipRepo,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$BcMcp
 )
 
 [DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath -Version $Version -InstanceId $InstanceId
@@ -72,7 +76,10 @@ if (-not $SkipRepo) {
     Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
 }
 else {
-    Write-Log "Skipping repository clone (SkipRepo flag set)" -Level Info
+    # Categories that scaffold their own workspace still need the folder to exist: it is shared into
+    # the container below, and Compile-AppInBcContainer throws for any path not shared with it.
+    Write-Log "Skipping repository clone (SkipRepo flag set); creating empty workspace at $RepoPath" -Level Info
+    New-Item -ItemType Directory -Path $RepoPath -Force | Out-Null
 }
 
 if (-not $SkipContainer) {
@@ -88,17 +95,34 @@ if (-not $SkipContainer) {
 
     Write-Log "Creating container $ContainerName for version $Version..." -Level Info
 
-    # Get BC artifact URL
-    [string] $url = Get-BCArtifactUrl -version $Version -Country $Country
+    [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category -Version $Version -Country $Country
+    [string] $url = $categoryArtifactConfig.artifactUrl
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
     # Create container synchronously with NAV folder shared
-    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath)
+    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath) -AcceptInsiderEula ([bool]$categoryArtifactConfig.accept_insiderEula)
 
     # Create compiler folder synchronously
     New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
 
     Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
+
+    [string] $company = Get-BCContainerCompany -ContainerName $ContainerName
+    Write-Log "BC company: '$company'" -Level Info
+
+    if ($env:GITHUB_ENV) {
+        "BC_COMPANY=$company" | Out-File -FilePath $env:GITHUB_ENV -Append
+    }
+
+    if ($BcMcp) {
+        Publish-MCPConfigApp -ContainerName $ContainerName -Version $Version -Credential $credential -BuildRoot $RepoPath
+        $mcpInfo = Get-BCMCPConnectionInfo -ContainerName $ContainerName
+        Write-Log "BC MCP base URL: $($mcpInfo.BaseUrl)" -Level Info
+
+        if ($env:GITHUB_ENV) {
+            "BC_MCP_URL=$($mcpInfo.BaseUrl)" | Out-File -FilePath $env:GITHUB_ENV -Append
+        }
+    }
 }
 else {
     Write-Log "Skipping BC container setup (SkipContainer flag set)" -Level Info

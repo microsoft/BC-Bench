@@ -12,16 +12,18 @@ that powers ``bcbench redteam scan`` — as an *objective generator* for the har
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from bcbench.logger import get_logger
+if TYPE_CHECKING:
+    from azure.ai.evaluation.red_team import AttackStrategy, RiskCategory, SupportedLanguages
 
 __all__ = ["harvest_objectives"]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _NEUTRAL_REPLY = "Thanks, noted."
 type CapturingTarget = Callable[..., Coroutine[Any, Any, dict[str, object]]]
@@ -78,10 +80,10 @@ def harvest_objectives(
     azure_ai_project: dict[str, str],
     output_path: Path,
     *,
-    risk_categories: list[object] | None = None,
+    risk_categories: list[RiskCategory] | None = None,
     seeds_path: Path | None = None,
-    attack_strategies: list[object] | None = None,
-    language: object | None = None,
+    attack_strategies: list[AttackStrategy] | None = None,
+    language: SupportedLanguages | None = None,
     scan_name: str = "bcbench-harms-harvest",
     num_objectives: int | None = None,
 ) -> Path:

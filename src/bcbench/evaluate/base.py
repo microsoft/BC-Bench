@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from pathlib import Path
 
-from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentTimeoutError
-from bcbench.logger import get_logger
-from bcbench.results import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
+from bcbench_core.agent.harness import AgentHarness, AgentResult
+from bcbench_core.exceptions import AgentError, AgentTimeoutError
 
-logger = get_logger(__name__)
-_config = get_config()
+from bcbench.dataset import BaseDatasetEntry
+from bcbench.github_actions import github_log_group
+from bcbench.results import BaseEvaluationResult
+from bcbench.results.base import RESULT_FILE_SUFFIX
+from bcbench.types import EvaluationContext, HarnessName
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["EvaluationPipeline"]
 
@@ -44,21 +45,12 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def run_agent(self, context: EvaluationContext[E], agent_runner: Callable) -> None:
-        """Run the agent and capture metrics.
-
-        Args:
-            context: Evaluation context with configuration
-            agent_runner: Function that runs the specific agent
-
-        Raises:
-            Exception: If agent execution fails
-        """
-        raise NotImplementedError
+    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> AgentResult:
+        with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
+            return harness.run(context.agent_request())
 
     @abstractmethod
-    def evaluate(self, context: EvaluationContext[E]) -> None:
+    def evaluate(self, context: EvaluationContext[E], agent_result: AgentResult) -> None:
         """Evaluate results: e.g. apply patches, build, run tests.
 
         Implementation should raise category-specific exceptions on failure.
@@ -74,7 +66,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     def execute(
         self,
         context: EvaluationContext[E],
-        agent_runner: Callable[[EvaluationContext[E]], tuple[AgentMetrics | None, ExperimentConfiguration | None]],
+        harness: AgentHarness[E, HarnessName],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 
@@ -83,24 +75,27 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
 
         Args:
             context: Evaluation context with configuration
-            agent_runner: Function that runs the specific agent and returns (AgentMetrics, ExperimentConfiguration)
+            harness: The agent harness to run
         """
         self.setup(context)
 
         try:
-            self.run_agent(context, agent_runner)
+            agent_result = self.run_agent(context, harness)
         except AgentTimeoutError as e:
-            context.metrics = e.metrics
-            context.experiment = e.config
-            result = BaseEvaluationResult.create_agent_timeout_failure(context)
+            agent_result = AgentResult(metrics=e.metrics, experiment=e.config, transcript=e.transcript)
+            logger.info(f"Agent metrics: {agent_result.metrics}")
+            logger.info(f"Experiment configuration: {agent_result.experiment}")
+            result = context.category.result_class.create_agent_timeout_failure(context, agent_result)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
             return
-        finally:
-            logger.info(f"Agent metrics: {context.metrics}")
-            logger.info(f"Experiment configuration: {context.experiment}")
+        except AgentError:
+            logger.exception("Agent execution failed")
+            raise
 
-        self.evaluate(context)
+        logger.info(f"Agent metrics: {agent_result.metrics}")
+        logger.info(f"Experiment configuration: {agent_result.experiment}")
+        self.evaluate(context, agent_result)
 
     def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.
@@ -110,4 +105,4 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             result: BaseEvaluationResult to save
         """
 
-        result.save(context.result_dir, f"{context.entry.instance_id}{_config.file_patterns.result_pattern}")
+        result.save(context.result_dir, f"{context.entry.instance_id}{RESULT_FILE_SUFFIX}")

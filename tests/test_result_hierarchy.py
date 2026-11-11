@@ -11,10 +11,16 @@ Covers:
 """
 
 from datetime import UTC, datetime
+from io import StringIO
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
+from bcbench_core.agent.metrics import AgentMetrics
+from pydantic import ValidationError
+from rich.console import Console
 
-from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult
+from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.display import create_console_summary, create_github_job_summary
 from bcbench.results.summary import (
@@ -23,8 +29,8 @@ from bcbench.results.summary import (
     JudgeBasedEvaluationResultSummary,
 )
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
-from tests.conftest import create_bugfix_result, create_evaluation_context, create_testgen_result
+from bcbench.types import EvaluationCategory
+from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
 
 
 def _make_config_with_summary(summary_path: str):
@@ -173,6 +179,25 @@ class TestFromJsonDispatch:
             BaseEvaluationResult.from_json(payload)
 
 
+class TestJudgeScoredValidation:
+    def test_restores_missing_judge_model_for_timeout(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
+        payload = BaseEvaluationResult.create_agent_timeout_failure(ctx, AgentResult()).model_dump(mode="json")
+
+        loaded = JudgeBasedEvaluationResult.model_validate(payload)
+
+        assert isinstance(loaded, JudgeBasedEvaluationResult)
+        assert loaded.judge_model == EvaluationCategory.NL2AL.judge_model
+
+    def test_rejects_missing_judge_model_for_non_timeout(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
+        payload = JudgeBasedEvaluationResult.create_raw(ctx, AgentResult(), "output").model_dump(mode="json")
+        del payload["judge_model"]
+
+        with pytest.raises(ValidationError, match="judge_model"):
+            JudgeBasedEvaluationResult.model_validate(payload)
+
+
 # ---------------------------------------------------------------------------
 # create_agent_timeout_failure
 # ---------------------------------------------------------------------------
@@ -181,7 +206,7 @@ class TestFromJsonDispatch:
 class TestCreateAgentTimeout:
     def test_timeout_sets_fields(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
-        result = BugFixResult.create_agent_timeout_failure(ctx)
+        result = BugFixResult.create_agent_timeout_failure(ctx, AgentResult())
         assert result.timeout is True
         assert result.error_message == "Agent timed out"
         assert result.status_label == "Timeout"
@@ -294,6 +319,7 @@ class TestMetricsRendering:
             total=3,
             date=datetime.now(UTC).date(),
             model="gpt-4o",
+            judge_model="test-judge",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
             average_duration=1.0,
@@ -350,6 +376,48 @@ class TestSummaryFromJson:
 # ---------------------------------------------------------------------------
 # display.py — console and GitHub summary
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("result_factory", "agent_name", "agent_version"),
+    [
+        pytest.param(create_bugfix_result, "GitHub Copilot", "1.0.82", id="copilot-version"),
+        pytest.param(create_testgen_result, "Claude Code", "2.1.221", id="claude-version"),
+        pytest.param(create_codereview_result, "BC PR Review", "a" * 40, id="pr-review-sha"),
+        pytest.param(create_codereview_result, "BC PR Review", None, id="pr-review-unrecorded"),
+    ],
+)
+class TestAgentVersionDisplay:
+    def test_console_header(self, monkeypatch, result_factory, agent_name, agent_version):
+        result = result_factory()
+        result.agent_name = agent_name
+        result.agent_version = agent_version
+        summary = EvaluationResultSummary.from_results([result], run_id="")
+        output = Console(file=StringIO(), record=True, width=160)
+        monkeypatch.setattr("bcbench.results.display.console", output)
+
+        create_console_summary([result], summary)
+
+        assert f"Agent Version: {agent_version or 'Unrecorded'}" in output.export_text(clear=False)
+        assert "BC-ALAgents/commit/" not in output.export_html()
+        assert result.agent_version == agent_version
+        assert summary.agent_version == agent_version
+
+    def test_github_header(self, monkeypatch, result_factory, agent_name, agent_version):
+        result = result_factory()
+        result.agent_name = agent_name
+        result.agent_version = agent_version
+        summary = EvaluationResultSummary.from_results([result], run_id="")
+        sections = []
+        monkeypatch.setattr("bcbench.results.display._write_github_step_summary", sections.append)
+
+        create_github_job_summary([result], summary)
+
+        content = sections[0]
+        assert f"- Agent Version: {agent_version or 'Unrecorded'}\n" in content
+        assert "BC-ALAgents/commit/" not in content
+        assert result.agent_version == agent_version
+        assert summary.agent_version == agent_version
 
 
 class TestConsoleSummary:

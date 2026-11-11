@@ -1,19 +1,17 @@
-"""LLM-based semantic judge for validating structurally matched code review comment pairs.
-
-After structural matching (file + line proximity), the judge validates whether
-each matched pair actually describes the same underlying issue. This filters out
-false positives where two comments happen to be near each other but address different concerns.
-"""
+"""Judge all same-file candidates before assigning one-to-one code review matches."""
 
 import json
+import os
 import re
-import subprocess
 from pathlib import Path
 
+from bcbench_core.agent.copilot import CopilotOptions, invoke_copilot
+from bcbench_core.exceptions import AgentError
+
 from bcbench.config import get_config
-from bcbench.copilot_cli import find_copilot as _find_copilot
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.exceptions import LLMJudgeError
+from bcbench.results.codereview import assign_comment_matches
 
 _config = get_config()
 
@@ -46,17 +44,22 @@ def _build_judge_prompt(pairs: list[tuple[ReviewComment, ReviewComment]], result
 
 
 def _extract_json_array(text: str) -> str:
-    stripped = text.strip()
-    if not stripped:
-        return ""
-    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", stripped, re.IGNORECASE)
-    if fence:
-        stripped = fence.group(1).strip()
-    start = stripped.find("[")
-    end = stripped.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        return stripped[start : end + 1]
-    return stripped
+    decoder = json.JSONDecoder()
+    result: str | None = None
+    end = 0
+    for token in re.finditer(r'[\[{}\]"]', text):
+        if token.start() < end:
+            continue
+        # Decode whole values; never retry inside a malformed outer value.
+        value, end = decoder.raw_decode(text, token.start())
+        if not isinstance(value, list):
+            raise LLMJudgeError(f"Judge result must be a JSON list, got {type(value).__name__}")
+        # Compare all content, including types, but allow JSON formatting differences.
+        candidate = json.dumps(value, sort_keys=True)
+        if result is not None and candidate != result:
+            raise LLMJudgeError("Judge output contains conflicting JSON arrays")
+        result = candidate
+    return result if result is not None else text.strip()
 
 
 def _parse_judge_results(result_path: Path, num_pairs: int, stdout: str = "") -> list[bool]:
@@ -104,35 +107,19 @@ def judge_expected_and_ignored(
     work_dir: Path,
     model: str = _config.judge.code_review_model,
 ) -> tuple[list[tuple[ReviewComment, ReviewComment]], list[tuple[ReviewComment, ReviewComment]]]:
-    """Judge the expected and ignored structural buckets in a single semantic-judge pass.
+    """Judge both candidate buckets once, then assign only confirmed edges one-to-one.
 
-    Runs ONE judge subprocess over the concatenation of both buckets, then splits the confirmed
-    pairs apart. A single pass keeps scoring to one LLM call per evaluation (less run-to-run
-    nondeterminism, one calibration target) and cannot reuse a stale verdict file, since a second
-    pass never runs. Defaults to a fixed judge model (``_config.judge.code_review_model``)
-    independent of the experiment model, so scores reflect AL review quality rather than a model
-    judging itself.
-
-    Expected takes precedence: a generated comment the judge confirms as an expected match is
-    dropped from the ignored bucket, so a finding is never both credited as expected and
-    neutralized as ignored. Because ignored pairs are matched against every generated comment
-    (not only the ones left over after expected structural matching), a finding whose expected
-    pair the judge rejects can still be neutralized as ignored instead of counting as a false
-    positive.
-
-    Returns:
-        ``(validated_expected, validated_ignored)`` — the judge-confirmed subset of each bucket.
+    Maximize expected matches first, ignored matches second, and minimize line distance last.
+    The fixed judge model is independent of the experiment model.
 
     Raises:
-        LLMJudgeError: If the judge cannot run or produce a usable verdict. Failing loudly avoids
-            silently inflating scores when the judge is broken.
+        LLMJudgeError: If the judge cannot run or produce a usable verdict.
     """
     split = len(expected_pairs)
     verdicts = judge_verdicts(expected_pairs + ignored_pairs, work_dir, model=model)
     validated_expected = [pair for pair, is_match in zip(expected_pairs, verdicts[:split], strict=True) if is_match]
-    expected_generated_ids = {id(generated) for _, generated in validated_expected}
-    validated_ignored = [pair for pair, is_match in zip(ignored_pairs, verdicts[split:], strict=True) if is_match and id(pair[1]) not in expected_generated_ids]
-    return validated_expected, validated_ignored
+    validated_ignored = [pair for pair, is_match in zip(ignored_pairs, verdicts[split:], strict=True) if is_match]
+    return assign_comment_matches(validated_expected, validated_ignored)
 
 
 def judge_verdicts(
@@ -148,32 +135,19 @@ def judge_verdicts(
     if not pairs:
         return []
 
-    copilot_cmd = _find_copilot()
-    if not copilot_cmd:
-        raise LLMJudgeError("Copilot CLI not found; cannot run the semantic judge")
-
     result_path = work_dir / _config.judge.result_file
     prompt = " ".join(_build_judge_prompt(pairs, _config.judge.result_file).split())
 
     try:
-        completed = subprocess.run(
-            [
-                copilot_cmd,
-                "--allow-all-tools",
-                "--disable-builtin-mcps",
-                "--no-custom-instructions",
-                f"--model={model}",
-                f"--prompt={prompt}",
-            ],
-            cwd=str(work_dir),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=_config.timeout.agent_execution,
-            check=True,
+        _, final_response = invoke_copilot(
+            prompt=prompt,
+            model=model,
+            work_dir=work_dir,
+            timeout=60 * 60,
+            env=os.environ,
+            options=CopilotOptions(allow_all_tools=True),
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
+    except AgentError as exc:
         raise LLMJudgeError(f"Judge subprocess failed: {exc}{_format_subprocess_output(exc)}") from exc
 
-    return _parse_judge_results(result_path, len(pairs), stdout=completed.stdout or "")
+    return _parse_judge_results(result_path, len(pairs), stdout=final_response)

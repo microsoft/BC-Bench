@@ -1,139 +1,111 @@
 """GitHub Copilot CLI Agent implementation."""
 
-import os
-import subprocess
-import sys
+import logging
+from dataclasses import dataclass
 from pathlib import Path
+from typing import override
 
-import yaml
+from bcbench_core.agent.copilot import CopilotHarness as CoreCopilotHarness
+from bcbench_core.agent.copilot import CopilotOptions, get_copilot_version
+from bcbench_core.agent.customization import setup_custom_agent, setup_instructions, setup_skills
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 
-from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
-from bcbench.config import get_config
-from bcbench.copilot_cli import find_copilot
+from bcbench.agent.shared import (
+    agent_subprocess_env,
+    build_al_lsp_plugin,
+    build_mcp_config,
+    build_prompt,
+    resolve_config_plugins,
+    start_bc_mcp_gateway,
+)
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentError, AgentTimeoutError
-from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.operations import instructions_profile_dir
+from bcbench.types import AgentConfig, AgentRuntimeConfig, EvaluationCategory, HarnessName, PluginConfig
 
-logger = get_logger(__name__)
-_config = get_config()
+logger = logging.getLogger(__name__)
 
 
-def run_copilot_agent(
-    entry: BaseDatasetEntry,
-    model: str,
-    category: EvaluationCategory,
-    repo_path: Path,
-    output_dir: Path,
-    al_mcp: bool = False,
-    al_lsp: bool = False,
-    container_name: str = "bcbench",
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    """Run GitHub Copilot CLI agent on a single dataset entry.
+@dataclass(frozen=True)
+class CopilotHarness(AgentHarness[BaseDatasetEntry, HarnessName]):
+    """GitHub Copilot CLI on any category, customized through the agent config."""
 
-    Returns:
-        Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
-    """
-    config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
-    copilot_config = yaml.safe_load(config_file.read_text())
+    model: str
+    category: EvaluationCategory
+    agent_config: AgentConfig
+    plugin_root: Path
+    runtime: AgentRuntimeConfig | None = None
+    timeout: int = 60 * 60
 
-    # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes PowerShell,
-    # which re-parses arguments and corrupts prompts containing double quotes (e.g. JSON examples).
-    copilot_cmd = find_copilot()
-    if not copilot_cmd:
-        raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
+    @override
+    def identity(self) -> AgentIdentity[HarnessName]:
+        return AgentIdentity[HarnessName](harness=HarnessName.COPILOT, version=get_copilot_version(), model=self.model)
 
-    logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
+    @override
+    def run(self, request: AgentRequest[BaseDatasetEntry], /) -> AgentResult:
+        entry, repo_path, output_dir = request.task, request.work_dir, request.output_dir
+        agent_config, category, runtime, plugin_root = self.agent_config, self.category, self.runtime, self.plugin_root
+        logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
-    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
-    lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.COPILOT, al_lsp=al_lsp, container_name=container_name)
-    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    tool_log_path: Path = setup_hooks(repo_path, AgentHarness.COPILOT, output_dir)
-    plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
+        prompt: str = build_prompt(entry, repo_path, agent_config, category, al_mcp=bool(runtime and runtime.al_mcp))
+        bc_gateway = start_bc_mcp_gateway(runtime)
+        mcp_config_json, mcp_server_names = build_mcp_config(
+            agent_config,
+            entry,
+            repo_path,
+            runtime=runtime,
+            bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
+        )
+        lsp_plugin_dir: Path | None = build_al_lsp_plugin(
+            entry,
+            category,
+            repo_path,
+            HarnessName.COPILOT,
+            plugin_root,
+            runtime=runtime,
+        )
+        profile_dir: Path = instructions_profile_dir(entry.customization_profile)
+        target_dir: Path = HarnessName.COPILOT.get_target_dir(repo_path)
+        instructions_enabled: bool = setup_instructions(agent_config.instructions, profile_dir, target_dir, HarnessName.COPILOT.instruction_filename)
+        skills_enabled: bool = setup_skills(agent_config.skills, profile_dir, target_dir)
+        custom_agent: str | None = setup_custom_agent(agent_config.agents, profile_dir, target_dir)
+        plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(agent_config, plugin_root, allow_copilot_manifest=True)
 
-    config = ExperimentConfiguration(
-        mcp_servers=mcp_server_names,
-        al_lsp_enabled=lsp_plugin_dir is not None,
-        custom_instructions=instructions_enabled,
-        skills_enabled=skills_enabled,
-        custom_agent=custom_agent,
-        plugins=[plugin.record for plugin, _ in plugins] or None,
-    )
-
-    logger.info(f"Executing Copilot CLI in directory: {repo_path}")
-    logger.debug(f"Using prompt:\n{prompt}")
-
-    try:
-        cmd_args = [
-            copilot_cmd,
-            "--allow-all-tools",  # required for non-interactive mode
-            "--disable-builtin-mcps",
-            f"--model={model}",
-            "--log-level=debug",
-            f"--log-dir={output_dir.resolve()}",
-            f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
-        ]
-        if not instructions_enabled:
-            cmd_args.append("--no-custom-instructions")
-        if mcp_config_json:
-            cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
-        if lsp_plugin_dir is not None:
-            cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
-        cmd_args.extend(f"--plugin-dir={plugin_dir}" for _, plugin_dir in plugins)
-        # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
-        # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
-        # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
-        # silently widen the agent's sandbox access.
-        cmd_args.extend(f"--add-dir={plugin_dir}" for plugin, plugin_dir in plugins if plugin.grant_dir_access)
-        if custom_agent:
-            cmd_args.append(f"--agent={custom_agent}")
-
-        logger.debug(f"Copilot command args: {cmd_args}")
-
-        result = subprocess.run(
-            cmd_args,
-            cwd=str(repo_path),
-            env={
-                **os.environ,
-                "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
-                "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
-            },
-            stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
-            timeout=_config.timeout.agent_execution,
-            check=True,
+        config = ExperimentConfiguration(
+            mcp_servers=mcp_server_names,
+            al_lsp_enabled=lsp_plugin_dir is not None,
+            custom_instructions=instructions_enabled,
+            skills_enabled=skills_enabled,
+            custom_agent=custom_agent,
+            plugins=[plugin.record for plugin, _ in plugins] or None,
         )
 
-        if result.stderr:
-            sys.stdout.buffer.write(result.stderr)
-            sys.stdout.buffer.flush()
-        logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
-
-        stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
-        stderr_lines = stderr.splitlines()
-
-        # Find the most recent session log for turn count parsing
-        session_logs = list(output_dir.glob("process-*.log"))
-        session_log_path = max(session_logs, key=lambda p: p.stat().st_mtime) if session_logs else None
-
-        metrics = parse_metrics(stderr_lines, session_log_path=session_log_path)
-
-        tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
-        if metrics and tool_usage:
-            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
-    except subprocess.TimeoutExpired:
-        logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
-        raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
-        raise AgentError(f"Copilot CLI execution failed: {e}") from None
-    except Exception:
-        logger.exception("Unexpected error running Copilot CLI")
-        raise
-    else:
-        return metrics, config
+        try:
+            lsp_plugin_dirs = (lsp_plugin_dir,) if lsp_plugin_dir is not None else ()
+            # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
+            # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
+            # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
+            # silently widen the agent's sandbox access.
+            options = CopilotOptions(
+                allow_all_tools=True,
+                custom_instructions=instructions_enabled,
+                mcp_config_json=mcp_config_json,
+                plugin_dirs=(*lsp_plugin_dirs, *(plugin_dir for _, plugin_dir in plugins)),
+                granted_dirs=tuple(plugin_dir for plugin, plugin_dir in plugins if plugin.grant_dir_access),
+                custom_agent=custom_agent,
+                workspace_mcp=True,
+            )
+            harness = CoreCopilotHarness(
+                name=HarnessName.COPILOT,
+                model=self.model,
+                env=agent_subprocess_env(pass_bc_credentials=category.pass_on_bc_container_credentials),
+                options=options,
+                experiment=config,
+                timeout=self.timeout,
+            )
+            result: AgentResult = harness.run(AgentRequest(task=prompt, work_dir=repo_path, output_dir=output_dir, timeout=request.timeout))
+            logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
+            return result
+        finally:
+            if bc_gateway is not None:
+                bc_gateway.stop()

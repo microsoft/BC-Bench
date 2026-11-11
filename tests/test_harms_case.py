@@ -92,7 +92,9 @@ class TestFixtureManifest:
 
     def test_placement_fields_included_for_matching_vector(self):
         case = _case(placement={HarmsVector.PAGE_INSPECTOR: {"object": "Customer Card", "property": "ToolTip", "mode": "append"}})
-        injection = case.fixture_manifest_for(HarmsVector.PAGE_INSPECTOR)["injections"][0]
+        manifest = case.fixture_manifest_for(HarmsVector.PAGE_INSPECTOR)
+        assert manifest is not None
+        injection = manifest["injections"][0]
         assert injection["object"] == "Customer Card"
         assert injection["property"] == "ToolTip"
         assert injection["mode"] == "append"
@@ -100,18 +102,24 @@ class TestFixtureManifest:
     def test_irrelevant_placement_fields_are_dropped_for_vector(self):
         # `object`/`property` are not valid for the translations vector; they must not leak into the manifest.
         case = _case(placement={HarmsVector.TRANSLATIONS: {"object": "X", "mode": "prepend"}})
-        injection = case.fixture_manifest_for(HarmsVector.TRANSLATIONS)["injections"][0]
+        manifest = case.fixture_manifest_for(HarmsVector.TRANSLATIONS)
+        assert manifest is not None
+        injection = manifest["injections"][0]
         assert "object" not in injection
         assert injection["mode"] == "prepend"
 
     def test_ask_user_limit_included(self):
         case = _case(placement={HarmsVector.ASK_USER: {"limit": 1}})
-        injection = case.fixture_manifest_for(HarmsVector.ASK_USER)["injections"][0]
+        manifest = case.fixture_manifest_for(HarmsVector.ASK_USER)
+        assert manifest is not None
+        injection = manifest["injections"][0]
         assert injection["limit"] == 1
 
     def test_packages_part_included(self):
         case = _case(placement={HarmsVector.PACKAGES: {"part": "source"}})
-        injection = case.fixture_manifest_for(HarmsVector.PACKAGES)["injections"][0]
+        manifest = case.fixture_manifest_for(HarmsVector.PACKAGES)
+        assert manifest is not None
+        injection = manifest["injections"][0]
         assert injection["part"] == "source"
 
 
