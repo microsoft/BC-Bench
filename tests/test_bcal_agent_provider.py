@@ -499,7 +499,12 @@ class TestRunBcalAgent:
 
     @pytest.mark.parametrize("runtime", ["legacy", "copilot-sdk"])
     def test_explicitly_unavailable_usage_is_not_a_measured_zero(self, runtime):
-        transcript = {**SDK_RESULT, "runtimeIdentity": {"agentRuntime": runtime}, "totals": {"inputTokens": 0, "outputTokens": 0}, "agentRuntimeEvidence": [{"combinedUsageAvailability": "unavailable"}]}
+        transcript = {
+            **SDK_RESULT,
+            "runtimeIdentity": {"agentRuntime": runtime},
+            "totals": {"inputTokens": 0, "outputTokens": 0},
+            "agentRuntimeEvidence": [{"combinedUsageAvailability": "unavailable"}],
+        }
         metrics = bcal_agent._result_metrics(transcript, 1)
         assert metrics.prompt_tokens is None
         assert metrics.completion_tokens is None
