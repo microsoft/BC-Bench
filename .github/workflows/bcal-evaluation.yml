@@ -34,6 +34,7 @@ on:
         default: "gpt-55-chat"
         type: choice
         options:
+          - "gpt-56-ceres"
           - "gpt-56-reasoning-nano-luna"
           - "gpt-56-reasoning-sol"
           - "gpt-55-chat"
@@ -44,6 +45,7 @@ on:
         type: choice
         options:
           - "none"
+          - "gpt-56-ceres"
           - "gpt-56-reasoning-nano-luna"
           - "gpt-56-reasoning-sol"
           - "gpt-55-chat"

@@ -252,7 +252,7 @@ wheels = [
 
 [[package]]
 name = "bcbench"
-version = "0.16.0"
+version = "0.17.0"
 source = { editable = "." }
 dependencies = [
     { name = "bcbench-core" },
@@ -466,7 +466,7 @@ wheels = [
 name = "confusables"
 version = "1.2.0"
 source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
-sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/confusables/1.2/confusables-1.2.0.tar.gz", hash = "sha256:429caad05333832e1edabb80815704cd26530514369430f913002b2ba548c38e", size = 262816, upload-time = "2021-03-24T02:29:08Z" }
+sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/confusables/1.2/confusables-1.2.0.tar.gz", hash = "sha256:429caad05333832e1edabb80815704cd26530514369430f913002b2ba548c38e", size = 262816, upload-time = "2026-11-11T12:25:07Z" }
 wheels = [
     { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/confusables/1.2/confusables-1.2.0-py3-none-any.whl", hash = "sha256:0c3e4a8ef8a6179f222e8cb6ea65ac5a71fa5c70d2de21950d14e99f933ecf52", size = 268464, upload-time = "2026-07-30T11:41:54Z" },
 ]

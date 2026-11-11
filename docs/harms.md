@@ -160,6 +160,73 @@ cheaply against the already-captured `trials.jsonl`.
 
 ## Prerequisites
 
+### Repeatable local accuracy and harms runs
+
+Use PowerShell 7, .NET 10, Python 3.13, the repository-required uv version, Azure CLI authentication,
+and authorized access to the BCal and BC Python feeds. Service/feed URLs and credentials are supplied
+by your organization; this repository does not grant access. Configure `LLM_API_*` as described in
+`.env.sample`, and use the same credentials for the agent and the local checklist judge.
+
+Install an **exact** BCal package version containing nested-package translation injection,
+analyzer-lifetime manifest caching and local resume support. Keep the whole installed tool directory.
+Use your organization's Azure Artifacts credential-provider setup; do not put tokens in URLs,
+command lines, committed files or reports.
+
+```powershell
+# Set BCAL_PACKAGE_ID, BCAL_FEED_URL and BCAL_PACKAGE_VERSION to approved exact values.
+dotnet tool install $env:BCAL_PACKAGE_ID --version $env:BCAL_PACKAGE_VERSION `
+    --tool-path .\.tools\bcal --add-source $env:BCAL_FEED_URL --interactive
+if ($LASTEXITCODE) { throw 'BCal installation failed' }
+
+# BC_EVAL_PYTHON_FEED_URL is the authorized BC Python feed's /pypi/simple/ URL.
+# Uses az login for feed authentication; creates a separate Python 3.13 bridge environment.
+.\scripts\Setup-BCalBridge.ps1 -PythonFeedUrl $env:BC_EVAL_PYTHON_FEED_URL
+.\scripts\Download-BCSymbols.ps1 -Category nl2al -Tier gold -InstanceId nl2al__move-name-customer-card-2
+```
+
+Commit the checkout before evaluating. Use paths without spaces for the checkout/bridge, a fresh
+results directory, and the exact downloaded BC artifact version. The wrapper records the source
+revision, model, runtime files, bridge packages, dataset and symbol hashes. It uses all original
+symbol packages; no session-local cache replacement or helper is required.
+
+```powershell
+$runtime = (Resolve-Path .\.tools\bcal\bcal.exe).Path
+$artifactVersion = '<exact downloaded BC 28.0 artifact version>'
+$run = Join-Path $PWD ('evaluation_results\ceres-' + (Get-Date -Format yyyyMMdd-HHmmss))
+
+# Bounded preflight: one gold entry, then one comprehensive case across all six vectors.
+.\scripts\Run-NL2ALEvaluation.ps1 -Category accuracy -BcalExecutable $runtime `
+    -ArtifactVersion $artifactVersion -Model gpt-56-ceres -ResultsDirectory "$run\accuracy-smoke"
+.\scripts\Run-NL2ALEvaluation.ps1 -Category harms -BcalExecutable $runtime `
+    -ArtifactVersion $artifactVersion -Model gpt-56-ceres -ResultsDirectory "$run\harms-smoke"
+
+# After preflight: full gold accuracy and the standard six-case / 36-trial harms matrix.
+.\scripts\Run-NL2ALEvaluation.ps1 -Category accuracy -BcalExecutable $runtime `
+    -ArtifactVersion $artifactVersion -Model gpt-56-ceres -Full -ResultsDirectory "$run\accuracy-full"
+.\scripts\Run-NL2ALEvaluation.ps1 -Category harms -BcalExecutable $runtime `
+    -ArtifactVersion $artifactVersion -Model gpt-56-ceres -Full -ResultsDirectory "$run\harms-full"
+
+# Score saved captures; these commands do not regenerate trials.
+.\.bcal-llm-api-venv\Scripts\python.exe .\tools\score_nl2al.py `
+    "$run\accuracy-full\accuracy\bceval_results.jsonl" "$run\accuracy-full\checklist-scores.jsonl" `
+    --model gpt-56-ceres
+uv run bcbench harms evaluate "$run\harms-full\harms" --no-upload
+```
+
+The wrapper captures only; scoring is separate and fails on missing/NaN scores. Accuracy uses a
+distinct output directory per entry because the CLI resets its run directory. `score_nl2al.py`
+refuses to overwrite a scoring attempt and preserves partial results on failure.
+Set the Foundry project variables below for harms evaluation. `--no-upload` still calls Azure
+evaluators; omit it only when uploading the captured content to that configured project is authorized.
+
+`gpt-56-ceres` is an **agent** option in both this entry point and the accuracy workflow; selecting
+Ceres only as judge is not an agent upgrade. Ceres keeps the Chat Completions bridge path;
+`gpt-56-reasoning-sol` retains its Responses continuation path. Neither path disables reasoning.
+Keep agent and judge identities separate in reports. Natural non-invocation of a seam is missing
+coverage, not a safety pass, and the wrapper does not replace the suite's triggers to force delivery.
+
+### Runtime and service requirements
+
 - **Python 3.13** and `uv sync --all-packages --extra redteam`. Use the uv version required by
   `pyproject.toml`.
 - **A bcal build with the harm-fixture injection wiring.** XPIA injection only lands on a build that
