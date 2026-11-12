@@ -1,0 +1,133 @@
+name: BCal LLM bridge preflight
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: Exact external-command model alias
+        required: true
+        type: string
+
+jobs:
+  preflight:
+    runs-on: windows-latest
+    environment:
+      name: ado-read
+      deployment: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Azure Login
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Build exact bridge environment
+        shell: pwsh
+        run: |
+          $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          Write-Output "::add-mask::$token"
+          uv venv .bcal-llm-api-venv --python .\.venv\Scripts\python.exe
+          $feed = "https://anything:" + $token + "@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          uv pip install --python .\.bcal-llm-api-venv\Scripts\python.exe "bc-eval==0.6.1" --index $feed
+
+      - name: Fetch LLM API client certificate
+        shell: pwsh
+        env:
+          CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+        run: |
+          $b64 = az keyvault secret show --vault-name $env:CERTIFICATE_KEY_VAULT_NAME --name $env:CERTIFICATE_NAME --query value -o tsv
+          if (-not $b64) {
+            throw "Failed to fetch LLM API client certificate."
+          }
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\llm-api-cert.pfx", [Convert]::FromBase64String($b64))
+
+      - name: Request a real judge completion through the shared bc-eval client
+        shell: pwsh
+        run: |
+          $script = @'
+          import importlib.util
+          from pathlib import Path
+          bridge_path = Path("src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py")
+          spec = importlib.util.spec_from_file_location("bcbench_bcal_llm_api_bridge", bridge_path)
+          if spec is None or spec.loader is None:
+              raise RuntimeError("Could not load the BC-Bench LLM API compatibility module.")
+          bridge = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(bridge)
+          bridge.install_sticky_route_compat()
+          from bc_eval.llm.llm_api import create_llm_api_client
+          response = create_llm_api_client().chat.completions.create(
+              model="gpt-56-ceres",
+              messages=[{"role": "user", "content": "Reply with exactly READY."}],
+              max_completion_tokens=32,
+          )
+          if not response.choices or not response.choices[0].message.content:
+              raise RuntimeError("Shared bc-eval client returned no judge response.")
+          '@
+          $script | & .\.bcal-llm-api-venv\Scripts\python.exe -
+          if ($LASTEXITCODE -ne 0) {
+            throw "Shared bc-eval judge preflight failed."
+          }
+          Write-Output "Shared bc-eval client returned a real judge response."
+
+      - name: Request a real model completion through the external-command bridge
+        shell: pwsh
+        env:
+          LLM_API_CERTIFICATE_FILE: ${{ runner.temp }}\llm-api-cert.pfx
+          LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
+          LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+        run: |
+          $script = @'
+          import importlib.util
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          bridge_path = Path("src/bcbench/agent/bcal/bc_eval_llm_api_bridge.py")
+          spec = importlib.util.spec_from_file_location("bcbench_bcal_llm_api_bridge", bridge_path)
+          if spec is None or spec.loader is None:
+              raise RuntimeError("Could not load the BC-Bench LLM API compatibility module.")
+          bridge = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(bridge)
+          responses = []
+          with bridge.sticky_route_ticket_broker_environment() as broker_environment:
+              environment = os.environ | broker_environment
+              for turn in range(2):
+                  request = {
+                      "model": "${{ inputs.model }}",
+                      "messages": [{"role": "user", "content": f"Turn {turn + 1}: reply with exactly READY."}],
+                      "max_completion_tokens": 32,
+                  }
+                  completed = subprocess.run(
+                      [sys.executable, str(bridge_path)],
+                      input=json.dumps(request),
+                      capture_output=True,
+                      text=True,
+                      encoding="utf-8",
+                      env=environment,
+                      check=False,
+                  )
+                  if completed.returncode != 0:
+                      raise RuntimeError(f"External-command bridge turn {turn + 1} failed: {completed.stderr}")
+                  responses.append(json.loads(completed.stdout))
+          if any(not response.get("choices") or not response["choices"][0]["message"].get("content") for response in responses):
+              raise RuntimeError("External-command bridge returned no model response.")
+          '@
+          $script | & .\.bcal-llm-api-venv\Scripts\python.exe -
+          if ($LASTEXITCODE -ne 0) {
+            throw "External-command bridge preflight failed."
+          }
+          Write-Output "External-command bridge returned two real model responses with session-scoped routing."

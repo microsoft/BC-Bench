@@ -1,141 +1,280 @@
 from __future__ import annotations
 
-import io
 import json
+import os
+import subprocess
 import sys
-import types
-from io import BytesIO
+from dataclasses import dataclass
+from pathlib import Path
+from textwrap import dedent
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
 
-from bcbench.agent.bcal import bc_eval_llm_api_bridge
+from bcbench.agent.bcal.bc_eval_llm_api_bridge import (
+    _STICKY_ROUTE_TICKET_HEADER,
+    StickyRouteSession,
+    install_sticky_route_compat,
+    sticky_route_ticket_broker_environment,
+)
 
 
-def test_load_request_accepts_utf8_bom_from_bcal_windows_stdin():
-    request = {
-        "model": "gpt-5",
-        "messages": [{"role": "user", "content": "hello"}],
-        "max_completion_tokens": 128,
-    }
-    input_stream = BytesIO(b"\xef\xbb\xbf" + json.dumps(request).encode())
+@dataclass
+class _RawResponse:
+    value: object
+    headers: dict[str, str]
 
-    assert bc_eval_llm_api_bridge._load_request(input_stream) == request
+    def parse(self) -> object:
+        return self.value
 
 
-class _StubCertCredential:
-    def __init__(self, tenant_id, client_id, certificate_path, send_certificate_chain=False):
-        self.tenant_id = tenant_id
-        self.client_id = client_id
-        self.certificate_path = certificate_path
-        self.send_certificate_chain = send_certificate_chain
+class _RawCompletions:
+    def __init__(self, outcomes: list[object]) -> None:
+        self.outcomes = outcomes
+        self.requests: list[dict[str, object]] = []
+
+    def create(self, **kwargs: object) -> object:
+        self.requests.append(kwargs)
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
 
 
-@pytest.fixture
-def fake_azure_identity(monkeypatch):
-    azure_pkg = types.ModuleType("azure")
-    azure_pkg.__path__ = []
-    identity_mod = types.ModuleType("azure.identity")
-    identity_mod.CertificateCredential = _StubCertCredential  # ty: ignore[unresolved-attribute]
-    monkeypatch.setitem(sys.modules, "azure", azure_pkg)
-    monkeypatch.setitem(sys.modules, "azure.identity", identity_mod)
+def _response(value: object, ticket: str | None = None) -> _RawResponse:
+    headers = {_STICKY_ROUTE_TICKET_HEADER: ticket} if ticket is not None else {}
+    return _RawResponse(value, headers)
 
 
-@pytest.fixture
-def fake_llm_api(monkeypatch):
-    """Stub bc_eval.llm.llm_api and record what the bridge passes to create_llm_api_client."""
-    calls: dict[str, Any] = {}
+def test_install_compat_wraps_initial_and_subsequent_requests(monkeypatch: pytest.MonkeyPatch):
+    raw_completions = _RawCompletions([_response({"id": "first"}, "secret-ticket"), _response({"id": "second"}, "updated-ticket")])
+    completions = SimpleNamespace(
+        create=lambda **kwargs: None,
+        with_raw_response=SimpleNamespace(create=raw_completions.create),
+    )
+    client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
 
-    class _Settings:
-        tenant_id = "tenant-x"
-        client_id = "client-y"
+    def create_client(*args: object, **kwargs: object) -> Any:
+        return client
 
-        @classmethod
-        def from_env(cls):
-            return cls()
+    bc_eval = ModuleType("bc_eval")
+    bc_eval_llm = ModuleType("bc_eval.llm")
+    bc_eval_llm.llm_api = SimpleNamespace(create_llm_api_client=create_client)  # ty: ignore[unresolved-attribute]
+    bc_eval.llm = bc_eval_llm  # ty: ignore[unresolved-attribute]
+    monkeypatch.setitem(sys.modules, "bc_eval", bc_eval)
+    monkeypatch.setitem(sys.modules, "bc_eval.llm", bc_eval_llm)
 
-    class _Completions:
-        def create(self, **kwargs):
-            calls["request"] = kwargs
-            return {"id": "completion-1", "choices": []}
+    install_sticky_route_compat()
+    compatible_client = bc_eval_llm.llm_api.create_llm_api_client()
 
-    def _create_llm_api_client(**kwargs):
-        calls["client"] = kwargs
-        return types.SimpleNamespace(chat=types.SimpleNamespace(completions=_Completions()))
-
-    modules = {name: types.ModuleType(name) for name in ("bc_eval", "bc_eval.llm", "bc_eval.llm.llm_api")}
-    modules["bc_eval"].__path__ = []
-    modules["bc_eval.llm"].__path__ = []
-    modules["bc_eval.llm.llm_api"].LlmApiSettings = _Settings  # ty: ignore[unresolved-attribute]
-    modules["bc_eval.llm.llm_api"].create_llm_api_client = _create_llm_api_client  # ty: ignore[unresolved-attribute]
-    for name, module in modules.items():
-        monkeypatch.setitem(sys.modules, name, module)
-    return calls
+    assert compatible_client.chat.completions.create(model="gpt") == {"id": "first"}
+    assert compatible_client.chat.completions.create(model="gpt") == {"id": "second"}
+    assert raw_completions.requests == [
+        {"model": "gpt", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: ""}},
+        {"model": "gpt", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: "secret-ticket"}},
+    ]
 
 
-def _run_main(monkeypatch, request: dict[str, object]) -> str:
-    stdin = types.SimpleNamespace(buffer=BytesIO(json.dumps(request).encode()))
-    stdout = io.StringIO()
-    monkeypatch.setattr(sys, "stdin", stdin)
-    monkeypatch.setattr(sys, "stdout", stdout)
+def test_sticky_route_session_caches_tickets_per_model():
+    completions = _RawCompletions(
+        [
+            _response({"id": "first"}, "ticket-a"),
+            _response({"id": "other"}, "ticket-b"),
+            _response({"id": "second"}, "ticket-a2"),
+        ]
+    )
+    session = StickyRouteSession()
 
-    assert bc_eval_llm_api_bridge.main() == 0
-    return stdout.getvalue()
-
-
-def test_local_certificate_credential_is_none_when_env_unset(monkeypatch):
-    monkeypatch.delenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, raising=False)
-
-    assert bc_eval_llm_api_bridge._local_certificate_credential("tenant-x", "client-y") is None
-
-
-def test_local_certificate_credential_raises_when_file_missing(monkeypatch, tmp_path):
-    monkeypatch.setenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, str(tmp_path / "does-not-exist.pfx"))
-
-    with pytest.raises(RuntimeError, match="does not exist"):
-        bc_eval_llm_api_bridge._local_certificate_credential("tenant-x", "client-y")
+    assert session.create(completions, {"model": "model-a"}) == {"id": "first"}
+    assert session.create(completions, {"model": "model-b"}) == {"id": "other"}
+    assert session.create(completions, {"model": "model-a"}) == {"id": "second"}
+    assert completions.requests == [
+        {"model": "model-a", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: ""}},
+        {"model": "model-b", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: ""}},
+        {"model": "model-a", "extra_headers": {_STICKY_ROUTE_TICKET_HEADER: "ticket-a"}},
+    ]
 
 
-def test_local_certificate_credential_uses_sni_auth(monkeypatch, fake_azure_identity, tmp_path):
-    cert = tmp_path / "cert.pfx"
-    cert.write_bytes(b"fake-pfx")
-    monkeypatch.setenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, str(cert))
+def test_sticky_route_session_defaults_missing_response_ticket_to_empty():
+    completions = _RawCompletions([_response({"id": "first"}), _response({"id": "second"})])
+    session = StickyRouteSession()
 
-    credential = bc_eval_llm_api_bridge._local_certificate_credential("tenant-x", "client-y")
+    session.create(completions, {"model": "gpt-55-chat"})
+    session.create(completions, {"model": "gpt-55-chat"})
 
-    assert isinstance(credential, _StubCertCredential)
-    assert credential.tenant_id == "tenant-x"
-    assert credential.client_id == "client-y"
-    assert credential.certificate_path == str(cert)
-    # SNI (x5c) auth is required by the app registration; without it AAD returns AADSTS700027.
-    assert credential.send_certificate_chain is True
+    assert completions.requests[0]["extra_headers"] == {_STICKY_ROUTE_TICKET_HEADER: ""}
+    assert completions.requests[1]["extra_headers"] == {_STICKY_ROUTE_TICKET_HEADER: ""}
 
 
-def test_main_passes_local_certificate_credential_to_llm_api_client(monkeypatch, fake_azure_identity, fake_llm_api, tmp_path):
-    cert = tmp_path / "cert.pfx"
-    cert.write_bytes(b"fake-pfx")
-    monkeypatch.setenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, str(cert))
-    tools = [{"type": "function", "function": {"name": "noop"}}]
+def test_sticky_route_session_preserves_other_request_headers():
+    completions = _RawCompletions([_response({"id": "first"})])
 
-    stdout = _run_main(monkeypatch, {"model": "gpt-56-ceres", "messages": [{"role": "user", "content": "hi"}], "tools": tools})
+    StickyRouteSession().create(
+        completions,
+        {"model": "gpt-55-chat", "extra_headers": {"x-existing": "value"}},
+    )
 
-    assert json.loads(stdout) == {"id": "completion-1", "choices": []}
-    credential = fake_llm_api["client"]["credential"]
-    assert isinstance(credential, _StubCertCredential)
-    assert (credential.tenant_id, credential.client_id) == ("tenant-x", "client-y")
-    assert fake_llm_api["client"]["inference_step"] == "HostAgent"
-    assert fake_llm_api["request"] == {
-        "model": "gpt-56-ceres",
-        "messages": [{"role": "user", "content": "hi"}],
-        "max_completion_tokens": 16384,
-        "tools": tools,
+    assert completions.requests[0]["extra_headers"] == {
+        "x-existing": "value",
+        _STICKY_ROUTE_TICKET_HEADER: "",
     }
 
 
-def test_main_falls_back_to_bc_eval_default_credential_without_local_cert(monkeypatch, fake_llm_api):
-    monkeypatch.delenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, raising=False)
+def test_sticky_route_session_does_not_handle_unrelated_taxonomy_error():
+    error = ValueError("Invalid taxonomy agent.")
+    session = StickyRouteSession()
 
-    _run_main(monkeypatch, {"model": "gpt-56-ceres", "messages": [], "reasoning_effort": "low"})
+    with pytest.raises(ValueError, match="Invalid taxonomy agent") as raised:
+        session.create(_RawCompletions([error]), {"model": "gpt-55-chat"})
 
-    assert fake_llm_api["client"]["credential"] is None
-    assert fake_llm_api["request"]["reasoning_effort"] == "low"
+    assert raised.value is error
+
+
+def test_sticky_route_session_suppresses_rejected_ticket_value():
+    completions = _RawCompletions([_response({"id": "first"}, "secret-ticket"), RuntimeError("invalid ticket: secret-ticket")])
+    session = StickyRouteSession()
+    session.create(completions, {"model": "gpt-55-chat"})
+
+    with pytest.raises(RuntimeError, match="rejected its response-derived") as raised:
+        session.create(completions, {"model": "gpt-55-chat"})
+
+    assert "secret-ticket" not in str(raised.value)
+
+
+def test_sticky_route_session_requires_model():
+    with pytest.raises(TypeError, match="string model"):
+        StickyRouteSession().create(_RawCompletions([]), {})
+
+
+def test_external_bridge_replays_ticket_across_process_turns(tmp_path: Path):
+    package = tmp_path / "bc_eval" / "llm"
+    package.mkdir(parents=True)
+    (tmp_path / "bc_eval" / "__init__.py").write_text("", encoding="utf-8")
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "llm_api.py").write_text(
+        dedent(
+            f"""
+            import json
+            import os
+
+            TICKET_HEADER = {_STICKY_ROUTE_TICKET_HEADER!r}
+
+
+            class LlmApiSettings:
+                tenant_id = ""
+                client_id = ""
+
+                @classmethod
+                def from_env(cls):
+                    return cls()
+
+
+            class RawResponse:
+                headers = {{TICKET_HEADER: "opaque-ticket"}}
+
+                def parse(self):
+                    return {{"choices": [{{"message": {{"content": "READY"}}}}]}}
+
+
+            class RawCompletions:
+                def create(self, **kwargs):
+                    ticket = kwargs["extra_headers"][TICKET_HEADER]
+                    with open(os.environ["REQUEST_LOG"], "a", encoding="utf-8") as stream:
+                        stream.write(json.dumps({{"ticket": ticket}}) + "\\n")
+                    if ticket not in {{"", "opaque-ticket"}}:
+                        raise RuntimeError("unexpected ticket")
+                    return RawResponse()
+
+
+            class Completions:
+                def __init__(self):
+                    self.with_raw_response = RawCompletions()
+
+
+            class Client:
+                def __init__(self):
+                    self.chat = type("Chat", (), {{"completions": Completions()}})()
+
+
+            def create_llm_api_client(**kwargs):
+                return Client()
+            """
+        ),
+        encoding="utf-8",
+    )
+    bridge = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "bcal" / "bc_eval_llm_api_bridge.py"
+    request_log = tmp_path / "requests.jsonl"
+    request = json.dumps({"model": "gpt-55-chat", "messages": [{"role": "user", "content": "READY"}]})
+
+    with sticky_route_ticket_broker_environment() as broker_environment:
+        environment = (
+            os.environ
+            | broker_environment
+            | {
+                "PYTHONPATH": str(tmp_path),
+                "REQUEST_LOG": str(request_log),
+            }
+        )
+        turns = [
+            subprocess.run(
+                [sys.executable, str(bridge)],
+                input=request,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=environment,
+                check=False,
+            )
+            for _ in range(2)
+        ]
+
+    assert [turn.returncode for turn in turns] == [0, 0]
+    assert [json.loads(line)["ticket"] for line in request_log.read_text(encoding="utf-8").splitlines()] == ["", "opaque-ticket"]
+    assert all("opaque-ticket" not in turn.stdout + turn.stderr for turn in turns)
+
+
+def test_external_bridge_fails_without_session_broker(tmp_path: Path):
+    package = tmp_path / "bc_eval" / "llm"
+    package.mkdir(parents=True)
+    (tmp_path / "bc_eval" / "__init__.py").write_text("", encoding="utf-8")
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "llm_api.py").write_text(
+        dedent(
+            """
+            class LlmApiSettings:
+                tenant_id = ""
+                client_id = ""
+
+                @classmethod
+                def from_env(cls):
+                    return cls()
+
+
+            def create_llm_api_client(**kwargs):
+                return type("Client", (), {"chat": type("Chat", (), {"completions": object()})()})()
+            """
+        ),
+        encoding="utf-8",
+    )
+    bridge = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "bcal" / "bc_eval_llm_api_bridge.py"
+    environment = os.environ | {"PYTHONPATH": str(tmp_path)}
+    for name in (
+        "BCBENCH_STICKY_ROUTE_BROKER_ADDRESS",
+        "BCBENCH_STICKY_ROUTE_BROKER_AUTH",
+        "BCBENCH_STICKY_ROUTE_BROKER_FAMILY",
+    ):
+        environment.pop(name, None)
+
+    completed = subprocess.run(
+        [sys.executable, str(bridge)],
+        input=json.dumps({"model": "gpt-55-chat", "messages": []}),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=environment,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "requires a session-scoped sticky-route broker" in completed.stderr

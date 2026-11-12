@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import shutil
+import struct
 import subprocess
 import time
 from dataclasses import dataclass
@@ -13,9 +16,9 @@ from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
-from bcbench.agent.bcal.agent import BCalBackendConfig, _process_output, _resolve_bcal_executable, get_bcal_version
+from bcbench.agent.bcal.agent import BCalBackendConfig, _bcal_process_environment, _process_output, _resolve_bcal_executable, get_bcal_version
 from bcbench.dataset import BCalScenarioEntry
 from bcbench.types import HarnessName
 
@@ -25,6 +28,8 @@ SCENARIO_MANIFEST = "execution.json"
 SCENARIO_RESULT = "evaluation-run.json"
 SCENARIO_EXPORT_DIR = "app"
 SCENARIO_SYMBOL_DIR = ".bcal-symbols"
+SCENARIO_CONTRACT_VERSION = "1.1"
+WORKSPACE_SEED_CONTRACT_VERSION = "1.0"
 
 
 class BCalToolUsage(BaseModel):
@@ -106,6 +111,11 @@ class BCalInteractionRequest(BaseModel):
     minimum: float | None = None
     maximum: float | None = None
 
+    @field_validator("choices", mode="before")
+    @classmethod
+    def normalize_absent_choices(cls, value: object) -> object:
+        return [] if value is None else value
+
 
 class BCalInteractionRecord(BaseModel):
     model_config = ConfigDict(frozen=True, extra="allow")
@@ -143,72 +153,121 @@ class BCalExportResult(BaseModel):
     message: str | None = None
 
 
-class BCalTraceEvent(BaseModel):
+class BCalSessionArchiveResult(BaseModel):
     model_config = ConfigDict(frozen=True, extra="allow")
 
-    type: str
-    name: str | None = None
-    sequence: float | None = None
-    index: float | None = None
+    attempted: bool
+    success: bool
+    path: str | None = None
+    file_name: str | None = Field(default=None, alias="fileName")
+    entries_exported: Annotated[int, Field(ge=0)] = Field(default=0, alias="entriesExported")
+    chat_entry_path: str | None = Field(default=None, alias="chatEntryPath")
+    message: str | None = None
 
 
-class BCalEvidenceTrace(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="allow")
+class BCalWorkspaceSeedFileReceipt(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    events: list[BCalTraceEvent] = Field(default_factory=list)
+    path_sha256: str = Field(alias="pathSha256")
+    content_sha256: str = Field(alias="contentSha256")
+    bytes: Annotated[int, Field(ge=0)]
 
 
-class BCalEvidence(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="allow")
+class BCalWorkspaceSeedEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    trace: BCalEvidenceTrace | None = None
+    contract_version: Literal["1.0"] = Field(alias="contractVersion")
+    file_count: Annotated[int, Field(ge=0)] = Field(alias="fileCount")
+    aggregate_bytes: Annotated[int, Field(ge=0)] = Field(alias="aggregateBytes")
+    aggregate_sha256: str = Field(alias="aggregateSha256")
+    files: list[BCalWorkspaceSeedFileReceipt]
 
 
 class BCalScenarioRunResult(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="allow")
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: Literal["1.0", "1.1"] = Field(alias="schemaVersion")
+    execution_identity: dict[str, object] | None = Field(default=None, alias="executionIdentity")
+    evidence: dict[str, object] | None = None
+    outcome: dict[str, object] | None = None
+    workspace_seed: BCalWorkspaceSeedEvidence | None = Field(default=None, alias="workspaceSeed")
     completed: bool
     steps: list[BCalStepResult]
-    interactions: list[BCalInteractionRecord] = Field(default_factory=list)
-    tool_usage: list[BCalToolUsage] = Field(default_factory=list, alias="toolUsage")
+    interactions: list[BCalInteractionRecord]
+    tool_usage: list[BCalToolUsage] = Field(alias="toolUsage")
     totals: BCalTotals
     export: BCalExportResult
-    evidence: BCalEvidence | None = None
+    session_archive: BCalSessionArchiveResult = Field(alias="sessionArchive")
     failure: BCalFailure | None = None
+
+    @property
+    def prompt_evidence(self) -> dict[str, object] | None:
+        value = self.evidence.get("promptEvidence") if self.evidence else None
+        return cast(dict[str, object], value) if isinstance(value, dict) else None
+
+    @property
+    def canonical_trace(self) -> dict[str, object] | None:
+        value = self.evidence.get("trace") if self.evidence else None
+        return cast(dict[str, object], value) if isinstance(value, dict) else None
+
+
+def workspace_seed_evidence(seed_folder: Path) -> BCalWorkspaceSeedEvidence:
+    aggregate = hashlib.sha256()
+    receipts: list[BCalWorkspaceSeedFileReceipt] = []
+    aggregate_bytes = 0
+    paths = sorted(
+        (path for path in seed_folder.rglob("*") if path.is_file()),
+        key=lambda path: path.relative_to(seed_folder).as_posix().encode("utf-16-be"),
+    )
+    for path in paths:
+        relative_path = path.relative_to(seed_folder).as_posix()
+        path_bytes = relative_path.encode()
+        content = path.read_bytes()
+        for value in (path_bytes, content):
+            aggregate.update(struct.pack(">I", len(value)))
+            aggregate.update(value)
+        aggregate_bytes += len(content)
+        receipts.append(
+            BCalWorkspaceSeedFileReceipt(
+                pathSha256=hashlib.sha256(path_bytes).hexdigest(),
+                contentSha256=hashlib.sha256(content).hexdigest(),
+                bytes=len(content),
+            )
+        )
+    return BCalWorkspaceSeedEvidence(
+        contractVersion=WORKSPACE_SEED_CONTRACT_VERSION,
+        fileCount=len(receipts),
+        aggregateBytes=aggregate_bytes,
+        aggregateSha256=aggregate.hexdigest(),
+        files=receipts,
+    )
 
 
 def write_execution_manifest(entry: BCalScenarioEntry, path: Path) -> None:
     manifest = {
-        "schemaVersion": "1.0",
+        "schemaVersion": SCENARIO_CONTRACT_VERSION,
         "session": entry.session.model_dump(mode="json", by_alias=True, exclude_none=True),
+        "workspaceSeed": {
+            "contractVersion": WORKSPACE_SEED_CONTRACT_VERSION,
+            "folder": f"./{SCENARIO_EXPORT_DIR}",
+        },
         "steps": [step.model_dump(mode="json", by_alias=True, exclude_none=True) for step in entry.steps],
         "interactions": [rule.model_dump(mode="json", by_alias=True, exclude_none=True) for rule in entry.interactions],
     }
     path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def load_scenario_result(path: Path) -> tuple[BCalScenarioRunResult, dict[str, JsonValue]]:
+def load_scenario_result(path: Path) -> BCalScenarioRunResult:
     if not path.is_file():
         raise AgentError(f"BCal did not write required scenario result: {path}")
-    try:
-        payload = cast(dict[str, JsonValue], json.loads(path.read_bytes()))
-        return BCalScenarioRunResult.model_validate(payload), payload
-    except (OSError, ValueError) as exc:
-        raise AgentError(f"Could not read BCal scenario result {path}: {exc}") from exc
-
-
-def _read_transcript_after_failure(path: Path) -> dict[str, JsonValue] | None:
-    try:
-        return load_scenario_result(path)[1]
-    except AgentError:
-        logger.warning("No usable BCal scenario transcript after failure", exc_info=True)
-        return None
+    return BCalScenarioRunResult.model_validate_json(path.read_text(encoding="utf-8-sig"))
 
 
 def _harness_failure(result: BCalScenarioRunResult) -> str | None:
     if not result.export.attempted or not result.export.success:
         return result.export.message or "BCal failed to export the scenario workspace"
+    if not result.session_archive.attempted or not result.session_archive.success:
+        return result.session_archive.message or "BCal failed to export the sanitized session archive"
     if result.failure and result.failure.step_id is None and result.totals.failed_steps == 0:
         return result.failure.message
     return None
@@ -241,12 +300,16 @@ class BCalScenarioHarness(AgentHarness[BCalScenarioEntry, HarnessName]):
         write_execution_manifest(entry, scenario_path)
         export_folder.mkdir(parents=True, exist_ok=True)
         result_path.unlink(missing_ok=True)
+        expected_seed = workspace_seed_evidence(export_folder)
 
         cmd_args = [
             _resolve_bcal_executable(),
-            f"--scenario={scenario_path}",
-            f"--result={result_path}",
-            f"--exportfolder={export_folder}",
+            "--scenario",
+            str(scenario_path),
+            "--result",
+            str(result_path),
+            "--exportfolder",
+            str(export_folder),
             f"--packagecachepath={package_cache_path}",
             "--include-evidence",
             *self.backend_config.cli_args(),
@@ -254,17 +317,19 @@ class BCalScenarioHarness(AgentHarness[BCalScenarioEntry, HarnessName]):
         logger.debug("BCal scenario command: %s", cmd_args)
 
         try:
-            start = time.monotonic()
-            completed = subprocess.run(
-                cmd_args,
-                timeout=timeout,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-            )
-            execution_time = time.monotonic() - start
+            with _bcal_process_environment() as environment:
+                start = time.monotonic()
+                completed = subprocess.run(
+                    cmd_args,
+                    timeout=timeout,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=False,
+                    env=environment,
+                )
+                execution_time = time.monotonic() - start
         except subprocess.TimeoutExpired:
             raise AgentTimeoutError(
                 "bcal scenario timed out",
@@ -282,12 +347,68 @@ class BCalScenarioHarness(AgentHarness[BCalScenarioEntry, HarnessName]):
             if not result_path.is_file():
                 raise AgentError(f"BCal scenario exited with status {completed.returncode} without writing {SCENARIO_RESULT}")
 
-        result, transcript = load_scenario_result(result_path)
+        result = load_scenario_result(result_path)
+        transcript = cast(dict[str, JsonValue], result.model_dump(mode="json", by_alias=True, exclude_none=True))
         if harness_error := _harness_failure(result):
             raise AgentError(f"BCal scenario harness failure: {harness_error}", transcript=transcript)
+        if result.workspace_seed != expected_seed:
+            actual_hash = result.workspace_seed.aggregate_sha256 if result.workspace_seed else "missing"
+            raise AgentError(
+                f"BCal scenario workspace seed receipt does not match the pre-run fixture snapshot: expected {expected_seed.aggregate_sha256}, got {actual_hash}",
+                transcript=transcript,
+            )
 
-        return AgentResult(
-            metrics=AgentMetrics(execution_time=execution_time),
-            experiment=ExperimentConfiguration(),
-            transcript=transcript,
+        tool_usage: dict[str, int] = {}
+        for usage in result.tool_usage:
+            tool_usage[usage.name] = tool_usage.get(usage.name, 0) + usage.started
+        metrics = AgentMetrics(
+            execution_time=execution_time,
+            turn_count=result.totals.steps,
+            prompt_tokens=result.totals.input_tokens,
+            completion_tokens=result.totals.output_tokens,
+            total_tokens=result.totals.input_tokens + result.totals.output_tokens,
+            tool_usage=tool_usage,
         )
+        return AgentResult(metrics=metrics, experiment=ExperimentConfiguration(), transcript=transcript)
+
+
+def run_bcal_scenario(
+    entry: BCalScenarioEntry,
+    repo_path: Path,
+    backend_config: BCalBackendConfig,
+) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]:
+    result = BCalScenarioHarness(backend_config).run(AgentRequest(task=entry, work_dir=repo_path, output_dir=repo_path))
+    return result.metrics, result.experiment
+
+
+def _read_transcript_after_failure(path: Path) -> dict[str, JsonValue] | None:
+    try:
+        payload = cast(JsonValue, json.loads(path.read_text(encoding="utf-8-sig")))
+    except (OSError, ValueError):
+        return None
+    return cast(dict[str, JsonValue], payload) if isinstance(payload, dict) else None
+
+
+def resolve_session_chat(result: BCalScenarioRunResult, repo_path: Path) -> Path | None:
+    archive = result.session_archive
+    if not archive.success or not archive.path or not archive.chat_entry_path:
+        return None
+
+    archive_path = Path(archive.path)
+    if not archive_path.is_absolute():
+        archive_path = repo_path / archive_path
+    if archive_path.is_dir():
+        chat_path = archive_path / archive.chat_entry_path
+        return chat_path if chat_path.is_file() else None
+
+    if archive_path.suffix.lower() == ".json" and archive_path.name == archive.chat_entry_path:
+        return archive_path if archive_path.is_file() else None
+
+    extracted_dir = repo_path / ".bcal-session-archive"
+    if archive_path.suffix.lower() == ".zip" and archive_path.is_file():
+        if extracted_dir.exists():
+            shutil.rmtree(extracted_dir)
+        shutil.unpack_archive(str(archive_path), extracted_dir)
+        chat_path = extracted_dir / archive.chat_entry_path
+        return chat_path if chat_path.is_file() else None
+    return None

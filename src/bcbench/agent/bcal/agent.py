@@ -2,10 +2,13 @@
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast, override
@@ -18,12 +21,19 @@ from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from pydantic import BaseModel, ConfigDict, JsonValue, field_validator
 
+from bcbench.agent.bcal.bc_eval_llm_api_bridge import sticky_route_ticket_broker_environment
 from bcbench.dataset import NL2ALEntry
 from bcbench.types import HarnessName
 
 logger = logging.getLogger(__name__)
 
 _BCAL_TOOL = "bcal"
+
+
+@contextmanager
+def _bcal_process_environment() -> Iterator[dict[str, str]]:
+    with sticky_route_ticket_broker_environment() as broker_environment:
+        yield os.environ | broker_environment
 
 
 class BCalBackendConfig(BaseModel):
@@ -189,7 +199,8 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
 
             try:
                 start = time.monotonic()
-                subprocess.run(cmd_args, timeout=timeout, check=True)
+                with _bcal_process_environment() as environment:
+                    subprocess.run(cmd_args, timeout=timeout, check=True, env=environment)
                 execution_time = time.monotonic() - start
             except subprocess.TimeoutExpired:
                 logger.exception(f"bcal CLI timed out after {timeout} seconds")
@@ -228,15 +239,17 @@ def run_bcal_prompt(
     cmd_args = _bcal_cmd_args(entry, package_cache_path, export_folder, backend_config, f"--prompt={query}")
 
     try:
-        result = subprocess.run(
-            cmd_args,
-            timeout=timeout,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=True,
-        )
+        with _bcal_process_environment() as environment:
+            result = subprocess.run(
+                cmd_args,
+                timeout=timeout,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+                env=environment,
+            )
         stdout = result.stdout or ""
     except subprocess.TimeoutExpired as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
