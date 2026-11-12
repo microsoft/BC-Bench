@@ -89,9 +89,12 @@ jobs:
             $jobs = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$($run.id)/jobs?per_page=100" | ConvertFrom-Json
             if ($jobs.total_count -gt 100) { throw 'Job accounting inventory is incomplete.' }
             foreach ($job in $jobs.jobs) {
+              if ($job.conclusion -eq 'skipped') { continue }
               if ($job.status -eq 'completed' -and $job.started_at -and $job.completed_at) {
-                $preflightSeconds += ([DateTimeOffset]$job.completed_at - [DateTimeOffset]$job.started_at).TotalSeconds
-              } elseif ($job.conclusion -ne 'skipped') { throw 'Preflight job charge unavailable.' }
+                $seconds = ([DateTimeOffset]$job.completed_at - [DateTimeOffset]$job.started_at).TotalSeconds
+                if ($seconds -lt 0) { throw 'Negative runner duration is not a valid charge.' }
+                $preflightSeconds += $seconds
+              } else { throw 'Preflight job charge unavailable.' }
             }
           }
           gh run download $env:PREFLIGHT_RUN_ID --repo $env:GITHUB_REPOSITORY --name sdk-policy-preflight --dir preflight-receipt
@@ -160,7 +163,7 @@ jobs:
     needs: [admit, pairs]
     if: always() && inputs.phase == 'smoke'
     runs-on: windows-latest
-    timeout-minutes: 9
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: ./.github/actions/setup-python-uv

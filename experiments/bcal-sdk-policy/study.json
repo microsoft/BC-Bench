@@ -132,7 +132,7 @@
     "originalLocalMeasuredSeconds": 62677.474418000085,
     "unresolvedLocalReservationSeconds": 1500,
     "studyCeilingSeconds": 28800,
-    "preflightReservationSeconds": 480,
+    "preflightReservationSeconds": 660,
     "localNoModelAdmissionReservationSeconds": 600,
     "preservedPriorHostedStudy": {
       "studyId": "bcal-sdk-governed-policy-20261112",
@@ -172,7 +172,7 @@
     },
     "controllerReservationSeconds": 300,
     "pairReservationSeconds": 3360,
-    "summaryReservationSeconds": 540,
+    "summaryReservationSeconds": 360,
     "pairCount": 8,
     "perAttemptSeconds": 1500,
     "watchdogSeconds": 1430,
