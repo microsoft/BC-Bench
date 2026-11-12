@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "1",
+  "studyId": "bcal-sdk-governed-policy-20261112",
+  "cohort": "original-smoke4-v1",
+  "repeatCount": 2,
+  "variants": [
+    "legacy",
+    "copilot-sdk"
+  ],
+  "datasets": [
+    {
+      "tier": "gold",
+      "file": "dataset\\nl2al.jsonl",
+      "datasetSha256": "fce1a4c1d4b63d9b593b5d8c2c14a65727c5c6063dc0cf5d754208619aac4ab9",
+      "selectedEntries": [
+        {
+          "instanceId": "nl2al__move-name-customer-card-2",
+          "taskPromptSha256": "00c19b5c51e84bd754bf46ea23a2d5b436dd0d6a66acbd258062ed5512345b37",
+          "expectedSha256": "35f2894e966a9fcafa084821314c38a1acf5a796b161d8ee62f6b73b538e9641",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__add-industry-field-customer-card-2",
+          "taskPromptSha256": "1f1c3172cd3b519e7ecc6d8e3fa1ade4b8ae2c9eb03e474420c031cc5ef9fe60",
+          "expectedSha256": "73ce5fba24bc24ee9037c26f94e1ba2141b82258e189b1780e962e6054d1cb4f",
+          "environmentSetupVersion": "28.0"
+        }
+      ]
+    },
+    {
+      "tier": "challenge",
+      "file": "dataset\\nl2al_challenge.jsonl",
+      "datasetSha256": "8563f49db15fa3fc90f466e677109944a83e5ddcbe99024ec5ff5588e47cdd36",
+      "selectedEntries": [
+        {
+          "instanceId": "nl2al__event-subscriber-onafterpostsalesdoc-2",
+          "taskPromptSha256": "ff3d7eda4239324262403549e0b8dc43e2d1aad7157db8261d720543ef85bf07",
+          "expectedSha256": "a2a785392593035fe4e47f7e19d538d97680da5dc58d3fd6bc646c0c5c6e44fa",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-internal-notes-blob-2",
+          "taskPromptSha256": "98ecb3d306bf443f448220b9108a5a473550d2a19aa123f93c6651b03586d64e",
+          "expectedSha256": "0c53ee380451ed6aa20bc8611fdd4596c7fe79a94aba8dd0a605b64de292e712",
+          "environmentSetupVersion": "28.0"
+        }
+      ]
+    }
+  ],
+  "symbolsManifestSha256": "cee5605b0cb36d894c3f723d4942c8d78053b07cd31151f61e78c78aa7bf6399",
+  "package": {
+    "id": "Microsoft.BusinessCentral.BCal.CLI",
+    "version": "30.0.46.34884-beta",
+    "productVersion": "30.0.46.34884+7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "sourceCommitSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "commonBaseSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "stablePatchId": "no-patch",
+    "buildId": 3049448,
+    "sha256": "aea6037faa835faa7d64ad95b17dd8240645ea25bc70e257213c8fa3c3ff80de",
+    "bytes": 306389504,
+    "framework": "net10.0",
+    "files": 460,
+    "sdkPackageVersion": "1.0.29",
+    "sdkRuntimeVersion": "1.0.107",
+    "nativeCatalogSha256": "53cbf24393521600b170c5840c5721292be4953c5b1e194e137489ba5e7ba81b",
+    "indexSha256": "e0d3f04ed40b264bf5407b36cd54a5a1efe88606d15ebe80c457675f156436f6",
+    "independentSealSha256": "71167a6426626623672daf1ac469441a7d97f76f1d04790dc8ff336d5b4aaf91"
+  },
+  "inference": {
+    "provider": "bc-eval-m365-test@0.6.1",
+    "model": "gpt-55-chat",
+    "reasoning": null,
+    "sdkMaxModelRequests": 64,
+    "sdkTimeoutSeconds": 1200,
+    "clientSourceSha256": "f4dfdd0148debfc2de8a3cabfa49b00c9f8b01bfcbfa4a78708c7d0459cfe815"
+  },
+  "judge": {
+    "model": "gpt-56-ceres",
+    "scorerSha256": "c563e569520b202e725d46ac58497868fefd8d48662fb8a305c9a397e14c398d",
+    "timeoutSeconds": 90,
+    "storage": "none"
+  },
+  "budget": {
+    "originalEnvelopeSeconds": 180000,
+    "historicalMeasuredSeconds": 62677.474418000085,
+    "unresolvedLocalReservationSeconds": 1500,
+    "studyCeilingSeconds": 28800,
+    "preflightReservationSeconds": 600,
+    "controllerReservationSeconds": 300,
+    "pairReservationSeconds": 3360,
+    "summaryReservationSeconds": 540,
+    "pairCount": 8,
+    "perAttemptSeconds": 1500,
+    "watchdogSeconds": 1430,
+    "maxWorkers": 4,
+    "localPauseSealSha256": "42ffa60e99f5b47d2817701d1588da9302cc9afc013b1204aed1d139beadcc12",
+    "infrastructureInvalidOriginalSeconds": 32288.592491100077,
+    "replacement": "Original local000 excluded with full charge; exactly-one linked replacement001 retained. Local016 unresolved/unscored,1500s held;15 completed/104 never admitted. Never resume or pool with hosted outcomes."
+  },
+  "publication": "Allowlisted sanitized identity/numeric/boolean/hash evidence only. No raw AL/prompts/private package/keys/tickets/arbitrary error text; no Kusto/Braintrust. Full raw remains runner-local ephemeral and is not retained after runner teardown."
+}

@@ -55,7 +55,8 @@ def test_bcal_run_identity_includes_tier_and_package_selection():
     workflow = _workflow("bcal-evaluation.yml")
 
     assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ${{{{ inputs.bcal-feed || 'official' }}}}@${{{{ inputs.bcal-version || 'latest' }}}} ")
-    assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}"
+    assert "format('bcal-evaluation-{0}', inputs.test-run && 'test' || 'full')" in workflow["concurrency"]["group"]
+    assert "bcal-sdk-governed-policy-20261112-entry" in workflow["concurrency"]["group"]
 
 
 def test_bcal_completion_review_model_offers_external_models_or_none():
@@ -87,7 +88,7 @@ def test_bcal_installs_selected_package():
     action = yaml.safe_load((WORKFLOWS.parent / "actions" / "install-bcal" / "action.yml").read_text(encoding="utf-8"))
     action_install = _step_named(action["runs"]["steps"], "Install BCal package")
 
-    assert install["uses"] == "$/.github/actions/install-bcal"
+    assert install["uses"] == "./.github/actions/install-bcal"
     assert install["with"]["version"] == "${{ env.BCAL_REQUESTED_VERSION }}"
     assert "bcal-version-mode" not in workflow
     assert '@("--version", $env:BCAL_REQUESTED_VERSION)' in action_install["run"]

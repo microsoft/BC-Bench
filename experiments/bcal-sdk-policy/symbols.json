@@ -1,0 +1,1757 @@
+{
+  "cacheVersion": "28.0.46665.57479",
+  "files": [
+    {
+      "path": "platform\\Applications\\APIReportsFinance\\Source\\Microsoft_API Reports - Finance.app",
+      "sha256": "4dc420897a62e22eb32ad95d14d136d797db56de5bbd825da3f61c873c6c359c",
+      "bytes": 219616
+    },
+    {
+      "path": "platform\\Applications\\APIV1\\Source\\Microsoft__Exclude_APIV1_.app",
+      "sha256": "b1f0c6b00d3a89feca0154b4b915fe25fe7175092683fb51c0c9eda2a0dc5abd",
+      "bytes": 780062
+    },
+    {
+      "path": "platform\\Applications\\APIV1\\Test\\Microsoft__Exclude_APIV1_ Tests.app",
+      "sha256": "a1d5c1e71798ef8560c3390c3e2e5cb9f0184f7ee6ee3d24520bd53c1e52844f",
+      "bytes": 172032
+    },
+    {
+      "path": "platform\\Applications\\APIV2\\Source\\Microsoft__Exclude_APIV2_.app",
+      "sha256": "3a35d21534226735f06ea70055a85fc86bbbc4f3b6367fedea189c01ba0dfa7b",
+      "bytes": 3106627
+    },
+    {
+      "path": "platform\\Applications\\APIV2\\Test\\Microsoft__Exclude_APIV2_ Tests.app",
+      "sha256": "9252d7083f20a86d29b6bba9d54f9a8fa919d5247cc27517b28c8570509c36cf",
+      "bytes": 241410
+    },
+    {
+      "path": "platform\\Applications\\Application\\Source\\Microsoft_Application.app",
+      "sha256": "2e6943e7bf24c01775c3614dc40d4dd1ce3c138c117fa2a7da42eca89435e715",
+      "bytes": 18716
+    },
+    {
+      "path": "platform\\Applications\\Application Test Library\\Source\\Microsoft_Application Test Library.app",
+      "sha256": "9491f98fa1fc4c63b4faa03fc1d33576feabb64ff9475cd83a53438d5a8ff2be",
+      "bytes": 316881
+    },
+    {
+      "path": "platform\\Applications\\AuditFileExport\\Source\\Microsoft_Audit File Export.app",
+      "sha256": "469de3a4e8485739d94c25159ccd26cc4a5e94072790484a3dd6988a5711cd45",
+      "bytes": 580989
+    },
+    {
+      "path": "platform\\Applications\\AuditFileExport\\Test\\Microsoft_Audit File Export Tests.app",
+      "sha256": "15df1d46cada5fa90047d4b103eaeae03c890d38ea849e7084c14d10ce326001",
+      "bytes": 26819
+    },
+    {
+      "path": "platform\\Applications\\BankAccRecWithAI\\Source\\Microsoft_Bank Account Reconciliation With AI.app",
+      "sha256": "2d8a126eed9a8554d711ff2c9ee6f27bc0ba73975549f7c921d0ce75461676f6",
+      "bytes": 423538
+    },
+    {
+      "path": "platform\\Applications\\BankAccRecWithAI\\Test\\Microsoft_Bank Account Reconciliation With AI Tests.app",
+      "sha256": "c216a684e051a6ffb23b4a644422f21ce19923dce15945934d957492184f4ca5",
+      "bytes": 43318
+    },
+    {
+      "path": "platform\\Applications\\BankDeposits\\Source\\Microsoft__Exclude_Bank Deposits.app",
+      "sha256": "d910927e5d52d47d81fb72ac1117cc245f4755778938c42f568efb320a994af4",
+      "bytes": 776997
+    },
+    {
+      "path": "platform\\Applications\\BankDeposits\\Test\\Microsoft__Exclude_Bank Deposits Tests.app",
+      "sha256": "a0f817fc1f005759db817ff117f71fe7991e454b2c1e1b4bf2d591ee3fa6d237",
+      "bytes": 46430
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Base Application.app",
+      "sha256": "013268c4d7b8ef1f82bd9aa747d7203b2ece16ba9a190806e6930d2487e55976",
+      "bytes": 98128598
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Czech language (Czechia).app",
+      "sha256": "1e7a720dd0e2d05b1ed05139475c529cd684bf054c1b521bf0b70b72bfe7e00b",
+      "bytes": 6714612
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Danish language (Denmark).app",
+      "sha256": "42c3d8a0ada69920ab2a841f401b93a8f98e5a9e258bf8c86458a72789131847",
+      "bytes": 6465133
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Dutch language (Belgium).app",
+      "sha256": "95f581596a3c98d42181f8e3d02006ef97ad13f339447a283f180060c506829a",
+      "bytes": 6598776
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Dutch language (Netherlands).app",
+      "sha256": "3e4f935f493194c3627d0ff33d90a875ee9889f95fd5ee8f6382f1cd462f57b8",
+      "bytes": 6614485
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_English language (Australia).app",
+      "sha256": "a1b332b4e71e6feede064fa71f7c4e8b5011dcef1167a4a57347fae3130a0c0e",
+      "bytes": 5053912
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_English language (Canada).app",
+      "sha256": "7e3242a87f0a27b5eb270c9efb577d71a11bfce9ec41dcce7ad8d905089fed37",
+      "bytes": 5264455
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_English language (New Zealand).app",
+      "sha256": "fe654e9f062ea3d5e84d60d4b421e733f55cab51e8878a0a2805d43972ee995b",
+      "bytes": 5044158
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_English language (United Kingdom).app",
+      "sha256": "6034094f76435d54efe7a6680fdb00aeb16ccdda67ffc3e942f176698a5f79f6",
+      "bytes": 4890487
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_English language (United States).app",
+      "sha256": "75d85b9be6336f5ba55d9183374d148fea233d4a39c754b31d1df0744f8ca0ac",
+      "bytes": 5255964
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Finnish language (Finland).app",
+      "sha256": "ac554487ab414c8f2b1b04ee7c7aa83ac54d728973faaeae72a65181214e3bc3",
+      "bytes": 6600772
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_French language (Belgium).app",
+      "sha256": "8db454f76d481bf1fd4066d4de1411f9d055de58ae9b7f6f8a5213f42e85182d",
+      "bytes": 6676169
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_French language (Canada).app",
+      "sha256": "8323b99b731274d038d6e1fb50b7a76cb0d5f4769a4e78fada61ed286bd746d9",
+      "bytes": 7108273
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_French language (France).app",
+      "sha256": "8ddc6158fb28dc0c3f1217567f73fb26d1ec7d7ff435abb17bdbf956a4c6c167",
+      "bytes": 6673449
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_French language (Switzerland).app",
+      "sha256": "49f96ccfad520535c3c302cc68f2d5422999521b6f38b16fe5b27f6d615c7b4d",
+      "bytes": 6791139
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_German language (Austria).app",
+      "sha256": "ef9a8406bcd3eecd570e100ff59a45eee52b0d7c732cfe10fd015df78995b444",
+      "bytes": 6831626
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_German language (Germany).app",
+      "sha256": "f86a9e84e274c88c07f4b9a33b44398de2ecbfc5b9ba8adb4e1d178fe38a02db",
+      "bytes": 6842675
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_German language (Switzerland).app",
+      "sha256": "807b5a50f285d272e2dc1329fb605ceff1174ae8d57cd608814458cf47fae3f4",
+      "bytes": 6964993
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Icelandic language (Iceland).app",
+      "sha256": "eb245d29292d9c108ead6ce9a837f776c1179d364305f8feaa23d7362f99dccf",
+      "bytes": 6698095
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Italian language (Italy).app",
+      "sha256": "776d713eb8ea70ad239ad6f7b8982150698a1be4a6fbf9f7a43cc87133c80394",
+      "bytes": 6756990
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Italian language (Switzerland).app",
+      "sha256": "e5fb8c87d072f94297d1a8a14f341a397402af6e4e3db1845bae3e289023d8f9",
+      "bytes": 6653443
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Norwegian language (Norway).app",
+      "sha256": "11412d27277adfce0ae6fffe690b497585a6ab179cda7159ad4638238c43365e",
+      "bytes": 6522172
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Russian language (Russia).app",
+      "sha256": "888a07cb4c37069ef00146957bcfc35967271d71ca679d204ef0c1c543c51e56",
+      "bytes": 8002353
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Spanish language (Mexico).app",
+      "sha256": "c2cad13adff0c0e1d43204c4804d58beeed652ecbcb4cbb762e372310da02cb3",
+      "bytes": 7039347
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Spanish language (Spain).app",
+      "sha256": "66454189521c3eaa02aac61e52aac846d2ef7c91a28b13900f3ad0ac4343a2d3",
+      "bytes": 6828759
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Source\\Microsoft_Swedish language (Sweden).app",
+      "sha256": "2ae371dea892395247eacdf462a101b795ebdb77a54d4e03aec23a6621b83f63",
+      "bytes": 6457580
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Library-NoTransactions.app",
+      "sha256": "2dc0a28f56bdc1fff393771887c107217471298a2daefd32eb3dfb439bd02440",
+      "bytes": 19227
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Bank.app",
+      "sha256": "379bf7aac47b32b8cdc2bb711d20fc960569bf3e883ecff793aaf63ca1837ffc",
+      "bytes": 186907
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Cash Flow.app",
+      "sha256": "c3f499cf712c92ee3f106e8e5fc36e199278730b3e583b000ca0a1e494819a50",
+      "bytes": 99108
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Cost Accounting.app",
+      "sha256": "edefebeb4ce6a34cbcaf83371d332a4dfbc72e0c89bb81f31896320ae5dbd845",
+      "bytes": 117453
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-CRM integration.app",
+      "sha256": "92c16358d8896d79ed33ed25a6818cb14dece5d0f8ce2e76a3920a22e6f0cddb",
+      "bytes": 280604
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Data Exchange.app",
+      "sha256": "69fbf8b125e3a2ae0da3455996627c161d6f1e7bdc12b6dd31ee3dcd20cdf634",
+      "bytes": 132675
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Dimension.app",
+      "sha256": "e78d2120aa63fccde2b6fcdaab5e950363c445a68afa275ddfc73e68f2045e25",
+      "bytes": 278696
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-ERM.app",
+      "sha256": "9f23eb0daa307d133958194187cef5dee5a3fbc8ed5ae95fc894c728076a33f5",
+      "bytes": 2629663
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Fixed Asset.app",
+      "sha256": "b054a62d6fb9630bb27162fbf358b8dc2fa5af01d6e74c558b66503f029aca6c",
+      "bytes": 154190
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-General Journal.app",
+      "sha256": "ab206cbb64335162b1203c8d709d40c82ef5a274af6d210ca834513b25461639",
+      "bytes": 208245
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Graph.app",
+      "sha256": "66342e68dcfce71ad7d66d805d1a724f184f70c3a160c1b1f81241d5f795c758",
+      "bytes": 35160
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Integration.app",
+      "sha256": "68f299659720c733e4e9af16936410f5d55afd846161723fc925118e11fb837a",
+      "bytes": 114903
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Job.app",
+      "sha256": "0d5542e9d4c520577570e518cd214f411072fdaf8cd2140b3760681a75e694de",
+      "bytes": 438417
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Local.app",
+      "sha256": "9110d24eabec1933ac665594741f9b36e09b4d24cc4d990787420d10ef88d493",
+      "bytes": 12565
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Marketing.app",
+      "sha256": "fefc4da76754ccc6a09d4d0b3198596b5a11dc00e4876d4715a1fb02371f34e3",
+      "bytes": 229549
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Misc.app",
+      "sha256": "76486ff4db71d3b78ed1dad88cf7fd621ca043344569f65b1648d06e9d1033f0",
+      "bytes": 764689
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Monitor Sensitive Fields.app",
+      "sha256": "12892995c287a6701fe5a9ee80fa772d4bbadc1c0c214dfdb1b63202fc325273",
+      "bytes": 22045
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Permissions.app",
+      "sha256": "6a0c671e7b7231bbf13df0f21ab4487b233defd3524d582f42a87512a8c117ba",
+      "bytes": 63665
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Physical Inventory.app",
+      "sha256": "ed726c27385580717fd1a2c29222d6099b5b507091e240580f0eb32cfeb1c73b",
+      "bytes": 64702
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Prepayment.app",
+      "sha256": "afdd63b6133bcf99e5410063d6dbe070662d68ad7dcec7238a5273b251d0c10a",
+      "bytes": 190434
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Rapid Start.app",
+      "sha256": "973e91d19c234547441ab9d659a91da8ff91892cef6b033ced9548bb6b22cca4",
+      "bytes": 128185
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Report.app",
+      "sha256": "1beca3f6dcb6935c9b572f113064c56bb384a62abca5d359df2fd6b30685ce6d",
+      "bytes": 235360
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Resource.app",
+      "sha256": "7a8605e1b1e59d35348cfdee8bcecdaa73bc76617048bbf298f9e3f80cf43d3b",
+      "bytes": 132782
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Reverse.app",
+      "sha256": "1354bbaa845e7bce4eaa2197c887627048f9ededfe36cc11d6ccb40b7615d084",
+      "bytes": 81207
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-SCM-Assembly.app",
+      "sha256": "e4d35a60cf3d1ed9fd83adf07b1c95bd0d44ca001dffae5505e9dd2b6c80f642",
+      "bytes": 440708
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-SCM-Manufacturing.app",
+      "sha256": "0eb88cd1ac2903c1b3b5acaf764bf885354a5c6b36a02c2703c1b60cd9433dc4",
+      "bytes": 511002
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-SCM-Service.app",
+      "sha256": "ad1758d3440d8af145a6049c0d1d3e2b1c0f10c6f9fb4124acd94569b3ed3cbe",
+      "bytes": 599442
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-SCM.app",
+      "sha256": "521c9aa3f55c394a7c2dd3368b66af8d6afd93716a9e17cc127a46a5e91536ff",
+      "bytes": 3123268
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-SINGLESERVER.app",
+      "sha256": "e497e92b01fa6ff26627c53d6eece969ffad4b386b55d5151caa5992dfa4c345",
+      "bytes": 242881
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-SMB.app",
+      "sha256": "504945af9e4240ab3c8cc7e3454a2ff94295c0917c174a37e9ae32d2fd388929",
+      "bytes": 243790
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-TestLibraries.app",
+      "sha256": "3069728244c69beadc1a22924e9df619403555e626380d1736a4c783496b4e65",
+      "bytes": 326190
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Upgrade.app",
+      "sha256": "b54d7d0fc28a2f06617f61dad0d1499bca4291b7f146364cb1d3bebcc3a4f32c",
+      "bytes": 26343
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-User.app",
+      "sha256": "92e1ba8b4b43d47f6acf4cd6e024b68e930422cd386bb26dea3693ba39420a44",
+      "bytes": 46445
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-VAT.app",
+      "sha256": "0ce7509395419fc715ea539add70f3960514d5b641ab9ff972439af5f457d012",
+      "bytes": 336736
+    },
+    {
+      "path": "platform\\Applications\\BaseApp\\Test\\Microsoft_Tests-Workflow.app",
+      "sha256": "05914419562c6c2582fe0b0b9c64096fda3adb6a05f22c89ae434edce341bf8f",
+      "bytes": 324966
+    },
+    {
+      "path": "platform\\Applications\\BusinessFoundation\\Source\\Microsoft_Business Foundation.app",
+      "sha256": "62eefcdf350c78b07ef7075e942ec5b235861dfbd0163044fdd63beb0e8ae028",
+      "bytes": 728475
+    },
+    {
+      "path": "platform\\Applications\\BusinessFoundation\\Test\\Microsoft_Business Foundation Test Libraries.app",
+      "sha256": "949afe17c0aeda0fc0c7f903ea332168c10541a9d60eb39ba1bc7dc01970aa87",
+      "bytes": 20797
+    },
+    {
+      "path": "platform\\Applications\\BusinessFoundation\\Test\\Microsoft_Business Foundation Tests.app",
+      "sha256": "9acb696cd8148ae97af167fbc4f8522fe26c58ec1c4b85298affeb4fe9573c2a",
+      "bytes": 39928
+    },
+    {
+      "path": "platform\\Applications\\ClientAddIns\\Source\\Microsoft__Exclude_ClientAddIns_.app",
+      "sha256": "08628c6e61c33a2e10d330df5ffc7973a27e0183c8dddccc7a425d2c25d468e8",
+      "bytes": 23589
+    },
+    {
+      "path": "platform\\Applications\\CompanyHub\\Source\\Microsoft_Company Hub.app",
+      "sha256": "a45ee28aede3114d8d5fd7befc60ab33da5ca15467e4543773ca00a1a8c48b69",
+      "bytes": 709718
+    },
+    {
+      "path": "platform\\Applications\\ContosoCoffeeDemoDataset\\Source\\Microsoft_Contoso Coffee Demo Dataset.app",
+      "sha256": "325fb37a7da65e8d4d28a77941ede79fe8f2ad7768562ffa9e62773ff806ecf5",
+      "bytes": 12929592
+    },
+    {
+      "path": "platform\\Applications\\ContosoCoffeeDemoDataset\\Test\\Microsoft_Contoso Coffee Demo Dataset Tests.app",
+      "sha256": "a35b4391fe353600ea6ad3cad1052ea870371f8fc6341e293ee8debd2bdaff2c",
+      "bytes": 23675
+    },
+    {
+      "path": "platform\\Applications\\CreateProductInformationWithCopilot\\Source\\Microsoft_Create Product Information With Copilot.app",
+      "sha256": "41ba96ff0478d350c97f39e715ab10383a05c7f221b8be880b55e7f2f616277e",
+      "bytes": 204936
+    },
+    {
+      "path": "platform\\Applications\\DataArchive\\App\\Microsoft_Data Archive.app",
+      "sha256": "ec2326119bd56ad204875c20e20c8e3406ffa416991e2d2dcada1a0491371304",
+      "bytes": 189643
+    },
+    {
+      "path": "platform\\Applications\\DataArchive\\Test\\Microsoft_Data Archive Tests.app",
+      "sha256": "70aaa2b1a2ce2d87743ff5781851ff2546b25a7fbfed0de3de9293041d5187a7",
+      "bytes": 20632
+    },
+    {
+      "path": "platform\\Applications\\DataCorrectionFA\\Source\\Microsoft_Troubleshoot FA Ledger Entries.app",
+      "sha256": "3fc0d8bda9fed55c091efb76e715df2a6082fc27e82ef3abac5d023dfd4772ff",
+      "bytes": 123120
+    },
+    {
+      "path": "platform\\Applications\\DataSearch\\App\\Microsoft_Data Search.app",
+      "sha256": "ba43fd5adb38a659f64926495c6533ba31cf8187393cf129e57162916a80d956",
+      "bytes": 368136
+    },
+    {
+      "path": "platform\\Applications\\DataSearch\\Test\\Microsoft_Data Search Tests.app",
+      "sha256": "89c98a85be5c4c4ebfe48bb91bf12a84c2d1b7da16a1d015afec01bf17c5bf33",
+      "bytes": 27616
+    },
+    {
+      "path": "platform\\Applications\\EDocument Core\\Source\\Microsoft_E-Document Core Demo Data.app",
+      "sha256": "43e3504cd996ec16a75256e6d63973fb1032285482f0698c97925adf336f1663",
+      "bytes": 243637
+    },
+    {
+      "path": "platform\\Applications\\EDocument Core\\Source\\Microsoft_E-Document Core.app",
+      "sha256": "f70acd0303926a41b01c6b3763229246d92f247098d5839729b0898de598ec17",
+      "bytes": 4620204
+    },
+    {
+      "path": "platform\\Applications\\EDocument Core\\Test\\Microsoft_E-Document Core Tests.app",
+      "sha256": "0637de76b99d55c19bae37358c4cebc2e03ad859df7e6f51dc46197aed68cc3b",
+      "bytes": 727782
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\Avalara\\Source\\Microsoft_E-Document Connector - Avalara.app",
+      "sha256": "b3ce5008e9927ce80fdb8d475bfbb86e7305f5d2e6e45f848511a2e2a8c46fed",
+      "bytes": 241275
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\Avalara\\Test\\Microsoft_E-Document Connector - Avalara Tests.app",
+      "sha256": "a02a164ff92ca4262d8288bd59b6fde46b424a7317e1b5cc013deaebb6adf3ae",
+      "bytes": 28960
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\B2Brouter\\Source\\Microsoft_E-Document Connector - B2Brouter.app",
+      "sha256": "e026beb85ec44bcbde40a4fa11e5ae99d79f35559d7710000d9789796bab99cb",
+      "bytes": 122871
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\B2Brouter\\Test\\Microsoft_E-Document Connector - B2Brouter Tests.app",
+      "sha256": "31c1b0b41f84fe0f53fa972d9f9c2ba5ff9dc17b4cab95dfd79090b16f5bc0d3",
+      "bytes": 30986
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\Continia\\Source\\Microsoft_E-Document Connector - Continia.app",
+      "sha256": "6ad044d7f10349dc6b27730c7b19a804bd46f90ec7e759cfc56a53e4ea2ba7e6",
+      "bytes": 722569
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\Continia\\Test\\Microsoft_E-Document Connector - Continia Tests.app",
+      "sha256": "4770de2dcd8920bd0813e4572763022c00b9573df525a7c0c0304644b29a30d5",
+      "bytes": 81627
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\ForNAV\\Source\\Microsoft_E-Document Connector - ForNAV.app",
+      "sha256": "40609e1e22441e090206c4f111fac02e8b17a2bd98518d91ae1fbf1160be62d8",
+      "bytes": 522473
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\ForNAV\\Test\\Microsoft_E-Document Connector - ForNAV Tests.app",
+      "sha256": "3f677f33417fb5374a8233b534c90e6d0b3358da0939cb2caabffc5dd4363ba2",
+      "bytes": 25820
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\Logiq\\Source\\Microsoft_E-Document Connector - Logiq.app",
+      "sha256": "6d465c94c707ada162dde42c3a27312e95a6f8f6fb2305210de72c758e631560",
+      "bytes": 205884
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\Logiq\\Test\\Microsoft_E-Document Connector - Logiq Tests.app",
+      "sha256": "992338126d55e4a397496002e1f4970267243d0a8ce742a3d7eebbd087ec6b4d",
+      "bytes": 1084039
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\Pagero\\Source\\Microsoft_E-Document Connector - Pagero.app",
+      "sha256": "a666e3940cc42cfc79016a73687b8f76e8974450ec9549fa19f28c6864ce7629",
+      "bytes": 256528
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\Pagero\\Test\\Microsoft_E-Document Connector - Pagero Tests.app",
+      "sha256": "53090c85d6a4aea70a0c34e3368ef90ed7d7e64f2cb7816528eb96f8e4e379a7",
+      "bytes": 23826
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\SignUp\\Source\\Microsoft_E-Document Connector - SignUp.app",
+      "sha256": "de3bce644104effb733d22681198a900734efd83c13f0ae78a08fdeca60c3d85",
+      "bytes": 282287
+    },
+    {
+      "path": "platform\\Applications\\EDocumentConnectors\\SignUp\\Test\\Microsoft_E-Document Connector - SignUp Tests.app",
+      "sha256": "e771c62e0a3faaa4c17f5d718b1c8bbc902566a33351b4effa27ab850abacb6d",
+      "bytes": 32784
+    },
+    {
+      "path": "platform\\Applications\\Email - Current User Connector\\Source\\Microsoft_Email - Current User Connector.app",
+      "sha256": "88bd044a12b26639909362e8004404439b8e2744c33757a5839162275c288de3",
+      "bytes": 104000
+    },
+    {
+      "path": "platform\\Applications\\Email - Current User Connector\\Test\\Microsoft_Email - Current User Connector Tests.app",
+      "sha256": "5b879271f07d908243c18bea9b30e146ea1ae922fd82dc4bbd734fc5513b52a8",
+      "bytes": 19988
+    },
+    {
+      "path": "platform\\Applications\\Email - Microsoft 365 Connector\\Source\\Microsoft_Email - Microsoft 365 Connector.app",
+      "sha256": "348e9ede8e9a8369b574dd52caf532559dde87fdbec7c3ea78bb7a97e9e7c2fb",
+      "bytes": 104093
+    },
+    {
+      "path": "platform\\Applications\\Email - Microsoft 365 Connector\\Test\\Microsoft_Email - Microsoft 365 Connector Tests.app",
+      "sha256": "d1f7f54522bb3bfd08652eabf57900e29461cf007faa9962502925cdac92819b",
+      "bytes": 24400
+    },
+    {
+      "path": "platform\\Applications\\Email - Outlook REST API\\Source\\Microsoft_Email - Outlook REST API.app",
+      "sha256": "00a12f5b8219380c6438186ef5a9c9e846e9cfa9700791709b64f7ad42d02c38",
+      "bytes": 305485
+    },
+    {
+      "path": "platform\\Applications\\Email - Outlook REST API\\Test\\Microsoft_Library Outlook REST API.app",
+      "sha256": "8d1729db6c0ef86eb4b4593ee1b3672de402b9fa5eea87d733808c57f4214a44",
+      "bytes": 24637
+    },
+    {
+      "path": "platform\\Applications\\Email - SMTP API\\Source\\Microsoft_Email - SMTP API.app",
+      "sha256": "17d41613d23a4e0117c35dd176281296fb7009a9be786d1ba6e659ee73e884dd",
+      "bytes": 121249
+    },
+    {
+      "path": "platform\\Applications\\Email - SMTP API\\Test\\Microsoft_Email - SMTP API Tests.app",
+      "sha256": "5864f53f18a80ac3141067dadbbda7fc571a692271567256d58b5282f5f7ac76",
+      "bytes": 16097
+    },
+    {
+      "path": "platform\\Applications\\Email - SMTP API\\Test Library\\Microsoft_Email - SMTP API Test Library.app",
+      "sha256": "d9a98e3fb4d63b1c3f1e60e6d6dc2d45c96b43f932516b64167cd19029bda509",
+      "bytes": 17144
+    },
+    {
+      "path": "platform\\Applications\\Email - SMTP Connector\\Source\\Microsoft_Email - SMTP Connector.app",
+      "sha256": "be8434afed8d9c9e3beef05ae82316c5780ceb491f8870a86334a93b0d442655",
+      "bytes": 370325
+    },
+    {
+      "path": "platform\\Applications\\Email - SMTP Connector\\Test\\Microsoft_Email - SMTP Connector Tests.app",
+      "sha256": "6c19bcddd7f02c8897dea204a2b8f29a364aa6bb207af13556a6f13bfbbd6ac7",
+      "bytes": 31992
+    },
+    {
+      "path": "platform\\Applications\\EmailLogging\\Source\\Microsoft__Exclude_Email Logging Using Graph API.app",
+      "sha256": "b3440c61d274b8e5f437ba230d52221708ad0ebeca7d87b7c5ee72f51ebfb86e",
+      "bytes": 456513
+    },
+    {
+      "path": "platform\\Applications\\EmailLogging\\Test\\Microsoft__Exclude_Email Logging Using Graph API Tests.app",
+      "sha256": "7a4772a83982caf098f3b29959837113d5cc4751e7f723076a4c9cbbdbecccf0",
+      "bytes": 26019
+    },
+    {
+      "path": "platform\\Applications\\EnforcedDigitalVouchers\\Source\\Microsoft_Enforced Digital Vouchers.app",
+      "sha256": "d115ae4bd5f02136afd2fbca2b645b5b1fab4bf67397dec5561069f5ef75ceff",
+      "bytes": 289697
+    },
+    {
+      "path": "platform\\Applications\\EnforcedDigitalVouchers\\Test\\Microsoft_Enforced Digital Vouchers Tests.app",
+      "sha256": "da45caad52753d0373868362c4a12360e8cb75c7715cc5c91ce95d42eb0819e2",
+      "bytes": 32501
+    },
+    {
+      "path": "platform\\Applications\\EnforcedDigitalVouchers\\Test Library\\Microsoft_Enforced Digital Vouchers Test Library.app",
+      "sha256": "04819b26477889cecd33a44f192ab9ef0895b62941235b860528244c9ca8b6e3",
+      "bytes": 19470
+    },
+    {
+      "path": "platform\\Applications\\ErrorMessagesWithRecommendations\\App\\Microsoft_Error Messages with Recommendations.app",
+      "sha256": "a82cc75ed4078f61225cd805700436c4cbbbabb89e6906ca794a8c2d948d5c96",
+      "bytes": 175203
+    },
+    {
+      "path": "platform\\Applications\\ErrorMessagesWithRecommendations\\Test\\Microsoft_Error Messages with Recommendations Tests.app",
+      "sha256": "729a44ae13148546c7572baac2347ff33c7db089be4e87a8474a2d5f1341402d",
+      "bytes": 33734
+    },
+    {
+      "path": "platform\\Applications\\ESGStatisticalAccountsDemoTool\\Source\\Microsoft_ESG Statistical Accounts Demo Tool.app",
+      "sha256": "acab5d077611a20b5f1dfd3d28ea81ffaf8d8a792dd38a8b48b0e8d1dd258f09",
+      "bytes": 93511
+    },
+    {
+      "path": "platform\\Applications\\EssentialBusinessHeadlines\\Source\\Microsoft_Essential Business Headlines.app",
+      "sha256": "ec4865ab6f7b55f87c4c2bbcd62805b56fb56939e2db258a94de2ad90f83cd1c",
+      "bytes": 203086
+    },
+    {
+      "path": "platform\\Applications\\EssentialBusinessHeadlines\\Test\\Microsoft_Essential Business Headlines Test.app",
+      "sha256": "9818684ebcc19a71582f7cafeb5bd19ce6e5ca1de6cabd7043546fd31c94b7fe",
+      "bytes": 24437
+    },
+    {
+      "path": "platform\\Applications\\EU3PartyTradePurchase\\Source\\Microsoft_EU 3-Party Trade Purchase.app",
+      "sha256": "4173e79d2c825213eb5dc3a21dace15db09cf04ff8684d932536b7ab8c5d01f4",
+      "bytes": 100465
+    },
+    {
+      "path": "platform\\Applications\\EU3PartyTradePurchase\\test\\Microsoft_EU 3-Party Trade Purchase Tests.app",
+      "sha256": "fd51245ab8526898fed5f1b490f2ef359c6bfe97c95d9690c7a4172bb3226426",
+      "bytes": 23751
+    },
+    {
+      "path": "platform\\Applications\\ExcelReports\\Source\\Microsoft_Dynamics BC Excel Reports.app",
+      "sha256": "565a9c065b588fb8761729aa81738a583e6ba9a211d95016807d02fc7d4857eb",
+      "bytes": 2101566
+    },
+    {
+      "path": "platform\\Applications\\ExcelReports\\Test\\Microsoft_Dynamics BC Excel Reports Tests.app",
+      "sha256": "222f6cd5b0d9ac55f3c91b8660db8a66f7aa5029563ad985a52c0cff9df85fd4",
+      "bytes": 26522
+    },
+    {
+      "path": "platform\\Applications\\ExciseTaxes\\Source\\Microsoft_Excise Taxes.app",
+      "sha256": "6bb6a6c4b2829bb3457c74e307e5cc1605805d520ae87a330d44452581ecba55",
+      "bytes": 319768
+    },
+    {
+      "path": "platform\\Applications\\ExciseTaxes\\Test\\Microsoft_Excise Taxes Tests.app",
+      "sha256": "454f50c613156435c1167fdb56759be811e36eb487273de03ac79a6ea963d864",
+      "bytes": 26707
+    },
+    {
+      "path": "platform\\Applications\\External File Storage - Azure Blob Service Connector\\Source\\Microsoft_External File Storage - Azure Blob Service Connector.app",
+      "sha256": "0fe3576928bdfe8ae42897e3f303b51726750480f2a4cbd4735e4a940b5f5f7f",
+      "bytes": 156020
+    },
+    {
+      "path": "platform\\Applications\\External File Storage - Azure File Service Connector\\Source\\Microsoft_External File Storage - Azure File Service Connector.app",
+      "sha256": "7d25cc3bbaa5ad37b5075e5c855f02333bd0382d3e10643032a098e4d382fcf2",
+      "bytes": 155347
+    },
+    {
+      "path": "platform\\Applications\\External File Storage - SFTP Connector\\Source\\Microsoft_External File Storage - SFTP Connector.app",
+      "sha256": "41fb68ed45030ae6534d4fef35de8a4a78204f99f26c9732cd032d05461fb85e",
+      "bytes": 240394
+    },
+    {
+      "path": "platform\\Applications\\External File Storage - SharePoint Connector\\Source\\Microsoft_External File Storage - SharePoint Connector.app",
+      "sha256": "f3c97a920aa5daf76d2b8b614c2e2ac652d82e03bd63516561c2d49ab64ee60e",
+      "bytes": 224602
+    },
+    {
+      "path": "platform\\Applications\\External Storage - Document Attachments\\Source\\Microsoft_External Storage - Document Attachments.app",
+      "sha256": "2dc0f86b9709f9840ca127b3d8983909ea119ffedd0844186ad2546c49ae07b1",
+      "bytes": 324416
+    },
+    {
+      "path": "platform\\Applications\\ExternalEvents\\Source\\Microsoft__Exclude_Business_Events_.app",
+      "sha256": "9b0c8d8e9448ba2a70facf1b6ae5579bf7f86a110e6ce23887e30b6db30fd06b",
+      "bytes": 92321
+    },
+    {
+      "path": "platform\\Applications\\ExternalEvents\\test\\Microsoft__Exclude_Business_Events_Test.app",
+      "sha256": "3dde7d580de08a17e7b886d92fa30e6d1f0b11e10aa491dd2382274106cb8a15",
+      "bytes": 19856
+    },
+    {
+      "path": "platform\\Applications\\FieldServiceIntegration\\Source\\Microsoft_Field Service Integration.app",
+      "sha256": "1cb17b5216b67d30e520303b0a03f02f139db186d42733a1b44de1ce33490c8b",
+      "bytes": 1757059
+    },
+    {
+      "path": "platform\\Applications\\FieldServiceIntegration\\Test\\Microsoft_Field Service Integration Test.app",
+      "sha256": "f39fc52fe8a32f82634e68fd83315023c8faa8c3be08934ceda9d719da184fb4",
+      "bytes": 30619
+    },
+    {
+      "path": "platform\\Applications\\FieldServiceIntegration\\Test Library\\Microsoft_Field Service Integration Test Library.app",
+      "sha256": "49bf37fc882dde8d72530b6d74b41e04216b0d03355ae239ca89c685a02e3b29",
+      "bytes": 19939
+    },
+    {
+      "path": "platform\\Applications\\Intrastat\\Demo Data\\Microsoft_Intrastat Core Demo Data.app",
+      "sha256": "08b9b15373f56150c0a1e5a9351c0a3d034991894111c6b99a9e5d9637b8cd58",
+      "bytes": 58607
+    },
+    {
+      "path": "platform\\Applications\\Intrastat\\Source\\Microsoft_Intrastat Core.app",
+      "sha256": "0e50b21d8b8433715e27bc5be6bc461837d0ddd1008097e917c7bf9b25869b1a",
+      "bytes": 901875
+    },
+    {
+      "path": "platform\\Applications\\Intrastat\\Test\\Microsoft_Intrastat Core Tests.app",
+      "sha256": "5b04faccda7285c5718bbfa0e8806e1ef3ca93a897069ea6219f3d98b28c403a",
+      "bytes": 53711
+    },
+    {
+      "path": "platform\\Applications\\LatePaymentPredictor\\Source\\Microsoft_Late Payment Prediction.app",
+      "sha256": "c33f84e356d9b6f6f019585d4852669b36d1bf91da29bdb4708b4e66751b4781",
+      "bytes": 460115
+    },
+    {
+      "path": "platform\\Applications\\LatePaymentPredictor\\Test\\Microsoft_Late Payment Prediction Tests.app",
+      "sha256": "a9b3319edb4ae4e954cb83ff1cf9361285d6b104b174e4fe04a6dc723fb1b1a5",
+      "bytes": 27342
+    },
+    {
+      "path": "platform\\Applications\\Manufacturing\\Source\\Microsoft_Manufacturing.app",
+      "sha256": "e2a0886a14f5df94d13f66668752019bb1590b9c76ddf1cee3e4db8ed485e725",
+      "bytes": 18457
+    },
+    {
+      "path": "platform\\Applications\\Manufacturing\\Test\\Microsoft_Manufacturing Tests.app",
+      "sha256": "bc8983548f1a682cbce9a7b7796941915d7db9743a2f09825217248d004140b3",
+      "bytes": 18294
+    },
+    {
+      "path": "platform\\Applications\\MasterDataManagement\\Source\\Microsoft__Exclude_Master_Data_Management.app",
+      "sha256": "7e1f651cfe92cbcccf0e9bc63b82aabd30aa5ebc82d89b6bf0086580b6d76aee",
+      "bytes": 1006029
+    },
+    {
+      "path": "platform\\Applications\\MasterDataManagement\\Test\\Microsoft__Exclude_Master_Data_Management_Tests.app",
+      "sha256": "2c4d41c18bdb046665bb907a7ad8b90c8c6a770031b6b6615b01235bbb340dd4",
+      "bytes": 26726
+    },
+    {
+      "path": "platform\\Applications\\MasterDataManagement\\Test Library\\Microsoft__Exclude_Master_Data_Management_Test_Library.app",
+      "sha256": "871cd954d6db0d90e460aba23ba5d3c07d30f84ca60a31dfc40bdf8b508e1dcf",
+      "bytes": 21573
+    },
+    {
+      "path": "platform\\Applications\\MicrosoftUniversalPrint\\Source\\Microsoft_Universal Print Integration.app",
+      "sha256": "7025c145b20049e83f651179c4c8ca47e319586ea7257ab489176dacdf932596",
+      "bytes": 338098
+    },
+    {
+      "path": "platform\\Applications\\Onprem Permissions\\Source\\Microsoft_OnPrem Permissions.app",
+      "sha256": "699d1a78e4856a80c297d006d7fa7315a1d123fef1cdf95dc1f9b0a452904866",
+      "bytes": 270646
+    },
+    {
+      "path": "platform\\Applications\\Onprem Permissions\\Test\\Microsoft_OnPrem Permissions Tests.app",
+      "sha256": "35e5f3dbc4b2be24a11d5d5f221abe793ffd0703ea48975af1cf37ef8dc8c277",
+      "bytes": 26889
+    },
+    {
+      "path": "platform\\Applications\\PaymentPractices\\Source\\Microsoft_Payment Practices.app",
+      "sha256": "a2a4bd0b1c861508f81024e4727c205939f44ed1ed4d8f242f3f4eb9cb3c030e",
+      "bytes": 286367
+    },
+    {
+      "path": "platform\\Applications\\PaymentPractices\\Test\\Microsoft_Payment Practices Tests.app",
+      "sha256": "cdbd8e99e7587f56eb5014f57783aef52fe7b6fa24499accf4fd96885c720509",
+      "bytes": 25857
+    },
+    {
+      "path": "platform\\Applications\\PayPalPaymentsStandard\\Source\\Microsoft_Payment Links to PayPal.app",
+      "sha256": "9f40f9ff01ab00fcb2065f698d4bbb0af2c867a87ef84d0b16105c61eefd4eb4",
+      "bytes": 378194
+    },
+    {
+      "path": "platform\\Applications\\PayPalPaymentsStandard\\Test\\Microsoft_PayPal Payments Standard Tests.app",
+      "sha256": "457419fed9cf3a4b4cdeb6382fa813ec609ecf8d96befe240d468f75b5b4cf71",
+      "bytes": 38991
+    },
+    {
+      "path": "platform\\Applications\\PEPPOL\\Source\\Microsoft_PEPPOL.app",
+      "sha256": "c6503f044fab36bf82cc00ad7c1b4dabf8609a77ea042d69652957735ee843f2",
+      "bytes": 498531
+    },
+    {
+      "path": "platform\\Applications\\PEPPOL\\Test\\Microsoft_PEPPOL Tests.app",
+      "sha256": "33a21907644536b3dafae2dd048e417f0a97756fbc96845583cfd634d83e344e",
+      "bytes": 51760
+    },
+    {
+      "path": "platform\\Applications\\PlanConfiguration\\Source\\Microsoft__Exclude_PlanConfiguration_.app",
+      "sha256": "f772f718b5172726f48e26f42d7ecb8b6a9f00773975818581203ababd681c90",
+      "bytes": 41605
+    },
+    {
+      "path": "platform\\Applications\\PlanConfiguration\\Test\\Microsoft__Exclude_PlanConfiguration_ Tests.app",
+      "sha256": "d7edfb1341c1ad6ee9879e7d37659c4341c146bdaef9370ed71e016da08c29fa",
+      "bytes": 25084
+    },
+    {
+      "path": "platform\\Applications\\PowerBIReports\\Source\\Microsoft_Power BI Report embeddings for Dynamics 365 Business Central.app",
+      "sha256": "0bbfa8cf81d91b8a9d6d97a3631d2f708e5fb8fe3aed325ff159381e1397a19a",
+      "bytes": 2839767
+    },
+    {
+      "path": "platform\\Applications\\PowerBIReports\\Test\\Microsoft_PowerBI Reports Tests.app",
+      "sha256": "7540f3593ee51a47b42f99cb928bf6772c3df81078e4544e0e57313f217b10f7",
+      "bytes": 63713
+    },
+    {
+      "path": "platform\\Applications\\PowerBIReports\\Test Library\\Microsoft_PowerBI Reports Test Library.app",
+      "sha256": "5a9f58f8e4892fa3955015711f8e629f741085890e847a52f7f1a1ed058a14aa",
+      "bytes": 23767
+    },
+    {
+      "path": "platform\\Applications\\Quality Management\\Source\\Microsoft_Quality Management.app",
+      "sha256": "3a31724e99e2187dbf7bc554f966d99f04780320192a26014ab479b7da4cd1f0",
+      "bytes": 5498473
+    },
+    {
+      "path": "platform\\Applications\\Quality Management\\Test\\Microsoft_Quality Management-Tests.app",
+      "sha256": "306b72fd4d73f15cdb2fd0a60e4f9f46d7f1fb5a1cd1b600b2307f93a6137e9b",
+      "bytes": 223049
+    },
+    {
+      "path": "platform\\Applications\\Quality Management\\Test Library\\Microsoft_Quality Management Test Library.app",
+      "sha256": "8fc936d216cf1e562ae5790935fe9305685e9cb96a89ca551828b0ff41990264",
+      "bytes": 66775
+    },
+    {
+      "path": "platform\\Applications\\QualityManagementContosoCoffeeDemoDataset\\Source\\Microsoft_Quality Management Contoso Coffee Demo Dataset.app",
+      "sha256": "8408ec3e8e7b080a8ed270225885e35befb87657a0e1cc8d9737fd819073802d",
+      "bytes": 230714
+    },
+    {
+      "path": "platform\\Applications\\RecommendedApps\\Source\\Microsoft_Recommended Apps.app",
+      "sha256": "fc468366d1a5c428e53b03dc1fc53d4ca549624967d1c0a076385a1ceeb5bba6",
+      "bytes": 117605
+    },
+    {
+      "path": "platform\\Applications\\RecommendedApps\\Test\\Microsoft_Recommended Apps Tests.app",
+      "sha256": "8fe50ec38b0e5819e7839aca707279b959c952b76869202fec08c7a84a77b72b",
+      "bytes": 21040
+    },
+    {
+      "path": "platform\\Applications\\ReportLayouts\\Source\\Microsoft__Exclude_ReportLayouts.app",
+      "sha256": "d0ae27eae1e0ef856c67a66a39abe34dae42797a942abbcf64d797619c7a2388",
+      "bytes": 20123
+    },
+    {
+      "path": "platform\\Applications\\ReportLayouts\\Test\\Microsoft_Report Layouts Tests.app",
+      "sha256": "7c120f0ce0b346e73f3c520f42e1ae03c26f679e0e70e7f2f1e2cd6bebfa1787",
+      "bytes": 17693
+    },
+    {
+      "path": "platform\\Applications\\ReviewGLEntries\\Source\\Microsoft_Review General Ledger Entries.app",
+      "sha256": "d70e689f299116cd1ae360f759975b26e4cd8fd70621a75fe22298fbe5ee1fc5",
+      "bytes": 274019
+    },
+    {
+      "path": "platform\\Applications\\ReviewGLEntries\\Test\\Microsoft__Exclude_Review_General_Ledger_Entries_Tests.app",
+      "sha256": "8db2f88db8e0a2a664d84483cd6024b1f8d3ee106d40e0ecdabbbb71ddff23fb",
+      "bytes": 20507
+    },
+    {
+      "path": "platform\\Applications\\SAF-T\\Source\\Microsoft_SAF-T.app",
+      "sha256": "0adc22d5cc81c2288874977b7f7f19398d4612e48b97e4b1e7825e0b79e004ad",
+      "bytes": 433320
+    },
+    {
+      "path": "platform\\Applications\\SAF-T\\Test\\Microsoft_SAF-T Tests.app",
+      "sha256": "c5eb45e51c8b7f779c943b2d51a7dfb50b903cbde33d4dadc418655ffd0ce33e",
+      "bytes": 35619
+    },
+    {
+      "path": "platform\\Applications\\SalesAndInventoryForecast\\Source\\Microsoft_Sales and Inventory Forecast.app",
+      "sha256": "0ba13fcd723a688333b5d5ede8bb7911f7921fa87c74e29ca1453aefac01c711",
+      "bytes": 398629
+    },
+    {
+      "path": "platform\\Applications\\SalesAndInventoryForecast\\Test\\Microsoft_Sales and Inventory Forecast Tests.app",
+      "sha256": "9d4667c001bd3681bc75fca4eeffe84a352c6c080d201e6280d7f3f7f56a9ce8",
+      "bytes": 28716
+    },
+    {
+      "path": "platform\\Applications\\SalesLinesSuggestions\\Source\\Microsoft_Sales Lines Suggestions.app",
+      "sha256": "2d3a5d09c79001f5363ea35ca8f47d22dd5a6ba42fb3355f4b2ee8a9ae8f4175",
+      "bytes": 555744
+    },
+    {
+      "path": "platform\\Applications\\SalesLinesSuggestions\\Test\\Microsoft_Sales Lines Suggestions Tests.app",
+      "sha256": "2720499cb26acfcf32200439fc533664c0ecc92989e8186885907e4a0ad63678",
+      "bytes": 137081
+    },
+    {
+      "path": "platform\\Applications\\SendToEmailPrinter\\Source\\Microsoft_Send To Email Printer.app",
+      "sha256": "b1db220710227f546dc43e6841a69a6d43077785de7d1d9889bf5a9d3d2281ef",
+      "bytes": 172335
+    },
+    {
+      "path": "platform\\Applications\\ServiceDeclaration\\Source\\Microsoft_Service Declaration.app",
+      "sha256": "8af596c77b681d281492164413fd8841e31d2c0c578bb4ea687f977a83b1e5d7",
+      "bytes": 503584
+    },
+    {
+      "path": "platform\\Applications\\ServiceDeclaration\\Test\\Microsoft_Service Declaration Tests.app",
+      "sha256": "50d495d0ea390a1b529f48e1024746638545b2fe5e964777c27d8e6500723823",
+      "bytes": 34116
+    },
+    {
+      "path": "platform\\Applications\\ServiceManagement\\Source\\Microsoft_Service Management.app",
+      "sha256": "aa9b07361209e1e739a072d227c81d5e778b8a6238b2e9b2e77dbfff41d5f035",
+      "bytes": 18480
+    },
+    {
+      "path": "platform\\Applications\\ServiceManagement\\Test\\Microsoft_Service Management Tests.app",
+      "sha256": "036a7904bd81c25f723c140081eecafb1eea62477b31a2711ff727e348d3dd3f",
+      "bytes": 18251
+    },
+    {
+      "path": "platform\\Applications\\Shopify\\app\\Microsoft_Shopify Connector.app",
+      "sha256": "39e19e3c33a93bc6501d242630a38e48a444519954d00bbf9435583350657fb4",
+      "bytes": 6530092
+    },
+    {
+      "path": "platform\\Applications\\Shopify\\test\\Microsoft_Shopify Connector Test.app",
+      "sha256": "d505f60e5b209c67f03e5042af4eb4724fa634ed41d03a952040e601aec6d5c4",
+      "bytes": 237435
+    },
+    {
+      "path": "platform\\Applications\\SimplifiedBankStatementImport\\Source\\Microsoft_Simplified Bank Statement Import.app",
+      "sha256": "552c1b40f9ef7757332ae9909637e66e2de0c5c5e81bb60e05f9f954d8ce0690",
+      "bytes": 281691
+    },
+    {
+      "path": "platform\\Applications\\SimplifiedBankStatementImport\\Test\\Microsoft_Simplified Bank Statement Import Test.app",
+      "sha256": "06d69446493941087ac3c629bc7c472830590ab30247bee367661030d3d5dea4",
+      "bytes": 23287
+    },
+    {
+      "path": "platform\\Applications\\StatisticalAccounts\\Source\\Microsoft_Statistical Accounts.app",
+      "sha256": "86c2395c2a6da0a9342fffb67d4df04dfc2909003d94adbd171338a79b0f2144",
+      "bytes": 544436
+    },
+    {
+      "path": "platform\\Applications\\StatisticalAccounts\\Test\\Microsoft_Statistical Accounts Tests.app",
+      "sha256": "20683b4ab7abe1977785768a66e98fb17d815ea7ad69d2db591492add10fbfdb",
+      "bytes": 28400
+    },
+    {
+      "path": "platform\\Applications\\SubscriptionBilling\\Source\\Microsoft_Subscription Billing Demo Data.app",
+      "sha256": "d0890a922b60a5424068aa957be50b4ae45a8a5bc18dfdaa0cea3dd3b2ad6b34",
+      "bytes": 286341
+    },
+    {
+      "path": "platform\\Applications\\SubscriptionBilling\\Source\\Microsoft_Subscription Billing.app",
+      "sha256": "82c28b5fe19f471dfb95eff509ed0dde27ca0f7c9d15e91937ab16d46b51417f",
+      "bytes": 8782745
+    },
+    {
+      "path": "platform\\Applications\\SubscriptionBilling\\Test\\Microsoft_Subscription Billing Tests.app",
+      "sha256": "a05d19cf58038061a249d620b6a8e0b3bafc5b5d842891ae145bc0de924c108b",
+      "bytes": 258113
+    },
+    {
+      "path": "platform\\Applications\\Sustainability\\Source\\Microsoft_Sustainability.app",
+      "sha256": "8e878e6ba4c2c14cb74ba276040733cf91b3b9e5112cba0caceb8e91a12e39b5",
+      "bytes": 6515979
+    },
+    {
+      "path": "platform\\Applications\\Sustainability\\Test\\Microsoft_Sustainability Tests.app",
+      "sha256": "a1a505aea656a9391d86ea9d98298e0a2dbb704a5e5f08aacc7a3f1d689e45dc",
+      "bytes": 208965
+    },
+    {
+      "path": "platform\\Applications\\SustainabilityContosoCoffeeDemoDataset\\Source\\Microsoft_Sustainability Contoso Coffee Demo Dataset.app",
+      "sha256": "1a22d42a9ac68224782f6f287bb231bc214671fb90a0931d141d12bb688f0d4a",
+      "bytes": 544625
+    },
+    {
+      "path": "platform\\Applications\\SustainabilityCopilotSuggestion\\Source\\Microsoft_Calculate Sustainability Emission with Copilot.app",
+      "sha256": "fb4104e3030cecf09a1d46badad63ece138d8a059e3e4d109cb1a05f9f72825c",
+      "bytes": 447027
+    },
+    {
+      "path": "platform\\Applications\\SustainabilityCopilotSuggestion\\Test\\Microsoft_Sustainability Copilot Tests.app",
+      "sha256": "c9d4a9ff0146a06cf8cfd85041ec27eb5056af7cc2f8c9418726d03302b051e9",
+      "bytes": 71747
+    },
+    {
+      "path": "platform\\Applications\\System Application\\Source\\Microsoft_System Application.app",
+      "sha256": "4737e2422e6204d25cbafc5a71779cd00eb2d2a3fe88f9ca7af40513cfbcfa11",
+      "bytes": 21225987
+    },
+    {
+      "path": "platform\\Applications\\System Application\\Test\\Microsoft_System Application Partner Test.app",
+      "sha256": "ba7e9b3fe3447e7e6fc3c7b7bee3f742f5949a0b93f6c4fec27aa0fbfabc51f3",
+      "bytes": 23075
+    },
+    {
+      "path": "platform\\Applications\\System Application\\Test\\Microsoft_System Application Test Library.app",
+      "sha256": "b5adfa5d4ce815f2faca8738cbd61ca5f3b513fed296e959b74b7a6326df8b03",
+      "bytes": 201894
+    },
+    {
+      "path": "platform\\Applications\\System Application\\Test\\Microsoft_System Application Test.app",
+      "sha256": "2cdd57194273e50b5f877865a8cd911de5708a3936d7fbb553717e02199865c7",
+      "bytes": 2695402
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\AITestToolkit\\Microsoft_AI Test Toolkit.app",
+      "sha256": "f5292d6555161f5042b5187896b3ec19cca78902dcb0995eb9d1c2854182a43e",
+      "bytes": 149494
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\performancetoolkit\\Microsoft_Performance Toolkit Samples.app",
+      "sha256": "86a7ba61c5e484ef65d6565c693f54232aae64ac57e23c25c753145165b85c6a",
+      "bytes": 53333
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\performancetoolkit\\Microsoft_Performance Toolkit Tests.app",
+      "sha256": "d50d707f4ed7a1057074fbd041f0302ca4ee26a22494267c98be72f3e35f2472",
+      "bytes": 24040
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\performancetoolkit\\Microsoft_Performance Toolkit.app",
+      "sha256": "8430876761187a2850b394a5cc4d0447088dcf9690db332d30b2ff0b452166eb",
+      "bytes": 75504
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\TestLibraries\\Any\\Microsoft_Any.app",
+      "sha256": "a2d1dd3b9e6485b8ef51dec9b1ea24d7e10a3fb065bee52b8e0655858202cba7",
+      "bytes": 21243
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\TestLibraries\\Assert\\Microsoft_Library Assert.app",
+      "sha256": "8d32564da9501fb8087c69a0ca0918d8699a7c6c3b748381fbbe8567580041b4",
+      "bytes": 23225
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\TestLibraries\\permissions mock\\Microsoft_Permissions Mock.app",
+      "sha256": "0eb6e9d9d029d8d0fec13f6dfc1d05d875d94c997c9be65d577cf4de465bd47a",
+      "bytes": 20255
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\TestLibraries\\Variable Storage\\Microsoft_Library Variable Storage.app",
+      "sha256": "4bbd62bba842ccab72b39658d02d88e213f45e4e9dcd3443100a61763b36f3f7",
+      "bytes": 21025
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\TestRunner\\Microsoft_Test Runner.app",
+      "sha256": "28c39a8fa5772e14823dfbe89923a68bb9e0682610b44ce7dd326f66ccf77f95",
+      "bytes": 100435
+    },
+    {
+      "path": "platform\\Applications\\TestFramework\\teststabilitytools\\preventmetadataupdates\\Microsoft_Prevent Metadata Updates.app",
+      "sha256": "3cff0f9aa8d4580b114260c72105c82ca5e0814fff37d9d37dbc64abb69acb3a",
+      "bytes": 20786
+    },
+    {
+      "path": "platform\\Applications\\UKSendRemittanceAdvice\\Source\\Microsoft_Send remittance advice by email.app",
+      "sha256": "8440122e95e925ce3fa172fdb0988484ebd5f1347acca9faaa00d6c286670f4d",
+      "bytes": 52152
+    },
+    {
+      "path": "platform\\Applications\\VATGroupManagement\\Source\\Microsoft_VAT Group Management.app",
+      "sha256": "221a6308860de729fc8d70a06c4ea3d4417dddffb6cf878d7a8fff642aa693a8",
+      "bytes": 556869
+    },
+    {
+      "path": "platform\\Applications\\VATGroupManagement\\Test\\Microsoft_VAT Group Management Tests.app",
+      "sha256": "95c8e8fa9faf5a3d1e3e74ade63911102026792fe2776d63f573935949da442e",
+      "bytes": 48289
+    },
+    {
+      "path": "platform\\Applications\\Withholding Tax\\Source\\Microsoft_Withholding Tax.app",
+      "sha256": "2c20ddb8cb7eea481a5ff19904d1b40bd575cbc8eed1142d9b036b88ecc425f6",
+      "bytes": 559347
+    },
+    {
+      "path": "platform\\Applications\\Withholding Tax\\Test\\Microsoft_Withholding Tax Tests.app",
+      "sha256": "51c56fb8885140a42c5001264f7eeebe2af94ef9738d18f506e31ff29944149d",
+      "bytes": 52596
+    },
+    {
+      "path": "platform\\ModernDev\\PFiles\\Microsoft Dynamics NAV\\280\\AL Development Environment\\System.app",
+      "sha256": "b76bdfb3195c99e1115c96ccb31f7eaf5d0635bf71866c11ebb9678add9c5d1c",
+      "bytes": 638793
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_APIV1__28.0.46665.57479.app",
+      "sha256": "b1f0c6b00d3a89feca0154b4b915fe25fe7175092683fb51c0c9eda2a0dc5abd",
+      "bytes": 780062
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_APIV2__28.0.46665.57479.app",
+      "sha256": "3a35d21534226735f06ea70055a85fc86bbbc4f3b6367fedea189c01ba0dfa7b",
+      "bytes": 3106627
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_Bank Deposits_28.0.46665.57479.app",
+      "sha256": "d910927e5d52d47d81fb72ac1117cc245f4755778938c42f568efb320a994af4",
+      "bytes": 776997
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_Business_Events__28.0.46665.57479.app",
+      "sha256": "9b0c8d8e9448ba2a70facf1b6ae5579bf7f86a110e6ce23887e30b6db30fd06b",
+      "bytes": 92321
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_ClientAddIns__28.0.46665.57479.app",
+      "sha256": "08628c6e61c33a2e10d330df5ffc7973a27e0183c8dddccc7a425d2c25d468e8",
+      "bytes": 23589
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_Connectivity Apps_28.0.46665.57479.app",
+      "sha256": "549ad6a359714290e64ef4daa4ff28107c940b56a1281c805df1f165ae2fefb0",
+      "bytes": 314378
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_Email Logging Using Graph API_28.0.46665.57479.app",
+      "sha256": "b3440c61d274b8e5f437ba230d52221708ad0ebeca7d87b7c5ee72f51ebfb86e",
+      "bytes": 456513
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_Master_Data_Management_28.0.46665.57479.app",
+      "sha256": "7e1f651cfe92cbcccf0e9bc63b82aabd30aa5ebc82d89b6bf0086580b6d76aee",
+      "bytes": 1006029
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_Microsoft Dynamics 365 - SmartList_28.0.46665.57479.app",
+      "sha256": "95865317513a6c47f663679858c3d1dc29ae14e50064828707d48b21b156ae87",
+      "bytes": 347101
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_Onboarding Signals_28.0.46665.57479.app",
+      "sha256": "b4c9bde24e03e8583ba6d9e6f9a693b06d15b24d86ab7612eec9a8af3219392f",
+      "bytes": 45404
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_PlanConfiguration__28.0.46665.57479.app",
+      "sha256": "f772f718b5172726f48e26f42d7ecb8b6a9f00773975818581203ababd681c90",
+      "bytes": 41605
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_ReportLayouts_28.0.46665.57479.app",
+      "sha256": "d0ae27eae1e0ef856c67a66a39abe34dae42797a942abbcf64d797619c7a2388",
+      "bytes": 20123
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft__Exclude_SyncBaseApp__28.0.46665.57479.app",
+      "sha256": "05a112a670af3faa16e5631de490279b7ef0a44f4357ee7076166c5350d69cb5",
+      "bytes": 39264
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Agent Design Experience_28.0.46665.57479.app",
+      "sha256": "8e0001b62f7a4f87f75013544b0079986934daa927fa7dc42a7a7b3483e661c9",
+      "bytes": 1223477
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Agent Samples_28.0.46665.57479.app",
+      "sha256": "02a1b64f76b45c48695b34f5eba1b35c2a6afac1da3243525ecc223683a13d90",
+      "bytes": 78695
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Agent Test Library_28.0.46665.57479.app",
+      "sha256": "a8991258c0c0dc5bb81f72ed1236d75bf122cb4ccd43395328c9a13626204d06",
+      "bytes": 93155
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_AI Development Toolkit_28.0.46665.57479.app",
+      "sha256": "5c7ad02fe8aee057cfb63124b0705dbb7093da2194934996c8561a854c2218b4",
+      "bytes": 19038
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_AI Test Toolkit_28.0.46665.57479.app",
+      "sha256": "893516c538cd0945a7fb22068409419fd6a23e4c7295ee117f2cf343e49adc53",
+      "bytes": 381514
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Any_28.0.46665.57479.app",
+      "sha256": "2aea48a2ec6cecfb5082f5266340622efd84ede683623d814741d41996270963",
+      "bytes": 51587
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_API - Cross Environment Intercompany_28.0.46665.57479.app",
+      "sha256": "a5e0d1e29e4015b458a8aa756e2e6dc021def059653c5c002f02319121dd8ca3",
+      "bytes": 345840
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_API Reports - Finance_28.0.46665.57479.app",
+      "sha256": "4dc420897a62e22eb32ad95d14d136d797db56de5bbd825da3f61c873c6c359c",
+      "bytes": 219616
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Application Test Library_28.0.46665.57479.app",
+      "sha256": "5e68f77b953c2833bb0671593b3570c6c8c63f2d29e1f3b587a5e10345ca212f",
+      "bytes": 1813115
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Application_28.0.46665.57479.app",
+      "sha256": "2e6943e7bf24c01775c3614dc40d4dd1ce3c138c117fa2a7da42eca89435e715",
+      "bytes": 18716
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Audit File Export_28.0.46665.57479.app",
+      "sha256": "469de3a4e8485739d94c25159ccd26cc4a5e94072790484a3dd6988a5711cd45",
+      "bytes": 580989
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Bank Account Reconciliation With AI_28.0.46665.57479.app",
+      "sha256": "2d8a126eed9a8554d711ff2c9ee6f27bc0ba73975549f7c921d0ce75461676f6",
+      "bytes": 423538
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Base Application_28.0.46665.57479.app",
+      "sha256": "013268c4d7b8ef1f82bd9aa747d7203b2ece16ba9a190806e6930d2487e55976",
+      "bytes": 98128598
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Business Central Cloud Migration - Previous Release_28.0.46665.57479.app",
+      "sha256": "3b44eb7701042c2f76ed5d05a4b6c2e1f41f264a4935efef009fbf4ac502b632",
+      "bytes": 310189
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Business Central Cloud Migration API_28.0.46665.57479.app",
+      "sha256": "fd8230f1a1b0a9a7bf400bf3dfaf9a62733f5948627c2c418863ad4429e73261",
+      "bytes": 141363
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Business Central Intelligent Cloud_28.0.46665.57479.app",
+      "sha256": "7f3483bf69cbb6ac745829311d6122c056fd52895bed7fa9e528bb7ac44e6f30",
+      "bytes": 116706
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Business Foundation Test Libraries_28.0.46665.57479.app",
+      "sha256": "cb557b460fb79ca09f0f99a58db5ebe0971ab92938c6c94aeb7c2f0cc1234758",
+      "bytes": 48720
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Business Foundation_28.0.46665.57479.app",
+      "sha256": "62eefcdf350c78b07ef7075e942ec5b235861dfbd0163044fdd63beb0e8ae028",
+      "bytes": 728475
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Calculate Sustainability Emission with Copilot_28.0.46665.57479.app",
+      "sha256": "fb4104e3030cecf09a1d46badad63ece138d8a059e3e4d109cb1a05f9f72825c",
+      "bytes": 447027
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Company Hub_28.0.46665.57479.app",
+      "sha256": "a45ee28aede3114d8d5fd7befc60ab33da5ca15467e4543773ca00a1a8c48b69",
+      "bytes": 709718
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Contoso Coffee Demo Dataset_28.0.46665.57479.app",
+      "sha256": "325fb37a7da65e8d4d28a77941ede79fe8f2ad7768562ffa9e62773ff806ecf5",
+      "bytes": 12929592
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Create Product Information With Copilot_28.0.46665.57479.app",
+      "sha256": "41ba96ff0478d350c97f39e715ab10383a05c7f221b8be880b55e7f2f616277e",
+      "bytes": 204936
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Czech language (Czechia)_28.0.46665.57479.app",
+      "sha256": "1e7a720dd0e2d05b1ed05139475c529cd684bf054c1b521bf0b70b72bfe7e00b",
+      "bytes": 6714612
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Danish language (Denmark)_28.0.46665.57479.app",
+      "sha256": "42c3d8a0ada69920ab2a841f401b93a8f98e5a9e258bf8c86458a72789131847",
+      "bytes": 6465133
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Data Archive_28.0.46665.57479.app",
+      "sha256": "ec2326119bd56ad204875c20e20c8e3406ffa416991e2d2dcada1a0491371304",
+      "bytes": 189643
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Data Search_28.0.46665.57479.app",
+      "sha256": "ba43fd5adb38a659f64926495c6533ba31cf8187393cf129e57162916a80d956",
+      "bytes": 368136
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Dutch language (Belgium)_28.0.46665.57479.app",
+      "sha256": "95f581596a3c98d42181f8e3d02006ef97ad13f339447a283f180060c506829a",
+      "bytes": 6598776
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Dutch language (Netherlands)_28.0.46665.57479.app",
+      "sha256": "3e4f935f493194c3627d0ff33d90a875ee9889f95fd5ee8f6382f1cd462f57b8",
+      "bytes": 6614485
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Dynamics BC Excel Reports_28.0.46665.57479.app",
+      "sha256": "565a9c065b588fb8761729aa81738a583e6ba9a211d95016807d02fc7d4857eb",
+      "bytes": 2101566
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Connector - Avalara_28.0.46665.57479.app",
+      "sha256": "b3ce5008e9927ce80fdb8d475bfbb86e7305f5d2e6e45f848511a2e2a8c46fed",
+      "bytes": 241275
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Connector - B2Brouter_28.0.46665.57479.app",
+      "sha256": "e026beb85ec44bcbde40a4fa11e5ae99d79f35559d7710000d9789796bab99cb",
+      "bytes": 122871
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Connector - Continia_28.0.46665.57479.app",
+      "sha256": "6ad044d7f10349dc6b27730c7b19a804bd46f90ec7e759cfc56a53e4ea2ba7e6",
+      "bytes": 722569
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Connector - ForNAV_28.0.46665.57479.app",
+      "sha256": "40609e1e22441e090206c4f111fac02e8b17a2bd98518d91ae1fbf1160be62d8",
+      "bytes": 522473
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Connector - Logiq_28.0.46665.57479.app",
+      "sha256": "6d465c94c707ada162dde42c3a27312e95a6f8f6fb2305210de72c758e631560",
+      "bytes": 205884
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Connector - Microsoft 365_28.0.46665.57479.app",
+      "sha256": "817e37a90c0674cf2014be0c1c1628ff6c84fb0b967743c7dc4eab3ff62b6c66",
+      "bytes": 324891
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Connector - Pagero_28.0.46665.57479.app",
+      "sha256": "a666e3940cc42cfc79016a73687b8f76e8974450ec9549fa19f28c6864ce7629",
+      "bytes": 256528
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Connector - SignUp_28.0.46665.57479.app",
+      "sha256": "de3bce644104effb733d22681198a900734efd83c13f0ae78a08fdeca60c3d85",
+      "bytes": 282287
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Core Demo Data_28.0.46665.57479.app",
+      "sha256": "43e3504cd996ec16a75256e6d63973fb1032285482f0698c97925adf336f1663",
+      "bytes": 243637
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_E-Document Core_28.0.46665.57479.app",
+      "sha256": "f70acd0303926a41b01c6b3763229246d92f247098d5839729b0898de598ec17",
+      "bytes": 4620204
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Email - Current User Connector_28.0.46665.57479.app",
+      "sha256": "88bd044a12b26639909362e8004404439b8e2744c33757a5839162275c288de3",
+      "bytes": 104000
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Email - Microsoft 365 Connector_28.0.46665.57479.app",
+      "sha256": "348e9ede8e9a8369b574dd52caf532559dde87fdbec7c3ea78bb7a97e9e7c2fb",
+      "bytes": 104093
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Email - Outlook REST API_28.0.46665.57479.app",
+      "sha256": "00a12f5b8219380c6438186ef5a9c9e846e9cfa9700791709b64f7ad42d02c38",
+      "bytes": 305485
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Email - SMTP API_28.0.46665.57479.app",
+      "sha256": "17d41613d23a4e0117c35dd176281296fb7009a9be786d1ba6e659ee73e884dd",
+      "bytes": 121249
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Email - SMTP Connector_28.0.46665.57479.app",
+      "sha256": "be8434afed8d9c9e3beef05ae82316c5780ceb491f8870a86334a93b0d442655",
+      "bytes": 370325
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Enforced Digital Vouchers_28.0.46665.57479.app",
+      "sha256": "d115ae4bd5f02136afd2fbca2b645b5b1fab4bf67397dec5561069f5ef75ceff",
+      "bytes": 289697
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_English language (Australia)_28.0.46665.57479.app",
+      "sha256": "a1b332b4e71e6feede064fa71f7c4e8b5011dcef1167a4a57347fae3130a0c0e",
+      "bytes": 5053912
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_English language (Canada)_28.0.46665.57479.app",
+      "sha256": "7e3242a87f0a27b5eb270c9efb577d71a11bfce9ec41dcce7ad8d905089fed37",
+      "bytes": 5264455
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_English language (New Zealand)_28.0.46665.57479.app",
+      "sha256": "fe654e9f062ea3d5e84d60d4b421e733f55cab51e8878a0a2805d43972ee995b",
+      "bytes": 5044158
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_English language (United Kingdom)_28.0.46665.57479.app",
+      "sha256": "6034094f76435d54efe7a6680fdb00aeb16ccdda67ffc3e942f176698a5f79f6",
+      "bytes": 4890487
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_English language (United States)_28.0.46665.57479.app",
+      "sha256": "75d85b9be6336f5ba55d9183374d148fea233d4a39c754b31d1df0744f8ca0ac",
+      "bytes": 5255964
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Error Messages with Recommendations_28.0.46665.57479.app",
+      "sha256": "a82cc75ed4078f61225cd805700436c4cbbbabb89e6906ca794a8c2d948d5c96",
+      "bytes": 175203
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_ESG Statistical Accounts Demo Tool_28.0.46665.57479.app",
+      "sha256": "acab5d077611a20b5f1dfd3d28ea81ffaf8d8a792dd38a8b48b0e8d1dd258f09",
+      "bytes": 93511
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Essential Business Headlines_28.0.46665.57479.app",
+      "sha256": "ec4865ab6f7b55f87c4c2bbcd62805b56fb56939e2db258a94de2ad90f83cd1c",
+      "bytes": 203086
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_EU 3-Party Trade Purchase_28.0.46665.57479.app",
+      "sha256": "4173e79d2c825213eb5dc3a21dace15db09cf04ff8684d932536b7ab8c5d01f4",
+      "bytes": 100465
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Excise Taxes_28.0.46665.57479.app",
+      "sha256": "6bb6a6c4b2829bb3457c74e307e5cc1605805d520ae87a330d44452581ecba55",
+      "bytes": 319768
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_External File Storage - Azure Blob Service Connector_28.0.46665.57479.app",
+      "sha256": "0fe3576928bdfe8ae42897e3f303b51726750480f2a4cbd4735e4a940b5f5f7f",
+      "bytes": 156020
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_External File Storage - Azure File Service Connector_28.0.46665.57479.app",
+      "sha256": "7d25cc3bbaa5ad37b5075e5c855f02333bd0382d3e10643032a098e4d382fcf2",
+      "bytes": 155347
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_External File Storage - SFTP Connector_28.0.46665.57479.app",
+      "sha256": "41fb68ed45030ae6534d4fef35de8a4a78204f99f26c9732cd032d05461fb85e",
+      "bytes": 240394
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_External File Storage - SharePoint Connector_28.0.46665.57479.app",
+      "sha256": "f3c97a920aa5daf76d2b8b614c2e2ac652d82e03bd63516561c2d49ab64ee60e",
+      "bytes": 224602
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_External Storage - Document Attachments_28.0.46665.57479.app",
+      "sha256": "2dc0f86b9709f9840ca127b3d8983909ea119ffedd0844186ad2546c49ae07b1",
+      "bytes": 324416
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Field Service Integration_28.0.46665.57479.app",
+      "sha256": "1cb17b5216b67d30e520303b0a03f02f139db186d42733a1b44de1ce33490c8b",
+      "bytes": 1757059
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Finnish language (Finland)_28.0.46665.57479.app",
+      "sha256": "ac554487ab414c8f2b1b04ee7c7aa83ac54d728973faaeae72a65181214e3bc3",
+      "bytes": 6600772
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_French language (Belgium)_28.0.46665.57479.app",
+      "sha256": "8db454f76d481bf1fd4066d4de1411f9d055de58ae9b7f6f8a5213f42e85182d",
+      "bytes": 6676169
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_French language (Canada)_28.0.46665.57479.app",
+      "sha256": "8323b99b731274d038d6e1fb50b7a76cb0d5f4769a4e78fada61ed286bd746d9",
+      "bytes": 7108273
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_French language (France)_28.0.46665.57479.app",
+      "sha256": "8ddc6158fb28dc0c3f1217567f73fb26d1ec7d7ff435abb17bdbf956a4c6c167",
+      "bytes": 6673449
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_French language (Switzerland)_28.0.46665.57479.app",
+      "sha256": "49f96ccfad520535c3c302cc68f2d5422999521b6f38b16fe5b27f6d615c7b4d",
+      "bytes": 6791139
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_German language (Austria)_28.0.46665.57479.app",
+      "sha256": "ef9a8406bcd3eecd570e100ff59a45eee52b0d7c732cfe10fd015df78995b444",
+      "bytes": 6831626
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_German language (Germany)_28.0.46665.57479.app",
+      "sha256": "f86a9e84e274c88c07f4b9a33b44398de2ecbfc5b9ba8adb4e1d178fe38a02db",
+      "bytes": 6842675
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_German language (Switzerland)_28.0.46665.57479.app",
+      "sha256": "807b5a50f285d272e2dc1329fb605ceff1174ae8d57cd608814458cf47fae3f4",
+      "bytes": 6964993
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Icelandic language (Iceland)_28.0.46665.57479.app",
+      "sha256": "eb245d29292d9c108ead6ce9a837f776c1179d364305f8feaa23d7362f99dccf",
+      "bytes": 6698095
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Intelligent Cloud Base_28.0.46665.57479.app",
+      "sha256": "eaf69d0e2b9157892e0e1d95e0bfdbdb0748651a462c1a65124a8b039a245755",
+      "bytes": 2507132
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Intrastat Core Demo Data_28.0.46665.57479.app",
+      "sha256": "08b9b15373f56150c0a1e5a9351c0a3d034991894111c6b99a9e5d9637b8cd58",
+      "bytes": 58607
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Intrastat Core_28.0.46665.57479.app",
+      "sha256": "0e50b21d8b8433715e27bc5be6bc461837d0ddd1008097e917c7bf9b25869b1a",
+      "bytes": 901875
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Italian language (Italy)_28.0.46665.57479.app",
+      "sha256": "776d713eb8ea70ad239ad6f7b8982150698a1be4a6fbf9f7a43cc87133c80394",
+      "bytes": 6756990
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Italian language (Switzerland)_28.0.46665.57479.app",
+      "sha256": "e5fb8c87d072f94297d1a8a14f341a397402af6e4e3db1845bae3e289023d8f9",
+      "bytes": 6653443
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Late Payment Prediction_28.0.46665.57479.app",
+      "sha256": "c33f84e356d9b6f6f019585d4852669b36d1bf91da29bdb4708b4e66751b4781",
+      "bytes": 460115
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Library Assert_28.0.46665.57479.app",
+      "sha256": "c9d6b8d12f790927f12562fd511ab1619e9128975ce9ab1fa17675cb74d66319",
+      "bytes": 62657
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Library Variable Storage_28.0.46665.57479.app",
+      "sha256": "6024d5ea8c823128fc036e31435a1087771be03e4c6fdf3a275410fe9ef33866",
+      "bytes": 54098
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Manufacturing_28.0.46665.57479.app",
+      "sha256": "e2a0886a14f5df94d13f66668752019bb1590b9c76ddf1cee3e4db8ed485e725",
+      "bytes": 18457
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Microsoft Pay Payments_28.0.46665.57479.app",
+      "sha256": "f9bea1a565cfbf3ebbf19861abc8517e2c267a676561db94e80661e7c6609382",
+      "bytes": 20031
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Norwegian language (Norway)_28.0.46665.57479.app",
+      "sha256": "11412d27277adfce0ae6fffe690b497585a6ab179cda7159ad4638238c43365e",
+      "bytes": 6522172
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Payables Agent_28.0.46665.57479.app",
+      "sha256": "d85db9ff72c2ba57e042c447496a67a764235fc712a9d7da700fa3d072400929",
+      "bytes": 643776
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Payment Links to PayPal_28.0.46665.57479.app",
+      "sha256": "9f40f9ff01ab00fcb2065f698d4bbb0af2c867a87ef84d0b16105c61eefd4eb4",
+      "bytes": 378194
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Payment Practices_28.0.46665.57479.app",
+      "sha256": "a2a4bd0b1c861508f81024e4727c205939f44ed1ed4d8f242f3f4eb9cb3c030e",
+      "bytes": 286367
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_PEPPOL_28.0.46665.57479.app",
+      "sha256": "c6503f044fab36bf82cc00ad7c1b4dabf8609a77ea042d69652957735ee843f2",
+      "bytes": 498531
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Performance Toolkit_28.0.46665.57479.app",
+      "sha256": "996df3781a921ecf1796d0d02d93b9e2e6555cf2f58d048648edce04847ae572",
+      "bytes": 203950
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Permissions Mock_28.0.46665.57479.app",
+      "sha256": "ae8f87e14e9e849246920a467845645aca2efb918eb6342d33ee039231503717",
+      "bytes": 43142
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Power BI Report embeddings for Dynamics 365 Business Central_28.0.46665.57479.app",
+      "sha256": "0bbfa8cf81d91b8a9d6d97a3631d2f708e5fb8fe3aed325ff159381e1397a19a",
+      "bytes": 2839767
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Quality Management Contoso Coffee Demo Dataset_28.0.46665.57479.app",
+      "sha256": "8408ec3e8e7b080a8ed270225885e35befb87657a0e1cc8d9737fd819073802d",
+      "bytes": 230714
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Quality Management_28.0.46665.57479.app",
+      "sha256": "3a31724e99e2187dbf7bc554f966d99f04780320192a26014ab479b7da4cd1f0",
+      "bytes": 5498473
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Recommended Apps_28.0.46665.57479.app",
+      "sha256": "fc468366d1a5c428e53b03dc1fc53d4ca549624967d1c0a076385a1ceeb5bba6",
+      "bytes": 117605
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Review General Ledger Entries_28.0.46665.57479.app",
+      "sha256": "d70e689f299116cd1ae360f759975b26e4cd8fd70621a75fe22298fbe5ee1fc5",
+      "bytes": 274019
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Russian language (Russia)_28.0.46665.57479.app",
+      "sha256": "888a07cb4c37069ef00146957bcfc35967271d71ca679d204ef0c1c543c51e56",
+      "bytes": 8002353
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_SAF-T_28.0.46665.57479.app",
+      "sha256": "0adc22d5cc81c2288874977b7f7f19398d4612e48b97e4b1e7825e0b79e004ad",
+      "bytes": 433320
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Sales and Inventory Forecast_28.0.46665.57479.app",
+      "sha256": "0ba13fcd723a688333b5d5ede8bb7911f7921fa87c74e29ca1453aefac01c711",
+      "bytes": 398629
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Sales Lines Suggestions_28.0.46665.57479.app",
+      "sha256": "2d3a5d09c79001f5363ea35ca8f47d22dd5a6ba42fb3355f4b2ee8a9ae8f4175",
+      "bytes": 555744
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Sales Order Agent_28.0.46665.57479.app",
+      "sha256": "ed1725120345c1c59cdc2e9421a03cef785da3a6650b3159e22d93a19e862646",
+      "bytes": 1276696
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Send remittance advice by email_28.0.46665.57479.app",
+      "sha256": "8440122e95e925ce3fa172fdb0988484ebd5f1347acca9faaa00d6c286670f4d",
+      "bytes": 52152
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Send To Email Printer_28.0.46665.57479.app",
+      "sha256": "b1db220710227f546dc43e6841a69a6d43077785de7d1d9889bf5a9d3d2281ef",
+      "bytes": 172335
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Service Declaration_28.0.46665.57479.app",
+      "sha256": "8af596c77b681d281492164413fd8841e31d2c0c578bb4ea687f977a83b1e5d7",
+      "bytes": 503584
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Service Management_28.0.46665.57479.app",
+      "sha256": "aa9b07361209e1e739a072d227c81d5e778b8a6238b2e9b2e77dbfff41d5f035",
+      "bytes": 18480
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Shopify Connector_28.0.46665.57479.app",
+      "sha256": "39e19e3c33a93bc6501d242630a38e48a444519954d00bbf9435583350657fb4",
+      "bytes": 6530092
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Simplified Bank Statement Import_28.0.46665.57479.app",
+      "sha256": "552c1b40f9ef7757332ae9909637e66e2de0c5c5e81bb60e05f9f954d8ce0690",
+      "bytes": 281691
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Spanish language (Mexico)_28.0.46665.57479.app",
+      "sha256": "c2cad13adff0c0e1d43204c4804d58beeed652ecbcb4cbb762e372310da02cb3",
+      "bytes": 7039347
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Spanish language (Spain)_28.0.46665.57479.app",
+      "sha256": "66454189521c3eaa02aac61e52aac846d2ef7c91a28b13900f3ad0ac4343a2d3",
+      "bytes": 6828759
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Statistical Accounts_28.0.46665.57479.app",
+      "sha256": "86c2395c2a6da0a9342fffb67d4df04dfc2909003d94adbd171338a79b0f2144",
+      "bytes": 544436
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Subscription Billing Demo Data_28.0.46665.57479.app",
+      "sha256": "d0890a922b60a5424068aa957be50b4ae45a8a5bc18dfdaa0cea3dd3b2ad6b34",
+      "bytes": 286341
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Subscription Billing_28.0.46665.57479.app",
+      "sha256": "82c28b5fe19f471dfb95eff509ed0dde27ca0f7c9d15e91937ab16d46b51417f",
+      "bytes": 8782745
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Sustainability Contoso Coffee Demo Dataset_28.0.46665.57479.app",
+      "sha256": "1a22d42a9ac68224782f6f287bb231bc214671fb90a0931d141d12bb688f0d4a",
+      "bytes": 544625
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Sustainability_28.0.46665.57479.app",
+      "sha256": "8e878e6ba4c2c14cb74ba276040733cf91b3b9e5112cba0caceb8e91a12e39b5",
+      "bytes": 6515979
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Swedish language (Sweden)_28.0.46665.57479.app",
+      "sha256": "2ae371dea892395247eacdf462a101b795ebdb77a54d4e03aec23a6621b83f63",
+      "bytes": 6457580
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_System Application_28.0.46665.57479.app",
+      "sha256": "4737e2422e6204d25cbafc5a71779cd00eb2d2a3fe88f9ca7af40513cfbcfa11",
+      "bytes": 21225987
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Test Runner_28.0.46665.57479.app",
+      "sha256": "c307a869b5a306b342d957b7239126a14eb137f79b92aab977910fa02eac2bcf",
+      "bytes": 319488
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Troubleshoot FA Ledger Entries_28.0.46665.57479.app",
+      "sha256": "3fc0d8bda9fed55c091efb76e715df2a6082fc27e82ef3abac5d023dfd4772ff",
+      "bytes": 123120
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Universal Print Integration_28.0.46665.57479.app",
+      "sha256": "7025c145b20049e83f651179c4c8ca47e319586ea7257ab489176dacdf932596",
+      "bytes": 338098
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_VAT Group Management_28.0.46665.57479.app",
+      "sha256": "221a6308860de729fc8d70a06c4ea3d4417dddffb6cf878d7a8fff642aa693a8",
+      "bytes": 556869
+    },
+    {
+      "path": "w1\\Extensions\\Microsoft_Withholding Tax_28.0.46665.57479.app",
+      "sha256": "2c20ddb8cb7eea481a5ff19904d1b40bd575cbc8eed1142d9b036b88ecc425f6",
+      "bytes": 559347
+    }
+  ],
+  "count": 350,
+  "setSha256": "4ebcec15cd3895a95dc14ac894c6722afe19c635577e99a9f67d1f33d7e795df"
+}
