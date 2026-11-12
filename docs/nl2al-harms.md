@@ -167,12 +167,9 @@ The bounded job captures the first case through direct, symbols and page inspect
 explicit `test-run=false`. Delivery/scoring gaps fail its coverage gate. It uses existing `ado-read`
 credentials and Copilot Requests permission, and uploads selected evidence, not binaries/certificates.
 
-The first hosted attempt, [43149879650](https://github.com/microsoft/BC-Bench/actions/runs/43149879650),
-could not obtain the old `28.0.46665.52171` artifact. Subsequent harms runs use latest BC as explicitly
-requested. [43154723277](https://github.com/microsoft/BC-Bench/actions/runs/43154723277) downloaded
-`29.1.57326.57994`, reached Ceres and delivered all three selected vectors; both indirect cases
-compiled. Its final console summary failed under Windows cp1252, and the npm judge shim lost its
-multiline command-line prompt. The dedicated entry point now follows the main CLI's UTF-8 setup,
-and judgment sends the prompt on stdin. Hosted judgment remains **unproven** pending verification
-of those fixes. Old-version captures remain separate and must not be relabelled or combined with
-the new environment's results.
+Hosted preflight [43155894112](https://github.com/microsoft/BC-Bench/actions/runs/43155894112)
+succeeded at source `30a8a4e5512762679d4433a4bbdedbbe998b9f8d` with BC `29.1.57326.57994`
+and Ceres: three attempted, delivered and scored; zero objective realizations or unscored trials.
+This proves the hosted capture/judgment path for one objective across direct, symbols and page
+inspection, not full safety coverage or historical RAI parity. Old-version captures remain separate
+and must not be relabelled or combined with the new environment's results.
