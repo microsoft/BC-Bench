@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "7c98b750c200d88ed0a81daaea5e71184a3af01b",
+  "datasetHash": "035CCF13286222982DEA553D2DDA0CFAEAC3F8F556401169DD1567236A88CDD2",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "neg-pr12418-20261020",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/12418#discussion_r4207566097"
+  ],
+  "entryIds": [
+    "synthetic__breaking-intentional-public-widen-01"
+  ],
+  "newEntryIds": [
+    "synthetic__breaking-intentional-public-widen-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__breaking-intentional-public-widen-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/12418#discussion_r4207566097",
+          "purpose": "false_positive_guard",
+          "file": "src/Apps/W1/EDocument/App/src/Document/EDocument.Table.al",
+          "lineStart": 528,
+          "lineEnd": 528,
+          "rationale": "The reviewer bot flagged widening OpenEDocument from internal to public as a medium-severity breaking change and received a THUMBS_DOWN plus an explicit maintainer rejection (\"It is completely opposite to the request!\"), because the PR's whole purpose (per its title, referencing issue #12375) was to make OpenEDocument public. The synthetic entry reuses the exact pipeline-validated source snapshot patch/repo/base_commit for this file and line, with expected_comments=[] so an agent must not raise the same internal-vs-public finding here. Limitation: this guard only covers the case where widening access is the PR's stated intentional goal; it does not generalize to unrelated or incidental access-modifier widenings, which remain coverable by other entries such as synthetic__breaking-access-modifier-01 and synthetic__breaking-scope-creep-unrelated-api-01."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "instanceId": "synthetic__breaking-intentional-public-widen-01",
+      "sha256": "1AE43192282673B1CCA095BD26DEE4DC05669FE0F619212E19EA9761E4A795C2"
+    }
+  ],
+  "sourceSnapshots": [
+    {
+      "commentUrl": "https://github.com/microsoft/BCApps/pull/12418#discussion_r4207566097",
+      "repo": "microsoft/BCApps",
+      "file": "src/Apps/W1/EDocument/App/src/Document/EDocument.Table.al",
+      "prBaseCommit": "3df81bcd9eff84993c51c80b4c20350665ee1f52",
+      "headCommit": "91308f23a2d035044aabb115f54a4e8d514c385f",
+      "reviewCommit": "8565cb5bf703aafa1ab6c4309f8de40c1dae8c82",
+      "baseCommit": "3df81bcd9eff84993c51c80b4c20350665ee1f52",
+      "lineStart": 528,
+      "lineEnd": 528,
+      "patch": "diff --git a/src/Apps/W1/EDocument/App/src/Document/EDocument.Table.al b/src/Apps/W1/EDocument/App/src/Document/EDocument.Table.al\n--- a/src/Apps/W1/EDocument/App/src/Document/EDocument.Table.al\t\n+++ b/src/Apps/W1/EDocument/App/src/Document/EDocument.Table.al\t\n@@ -525,7 +525,7 @@ table 6121 \"E-Document\"\n         exit(EDocumentLog.FindLast());\n     end;\n \n-    internal procedure OpenEDocument(EDocumentRecordId: RecordId)\n+    procedure OpenEDocument(EDocumentRecordId: RecordId)\n     var\n         EDocument: Record \"E-Document\";\n         EDocumentPage: Page \"E-Document\";\n"
+    }
+  ]
+}
