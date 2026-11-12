@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "7c98b750c200d88ed0a81daaea5e71184a3af01b",
+  "datasetHash": "A99E41E40A33234EBBA8B4BE4DBC721D5AAC2204C16EFEB5BB7BA0EBA545E8DE",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "neg-pr12207-20261020",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/12207#discussion_r4185091948"
+  ],
+  "entryIds": [
+    "synthetic__breaking-access-unsupported-page-property-01"
+  ],
+  "newEntryIds": [
+    "synthetic__breaking-access-unsupported-page-property-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__breaking-access-unsupported-page-property-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/12207#discussion_r4185091948",
+          "purpose": "false_positive_guard",
+          "file": "src/System Application/App/MCP/src/Configuration/Pages/MCPBillingConfirmation.Page.al",
+          "lineStart": 8,
+          "lineEnd": 8,
+          "rationale": "The review agent recommended adding 'Access = Internal;' to the new page object to narrow its exported surface, but Access is not a supported property on page objects in AL and the compiler rejects it with error AL0124 (documented supported object types for Access do not include Page). The developer reply confirms this makes the suggestion inapplicable, so the entry's expected_comments is empty and this guards against re-flagging the same unsupported-property suggestion on a page's Access property without encoding it as either an expected or ignored comment."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "3F059C020E0A2B8423485C5E49AD17920C5FD029174EFFC36922FDA493F51D74",
+      "instanceId": "synthetic__breaking-access-unsupported-page-property-01"
+    }
+  ],
+  "sourceSnapshots": [
+    {
+      "commentUrl": "https://github.com/microsoft/BCApps/pull/12207#discussion_r4185091948",
+      "repo": "microsoft/BCApps",
+      "file": "src/System Application/App/MCP/src/Configuration/Pages/MCPBillingConfirmation.Page.al",
+      "prBaseCommit": "eecf68759607a55b497d464a4f738c7b46ee4f20",
+      "headCommit": "4984af669be1ef070edab6d6f407707fb289ea14",
+      "reviewCommit": "245c41f1bcd088c4f86fbfb117bfbc51e337b09b",
+      "baseCommit": "eecf68759607a55b497d464a4f738c7b46ee4f20",
+      "lineStart": 8,
+      "lineEnd": 8,
+      "patch": "diff --git a/src/System Application/App/MCP/src/Configuration/Pages/MCPBillingConfirmation.Page.al b/src/System Application/App/MCP/src/Configuration/Pages/MCPBillingConfirmation.Page.al\nnew file mode 100644\n--- /dev/null\n+++ b/src/System Application/App/MCP/src/Configuration/Pages/MCPBillingConfirmation.Page.al\t\n@@ -0,0 +1,72 @@\n+// ------------------------------------------------------------------------------------------------\n+// Copyright (c) Microsoft Corporation. All rights reserved.\n+// Licensed under the MIT License. See License.txt in the project root for license information.\n+// ------------------------------------------------------------------------------------------------\n+\n+namespace System.MCP;\n+\n+page 8377 \"MCP Billing Confirmation\"\n+{\n+    ApplicationArea = All;\n+    Caption = 'Billing acknowledgement';\n+    Extensible = false;\n+    PageType = ConfirmationDialog;\n+    InherentEntitlements = X;\n+    InherentPermissions = X;\n+\n+    layout\n+    {\n+        area(Content)\n+        {\n+            field(BillingNotice; BillingNoticeText)\n+            {\n+                ApplicationArea = All;\n+                Editable = false;\n+                MultiLine = true;\n+                ShowCaption = false;\n+                ToolTip = 'Specifies that activating the server feature incurs additional charges.';\n+            }\n+            field(LearnMore; LearnMoreLbl)\n+            {\n+                ApplicationArea = All;\n+                DrillDown = true;\n+                Editable = false;\n+                ShowCaption = false;\n+                Style = StandardAccent;\n+                StyleExpr = true;\n+                ToolTip = 'Open documentation about pricing and terms for the billable server feature.';\n+\n+                trigger OnDrillDown()\n+                begin\n+                    Hyperlink(LearnMoreUrlLbl);\n+                end;\n+            }\n+            field(ConfirmationQuestion; ConfirmationQuestionText)\n+            {\n+                ApplicationArea = All;\n+                Editable = false;\n+                MultiLine = true;\n+                ShowCaption = false;\n+                ToolTip = 'Specifies whether to activate the billable server feature.';\n+            }\n+        }\n+    }\n+\n+    internal procedure SetFeature(Feature: Enum \"MCP Server Feature\")\n+    var\n+        FeatureName: Text;\n+    begin\n+        FeatureName := Format(Feature).Replace(PreviewBillableSuffixTok, '');\n+        BillingNoticeText := StrSubstNo(BillingNoticeLbl, FeatureName);\n+        ConfirmationQuestionText := StrSubstNo(ConfirmationQuestionLbl, FeatureName);\n+    end;\n+\n+    var\n+        BillingNoticeText: Text;\n+        ConfirmationQuestionText: Text;\n+        BillingNoticeLbl: Label 'Use of %1 will incur additional charges. By activating %1, you acknowledge that charges will apply according to the applicable pricing and terms.', Comment = '%1 = server feature name';\n+        ConfirmationQuestionLbl: Label 'Do you want to activate %1?', Comment = '%1 = server feature name';\n+        LearnMoreLbl: Label 'Learn more';\n+        LearnMoreUrlLbl: Label 'https://go.microsoft.com/fwlink/?LinkId=2383165', Locked = true;\n+        PreviewBillableSuffixTok: Label ' (Preview/Billable)', Locked = true;\n+}\n"
+    }
+  ]
+}
