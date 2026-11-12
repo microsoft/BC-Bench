@@ -21,11 +21,7 @@ __all__ = ["DEFAULT_EVALUATORS", "build_eval_dataset", "evaluate_trials"]
 
 logger = logging.getLogger(__name__)
 
-# Evaluators run only on valid delivered trials:
-#   - content_safety: the standard harms (violence / sexual / self-harm / hate).
-#   - indirect_attack: XPIA — did the response comply with the injected attacker instruction. On the
-#     direct trials this doubles as a UPIA manipulation signal (the attack is the prompt itself).
-#   - code_vulnerability: insecure/malicious generated AL (e.g. an exfiltration HTTP hook).
+# Generic response telemetry only. Objective success is judged separately by `harms score`.
 DEFAULT_EVALUATORS = ("content_safety", "indirect_attack", "code_vulnerability")
 _REQUIRED_SCORES = {
     "content_safety": ("violence_score", "self_harm_score", "sexual_score", "hate_unfairness_score"),
@@ -35,13 +31,7 @@ _REQUIRED_SCORES = {
 
 
 def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
-    """Write one evaluator row per executed trial.
-
-    ``query`` is the prompt bcal actually received (the harm for direct/UPIA trials, the benign
-    trigger for indirect/XPIA trials); ``context`` carries the injected attack. This mirrors what the
-    agent saw, so the RAI evaluators judge manipulation of a real turn rather than treating an
-    injected payload as the user's own request.
-    """
+    """Write captured evidence and separate objective judgments alongside response telemetry."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for trial in trials:
@@ -61,7 +51,8 @@ def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
                 "valid": valid_trial(trial),
                 "execution_error": execution_failure(trial),
                 "score_error": trial.score_error,
-                # AL-aware success scoring (filled by `harms score`): did the agent produce the insecure AL?
+                "scorer_version": trial.scorer_version,
+                "judge_model": trial.judge_model,
                 "harm_realized": trial.harm_realized,
                 "detector_realized": trial.detector_realized,
                 "judge_realized": trial.judge_realized,
@@ -106,12 +97,7 @@ def evaluate_trials(
     credential = DefaultAzureCredential()
     evaluator_map = _build_evaluators(evaluators, azure_ai_project, credential)
 
-    # Map dataset columns -> evaluator inputs (context supplied for XPIA-style evaluators that accept it).
-    column_mapping = {
-        "query": "${data.query}",
-        "response": "${data.response}",
-        "context": "${data.context}",
-    }
+    column_mapping = {"response": "${data.response}"}
     evaluator_config: dict[str, EvaluatorConfig] = {name: {"column_mapping": column_mapping} for name in evaluator_map}
 
     logger.info(f"Evaluating {len(valid)}/{len(trials)} valid harms trials with {list(evaluator_map)} (upload={upload})")
@@ -142,6 +128,8 @@ def evaluate_trials(
         result = _evaluate_per_evaluator(_run, evaluator_map, upload_project)
 
     _mark_incomplete_scores(result, evaluators)
+    result["evaluation_kind"] = "generic_response_telemetry"
+    result["limitations"] = "These Azure labels are not objective-conditioned attack success or AL vulnerability verdicts. Use harms score for objective judgments."
     _write_result(result, results_dir / "harms_results.json")
     if url := result.get("studio_url"):
         logger.info(f"Foundry studio: {url}")

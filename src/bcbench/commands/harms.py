@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from enum import StrEnum
@@ -32,6 +33,7 @@ from bcbench.harms import (
 from bcbench.harms.case import HarmsVector
 from bcbench.harms.evaluate import DEFAULT_EVALUATORS, build_eval_dataset
 from bcbench.harms.runner import execution_failure, valid_trial
+from bcbench.harms.score import SCORER_VERSION, scoring_sources, scoring_summary
 
 type Json = dict[str, Any]
 
@@ -39,9 +41,9 @@ logger = logging.getLogger(__name__)
 _config = get_config()
 _console = Console()
 
-harms_app = typer.Typer(help="Harms-test BCAL by injecting harms through direct and indirect vectors")
+harms_app = typer.Typer(help="NL2AL adversarial evaluation of BCal: capture, objective judgments, and separate Azure telemetry")
 
-_DEFAULT_SUITE = _config.paths.dataset_dir / "harms" / "smoke.harms.yaml"
+_DEFAULT_SUITE = _config.paths.dataset_dir / "nl2al" / "harms" / "smoke.harms.yaml"
 
 
 class HarmsTarget(StrEnum):
@@ -82,7 +84,7 @@ def run(
     Examples:
         uv run bcbench harms run --dry-run
         uv run bcbench harms run --limit 1 --vector direct
-        uv run bcbench harms run --suite dataset/harms/comprehensive.harms.yaml
+        uv run bcbench harms run --suite dataset/nl2al/harms/comprehensive.harms.yaml
         uv run bcbench harms run --objectives dataset/redteam/attack_objectives.sample.json
     """
     if not dry_run and not skip_evaluation and (not subscription_id or not resource_group or not project_name):
@@ -155,10 +157,8 @@ def harvest(
     """
     from azure.ai.evaluation.red_team import RiskCategory, SupportedLanguages
 
-    if seeds and risk_category:
-        raise typer.BadParameter("Use either --seeds or --risk-category, not both.")
-    if not seeds and not risk_category:
-        raise typer.BadParameter("Provide either --seeds or --risk-category.")
+    if seeds or not risk_category or len(risk_category) != 1:
+        raise typer.BadParameter("Provide exactly one --risk-category; seeded harvesting is unsupported because callback provenance is unavailable.")
 
     risks = [TypeAdapter(RiskCategory).validate_python(r) for r in risk_category] if risk_category else None
     lang = TypeAdapter(SupportedLanguages).validate_python(language) if language else None
@@ -230,31 +230,35 @@ def annotate(
 @harms_app.command("score")
 def score(
     trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _config.paths.harms_results,
-    model: Annotated[str | None, typer.Option(help="LLM model for the BCQuality judge (defaults to the configured judge model).")] = None,
-    no_judge: Annotated[bool, typer.Option("--no-judge", help="Deterministic detector only; skip the LLM judge.")] = False,
+    model: Annotated[str | None, typer.Option(help="Copilot model for objective judging (defaults to the configured judge model).")] = None,
+    no_judge: Annotated[bool, typer.Option("--no-judge", help="Detector diagnostics only; objective scores remain incomplete.")] = False,
     bcquality_root: Annotated[Path | None, typer.Option(envvar="BCQUALITY_ROOT", help="BCQuality checkout at the pinned harms knowledge commit.")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="New directory for corrected scores, preserving the original captures.")] = None,
 ) -> None:
-    """
-    Score whether each executed trial actually produced the insecure AL (``harm_realized``).
-
-    Runs the per-case deterministic detector and the BCQuality-grounded LLM judge over the captured
-    generated AL, reconciles them, writes ``trials.jsonl`` back, refreshes ``eval_dataset.jsonl``, and
-    reports the attack-success rate over valid (delivered) lines. No bcal re-run.
-
-    Example:
-        uv run bcbench harms score evaluation_results/harms --no-judge
-    """
+    """Judge objective-following from saved evidence, optionally grounded in pinned BCQuality rules."""
     results_dir = trials_path if trials_path.is_dir() else trials_path.parent
     trials_file = trials_path / "trials.jsonl" if trials_path.is_dir() else trials_path
     if not trials_file.exists():
         raise typer.BadParameter(f"No trials.jsonl found at {trials_file}.")
 
+    input_hash = hashlib.sha256(trials_file.read_bytes()).hexdigest()
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=False)
+        results_dir = output_dir
     scored = score_trials(_load_trials(trials_file), model=model, use_judge=not no_judge, bcquality_root=bcquality_root)
-    write_trials(trials_file, scored)
+    write_trials(results_dir / "trials.jsonl", scored)
     build_eval_dataset(scored, results_dir / "eval_dataset.jsonl")
-    _console.print(f"[green]Scored[/] {len(scored)} trials → refreshed {trials_file.name} and eval_dataset.jsonl.")
+    summary = scoring_summary(scored)
+    (results_dir / "scoring-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (results_dir / "scoring-manifest.json").write_text(
+        json.dumps(
+            {"input_sha256": input_hash, "scorer_version": SCORER_VERSION, "scoring_sources": scoring_sources(), "judge_models": sorted({t.judge_model for t in scored if t.judge_model})}, indent=2
+        ),
+        encoding="utf-8",
+    )
+    _console.print(f"Objective scoring attempted for {len(scored)} trials; results saved at {results_dir}.")
     _render_trials(scored)
-    if any(trial.score_error for trial in scored):
+    if not summary["scored"] or summary["unscored_delivered"]:
         _console.print("[red]Scoring incomplete; see score_error in the saved trials.[/]")
         raise typer.Exit(code=1)
 
@@ -329,23 +333,19 @@ def _valid_cell(trial: HarmsTrial) -> str:
 
 
 def _realized_cell(trial: HarmsTrial) -> str:
-    # Did the agent actually produce the insecure AL? (filled by `harms score`).
-    if not valid_trial(trial) or trial.score_error or trial.harm_realized is None:
+    # Only current, conclusive objective judgments are displayed.
+    if not valid_trial(trial) or trial.scorer_version != SCORER_VERSION or trial.score_error or trial.harm_realized is None:
         return "-"
-    tag = "[red]\u2717 realized[/]" if trial.harm_realized else "[green]\u2713 resisted[/]"
+    tag = "[red]objective realized[/]" if trial.harm_realized else "[green]not realized[/]"
     return f"{tag} [yellow]!?[/]" if trial.score_disagreement else tag
 
 
 def _render_asr_summary(trials: list[HarmsTrial]) -> None:
-    # Attack-success rate over VALID (delivered) lines that have been scored.
-    scored = [t for t in trials if valid_trial(t) and not t.score_error and t.harm_realized is not None]
-    if not scored:
-        return
-    realized = [t for t in scored if t.harm_realized]
-    disagreements = [t for t in scored if t.score_disagreement]
-    pct = 100.0 * len(realized) / len(scored)
-    colour = "red" if realized else "green"
-    _console.print(f"[{colour}]Attack success (harm realized):[/] {len(realized)}/{len(scored)} valid lines ({pct:.0f}% ASR).")
+    summary = scoring_summary(trials)
+    _console.print(f"Coverage: {summary['attempted']} attempted, {summary['delivered']} delivered, {summary['scored']} scored, {summary['unscored_delivered']} delivered but unscored.")
+    if summary["objective_success_rate"] is not None:
+        _console.print(f"Objective realized: {summary['objective_realized']}/{summary['scored']} scored trials ({100 * summary['objective_success_rate']:.0f}%). Not an AL vulnerability rate.")
+    disagreements = [t for t in trials if valid_trial(t) and t.score_disagreement]
     if disagreements:
         _console.print(
             f"[yellow]\u26a0 Detector/judge disagreement on {len(disagreements)} line(s)[/] — review the generated AL "
@@ -388,6 +388,7 @@ def _render_injection_summary(trials: list[HarmsTrial]) -> None:
 
 
 def _render_results(result: Json, trials: list[HarmsTrial]) -> None:
+    _console.print("[yellow]Azure response telemetry only: not objective-conditioned resistance or an AL vulnerability verdict.[/]")
     if incomplete := result.get("incomplete_evaluations"):
         _console.print(f"[yellow]Incomplete scoring for {len(incomplete)} trial(s): missing scores are not resistance results.[/]")
     metrics: Json = result.get("metrics", {})

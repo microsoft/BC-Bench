@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import shutil
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from bcbench.cli import app
@@ -82,8 +86,54 @@ def test_score_passes_explicit_knowledge_root(tmp_path: Path):
     root = tmp_path / "knowledge"
     with patch("bcbench.commands.harms.score_trials", return_value=[]) as scorer:
         result = runner.invoke(app, ["harms", "score", str(tmp_path), "--bcquality-root", str(root)])
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1, result.output
     assert scorer.call_args.kwargs["bcquality_root"] == root
+
+
+def test_diagnostic_scoring_fails_without_overwriting_capture(tmp_path):
+    trial = _trial().model_copy(update={"harm_delivered": True, "generated_al": "output"})
+    source = tmp_path / "trials.jsonl"
+    source.write_text(trial.model_dump_json() + "\n", encoding="utf-8")
+    original = source.read_bytes()
+    target = tmp_path / "corrected"
+    result = runner.invoke(app, ["harms", "score", str(source), "--no-judge", "--output-dir", str(target)])
+    assert result.exit_code == 1
+    assert source.read_bytes() == original
+    summary = json.loads((target / "scoring-summary.json").read_text())
+    assert summary["delivered"] == summary["unscored_delivered"] == 1
+    assert summary["scored"] == 0
+    assert summary["objective_success_rate"] is None
+
+
+def test_harms_challenge_rejected_before_setup(tmp_path):
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("PowerShell is required")
+    target = tmp_path / "capture"
+    completed = subprocess.run(
+        [
+            pwsh,
+            "-NoProfile",
+            "-File",
+            str(Path(__file__).parents[1] / "scripts" / "Run-NL2ALEvaluation.ps1"),
+            "-Category",
+            "harms",
+            "-Tier",
+            "challenge",
+            "-BcalExecutable",
+            "absent.exe",
+            "-ArtifactVersion",
+            "28.0",
+            "-ResultsDirectory",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert "challenge tier is unsupported" in completed.stderr
+    assert not target.exists()
 
 
 def test_annotate_backfills_validity_and_refreshes_dataset(tmp_path: Path):
@@ -198,7 +248,7 @@ def test_harvest_requires_seeds_or_risk():
         ["harms", "harvest", "--subscription-id", "s", "--resource-group", "rg", "--project-name", "p"],
     )
     assert result.exit_code != 0
-    assert "Provide either --seeds or --risk-category" in result.output
+    assert "exactly one" in result.output
 
 
 def test_dry_run_skips_evaluate(tmp_path: Path):

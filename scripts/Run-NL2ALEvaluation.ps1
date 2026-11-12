@@ -15,11 +15,17 @@ param(
     [string] $Tier = 'gold',
     [ValidateRange(1, 2147483647)]
     [int] $Limit = 1,
+    [ValidateSet('direct', 'symbols', 'page_inspector', 'translations', 'ask_user', 'packages')]
+    [string[]] $Vector = @(),
     [switch] $Full
 )
 
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
+if ($Category -eq 'harms' -and $Tier -ne 'gold') {
+    throw 'NL2AL harms uses the fixed gold base entry; challenge tier is unsupported.'
+}
+if ($Category -ne 'harms' -and $Vector.Count) { throw 'Vector selection is only supported for harms.' }
 $root = Split-Path $PSScriptRoot
 Push-Location $root
 try {
@@ -48,6 +54,7 @@ try {
         tier = $Tier
         full = [bool]$Full
         limit = if ($Full) { $null } else { $Limit }
+        vectors = $Vector
         executable = $env:BCAL_EXECUTABLE
         runtime_version = (& $env:BCAL_EXECUTABLE --version)
         runtime_files = @(Get-ChildItem (Split-Path $env:BCAL_EXECUTABLE) -File -Recurse |
@@ -57,7 +64,7 @@ try {
         artifact_version = $ArtifactVersion
         package_hashes = @(Get-ChildItem -LiteralPath $artifactRoot -Recurse -File -Filter *.app |
             Get-FileHash -Algorithm SHA256 | Select-Object Path, Hash)
-        input_hashes = @(Get-FileHash $datasetPath, .\dataset\harms\comprehensive.harms.yaml |
+        input_hashes = @(Get-FileHash $datasetPath, .\dataset\nl2al\harms\comprehensive.harms.yaml |
             Select-Object Path, Hash)
     } | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 "$out\protocol.json"
 
@@ -84,8 +91,9 @@ try {
         if ($code) { $failures.Add('accuracy-summary') }
     } else {
         $limitArgs = if ($Full) { @() } else { @('--limit', "$Limit") }
+        foreach ($selectedVector in $Vector) { $limitArgs += @('--vector', $selectedVector) }
         $PSNativeCommandUseErrorActionPreference = $false
-        & $python -m bcbench harms run --suite .\dataset\harms\comprehensive.harms.yaml `
+        & $python -m bcbench harms run --suite .\dataset\nl2al\harms\comprehensive.harms.yaml `
             @limitArgs --llm-model $Model --skip-evaluation --results-dir "$out\harms" `
             *> "$out\harms.console.txt"
         $code = $LASTEXITCODE

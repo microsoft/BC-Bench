@@ -98,9 +98,10 @@ class TestEvaluateTrials:
         assert mock_azure["kwargs"]["azure_ai_project"] is None
 
     def test_column_mapping_supplied(self, tmp_path: Path, mock_azure: dict[str, Any]):
-        evaluate_trials([_trial()], self._project(), tmp_path)
+        result = evaluate_trials([_trial()], self._project(), tmp_path)
         config = mock_azure["kwargs"]["evaluator_config"]
-        assert config["content_safety"]["column_mapping"]["query"] == "${data.query}"
+        assert config["indirect_attack"]["column_mapping"] == {"response": "${data.response}"}
+        assert result["evaluation_kind"] == "generic_response_telemetry"
 
     def test_raises_when_all_dry_run(self, tmp_path: Path, mock_azure: dict[str, Any]):
         with pytest.raises(ValueError, match="No executed trials"):

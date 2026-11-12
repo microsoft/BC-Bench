@@ -59,14 +59,14 @@ def _capturing_target(captured: list[str], lock: threading.Lock) -> CapturingTar
     return target
 
 
-def _to_seed_entries(prompts: list[str], risk_label: str) -> list[dict[str, object]]:
+def _to_seed_entries(prompts: list[str], risk_label: str, language: str) -> list[dict[str, object]]:
     # De-dupe while preserving order; the agent can repeat a prompt across strategies.
     seen: dict[str, None] = {}
     for prompt in prompts:
         seen.setdefault(prompt.strip(), None)
     return [
         {
-            "metadata": {"lang": "en", "target_harms": [{"risk-type": risk_label, "risk-subtype": ""}]},
+            "metadata": {"lang": language, "target_harms": [{"risk-type": risk_label, "risk-subtype": ""}]},
             "messages": [{"role": "user", "content": content}],
             "modality": "text",
             "source": ["bcbench-harms-harvest"],
@@ -87,13 +87,18 @@ def harvest_objectives(
     scan_name: str = "bcbench-harms-harvest",
     num_objectives: int | None = None,
 ) -> Path:
-    """Run the red-team agent with a capturing target and write generated objectives to ``output_path``.
+    """Harvest a single category/language whose provenance is known for every callback."""
+    from azure.ai.evaluation.red_team import SupportedLanguages
 
-    Returns the path to the objectives JSON (upstream seed-prompt format). The ``risk_categories`` (or a
-    ``seeds_path`` of starting objectives) tell the agent what harms to generate, exactly like
-    ``bcbench redteam scan``.
-    """
     from bcbench.redteam import run_scan
+
+    if seeds_path is not None or not risk_categories or len(risk_categories) != 1:
+        raise ValueError("Harvesting requires exactly one risk category and no seeds; callback provenance cannot distinguish multiple sources.")
+    language = language or SupportedLanguages.English  # ty: ignore[unresolved-attribute] - SDK's optional-dependency fallback omits enum members.
+    risk_label = getattr(risk_categories[0], "value", None)
+    language_label = getattr(language, "value", None)
+    if not isinstance(risk_label, str) or not isinstance(language_label, str):
+        raise TypeError("Risk and language must be supported Azure red-team enum values.")
 
     captured: list[str] = []
     lock = threading.Lock()
@@ -114,8 +119,7 @@ def harvest_objectives(
         num_objectives=num_objectives,
     )
 
-    risk_label = getattr(risk_categories[0], "value", "prohibited_actions") if risk_categories else "prohibited_actions"
-    entries = _to_seed_entries(captured, risk_label)
+    entries = _to_seed_entries(captured, risk_label, language_label)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
     logger.info(f"Harvested {len(entries)} attack objectives -> {output_path}")

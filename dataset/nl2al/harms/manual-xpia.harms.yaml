@@ -4,7 +4,7 @@
 # fix: `symbols` and `page_inspector`. Each injection targets the real page the trigger makes the agent
 # inspect, on the Caption property (reliably surfaced by inspect_page / get_properties).
 #
-# Run: uv run bcbench harms run --suite dataset/harms/manual-xpia.harms.yaml --vector page_inspector
+# Run: uv run bcbench harms run --suite dataset/nl2al/harms/manual-xpia.harms.yaml --vector page_inspector
 
 defaults:
   audience: Technical

@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.evaluation-kind || 'accuracy' }} ${{ inputs.tier || 'gold' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -7,6 +7,14 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      evaluation-kind:
+        description: "Accuracy, or NL2AL harms with pinned experimental BCal 30.0.46.28048-beta"
+        required: false
+        default: accuracy
+        type: choice
+        options:
+          - accuracy
+          - harms
       tier:
         description: "NL2AL dataset tier to evaluate"
         required: false
@@ -59,7 +67,7 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: bcal-evaluation-${{ inputs.evaluation-kind || 'accuracy' }}-${{ inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -69,6 +77,7 @@ env:
 
 jobs:
   get-entries:
+    if: inputs.evaluation-kind != 'harms'
     uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run || false }}
@@ -197,6 +206,141 @@ jobs:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
+
+  evaluate-harms:
+    if: inputs.evaluation-kind == 'harms'
+    runs-on: windows-latest
+    timeout-minutes: 240
+    environment:
+      name: ado-read
+      deployment: false
+    permissions:
+      contents: read
+      id-token: write
+      copilot-requests: write
+    env:
+      HARMS_OUTPUT: C:\bcr\${{ github.run_id }}
+      BCAL_LLM_MODEL: ${{ inputs.external-model || 'gpt-55-chat' }}
+      COPILOT_GITHUB_TOKEN: ${{ github.token }}
+      LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
+      LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate harms selection
+        shell: pwsh
+        env:
+          SELECTED_TIER: ${{ inputs.tier }}
+          SELECTED_REVIEW: ${{ inputs.completion-review-model }}
+        run: |
+          if ($env:SELECTED_TIER -ne 'gold') { throw 'Harms supports only its fixed gold base entry.' }
+          if ($env:SELECTED_REVIEW -ne 'none') { throw 'Separate completion review is not supported by this harms capture path.' }
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Install pinned BCal
+        uses: ./.github/actions/install-bcal
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          package-id: Microsoft.BusinessCentral.BCal.CLI
+          feed: experiment
+          official-feed-url: ${{ secrets.BCAL_FEED_URL }}
+          experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
+          version: 30.0.46.28048-beta
+
+      - name: Setup isolated bridge
+        shell: pwsh
+        run: |
+          .\scripts\Setup-BCalBridge.ps1 -PythonFeedUrl 'https://dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/'
+          $version = bcal --version
+          if ($version -ne '30.0.46.28048+7c5514f77dc3346194813ec8d6a475f654d685ab') {
+            throw "Unexpected runtime: $version"
+          }
+
+      - name: Setup Node.js for the objective judge
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Install objective judge
+        shell: pwsh
+        run: npm install -g @github/copilot@1.0.82
+
+      - name: Cache pinned BC artifacts
+        id: harms-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\bcartifacts.cache
+          key: bcartifacts-harms-28.0.46665.52171
+
+      - name: Download pinned BC artifacts
+        if: steps.harms-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
+          Import-Module BcContainerHelper
+          $url = Get-BCArtifactUrl -version '28.0.46665.52171' -country w1 -select Latest
+          if (-not $url) { throw 'Pinned BC artifact is unavailable.' }
+          Download-Artifacts -artifactUrl $url -includePlatform
+
+      - name: Fetch LLM API certificate
+        shell: pwsh
+        env:
+          CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $b64 = az keyvault secret show --vault-name $env:CERTIFICATE_KEY_VAULT_NAME --name $env:CERTIFICATE_NAME --query value -o tsv
+          if (-not $b64) { throw 'LLM API certificate retrieval failed.' }
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\llm-api-cert.pfx", [Convert]::FromBase64String($b64))
+
+      - name: Capture NL2AL harms
+        shell: pwsh
+        env:
+          BOUNDED: ${{ inputs.test-run }}
+        run: |
+          $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
+          $selection = if ($env:BOUNDED -eq 'true') {
+            @{ Limit = 1; Vector = @('direct', 'symbols', 'page_inspector') }
+          } else { @{ Full = $true } }
+          .\scripts\Run-NL2ALEvaluation.ps1 -Category harms -BcalExecutable (Get-Command bcal).Source `
+            -ArtifactVersion 28.0.46665.52171 -Model $env:BCAL_LLM_MODEL `
+            -ResultsDirectory "$env:HARMS_OUTPUT\capture" @selection
+
+      - name: Judge objectives and check coverage
+        if: success() || failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not (Test-Path "$env:HARMS_OUTPUT\capture\harms\trials.jsonl")) { throw 'No captured trials to score.' }
+          .\.venv\Scripts\python.exe -m bcbench harms score "$env:HARMS_OUTPUT\capture\harms" `
+            --model gpt-5.3-codex --output-dir "$env:HARMS_OUTPUT\objective-scores"
+          $summary = Get-Content "$env:HARMS_OUTPUT\objective-scores\scoring-summary.json" -Raw | ConvertFrom-Json
+          if ($summary.attempted -ne $summary.delivered -or $summary.delivered -ne $summary.scored) {
+            throw 'Incomplete delivery/scoring coverage; retained artifacts are not a full resistance result.'
+          }
+
+      - name: Upload harms evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nl2al-harms-${{ github.run_id }}
+          path: |
+            ${{ env.HARMS_OUTPUT }}\capture\protocol.json
+            ${{ env.HARMS_OUTPUT }}\capture\execution-summary.json
+            ${{ env.HARMS_OUTPUT }}\capture\harms.console.txt
+            ${{ env.HARMS_OUTPUT }}\capture\harms\*.json*
+            ${{ env.HARMS_OUTPUT }}\capture\harms\logs\*.jsonl
+            ${{ env.HARMS_OUTPUT }}\capture\harms\exports\**\*.al
+            ${{ env.HARMS_OUTPUT }}\objective-scores\*.json*
+          if-no-files-found: warn
+          retention-days: 7
 
   summarize-results:
     needs: evaluate-with-bcal

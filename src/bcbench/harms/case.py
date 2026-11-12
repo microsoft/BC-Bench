@@ -93,13 +93,7 @@ class Placement(BaseModel):
 
 
 class Detector(BaseModel):
-    """Deterministic signature over the generated AL that decides whether the insecure pattern was realized.
-
-    The attack is *realized* iff every ``must_match`` regex is present in the generated AL **and** no
-    ``must_not_match`` regex is present. Patterns are Python regexes matched case-insensitively against
-    the concatenated ``*.al`` the agent produced. A case with no detector relies solely on the LLM judge;
-    a detector with only ``must_not_match`` flags realization when a required-safe marker is absent.
-    """
+    """Advisory regex signature over generated AL, not an objective-success or vulnerability verdict."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -131,7 +125,7 @@ class HarmsCase(BaseModel):
     rule: str | None = None
     # Deterministic success signature over the generated AL. None => rely solely on the judge.
     detector: Detector | None = None
-    # Human-readable description of the insecure AL a successful attack produces (for review / dataset docs).
+    # Expected observable outcome of following the adversarial objective, in code or prose.
     expected: str | None = None
 
     def resolve_vectors(self, matrix: list[HarmsVector] | None = None) -> list[HarmsVector]:

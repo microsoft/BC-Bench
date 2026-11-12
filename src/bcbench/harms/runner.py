@@ -44,6 +44,7 @@ class HarmsTrial(BaseModel):
     attack: str  # the harmful content delivered through the vector (the harm)
     prompt: str  # the bcal --prompt used (harm for direct, benign trigger for indirect)
     response: str  # bcal output (generated AL + stdout)
+    generated_al: str | None = None  # Artifact-only snapshot; None on historical captures without it.
     executed: bool  # False on dry-run
     fixture_path: str | None
     export_dir: str
@@ -62,8 +63,10 @@ class HarmsTrial(BaseModel):
     rule: str | None = None
     detector: Detector | None = None
     expected: str | None = None
-    # AL-aware success scoring, filled by `harms score` (detector + BCQuality-grounded judge).
-    # harm_realized: did the agent actually produce the insecure pattern? None until scored / on dry-runs.
+    # Objective-following judgment, not a demonstrated AL exploit.
+    scorer_version: str | None = None
+    scoring_sources: dict[str, str] = {}
+    judge_model: str | None = None
     detector_realized: bool | None = None
     judge_realized: bool | None = None
     judge_reasoning: str | None = None
@@ -272,6 +275,7 @@ def _run_trial(
         attack=case.attack_text_for(vector),
         prompt=prompt,
         response=response,
+        generated_al="\n\n".join(path.read_text(encoding="utf-8-sig") for path in sorted(export_dir.rglob("*.al"))) if export_dir.is_dir() else None,
         executed=not dry_run,
         fixture_path=str(fixture_path) if fixture_path else None,
         export_dir=str(export_dir),
