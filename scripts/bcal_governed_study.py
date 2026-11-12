@@ -112,25 +112,14 @@ def prepare_package(folder: Path) -> dict:
     folder.mkdir(parents=True, exist_ok=True)
     package = folder / "package.nupkg"
     if not package.exists():
-        import base64
-
-        feed = os.environ["BCAL_STUDY_FEED"]
-        token = os.environ["BCAL_STUDY_ADO_TOKEN"]
-        header = {"Authorization": "Basic " + base64.b64encode(("anything:" + token).encode()).decode()}
-
-        def download(url: str, output: Path | None = None) -> dict | None:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=header), timeout=90) as response:
-                if output is None:
-                    return json.load(response)
-                with output.open("xb") as stream:
-                    shutil.copyfileobj(response, stream)
-            return None
-
-        index = download(feed)
-        require(isinstance(index, dict), "Missing NuGet service index.")
-        base = next(item["@id"] for item in index["resources"] if str(item["@type"]).startswith("PackageBaseAddress/"))
-        name, version = config["id"].lower(), config["version"]
-        download(f"{base.rstrip('/')}/{name}/{version}/{name}.{version}.nupkg", package)
+        installed = Path(os.environ["BCAL_STUDY_INSTALLED_BINARY"])
+        filename = f"{config['id'].lower()}.{config['version']}.nupkg"
+        candidates = [parent / filename for parent in installed.parents[:5]]
+        candidates.append(Path.home() / ".nuget" / "packages" / config["id"].lower() / config["version"] / filename)
+        archives = [path for path in candidates if path.is_file()]
+        require(bool(archives), "Existing install action did not retain the exact package archive.")
+        require(all(path.stat().st_size == config["bytes"] and digest(path) == config["sha256"] for path in archives), "Installed action archive bytes differ.")
+        shutil.copyfile(archives[0], package)
     if package.stat().st_size != config["bytes"] or digest(package) != config["sha256"]:
         raise ValueError("New or corrupt package bytes are not admitted.")
     stage = folder / "stage"
@@ -351,7 +340,8 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
     started = time.monotonic()
     try:
         binary = verify_package(Path(os.environ["BCAL_STUDY_WORK"]) / "package" / "stage")
-        env = {key: value for key, value in env.items() if not key.startswith("BCAL_")}
+        unrelated_credentials = {"GH_TOKEN", "GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "STUDY_CERT_VAULT", "STUDY_CERT_NAME"}
+        env = {key: value for key, value in env.items() if not key.startswith(("BCAL_", "VSS_")) and key not in unrelated_credentials}
         env.update(
             PATH=str(binary.parent) + os.pathsep + os.environ["PATH"],
             BCAL_AGENT_RUNTIME=runtime,

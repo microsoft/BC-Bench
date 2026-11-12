@@ -5,7 +5,6 @@ New-Item -ItemType Directory -Force -Path $work | Out-Null
 $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
 if (-not $token) { throw 'ADO token unavailable.' }
 Write-Output "::add-mask::$token"
-$env:BCAL_STUDY_ADO_TOKEN = $token
 
 uv venv "$work\inference" --python .\.venv\Scripts\python.exe *> "$work\venv-inference.log"
 uv venv "$work\judge" --python .\.venv\Scripts\python.exe *> "$work\venv-judge.log"
@@ -46,4 +45,4 @@ if (-not (Test-Path $symbolRoot)) {
 foreach ($name in @('BCAL_STUDY_INFERENCE_PYTHON', 'BCAL_STUDY_JUDGE_PYTHON', 'BCAL_STUDY_INSTALLED_BINARY', 'PYTHONPATH', 'LLM_API_ENVIRONMENT', 'LLM_API_CERTIFICATE_FILE')) {
     "$name=$([Environment]::GetEnvironmentVariable($name))" >> $env:GITHUB_ENV
 }
-$env:BCAL_STUDY_ADO_TOKEN = $null
+$token = $null

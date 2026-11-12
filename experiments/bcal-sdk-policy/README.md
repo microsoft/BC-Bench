@@ -21,6 +21,14 @@ another attempt without a full 1,500-second evaluation and separate
 There are no evaluation retries or default switches. Final measured accounting
 must use all jobs' start/end timestamps, including failures and preflight.
 
+The original no-model admission run
+[43236707356](https://github.com/microsoft/BC-Bench/actions/runs/43236707356)
+failed a redundant standalone feed read after the existing installation succeeded.
+Its full 414-second job charge remains in the preflight grant; the original ref
+and failed receipt are preserved. Admission now reuses the install action's exact
+cached nupkg rather than introducing a second private-feed downloader. This is
+not a repeated or replacement semantic attempt.
+
 Package/source, dataset, prompts, assertions and all 350 symbol hashes are
 checked before inference. The existing feed/OIDC/Key Vault actions are reused.
 Main, auxiliary and judge routing use fixed-model loopback proxies with separate

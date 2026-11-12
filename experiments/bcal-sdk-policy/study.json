@@ -85,7 +85,14 @@
     "historicalMeasuredSeconds": 62677.474418000085,
     "unresolvedLocalReservationSeconds": 1500,
     "studyCeilingSeconds": 28800,
-    "preflightReservationSeconds": 600,
+    "preflightReservationSeconds": 1014,
+    "preservedFailedPreflight": {
+      "runId": 43236707356,
+      "benchCommit": "d0db24baaa5760558233dd0ff7a80cc61308678a",
+      "fullJobSeconds": 414,
+      "modelsAdmitted": 0,
+      "failure": "Redundant standalone archive HTTP read; existing install action succeeded"
+    },
     "controllerReservationSeconds": 300,
     "pairReservationSeconds": 3360,
     "summaryReservationSeconds": 540,

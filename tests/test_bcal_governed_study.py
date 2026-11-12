@@ -46,6 +46,28 @@ def test_route_receipt_rejects_missing_stickiness_and_private_fields(tmp_path):
         study.route_receipt(path)
 
 
+def test_package_admission_reuses_exact_installed_action_archive(tmp_path, monkeypatch):
+    import hashlib
+
+    installed = tmp_path / "store" / "30.0" / "tools" / "net10.0" / "any" / "bcal.exe"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes(b"binary")
+    archive = installed.parents[3] / "test.package.30.0.nupkg"
+    archive.write_bytes(b"exact governed archive")
+    config = {"id": "test.package", "version": "30.0", "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "bytes": archive.stat().st_size, "sourceCommitSha": "a" * 40}
+    folder = tmp_path / "private"
+    (folder / "stage").mkdir(parents=True)
+    monkeypatch.setenv("BCAL_STUDY_INSTALLED_BINARY", str(installed))
+    monkeypatch.setattr(study, "study", lambda: {"package": config})
+    monkeypatch.setattr(study, "verify_package", lambda _: installed)
+    assert study.prepare_package(folder)["sha256"] == config["sha256"]
+    assert (folder / "package.nupkg").read_bytes() == archive.read_bytes()
+    (folder / "package.nupkg").unlink()
+    archive.write_bytes(b"wrong")
+    with pytest.raises(ValueError, match="archive bytes differ"):
+        study.prepare_package(folder)
+
+
 def test_sanitized_legacy_failure_never_exports_or_scores_success():
     transcript = {
         "executionIdentity": {"sourceCommitSha": study.study()["package"]["sourceCommitSha"]},
