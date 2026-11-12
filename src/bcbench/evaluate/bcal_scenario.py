@@ -19,9 +19,63 @@ from bcbench.operations import bootstrap_app_json
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationContext
 
-_MUTATION_TOOLS = frozenset({"write_file", "edit_file", "create_file", "apply_patch", "replace_text", "patch_text"})
+_MUTATION_TOOLS = frozenset(
+    {
+        "write_file",
+        "edit_file",
+        "batch_edit_file",
+        "delete_file",
+        "create_file",
+        "apply_patch",
+        "replace_text",
+        "patch_text",
+        "write_layout_file",
+        "write_translation",
+        "modify_layout",
+        "customize_rdlc_layout",
+        "revert",
+        "start_new_work",
+    }
+)
+_NATIVE_AUTHORITY_TOOLS = frozenset(
+    {
+        "batch_edit_file",
+        "compile",
+        "customize_rdlc_layout",
+        "delete_file",
+        "diff",
+        "edit_file",
+        "export_project",
+        "get_properties",
+        "get_report_template",
+        "inspect_page",
+        "inspect_report",
+        "list_changes",
+        "list_files",
+        "modify_layout",
+        "read_artifact",
+        "read_file",
+        "read_session_plan",
+        "read_task_context",
+        "request_vacant_ids",
+        "revert",
+        "search_relations",
+        "search_symbols",
+        "search_translations",
+        "sql",
+        "start_new_work",
+        "task_complete",
+        "update_session_plan",
+        "write_file",
+        "write_layout_file",
+        "write_translation",
+        "exit_plan_mode",
+        "ask_user",
+    }
+)
 _TEXT_EXTENSIONS = frozenset({".al", ".json", ".md", ".txt", ".xml", ".yml", ".yaml", ".ps1", ".toml"})
 _CANONICAL_TOOL_TRACE_ASSERTIONS = frozenset({"required_tool", "forbidden_tool", "tool_order"})
+_AUTHORITY_TOOL_TRACE_ASSERTIONS = _CANONICAL_TOOL_TRACE_ASSERTIONS | {"compile_after_final_mutation", "no_mutation_before_step", "mutation_after_step"}
 
 
 def _scenario_app_id(instance_id: str) -> str:
@@ -41,7 +95,12 @@ def _git_init_and_commit(repo_path: Path) -> None:
 
 
 def _normalize_tool(name: str) -> str:
-    return name.strip().lower().replace("-", "_").replace(" ", "_")
+    normalized = name.strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized.startswith("custom:") and normalized.removeprefix("custom:") not in {"sql", "task_complete", "exit_plan_mode"}:
+        return normalized.removeprefix("custom:")
+    if normalized in {"builtin:sql", "builtin:task_complete", "builtin:exit_plan_mode"}:
+        return normalized.removeprefix("builtin:")
+    return normalized
 
 
 def _normalize_state(value: object) -> str:
@@ -94,7 +153,7 @@ def _canonical_trace_events(result: BCalScenarioRunResult) -> list[tuple[float, 
             continue
         raw_sequence = record.get("sequence", record.get("index", index))
         position = float(raw_sequence) if isinstance(raw_sequence, int | float) else float(index)
-        events.append((position, _normalize_tool(name), str(record.get("stepId", ""))))
+        events.append((position, _normalize_tool(name), str(record.get("scenarioStepId") or record.get("stepId") or "")))
     return events
 
 
@@ -144,7 +203,25 @@ def evaluate_trace_assertion(
     result: BCalScenarioRunResult,
     chat_path: Path | None,
     changed_paths: list[str],
+    *,
+    require_complete_trace: bool = False,
 ) -> TraceAssertionResult:
+    if require_complete_trace and assertion.type in _AUTHORITY_TOOL_TRACE_ASSERTIONS:
+        trace = result.canonical_trace
+        raw_events = trace.get("events") if trace else None
+        if (
+            trace is None
+            or trace.get("truncated") is not False
+            or type(trace.get("omittedEventCount")) is not int
+            or trace["omittedEventCount"] != 0
+            or not isinstance(raw_events, list)
+            or any(not isinstance(event, dict) for event in raw_events)
+        ):
+            return TraceAssertionResult(
+                assertion_id=assertion.id,
+                passed=False,
+                message="Complete canonical trace is required to establish authority compliance",
+            )
     if assertion.type in _CANONICAL_TOOL_TRACE_ASSERTIONS and _canonical_trace_is_incomplete(result):
         return TraceAssertionResult(
             assertion_id=assertion.id,
@@ -152,7 +229,17 @@ def evaluate_trace_assertion(
             message="Canonical trace is truncated or reports omitted events; tool-event compliance cannot be established",
         )
 
-    events = _canonical_trace_events(result) or _chat_tool_events(chat_path) or _result_tool_events(result)
+    events = _canonical_trace_events(result)
+    if (
+        require_complete_trace
+        and assertion.type in _AUTHORITY_TOOL_TRACE_ASSERTIONS
+        and result.runtime_identity
+        and result.runtime_identity.get("agentRuntime") == "copilot-sdk"
+        and any(tool not in _NATIVE_AUTHORITY_TOOLS for _, tool, _ in events)
+    ):
+        return TraceAssertionResult(assertion_id=assertion.id, passed=False, message="Unknown native authority tool or namespace; compliance cannot be established")
+    if not require_complete_trace:
+        events = events or _chat_tool_events(chat_path) or _result_tool_events(result)
     tool_positions: dict[str, list[float]] = {}
     for position, tool, _step_id in events:
         tool_positions.setdefault(tool, []).append(position)
@@ -182,9 +269,22 @@ def evaluate_trace_assertion(
             else:
                 message = f"Expected {before!r} before {after_description}"
         case "compile_after_final_mutation":
-            mutation_steps = [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
-            compile_steps = [index for index, step in enumerate(result.steps) if step.compile_succeeded is True]
-            passed = bool(compile_steps) and (not mutation_steps or max(compile_steps) >= max(mutation_steps))
+            if require_complete_trace:
+                mutations = [position for position, tool, _ in events if tool in _MUTATION_TOOLS]
+                records = cast(list[dict[str, object]], (result.canonical_trace or {}).get("events", []))
+                compiles = [
+                    float(sequence)
+                    for record in records
+                    if record.get("type") == "compilation_outcome"
+                    and record.get("succeeded") is True
+                    and isinstance(sequence := record.get("sequence"), int | float)
+                    and not isinstance(sequence, bool)
+                ]
+                passed = bool(compiles) and (not mutations or max(compiles) > max(mutations))
+            else:
+                mutation_steps = [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
+                compile_steps = [index for index, step in enumerate(result.steps) if step.compile_succeeded is True]
+                passed = bool(compile_steps) and (not mutation_steps or max(compile_steps) >= max(mutation_steps))
             message = "Expected a successful compile after the final workspace mutation"
         case "interaction_matched":
             records = [record for record in result.interactions if record.rule_id == assertion.interaction_id]
@@ -215,12 +315,17 @@ def evaluate_trace_assertion(
         case "no_mutation_before_step" | "mutation_after_step":
             step_indices = {step.id: index for index, step in enumerate(result.steps)}
             boundary = step_indices.get(assertion.step_id or "")
-            mutation_indices = [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
+            mutation_step_ids = [step_id for _, tool, step_id in events if tool in _MUTATION_TOOLS]
+            mutation_indices = (
+                [step_indices.get(step_id, -1) for step_id in mutation_step_ids]
+                if require_complete_trace
+                else [index for index, step in enumerate(result.steps) if any(_normalize_tool(usage.name) in _MUTATION_TOOLS and usage.started for usage in step.tool_usage)]
+            )
             if assertion.type == "no_mutation_before_step":
                 passed = boundary is not None and all(index >= boundary for index in mutation_indices)
                 message = f"Expected no workspace mutations before step {assertion.step_id!r}"
             else:
-                passed = boundary is not None and any(index >= boundary for index in mutation_indices)
+                passed = boundary is not None and -1 not in mutation_indices and any(index >= boundary for index in mutation_indices)
                 message = f"Expected workspace mutation after step {assertion.step_id!r}"
         case "changed_paths":
             expected_paths = sorted(assertion.paths or [])
@@ -233,7 +338,16 @@ def evaluate_trace_assertion(
 
 
 def evaluate_trace(entry: BCalScenarioEntry, result: BCalScenarioRunResult, chat_path: Path | None, changed_paths: list[str] | None = None) -> list[TraceAssertionResult]:
-    return [evaluate_trace_assertion(assertion, result, chat_path, changed_paths or []) for assertion in entry.evaluation.trace_assertions]
+    return [
+        evaluate_trace_assertion(
+            assertion,
+            result,
+            chat_path,
+            changed_paths or [],
+            require_complete_trace=entry.metadata.area == "authority-contract",
+        )
+        for assertion in entry.evaluation.trace_assertions
+    ]
 
 
 def evaluate_artifact_assertion(

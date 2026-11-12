@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.category || 'bcal-scenario' }} ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.category || 'bcal-scenario' }} ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}${{ (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke') && format(' / stacked-smoke {0}', inputs.validation-phase) || '' }}
 permissions:
   contents: read
   actions: write
@@ -7,6 +7,20 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      validation-phase:
+        description: "Isolated approved 16-attempt smoke; ordinary preserves existing evaluation"
+        required: false
+        default: ordinary
+        type: choice
+        options:
+          - ordinary
+          - preflight
+          - smoke
+      preflight-run-id:
+        description: "Exact successful same-SHA no-model preflight for the bounded smoke"
+        required: false
+        default: ""
+        type: string
       tier:
         description: "Dataset tier to evaluate (challenge is only available for NL2AL)"
         required: false
@@ -71,7 +85,7 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.category || 'bcal-scenario' }}-${{ inputs.test-run && 'test' || 'full' }}
+  group: ${{ (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke') && 'bcal-stacked-sdk-smoke-20261112-entry' || format('bcal-evaluation-{0}-{1}', inputs.category || 'bcal-scenario', inputs.test-run && 'test' || 'full') }}
   cancel-in-progress: false
 
 env:
@@ -80,8 +94,20 @@ env:
   BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
 
 jobs:
+  governed-validation:
+    if: inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke'
+    uses: ./.github/workflows/bcal-governed-policy.yml
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    with:
+      phase: ${{ inputs.validation-phase }}
+      preflight-run-id: ${{ inputs.preflight-run-id }}
+    secrets: inherit
+
   llm-preflight:
-    if: ${{ inputs.llm-preflight-only || false }}
+    if: ${{ (inputs.validation-phase == '' || inputs.validation-phase == 'ordinary') && (inputs.llm-preflight-only || false) }}
     uses: ./.github/workflows/bcal-llm-preflight.yml
     permissions:
       contents: read
@@ -91,8 +117,8 @@ jobs:
     secrets: inherit
 
   get-entries:
-    if: ${{ !(inputs.llm-preflight-only || false) }}
-    uses: $/.github/workflows/get-entries.yml
+    if: (inputs.validation-phase == '' || inputs.validation-phase == 'ordinary') && !(inputs.llm-preflight-only || false)
+    uses: ./.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run || false }}
       category: ${{ inputs.category || 'bcal-scenario' }}
@@ -121,10 +147,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python with UV
-        uses: $/.github/actions/setup-python-uv
+        uses: ./.github/actions/setup-python-uv
 
       - name: Install bcal CLI from internal feed
-        uses: $/.github/actions/install-bcal
+        uses: ./.github/actions/install-bcal
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -223,7 +249,7 @@ jobs:
 
   summarize-results:
     needs: evaluate-with-bcal
-    uses: $/.github/workflows/summarize-results.yml
+    uses: ./.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write

@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 import typer
 from bcbench_core.container import ContainerConfig
 
-from bcbench.types import AgentRuntimeConfig, DatasetTier, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, BCalAgentPlanning, BCalAgentRuntime, DatasetTier, EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here
@@ -48,6 +48,19 @@ ContainerCompany = Annotated[str, typer.Option(envvar="BC_COMPANY", help="BC com
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
 
 TierOption = Annotated[DatasetTier, typer.Option(help="Only use dataset entries whose metadata.tier matches")]
+
+BCalRuntimeOption = Annotated[BCalAgentRuntime, typer.Option("--agent-runtime", envvar="BCAL_AGENT_RUNTIME", help="BCal runtime; legacy remains the default")]
+BCalPlanningOption = Annotated[BCalAgentPlanning | None, typer.Option("--agent-planning", help="Explicit planning policy; SDK defaults to native copilot")]
+BCalSdkProvider = Annotated[Literal["openai"] | None, typer.Option("--sdk-provider", envvar="BCAL_SDK_PROVIDER")]
+BCalSdkBaseUrl = Annotated[str | None, typer.Option("--sdk-base-url", envvar="BCAL_SDK_BASE_URL")]
+BCalSdkModel = Annotated[str | None, typer.Option("--sdk-model", envvar="BCAL_SDK_MODEL")]
+BCalSdkApiKeyEnv = Annotated[str | None, typer.Option("--sdk-api-key-env", envvar="BCAL_SDK_API_KEY_ENV", help="Environment variable name, never the key")]
+BCalSdkReasoningEffort = Annotated[Literal["none", "low", "medium", "high", "xhigh", "max"] | None, typer.Option("--sdk-reasoning-effort", envvar="BCAL_SDK_REASONING_EFFORT")]
+BCalSdkMaxModelRequests = Annotated[int | None, typer.Option("--sdk-max-model-requests", envvar="BCAL_SDK_MAX_MODEL_REQUESTS", min=1)]
+BCalSdkTimeoutSeconds = Annotated[int | None, typer.Option("--sdk-timeout-seconds", envvar="BCAL_SDK_TIMEOUT_SECONDS", min=1)]
+BCalInferenceProvider = Annotated[str | None, typer.Option("--inference-provider", envvar="BCAL_INFERENCE_PROVIDER")]
+BCalLlmProvider = Annotated[str | None, typer.Option("--llm-provider", envvar="BCAL_LLM_PROVIDER")]
+BCalLlmWireApi = Annotated[Literal["chat-completions", "responses"] | None, typer.Option("--llm-wire-api", envvar="BCAL_LLM_WIRE_API")]
 
 
 def resolve_agent_runtime(

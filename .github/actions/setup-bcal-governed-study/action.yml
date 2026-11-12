@@ -1,0 +1,30 @@
+name: Prepare governed BCAL policy study
+description: No-model exact-package, certificate and frozen-symbol admission
+inputs:
+  azure-client-id:
+    required: true
+    description: Existing ado-read identity
+  azure-tenant-id:
+    required: true
+    description: Existing ado-read tenant
+  official-feed-url:
+    required: true
+    description: Existing official package feed
+  experiment-feed-url:
+    required: true
+    description: Existing internal experiment feed
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-python-uv
+    - uses: ./.github/actions/install-bcal
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        package-id: Microsoft.BusinessCentral.BCal.CLI
+        feed: experiment
+        version: 30.0.46.34884-beta
+        official-feed-url: ${{ inputs.official-feed-url }}
+        experiment-feed-url: ${{ inputs.experiment-feed-url }}
+    - shell: pwsh
+      run: .\scripts\Setup-BCalGovernedStudy.ps1

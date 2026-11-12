@@ -13,6 +13,18 @@ from bcbench_core.filesystem import prepare_run_dir
 from bcbench.agent import BCalBackendConfig, BCalHarness, BCalScenarioHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
 from bcbench.cli_options import (
     AgentConfigPath,
+    BCalInferenceProvider,
+    BCalLlmProvider,
+    BCalLlmWireApi,
+    BCalPlanningOption,
+    BCalRuntimeOption,
+    BCalSdkApiKeyEnv,
+    BCalSdkBaseUrl,
+    BCalSdkMaxModelRequests,
+    BCalSdkModel,
+    BCalSdkProvider,
+    BCalSdkReasoningEffort,
+    BCalSdkTimeoutSeconds,
     ClaudeCodeModel,
     ContainerCompany,
     ContainerMcpUrl,
@@ -46,7 +58,7 @@ from bcbench.results import (
     JudgeBasedEvaluationResult,
     TraceAssertionResult,
 )
-from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
+from bcbench.types import AgentConfig, BCalAgentRuntime, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
 
 logger = logging.getLogger(__name__)
 _config = get_config()
@@ -232,6 +244,18 @@ def evaluate_bcal(
     run_id: RunId = "bcal_test_run",
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="External LLM command used by BCal")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="Optional model/deployment passed to BCal")] = None,
+    agent_runtime: BCalRuntimeOption = BCalAgentRuntime.LEGACY,
+    agent_planning: BCalPlanningOption = None,
+    sdk_provider: BCalSdkProvider = None,
+    sdk_base_url: BCalSdkBaseUrl = None,
+    sdk_model: BCalSdkModel = None,
+    sdk_api_key_env: BCalSdkApiKeyEnv = None,
+    sdk_reasoning_effort: BCalSdkReasoningEffort = None,
+    sdk_max_model_requests: BCalSdkMaxModelRequests = None,
+    sdk_timeout_seconds: BCalSdkTimeoutSeconds = None,
+    inference_provider: BCalInferenceProvider = None,
+    llm_provider: BCalLlmProvider = None,
+    llm_wire_api: BCalLlmWireApi = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -251,7 +275,22 @@ def evaluate_bcal(
 
     entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
-    backend_config = BCalBackendConfig(command=llm_command, model=llm_model)
+    backend_config = BCalBackendConfig(
+        command=llm_command,
+        model=llm_model,
+        agent_runtime=agent_runtime,
+        agent_planning=agent_planning,
+        sdk_provider=sdk_provider,
+        sdk_base_url=sdk_base_url,
+        sdk_model=sdk_model,
+        sdk_api_key_env=sdk_api_key_env,
+        sdk_reasoning_effort=sdk_reasoning_effort,
+        sdk_max_model_requests=sdk_max_model_requests,
+        sdk_timeout_seconds=sdk_timeout_seconds,
+        inference_provider=inference_provider,
+        llm_provider=llm_provider,
+        llm_wire_api=llm_wire_api,
+    )
     harness = BCalScenarioHarness(backend_config) if isinstance(entry, BCalScenarioEntry) else BCalHarness(backend_config)
 
     logger.info(f"Running evaluation on entry {entry_id} with BCal")
@@ -270,6 +309,9 @@ def evaluate_bcal(
     try:
         pipeline.execute(context, harness)
     except AgentError as exc:
+        context.transcript = exc.transcript
+        context.metrics = exc.metrics
+        context.experiment = exc.config
         result = (
             BCalScenarioEvaluationResult.create_harness_failure(context, str(exc))
             if isinstance(entry, BCalScenarioEntry)

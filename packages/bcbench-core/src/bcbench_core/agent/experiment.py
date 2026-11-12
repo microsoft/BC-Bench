@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 
 class ExperimentConfiguration(BaseModel):
@@ -28,10 +28,21 @@ class ExperimentConfiguration(BaseModel):
     # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
+    # Versioned, non-secret execution identity supplied by the harness.
+    execution: dict[str, JsonValue] | None = None
+
     def is_empty(self) -> bool:
         """Check if this configuration has all default/empty values.
 
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+        return (
+            self.mcp_servers is None
+            and self.al_lsp_enabled is False
+            and self.custom_instructions is False
+            and self.skills_enabled is False
+            and self.custom_agent is None
+            and self.plugins is None
+            and self.execution is None
+        )

@@ -1,0 +1,182 @@
+name: Governed BCAL policy validation
+on:
+  workflow_call:
+    inputs:
+      phase:
+        type: string
+        required: true
+      preflight-run-id:
+        type: string
+        default: ""
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: bcal-stacked-sdk-smoke-20261112
+  cancel-in-progress: false
+env:
+  BCAL_STUDY_WORK: C:\bgs
+  STUDY_CERT_VAULT: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+  STUDY_CERT_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+  LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
+  LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+  LLM_API_ENVIRONMENT: TEST
+jobs:
+  preflight:
+    if: inputs.phase == 'preflight'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    environment:
+      name: ado-read
+      deployment: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Record no-model admission boundary
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'Study reruns are not authorized.' }
+          New-Item -ItemType Directory study-sanitized -Force | Out-Null
+          $study = Get-Content experiments\bcal-sdk-policy\study.json -Raw | ConvertFrom-Json
+          @{status='setup';modelsAdmitted=0;benchCommit=$env:GITHUB_SHA;studyId=$study.studyId} | ConvertTo-Json | Set-Content study-sanitized\setup.json
+      - uses: ./.github/actions/setup-bcal-governed-study
+        with:
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          official-feed-url: ${{ secrets.BCAL_FEED_URL }}
+          experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
+      - name: Retain sanitized preflight only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sdk-policy-preflight
+          path: study-sanitized\*.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Remove runner-local certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath 'C:\bgs\llm-api-cert.pfx') { Remove-Item -LiteralPath 'C:\bgs\llm-api-cert.pfx' -Force }
+  admit:
+    if: inputs.phase == 'smoke'
+    runs-on: windows-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.admit.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Verify immutable preflight, duplicates and disjoint reservations
+        id: admit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight-run-id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1' -or $env:PREFLIGHT_RUN_ID -notmatch '^\d+$') { throw 'A first dispatch and exact successful preflight are required.' }
+          $preflight = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:PREFLIGHT_RUN_ID" | ConvertFrom-Json
+          if ($preflight.conclusion -ne 'success' -or $preflight.head_sha -ne $env:GITHUB_SHA -or $preflight.display_title -notlike '*stacked-smoke preflight') { throw 'Preflight state/source/mode differs.' }
+          $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
+          if ($runs.total_count -gt 100) { throw 'Bounded duplicate inventory is insufficient.' }
+          $duplicates = @($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title -like '*stacked-smoke smoke' })
+          if ($duplicates.Count) { throw 'A study dispatch already exists; preserve it rather than rerun.' }
+          $preflightSeconds = 0.0
+          foreach ($run in @($runs.workflow_runs | Where-Object { $_.display_title -like '*stacked-smoke preflight' })) {
+            if ($run.status -ne 'completed' -or $run.run_attempt -ne 1) { throw 'Unresolved or rerun preflight; stop admission.' }
+            $jobs = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$($run.id)/jobs?per_page=100" | ConvertFrom-Json
+            if ($jobs.total_count -gt 100) { throw 'Job accounting inventory is incomplete.' }
+            foreach ($job in $jobs.jobs) {
+              if ($job.status -eq 'completed' -and $job.started_at -and $job.completed_at) {
+                $preflightSeconds += ([DateTimeOffset]$job.completed_at - [DateTimeOffset]$job.started_at).TotalSeconds
+              } elseif ($job.conclusion -ne 'skipped') { throw 'Preflight job charge unavailable.' }
+            }
+          }
+          gh run download $env:PREFLIGHT_RUN_ID --repo $env:GITHUB_REPOSITORY --name sdk-policy-preflight --dir preflight-receipt
+          $receipt = Get-Content preflight-receipt\preflight.json -Raw | ConvertFrom-Json
+          if ($receipt.status -ne 'passed' -or $receipt.modelsAdmitted -ne 0 -or $receipt.benchCommit -ne $env:GITHUB_SHA -or $receipt.package.sha256 -ne 'aea6037faa835faa7d64ad95b17dd8240645ea25bc70e257213c8fa3c3ff80de') { throw 'Preflight receipts failed admission.' }
+          $study = Get-Content experiments\bcal-sdk-policy\study.json -Raw | ConvertFrom-Json
+          $inputsSha256 = (Get-FileHash experiments\bcal-sdk-policy\study.json -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($receipt.studyId -ne $study.studyId -or $receipt.inputsSha256 -ne $inputsSha256) { throw 'Preflight belongs to a different study manifest.' }
+          $budget = $study.budget
+          $reserved = $budget.localNoModelAdmissionReservationSeconds + $preflightSeconds + $budget.controllerReservationSeconds + 8*$budget.pairReservationSeconds + $budget.summaryReservationSeconds
+          if ($reserved -gt 28800 -or $budget.historicalMeasuredSeconds + $budget.unresolvedLocalReservationSeconds + 28800 -gt 180000) { throw 'Aggregate historical+study reservations exceed authorization.' }
+          New-Item -ItemType Directory study-sanitized -Force | Out-Null
+          @{studyId=$study.studyId;benchCommit=$env:GITHUB_SHA;preflightRunId=$env:PREFLIGHT_RUN_ID;priorLocalBudget=$budget;measuredPreflightSeconds=$preflightSeconds;reservedStudySeconds=$reserved;rerunsAllowed=$false} | ConvertTo-Json -Depth 20 | Set-Content study-sanitized\admission.json
+          'matrix={"include":[{"pair":0},{"pair":1},{"pair":2},{"pair":3},{"pair":4},{"pair":5},{"pair":6},{"pair":7}]}' >> $env:GITHUB_OUTPUT
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sdk-policy-admission
+          path: study-sanitized\*.json
+          retention-days: 30
+          if-no-files-found: warn
+  pairs:
+    needs: admit
+    if: inputs.phase == 'smoke'
+    runs-on: windows-latest
+    timeout-minutes: 56
+    environment:
+      name: ado-read
+      deployment: false
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJson(needs.admit.outputs.matrix) }}
+    steps:
+      - name: Start this pair's disjoint all-inclusive grant
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'No automatic/manual study reruns.' }
+          "BCAL_STUDY_JOB_STARTED_UNIX=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()/1000.0)" >> $env:GITHUB_ENV
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: ./.github/actions/setup-bcal-governed-study
+        with:
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          official-feed-url: ${{ secrets.BCAL_FEED_URL }}
+          experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
+      - name: Run this fixed pair sequentially without retries
+        shell: pwsh
+        env:
+          STUDY_PAIR: ${{ matrix.pair }}
+        run: .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py pair --pair $env:STUDY_PAIR --work $env:BCAL_STUDY_WORK --output study-sanitized
+      - name: Retain only sanitized coverage and measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sdk-policy-pair-${{ matrix.pair }}
+          path: study-sanitized\*.json
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Remove runner-local certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath 'C:\bgs\llm-api-cert.pfx') { Remove-Item -LiteralPath 'C:\bgs\llm-api-cert.pfx' -Force }
+  summarize:
+    needs: [admit, pairs]
+    if: always() && inputs.phase == 'smoke'
+    runs-on: windows-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: ./.github/actions/setup-python-uv
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: sdk-policy-*
+          path: study-receipts
+      - name: Failure-safe completeness and paired descriptive report
+        shell: pwsh
+        run: |
+          .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py summary --work study-receipts --output study-summary
+          Get-Content study-summary\comparison.md >> $env:GITHUB_STEP_SUMMARY
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sdk-policy-summary
+          path: study-summary\*
+          retention-days: 30
+          if-no-files-found: error

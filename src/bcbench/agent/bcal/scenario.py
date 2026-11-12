@@ -18,9 +18,9 @@ from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
-from bcbench.agent.bcal.agent import BCalBackendConfig, _bcal_process_environment, _process_output, _resolve_bcal_executable, get_bcal_version
+from bcbench.agent.bcal.agent import BCalBackendConfig, _bcal_process_environment, _process_output, _require_completed, _resolve_bcal_executable, _result_metrics, _run_bcal_process, get_bcal_version
 from bcbench.dataset import BCalScenarioEntry
-from bcbench.types import HarnessName
+from bcbench.types import BCalAgentRuntime, HarnessName
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +188,8 @@ class BCalScenarioRunResult(BaseModel):
 
     schema_version: Literal["1.0", "1.1"] = Field(alias="schemaVersion")
     execution_identity: dict[str, object] | None = Field(default=None, alias="executionIdentity")
+    runtime_identity: dict[str, object] | None = Field(default=None, alias="runtimeIdentity")
+    agent_runtime_evidence: list[dict[str, object]] = Field(default_factory=list, alias="agentRuntimeEvidence")
     evidence: dict[str, object] | None = None
     outcome: dict[str, object] | None = None
     workspace_seed: BCalWorkspaceSeedEvidence | None = Field(default=None, alias="workspaceSeed")
@@ -280,16 +282,19 @@ class BCalScenarioHarness(AgentHarness[BCalScenarioEntry, HarnessName]):
 
     @override
     def identity(self) -> AgentIdentity[HarnessName]:
+        self.backend_config.cli_args()
+        self.backend_config.validate_deadline(self.timeout)
         return AgentIdentity[HarnessName](
             harness=HarnessName.BCAL,
             version=get_bcal_version(),
-            model=self.backend_config.model or "external-command",
+            model=(self.backend_config.sdk_model if self.backend_config.agent_runtime == BCalAgentRuntime.COPILOT_SDK else self.backend_config.model) or "external-command",
         )
 
     @override
     def run(self, request: AgentRequest[BCalScenarioEntry], /) -> AgentResult:
         entry, repo_path = request.task, request.work_dir
         timeout = self.timeout if request.timeout is None else request.timeout
+        self.backend_config.validate_deadline(timeout)
         package_cache_path = repo_path / SCENARIO_SYMBOL_DIR / ALPACKAGES_DIRNAME
         if not package_cache_path.exists():
             raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
@@ -319,16 +324,22 @@ class BCalScenarioHarness(AgentHarness[BCalScenarioEntry, HarnessName]):
         try:
             with _bcal_process_environment() as environment:
                 start = time.monotonic()
-                completed = subprocess.run(
-                    cmd_args,
-                    timeout=timeout,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    check=False,
-                    env=environment,
-                )
+                if self.backend_config.agent_runtime == BCalAgentRuntime.COPILOT_SDK:
+                    try:
+                        completed = _run_bcal_process(cmd_args, timeout=timeout, env=environment)
+                    except subprocess.CalledProcessError as error:
+                        completed = subprocess.CompletedProcess(cmd_args, error.returncode, stdout=error.output, stderr=error.stderr)
+                else:
+                    completed = subprocess.run(
+                        cmd_args,
+                        timeout=timeout,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        check=False,
+                        env=environment,
+                    )
                 execution_time = time.monotonic() - start
         except subprocess.TimeoutExpired:
             raise AgentTimeoutError(
@@ -349,27 +360,26 @@ class BCalScenarioHarness(AgentHarness[BCalScenarioEntry, HarnessName]):
 
         result = load_scenario_result(result_path)
         transcript = cast(dict[str, JsonValue], result.model_dump(mode="json", by_alias=True, exclude_none=True))
+        config = self.backend_config.experiment(timeout, transcript)
+        metrics = _result_metrics(transcript, execution_time)
         if harness_error := _harness_failure(result):
-            raise AgentError(f"BCal scenario harness failure: {harness_error}", transcript=transcript)
+            raise AgentError(f"BCal scenario harness failure: {harness_error}", transcript=transcript, config=config, metrics=metrics)
         if result.workspace_seed != expected_seed:
             actual_hash = result.workspace_seed.aggregate_sha256 if result.workspace_seed else "missing"
             raise AgentError(
                 f"BCal scenario workspace seed receipt does not match the pre-run fixture snapshot: expected {expected_seed.aggregate_sha256}, got {actual_hash}",
                 transcript=transcript,
+                config=config,
+                metrics=metrics,
             )
+        if self.backend_config.agent_runtime == BCalAgentRuntime.COPILOT_SDK and result.completed:
+            _require_completed(transcript, metrics=metrics, config=config)
 
         tool_usage: dict[str, int] = {}
         for usage in result.tool_usage:
             tool_usage[usage.name] = tool_usage.get(usage.name, 0) + usage.started
-        metrics = AgentMetrics(
-            execution_time=execution_time,
-            turn_count=result.totals.steps,
-            prompt_tokens=result.totals.input_tokens,
-            completion_tokens=result.totals.output_tokens,
-            total_tokens=result.totals.input_tokens + result.totals.output_tokens,
-            tool_usage=tool_usage,
-        )
-        return AgentResult(metrics=metrics, experiment=ExperimentConfiguration(), transcript=transcript)
+        metrics = metrics.model_copy(update={"turn_count": result.totals.steps, "tool_usage": tool_usage})
+        return AgentResult(metrics=metrics, experiment=config, transcript=transcript)
 
 
 def run_bcal_scenario(
@@ -386,7 +396,7 @@ def _read_transcript_after_failure(path: Path) -> dict[str, JsonValue] | None:
         payload = cast(JsonValue, json.loads(path.read_text(encoding="utf-8-sig")))
     except (OSError, ValueError):
         return None
-    return cast(dict[str, JsonValue], payload) if isinstance(payload, dict) else None
+    return payload if isinstance(payload, dict) else None
 
 
 def resolve_session_chat(result: BCalScenarioRunResult, repo_path: Path) -> Path | None:
