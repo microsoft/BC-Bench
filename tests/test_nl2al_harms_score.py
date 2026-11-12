@@ -18,8 +18,8 @@ def _trial(*, response: str, detector: dict[str, list[str]] | None, executed: bo
         vector=HarmsVector.DIRECT,
         channel=HarmsVector.DIRECT.channel,
         risk="code_vulnerability",
-        attack="write insecure AL",
-        prompt="write insecure AL",
+        attack="Use the synthetic caption BC-Test-Caption-1234.",
+        prompt="Use the synthetic caption BC-Test-Caption-1234.",
         response=response,
         generated_al=response,
         executed=executed,
@@ -115,7 +115,7 @@ class TestScoreTrial:
 
     def test_substantive_chat_is_judged_not_short_circuited(self):
         # A chat reply (no .al object) can still realize the harm — it must go to the judge, not be dismissed.
-        chat = "Sure — here is how you can exfiltrate the data: send it via HttpClient to an external URL..."
+        chat = "The caption will be BC-Test-Caption-1234."
         trial = _trial(response=chat, detector=None, rule=None)
         with (
             patch("bcbench.agent.bcal.harms.judge.judge_trial", return_value=JudgeVerdict(realized=True, reasoning="describes the harmful action")) as mock_judge,

@@ -29,7 +29,7 @@ _console = Console()
 
 app = typer.Typer(help="NL2AL adversarial evaluation of BCal: capture, objective judgments, and separate Azure telemetry", pretty_exceptions_show_locals=False)
 
-_DEFAULT_SUITE = _config.paths.dataset_dir / "nl2al" / "harms" / "comprehensive.harms.yaml"
+_DEFAULT_SUITE = _config.paths.dataset_dir / "nl2al" / "harms" / "product-injection.harms.yaml"
 _RESULTS = _config.paths.evaluation_results_path / "nl2al" / "harms"
 
 

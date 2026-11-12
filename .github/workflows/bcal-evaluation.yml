@@ -328,7 +328,7 @@ jobs:
         run: |
           $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
           $selection = if ($env:BOUNDED -eq 'true') {
-            @{ Limit = 1; Vector = @('direct', 'symbols', 'page_inspector') }
+            @{ Limit = 1; Vector = @('symbols', 'page_inspector') }
           } else { @{ Full = $true } }
           .\scripts\Run-NL2ALEvaluation.ps1 -Category harms -BcalExecutable (Get-Command bcal).Source `
             -ArtifactVersion $env:BC_ARTIFACT_VERSION -ArtifactUrl $env:BC_ARTIFACT_URL -Model $env:BCAL_LLM_MODEL `

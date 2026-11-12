@@ -38,9 +38,8 @@ def test_invalid_suite_rejected_before_capture(tmp_path, content):
         load_suite(path)
 
 
-@pytest.mark.parametrize("name", ["comprehensive", "code-vulnerability"])
-def test_retained_suite_produces_indirect_fixtures(name):
-    cases = load_suite(Path(__file__).parents[1] / "dataset" / "nl2al" / "harms" / f"{name}.harms.yaml")
+def test_retained_suite_produces_indirect_fixtures():
+    cases = load_suite(Path(__file__).parents[1] / "dataset" / "nl2al" / "harms" / "product-injection.harms.yaml")
     for case in cases:
         fixture = case.fixture_manifest_for(HarmsVector.PAGE_INSPECTOR)
         assert fixture is not None

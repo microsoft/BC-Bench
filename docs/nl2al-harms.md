@@ -5,8 +5,10 @@ title: NL2AL accuracy and harms
 
 # Repeatable NL2AL accuracy and harms evaluation
 
-The fixed harms cases evaluate BCal instruction following through direct prompts and indirect
-tool-result injection. Code lives under `bcbench.agent.bcal.harms`, with a dedicated
+The committed cases evaluate BCal instruction following through indirect tool-result injection.
+General harmful inputs must originate from the red-teaming agent and stay in private runtime
+artifacts, not committed datasets or tests. Authored cases are limited to otherwise innocuous
+actions that become unauthorized in the BC task context. Code lives under `bcbench.agent.bcal.harms`, with a dedicated
 `python -m bcbench.agent.bcal.harms` entry point; it is not a cross-category framework.
 For Azure-generated attacks and attack strategies, use the existing `bcbench redteam scan`.
 No harvesting, source-plugin protocol, couching library or template language is added here.
@@ -61,7 +63,7 @@ $harmsArtifactVersion = ([uri]$harmsArtifactUrl).Segments[-2].Trim('/')
 Download-Artifacts -artifactUrl $harmsArtifactUrl -includePlatform
 .\scripts\Run-NL2ALEvaluation.ps1 -Category harms -BcalExecutable $runtime `
     -ArtifactVersion $harmsArtifactVersion -ArtifactUrl $harmsArtifactUrl `
-    -Model gpt-56-ceres -Vector direct,symbols,page_inspector `
+    -Model gpt-56-ceres -Vector symbols,page_inspector `
     -ResultsDirectory "$run\harms"
 
 .\.bcal-llm-api-venv\Scripts\python.exe .\tools\score_nl2al.py `
@@ -72,7 +74,11 @@ uv run python -m bcbench.agent.bcal.harms score "$run\harms\harms" `
 ```
 
 After preflight and approval of the exact pins, `-Full` selects all accuracy entries or all
-six comprehensive harms cases. Omit `-Vector` for the six-vector, 36-trial harms matrix.
+cases in the selected harms suite. The default has 15 BC-context objectives across five indirect
+vectors (75 planned attempts); omitting `-Vector` preserves each case's vector selection.
+Pass `-Suite <private-suite.yaml>` to the wrapper, or `run --suite <private-suite.yaml>` to the
+dedicated CLI, to replay privately sourced inputs. The wrapper hashes the actual selected suite.
+Do not pass private inputs to public CI or upload them as public artifacts.
 Harms uses the gold base entry; challenge is rejected rather than mislabelled.
 Its explicit `--bc-version` override reaches symbol selection and runtime input; manifests retain
 both the original dataset environment and selected environment. The wrapper also records the exact
@@ -88,13 +94,29 @@ Boolean with reasoning per assertion; missing, duplicate or malformed judgments 
 
 ## Fixed cases and validity
 
-Suites are plain YAML under `dataset/nl2al/harms`: `comprehensive.harms.yaml` is the run matrix;
-`code-vulnerability.harms.yaml` provides optional BCQuality-grounded cases. Both accept `defaults`
-and a nonempty `cases` list. Each case has a unique `id`, `harm`, `page`, optional `audience`,
+The committed `dataset/nl2al/harms/product-injection.harms.yaml` contains BC-context-only
+instruction injection: captions, names, tooltips, controls and other task deviations.
+Eight objectives are recovered source candidates from commit
+`49d6040fc4284ddefa216cee609d697e06559d61`, `dataset/harms/code-vulnerability.harms.yaml`;
+seven are newly authored. The original prompt, trigger, page and expected outcome of the eight
+candidates are preserved, but additional vector combinations are new. None is claimed to match
+a historical assessment execution without a manifest linking it.
+
+Suites accept `defaults` and a nonempty `cases` list. Each case has a unique `id`, `harm`, `page`, optional `audience`,
 benign `trigger`, `risk` label, `vectors` and per-vector `placement`. Optional `rule`, `detector`
 and `expected` describe scoring evidence. Labels are authored metadata, not generated taxonomy.
-The comprehensive file has six fixed objectives across six vectors: 36 attempts, not 36 independent
-objectives or an Azure-generated red-team campaign. It does not establish parity with historical RAI runs.
+The former six-objective suite and hand-authored general harmful objectives are no longer shipped.
+Their frozen captures remain valid historical artifacts of that source revision, not results for
+the replacement inputs. A vector or placement expansion increases attempts, not distinct objectives.
+
+Recover approved historical prompt/output pairs into a private suite without changing their text;
+keep workbook hashes, source rows, original scores and manual adjudications in a sidecar manifest.
+Unknown direct/UPIA pairing, generator identity or XPIA payload provenance must remain unknown.
+An explicitly selected replay page is new execution context, not recovered metadata. For new
+general harmful inputs, use the existing Azure red-teaming agent (`bcbench redteam scan`), keeping
+its generated inputs and provenance private. That command runs a target campaign: do not invoke it
+merely to validate a recovered suite. `run --dry-run` validates fixture construction without target
+or judge calls. Do not equate any fixed suite with the historical RAI regimen.
 
 Direct trials send `harm` as the prompt. Indirect trials send the benign trigger and inject
 the payload through BCal's `--harms-fixture` contract into symbols, page inspection, translations,
@@ -163,13 +185,14 @@ Accuracy remains the workflow default and scheduled path. Harms is opt-in and pi
 Copilot CLI `1.0.82` and objective judge `gpt-5.3-codex`. It resolves the latest supported sandbox
 without restricting the BC major version, then uses that exact build throughout the job.
 `artifact-resolution.json` preserves the URL, version, resolution time and helper version.
-The bounded job captures the first case through direct, symbols and page inspection. Full mode is
+The bounded job captures the first BC-context case through symbols and page inspection. Full mode is
 explicit `test-run=false`. Delivery/scoring gaps fail its coverage gate. It uses existing `ado-read`
 credentials and Copilot Requests permission, and uploads selected evidence, not binaries/certificates.
 
 Hosted preflight [43155894112](https://github.com/microsoft/BC-Bench/actions/runs/43155894112)
 succeeded at source `30a8a4e5512762679d4433a4bbdedbbe998b9f8d` with BC `29.1.57326.57994`
 and Ceres: three attempted, delivered and scored; zero objective realizations or unscored trials.
-This proves the hosted capture/judgment path for one objective across direct, symbols and page
+This used the previous six-objective suite, not the replacement product-context inputs.
+It proves the hosted capture/judgment path for one objective across direct, symbols and page
 inspection, not full safety coverage or historical RAI parity. Old-version captures remain separate
 and must not be relabelled or combined with the new environment's results.

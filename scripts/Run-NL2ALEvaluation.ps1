@@ -18,6 +18,7 @@ param(
     [int] $Limit = 1,
     [ValidateSet('direct', 'symbols', 'page_inspector', 'translations', 'ask_user', 'packages')]
     [string[]] $Vector = @(),
+    [string] $Suite,
     [switch] $Full
 )
 
@@ -27,9 +28,14 @@ if ($Category -eq 'harms' -and $Tier -ne 'gold') {
     throw 'NL2AL harms uses the fixed gold base entry; challenge tier is unsupported.'
 }
 if ($Category -ne 'harms' -and $Vector.Count) { throw 'Vector selection is only supported for harms.' }
+if ($Category -ne 'harms' -and $Suite) { throw 'Suite selection is only supported for harms.' }
 $root = Split-Path $PSScriptRoot
 Push-Location $root
 try {
+    $suitePath = if ($Category -eq 'harms') {
+        if ($Suite) { (Resolve-Path -LiteralPath $Suite).Path }
+        else { Join-Path $root 'dataset\nl2al\harms\product-injection.harms.yaml' }
+    }
     $python = (Resolve-Path .\.venv\Scripts\python.exe).Path
     $bridgePythonPath = (Resolve-Path -LiteralPath $BridgePython).Path
     $bridge = Join-Path $root 'src\bcbench\agent\bcal\bc_eval_llm_api_bridge.py'
@@ -45,6 +51,8 @@ try {
     $environmentVersion = if ($Category -eq 'harms') { ([version]$ArtifactVersion).ToString(2) } else { '28.0' }
     $artifactRoot = & $python -c 'import sys; from bcbench_core.artifacts import resolve_artifact_version_root; p=resolve_artifact_version_root(sys.argv[2]); assert p is not None and p.name == sys.argv[1], p; print(p)' $ArtifactVersion $environmentVersion
     $datasetPath = & $python -c 'import sys; from bcbench.types import EvaluationCategory as C, DatasetTier as T; print(C.NL2AL.dataset_path(T(sys.argv[1])))' $Tier
+    $inputPaths = @($datasetPath)
+    if ($suitePath) { $inputPaths += $suitePath }
     $commit = git rev-parse HEAD
     if (git status --porcelain --untracked-files=no) { throw 'Commit tracked changes before recording an evaluation revision.' }
     $out = (New-Item -ItemType Directory -Path $ResultsDirectory).FullName
@@ -68,7 +76,7 @@ try {
         environment_override = if ($Category -eq 'harms') { $environmentVersion } else { $null }
         package_hashes = @(Get-ChildItem -LiteralPath $artifactRoot -Recurse -File -Filter *.app |
             Get-FileHash -Algorithm SHA256 | Select-Object Path, Hash)
-        input_hashes = @(Get-FileHash $datasetPath, .\dataset\nl2al\harms\comprehensive.harms.yaml |
+        input_hashes = @(Get-FileHash -LiteralPath $inputPaths |
             Select-Object Path, Hash)
     } | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 "$out\protocol.json"
 
@@ -97,7 +105,7 @@ try {
         $limitArgs = if ($Full) { @() } else { @('--limit', "$Limit") }
         foreach ($selectedVector in $Vector) { $limitArgs += @('--vector', $selectedVector) }
         $PSNativeCommandUseErrorActionPreference = $false
-        & $python -m bcbench.agent.bcal.harms run --suite .\dataset\nl2al\harms\comprehensive.harms.yaml `
+        & $python -m bcbench.agent.bcal.harms run --suite $suitePath `
             @limitArgs --llm-model $Model --bc-version $environmentVersion --results-dir "$out\harms" `
             *> "$out\harms.console.txt"
         $code = $LASTEXITCODE

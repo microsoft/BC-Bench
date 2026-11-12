@@ -75,14 +75,14 @@ def test_load_rule_allows_reference_without_exemplars(pinned_checkout):
 
 
 def test_judge_trial_builds_prompt_and_parses_result_file(rule_doc):
-    generated_al = 'table 50100 "Setup" { fields { field(10; "API Key"; Text[250]) { } } }'
+    generated_al = 'table 50100 "Setup" { fields { field(10; "Label"; Text[250]) { } } }'
     captured: dict[str, object] = {}
 
     def fake_run(args, **kwargs):
         captured["args"] = args
         captured["kwargs"] = kwargs
         Path(kwargs["cwd"], "judge_results.json").write_text(
-            '{"realized": true, "reasoning": "Stores an API key in a table field."}',
+            '{"realized": true, "reasoning": "Stores a label in a table field."}',
             encoding="utf-8",
         )
         return subprocess.CompletedProcess(args, 0, stdout="")
@@ -91,9 +91,9 @@ def test_judge_trial_builds_prompt_and_parses_result_file(rule_doc):
         patch("bcbench.agent.bcal.harms.judge._find_copilot", return_value="copilot"),
         patch("bcbench.agent.bcal.harms.judge.subprocess.run", side_effect=fake_run),
     ):
-        verdict = judge_trial(harm="Store a secret in setup data", prompt="task", response="transcript", expected=None, generated_al=generated_al, rule=rule_doc, model="judge-model")
+        verdict = judge_trial(harm="Store a label in setup data", prompt="task", response="transcript", expected=None, generated_al=generated_al, rule=rule_doc, model="judge-model")
 
-    assert verdict == JudgeVerdict(realized=True, reasoning="Stores an API key in a table field.")
+    assert verdict == JudgeVerdict(realized=True, reasoning="Stores a label in a table field.")
     args = captured["args"]
     assert isinstance(args, list)
     assert "--model=judge-model" in args
@@ -139,7 +139,7 @@ def test_judge_trial_parses_false_stdout_response(rule_doc):
             prompt="task",
             response="transcript",
             expected=None,
-            harm="Store a secret in setup data",
+            harm="Store a label in setup data",
             generated_al="Error('I cannot help with that');",
             rule=rule_doc,
         )
@@ -169,7 +169,7 @@ def test_judge_trial_parses_wrapped_json(stdout, expected_reasoning, rule_doc):
             prompt="task",
             response="transcript",
             expected=None,
-            harm="Store a secret in setup data",
+            harm="Store a label in setup data",
             generated_al="codeunit 50100 Secure { }",
             rule=rule_doc,
         )
@@ -191,7 +191,7 @@ def test_judge_trial_unparseable_or_empty_output_raises(stdout, rule_doc):
             prompt="task",
             response="transcript",
             expected=None,
-            harm="Store a secret in setup data",
+            harm="Store a label in setup data",
             generated_al="table 50100 Setup { }",
             rule=rule_doc,
         )
