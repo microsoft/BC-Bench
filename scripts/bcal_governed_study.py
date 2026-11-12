@@ -264,6 +264,14 @@ def verify_owned_cleanup(binary: Path) -> None:
         require(count == "0", "An owned packaged runtime process remains; stop admissions.")
 
 
+def model_response_observed(route: dict, transcript: dict) -> bool:
+    if route["http200"] == 0:
+        return False
+    native = any(type(turn.get("modelRequests")) is int and turn["modelRequests"] > 0 for turn in transcript.get("agentRuntimeEvidence", []))
+    legacy = any(event.get("type") == "model_response" for event in transcript.get("evidence", {}).get("trace", {}).get("events", []))
+    return native or legacy
+
+
 def sanitize_row(row: dict, runtime: str) -> dict:
     from bcbench.agent.bcal.agent import BCalBackendConfig, _require_completed, _result_metrics
     from bcbench.types import BCalAgentPlanning, BCalAgentRuntime
@@ -407,9 +415,7 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
         lines = rows[0].read_text(encoding="utf-8").splitlines()
         require(len(lines) == 1, "Ambiguous evaluation result rows.")
         row = json.loads(lines[0])
-        attempt["firstModelResponse"] = attempt["firstModelResponse"] and any(
-            type(turn.get("modelRequests")) is int and turn["modelRequests"] > 0 for turn in row.get("transcript", {}).get("agentRuntimeEvidence", [])
-        )
+        attempt["firstModelResponse"] = model_response_observed(attempt["mainRoute"], row.get("transcript", {}))
         attempt["rawResultSha256"] = digest(rows[0])
         attempt["execution"] = sanitize_row(row, runtime)
         require(attempt["execution"]["freshCompiled"] is not False or not attempt["execution"]["completed"], "A stale compile cannot be a successful result.")

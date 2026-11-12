@@ -14,8 +14,8 @@ This compares legacy/BCAL planning with SDK/Copilot planning and self-review,
 not source-patch A/B or pure orchestration parity.
 
 The 8-hour aggregate grant includes preflight, setup, all worker attempts,
-judge, controller and artifacts. Disjoint job reservations total 28,320 seconds;
-480 seconds remain for runner/controller finalization. A worker never admits
+judge, controller and artifacts. Disjoint job reservations total 28,734 seconds;
+66 seconds remain for runner/controller finalization. A worker never admits
 another attempt without a full 1,500-second evaluation and separate
 100-second judge reservation. GitHub's job timeouts cap each reservation.
 There are no evaluation retries or default switches. Final measured accounting
@@ -28,6 +28,16 @@ Its full 414-second job charge remains in the preflight grant; the original ref
 and failed receipt are preserved. Admission now reuses the install action's exact
 cached nupkg rather than introducing a second private-feed downloader. This is
 not a repeated or replacement semantic attempt.
+
+The immutable hosted execution
+[43239801312](https://github.com/microsoft/BC-Bench/actions/runs/43239801312)
+exposed an incorrect legacy eligibility guard: the native SDK request counter
+is zero for legacy even after real model responses. The follow-up fix recognizes
+canonical legacy `model_response` events corroborated by the main route's HTTP
+responses, without weakening terminal/compile/export checks. Original receipts
+remain immutable; completed but unjudged cells have unavailable quality, not
+zero, and cannot be rejudged after ephemeral raw output is gone. This fix does
+not authorize a semantic retry, replacement, or additional dispatch.
 
 Package/source, dataset, prompts, assertions and all 350 symbol hashes are
 checked before inference. The existing feed/OIDC/Key Vault actions are reused.

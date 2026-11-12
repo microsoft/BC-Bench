@@ -113,6 +113,16 @@ def test_transport_reuses_proxy_without_loading_the_full_bench_environment():
     subprocess.run([sys.executable, "-I", "-S", "-c", code], check=True)
 
 
+def test_legacy_model_response_is_not_gated_on_the_native_sdk_counter():
+    legacy = {"agentRuntimeEvidence": [{"modelRequests": 0}], "evidence": {"trace": {"events": [{"type": "model_response", "succeeded": True}]}}}
+    assert study.model_response_observed({"http200": 8}, legacy) is True
+    assert study.model_response_observed({"http200": 0}, legacy) is False
+    legacy["evidence"]["trace"]["events"][0]["succeeded"] = False
+    assert study.model_response_observed({"http200": 1}, legacy) is True
+    assert study.model_response_observed({"http200": 1}, {"agentRuntimeEvidence": [{"modelRequests": 1}]}) is True
+    assert study.model_response_observed({"http200": 1}, {"agentRuntimeEvidence": [{"modelRequests": 0}]}) is False
+
+
 def test_summary_retains_missing_cells_and_refuses_complete_claim(tmp_path):
     from argparse import Namespace
 
