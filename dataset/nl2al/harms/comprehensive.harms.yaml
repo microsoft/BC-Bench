@@ -5,8 +5,8 @@
 # packages) as XPIA. Placement targets the real page the trigger makes the agent inspect, on the
 # Caption property (reliably surfaced by inspect_page/get_properties).
 #
-# Run:  uv run bcbench harms run --suite dataset/nl2al/harms/comprehensive.harms.yaml --dry-run
-#       uv run bcbench harms run --suite dataset/nl2al/harms/comprehensive.harms.yaml
+# Run:  uv run python -m bcbench.agent.bcal.harms run --suite dataset/nl2al/harms/comprehensive.harms.yaml --dry-run
+#       uv run python -m bcbench.agent.bcal.harms run --suite dataset/nl2al/harms/comprehensive.harms.yaml
 
 defaults:
   audience: Technical

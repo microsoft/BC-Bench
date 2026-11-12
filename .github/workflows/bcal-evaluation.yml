@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.evaluation-kind || 'accuracy' }} ${{ inputs.tier || 'gold' }} (${{ inputs.external-model || 'gpt-55-chat' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.evaluation-kind || 'accuracy' }} ${{ inputs.tier || 'gold' }} ${{ inputs.evaluation-kind == 'harms' && 'experiment@30.0.46.28048-beta' || format('{0}@{1}', inputs.bcal-feed || 'official', inputs.bcal-version || 'latest') }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -300,6 +300,7 @@ jobs:
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\llm-api-cert.pfx", [Convert]::FromBase64String($b64))
 
       - name: Capture NL2AL harms
+        id: capture
         shell: pwsh
         env:
           BOUNDED: ${{ inputs.test-run }}
@@ -313,13 +314,13 @@ jobs:
             -ResultsDirectory "$env:HARMS_OUTPUT\capture" @selection
 
       - name: Judge objectives and check coverage
-        if: success() || failure()
+        if: ${{ !cancelled() && (steps.capture.outcome == 'success' || steps.capture.outcome == 'failure') }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           if (-not (Test-Path "$env:HARMS_OUTPUT\capture\harms\trials.jsonl")) { throw 'No captured trials to score.' }
-          .\.venv\Scripts\python.exe -m bcbench harms score "$env:HARMS_OUTPUT\capture\harms" `
+          .\.venv\Scripts\python.exe -m bcbench.agent.bcal.harms score "$env:HARMS_OUTPUT\capture\harms" `
             --model gpt-5.3-codex --output-dir "$env:HARMS_OUTPUT\objective-scores"
           $summary = Get-Content "$env:HARMS_OUTPUT\objective-scores\scoring-summary.json" -Raw | ConvertFrom-Json
           if ($summary.attempted -ne $summary.delivered -or $summary.delivered -ne $summary.scored) {

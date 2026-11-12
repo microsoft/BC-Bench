@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 
+from bcbench.agent.bcal.harms.judge import JudgeVerdict, RuleDoc, judge_trial, load_rule
 from bcbench.exceptions import LLMJudgeError
-from bcbench.harms.judge import JudgeVerdict, RuleDoc, judge_trial, load_rule
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def pinned_checkout(tmp_path, monkeypatch):
         ["git", "-C", str(root), "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-m", "Pinned knowledge"], check=True, capture_output=True
     )
     commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
-    monkeypatch.setattr("bcbench.harms.judge.BCQUALITY_COMMIT", commit)
+    monkeypatch.setattr("bcbench.agent.bcal.harms.judge.BCQUALITY_COMMIT", commit)
     return root, commit
 
 
@@ -59,7 +59,7 @@ def test_load_rule_rejects_missing_checkout_and_rule(pinned_checkout):
 
 
 def test_load_rule_rejects_wrong_commit(pinned_checkout, monkeypatch):
-    monkeypatch.setattr("bcbench.harms.judge.BCQUALITY_COMMIT", "0" * 40)
+    monkeypatch.setattr("bcbench.agent.bcal.harms.judge.BCQUALITY_COMMIT", "0" * 40)
     with pytest.raises(LLMJudgeError, match="expected"):
         load_rule("secrets-isolated-storage", pinned_checkout[0])
 
@@ -86,8 +86,8 @@ def test_judge_trial_builds_prompt_and_parses_result_file(rule_doc):
         return subprocess.CompletedProcess(args, 0, stdout="")
 
     with (
-        patch("bcbench.harms.judge._find_copilot", return_value="copilot"),
-        patch("bcbench.harms.judge.subprocess.run", side_effect=fake_run),
+        patch("bcbench.agent.bcal.harms.judge._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.bcal.harms.judge.subprocess.run", side_effect=fake_run),
     ):
         verdict = judge_trial(harm="Store a secret in setup data", prompt="task", response="transcript", expected=None, generated_al=generated_al, rule=rule_doc, model="judge-model")
 
@@ -106,8 +106,8 @@ def test_judge_trial_parses_false_stdout_response(rule_doc):
         )
 
     with (
-        patch("bcbench.harms.judge._find_copilot", return_value="copilot"),
-        patch("bcbench.harms.judge.subprocess.run", side_effect=fake_run),
+        patch("bcbench.agent.bcal.harms.judge._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.bcal.harms.judge.subprocess.run", side_effect=fake_run),
     ):
         verdict = judge_trial(
             prompt="task",
@@ -136,8 +136,8 @@ def test_judge_trial_parses_wrapped_json(stdout, expected_reasoning, rule_doc):
         return subprocess.CompletedProcess(args, 0, stdout=stdout)
 
     with (
-        patch("bcbench.harms.judge._find_copilot", return_value="copilot"),
-        patch("bcbench.harms.judge.subprocess.run", side_effect=fake_run),
+        patch("bcbench.agent.bcal.harms.judge._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.bcal.harms.judge.subprocess.run", side_effect=fake_run),
     ):
         verdict = judge_trial(
             prompt="task",
@@ -157,8 +157,8 @@ def test_judge_trial_unparseable_or_empty_output_raises(stdout, rule_doc):
         return subprocess.CompletedProcess(args, 0, stdout=stdout)
 
     with (
-        patch("bcbench.harms.judge._find_copilot", return_value="copilot"),
-        patch("bcbench.harms.judge.subprocess.run", side_effect=fake_run),
+        patch("bcbench.agent.bcal.harms.judge._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.bcal.harms.judge.subprocess.run", side_effect=fake_run),
         pytest.raises(LLMJudgeError),
     ):
         judge_trial(
@@ -181,7 +181,7 @@ def test_judge_trial_unparseable_or_empty_output_raises(stdout, rule_doc):
     ],
 )
 def test_malformed_verdict_is_not_coerced(tmp_path, payload):
-    from bcbench.harms.judge import _parse_judge_result
+    from bcbench.agent.bcal.harms.judge import _parse_judge_result
 
     with pytest.raises(LLMJudgeError):
         _parse_judge_result(tmp_path / "absent.json", payload)

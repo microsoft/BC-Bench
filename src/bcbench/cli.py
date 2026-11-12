@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 from bcbench_core.logs import setup_logging
 
-from bcbench.commands import dataset_app, evaluate_app, harms_app, run_app
+from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.category import category_app
 from bcbench.commands.collect import collect_app
 from bcbench.commands.contamination import contamination_app
@@ -38,7 +38,6 @@ app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(result_app, name="result")
 app.add_typer(category_app, name="category")
 app.add_typer(contamination_app, name="contamination")
-app.add_typer(harms_app, name="harms")
 
 
 def _redteam_extra_installed() -> bool:

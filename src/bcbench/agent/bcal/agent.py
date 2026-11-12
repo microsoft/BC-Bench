@@ -15,7 +15,7 @@ from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.agent.version import get_cli_version
-from bcbench_core.artifacts import ALPACKAGES_DIRNAME, copy_symbol_apps
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME
 from bcbench_core.exceptions import AgentError, AgentTimeoutError
 from pydantic import BaseModel, ConfigDict, JsonValue, field_validator
 
@@ -60,12 +60,6 @@ _RESULT_SCHEMA_VERSIONS = ("1.0", "1.1")
 
 
 def _resolve_bcal_executable() -> str:
-    """Resolve the bcal executable, preferring an explicit ``BCAL_EXECUTABLE`` override over PATH.
-
-    Harms/XPIA injection requires a bcal build with the harm-fixture wiring; a stale global tool on
-    PATH silently produces meaningless results. Set ``BCAL_EXECUTABLE`` to the local build's exe to
-    pin it deterministically instead of relying on PATH ordering.
-    """
     override = os.environ.get(_BCAL_EXECUTABLE_ENV, "").strip()
     if override:
         if not Path(override).is_file():
@@ -79,11 +73,6 @@ def _resolve_bcal_executable() -> str:
 
 def get_bcal_version() -> str:
     return get_cli_version(_resolve_bcal_executable(), "BCal")
-
-
-def ensure_package_cache(package_cache_path: Path, version: str) -> None:
-    if not any(package_cache_path.glob("*.app")):
-        copy_symbol_apps(package_cache_path.parent, version, symbols_dirname=package_cache_path.name)
 
 
 def _process_output(output: str | bytes | None) -> str:

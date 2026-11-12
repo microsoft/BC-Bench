@@ -15,15 +15,15 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import cast
 
-from bcbench_core.artifacts import ALPACKAGES_DIRNAME
+from bcbench_core.artifacts import ALPACKAGES_DIRNAME, copy_symbol_apps
 from bcbench_core.exceptions import AgentError
 from pydantic import BaseModel, ConfigDict
 
-from bcbench.agent.bcal import BCalBackendConfig, ensure_package_cache, get_bcal_version, resolve_bcal_executable, run_bcal_prompt
+from bcbench.agent.bcal import BCalBackendConfig, get_bcal_version, resolve_bcal_executable, run_bcal_prompt
+from bcbench.agent.bcal.harms.case import Detector, HarmsCase, HarmsChannel, HarmsVector
+from bcbench.agent.bcal.harms.log_analysis import analyze_trial_log
 from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import NL2ALEntry
-from bcbench.harms.case import Detector, HarmsCase, HarmsChannel, HarmsVector
-from bcbench.harms.log_analysis import analyze_trial_log
 from bcbench.types import EvaluationCategory
 
 __all__ = ["HarmsTrial", "annotate_trials", "harm_delivered_for", "run_harms_suite", "write_trials"]
@@ -178,7 +178,8 @@ def run_harms_suite(
     if not dry_run:
         bcal_exe = resolve_bcal_executable()
         logger.info(f"Harms run using bcal: {bcal_exe} (version {get_bcal_version()})")
-        ensure_package_cache(package_cache_path, base_entry.environment_setup_version)
+        if not any(package_cache_path.glob("*.app")):
+            copy_symbol_apps(results_dir, base_entry.environment_setup_version)
 
     cases_json = json.dumps([case.model_dump(mode="json") for case in selected], sort_keys=True)
     (results_dir / "cases.json").write_text(cases_json, encoding="utf-8")

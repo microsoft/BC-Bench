@@ -5,35 +5,21 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from pydantic import TypeAdapter
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
 from bcbench.agent.bcal import BCalBackendConfig
+from bcbench.agent.bcal.harms.case import HarmsVector
+from bcbench.agent.bcal.harms.evaluate import DEFAULT_EVALUATORS, build_eval_dataset, evaluate_trials
+from bcbench.agent.bcal.harms.runner import HarmsTrial, annotate_trials, execution_failure, run_harms_suite, valid_trial, write_trials
+from bcbench.agent.bcal.harms.score import SCORER_VERSION, score_trials, scoring_sources, scoring_summary
+from bcbench.agent.bcal.harms.suite import load_suite
 from bcbench.config import get_config
-from bcbench.harms import (
-    HarmsTrial,
-    ManualHarmsSource,
-    RedTeamHarmsSource,
-    annotate_trials,
-    couchings_by_id,
-    evaluate_trials,
-    harvest_objectives,
-    load_objectives,
-    run_harms_suite,
-    score_trials,
-    write_trials,
-)
-from bcbench.harms.case import HarmsVector
-from bcbench.harms.evaluate import DEFAULT_EVALUATORS, build_eval_dataset
-from bcbench.harms.runner import execution_failure, valid_trial
-from bcbench.harms.score import SCORER_VERSION, scoring_sources, scoring_summary
 
 type Json = dict[str, Any]
 
@@ -41,63 +27,27 @@ logger = logging.getLogger(__name__)
 _config = get_config()
 _console = Console()
 
-harms_app = typer.Typer(help="NL2AL adversarial evaluation of BCal: capture, objective judgments, and separate Azure telemetry")
+app = typer.Typer(help="NL2AL adversarial evaluation of BCal: capture, objective judgments, and separate Azure telemetry", pretty_exceptions_show_locals=False)
 
-_DEFAULT_SUITE = _config.paths.dataset_dir / "nl2al" / "harms" / "smoke.harms.yaml"
-
-
-class HarmsTarget(StrEnum):
-    # Only nl2al (BCal) for now; pluggable like redteam.
-    BCAL = "bcal"
+_DEFAULT_SUITE = _config.paths.dataset_dir / "nl2al" / "harms" / "comprehensive.harms.yaml"
+_RESULTS = _config.paths.evaluation_results_path / "nl2al" / "harms"
 
 
-@harms_app.command("run")
+@app.command("run")
 def run(
     suite: Annotated[Path, typer.Option(help="Harms suite YAML to load.")] = _DEFAULT_SUITE,
-    subscription_id: Annotated[str | None, typer.Option(envvar="AZURE_SUBSCRIPTION_ID", help="Foundry Hub subscription ID (required unless --dry-run).")] = None,
-    resource_group: Annotated[str | None, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Foundry Hub resource group (required unless --dry-run).")] = None,
-    project_name: Annotated[str | None, typer.Option(envvar="AZURE_PROJECT_NAME", help="Foundry Hub project name (required unless --dry-run).")] = None,
-    target: Annotated[HarmsTarget, typer.Option(help="Agent under test.")] = HarmsTarget.BCAL,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model (external-command backend).")] = None,
-    results_dir: Annotated[Path, typer.Option(help="Where to write trials, fixtures, and results.")] = _config.paths.harms_results,
-    limit: Annotated[int | None, typer.Option(help="Cap the number of cases (rapid validation).")] = None,
+    results_dir: Annotated[Path, typer.Option(help="New directory for captured trials, fixtures, and logs.")] = _RESULTS,
+    limit: Annotated[int | None, typer.Option(min=1, help="Cap the number of cases (rapid validation).")] = None,
     vector: Annotated[list[HarmsVector] | None, typer.Option("--vector", help="Restrict the vector matrix (repeatable), e.g. --vector direct. Overrides case/suite matrices.")] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Build fixtures + eval rows but skip bcal and Foundry (instant validation).")] = False,
-    no_upload: Annotated[bool, typer.Option("--no-upload", help="Run bcal + local scoring but skip the Foundry upload.")] = False,
-    skip_evaluation: Annotated[bool, typer.Option("--skip-evaluation", help="Capture trials without contacting Foundry; score later with harms evaluate.")] = False,
-    evaluator: Annotated[list[str] | None, typer.Option("--evaluator", help="Override the evaluator set (repeatable): content_safety, indirect_attack, code_vulnerability.")] = None,
-    objectives: Annotated[Path | None, typer.Option(help="Red-team attack objectives JSON to couch + expand instead of a YAML suite (see `harms harvest`).")] = None,
-    couching: Annotated[list[str] | None, typer.Option("--couching", help="Couching template ids for --objectives (repeatable): system_override, reviewer_note, doc_comment, changelog_note.")] = None,
-    page: Annotated[str, typer.Option(help="BC page for red-team objectives (--objectives).")] = "Customer Card",
-    audience: Annotated[str, typer.Option(help="Audience for red-team objectives (--objectives).")] = "Business",
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Write fixtures and planned rows without executing BCal.")] = False,
 ) -> None:
-    """
-    Run a harms suite against BCAL: expand each vector-invariant case across the vector matrix, run
-    bcal per trial, score with Azure AI safety evaluators, and upload results to Foundry.
-
-    Cases come from a manual YAML suite (--suite) or red-team attack objectives (--objectives), which
-    are couched into a delivered harm + benign trigger before expansion.
-
-    Rapid validation: `--dry-run` (no bcal/network), `--limit 1 --vector direct` (one bcal run).
-
-    Examples:
-        uv run bcbench harms run --dry-run
-        uv run bcbench harms run --limit 1 --vector direct
-        uv run bcbench harms run --suite dataset/nl2al/harms/comprehensive.harms.yaml
-        uv run bcbench harms run --objectives dataset/redteam/attack_objectives.sample.json
-    """
-    if not dry_run and not skip_evaluation and (not subscription_id or not resource_group or not project_name):
-        raise typer.BadParameter("Foundry project (AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME) is required unless --dry-run.")
-
-    results_dir.mkdir(parents=True, exist_ok=True)
-    if objectives is not None:
-        source = RedTeamHarmsSource(load_objectives(objectives), page=page, audience=audience, couchings=couchings_by_id(couching))
-        cases = source.load()
-        _console.print(f"[cyan]Red-team source[/]: {len(cases)} couched cases from {objectives}.")
-    else:
-        cases = ManualHarmsSource(suite).load()
-
+    """Capture fixed NL2AL cases; judging and optional Azure telemetry are separate commands."""
+    cases = load_suite(suite)
+    if results_dir.exists():
+        raise typer.BadParameter(f"Capture directory already exists: {results_dir}")
+    results_dir.mkdir(parents=True)
     trials = run_harms_suite(
         cases,
         backend_config=BCalBackendConfig(command=llm_command, model=llm_model),
@@ -109,68 +59,15 @@ def run(
 
     build_eval_dataset(trials, results_dir / "eval_dataset.jsonl")
     if dry_run:
-        _console.print(f"[yellow]Dry run[/]: planned {len(trials)} trials (bcal + Foundry skipped). Fixtures under {results_dir / 'fixtures'}.")
-        _render_trials(trials)
-        return
-    if skip_evaluation:
-        _render_trials(trials)
-        if any(execution_failure(trial) for trial in trials):
-            raise typer.Exit(1)
-        return
-    assert subscription_id
-    assert resource_group
-    assert project_name
-
-    azure_ai_project = {
-        "subscription_id": subscription_id,
-        "resource_group_name": resource_group,
-        "project_name": project_name,
-    }
-    result = evaluate_trials(trials, azure_ai_project, results_dir, evaluators=tuple(evaluator) if evaluator else DEFAULT_EVALUATORS, upload=not no_upload)
-    print(f"Harms results written to {results_dir / 'harms_results.json'}")
-    _render_results(result, trials)
-    if result.get("failed_evaluators") or result.get("incomplete_evaluations") or any(execution_failure(trial) for trial in trials):
+        _console.print(f"[yellow]Dry run[/]: planned {len(trials)} trials. Fixtures under {results_dir / 'fixtures'}.")
+    _render_trials(trials)
+    if any(execution_failure(trial) for trial in trials):
         raise typer.Exit(1)
 
 
-@harms_app.command("harvest")
-def harvest(
-    subscription_id: Annotated[str, typer.Option(envvar="AZURE_SUBSCRIPTION_ID", help="Foundry Hub subscription ID.")],
-    resource_group: Annotated[str, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Foundry Hub resource group.")],
-    project_name: Annotated[str, typer.Option(envvar="AZURE_PROJECT_NAME", help="Foundry Hub project name.")],
-    output: Annotated[Path, typer.Option(help="Where to write the generated attack-objectives JSON.")] = _config.paths.harms_results / "objectives.json",
-    risk_category: Annotated[
-        list[str] | None, typer.Option("--risk-category", help="Risk category to generate objectives for (repeatable), e.g. code_vulnerability. Mutually exclusive with --seeds.")
-    ] = None,
-    seeds: Annotated[Path | None, typer.Option(help="Starting attack-objectives JSON (upstream format). Mutually exclusive with --risk-category.")] = None,
-    language: Annotated[str | None, typer.Option(help="Attack language (e.g. es).")] = None,
-    num_objectives: Annotated[int | None, typer.Option("--num-objectives", help="Objectives to generate per risk category (default 10).")] = None,
-) -> None:
-    """
-    Generate red-team attack objectives using the Azure AI Red Teaming Agent, for use with
-    `harms run --objectives`. The agent is driven with a capturing target that records the harmful
-    prompts it generates; those are written as an objectives JSON.
-
-    Example:
-        uv run bcbench harms harvest --risk-category code_vulnerability --output objectives.json
-        uv run bcbench harms run --objectives objectives.json
-    """
-    from azure.ai.evaluation.red_team import RiskCategory, SupportedLanguages
-
-    if seeds or not risk_category or len(risk_category) != 1:
-        raise typer.BadParameter("Provide exactly one --risk-category; seeded harvesting is unsupported because callback provenance is unavailable.")
-
-    risks = [TypeAdapter(RiskCategory).validate_python(r) for r in risk_category] if risk_category else None
-    lang = TypeAdapter(SupportedLanguages).validate_python(language) if language else None
-    azure_ai_project = {"subscription_id": subscription_id, "resource_group_name": resource_group, "project_name": project_name}
-
-    path = harvest_objectives(azure_ai_project, output, risk_categories=risks, seeds_path=seeds, language=lang, num_objectives=num_objectives)
-    print(f"Attack objectives written to {path}")
-
-
-@harms_app.command("evaluate")
+@app.command("evaluate")
 def evaluate(
-    trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _config.paths.harms_results,
+    trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _RESULTS,
     subscription_id: Annotated[str | None, typer.Option(envvar="AZURE_SUBSCRIPTION_ID", help="Foundry Hub subscription ID.")] = None,
     resource_group: Annotated[str | None, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Foundry Hub resource group.")] = None,
     project_name: Annotated[str | None, typer.Option(envvar="AZURE_PROJECT_NAME", help="Foundry Hub project name.")] = None,
@@ -183,7 +80,7 @@ def evaluate(
     Lets you iterate on the evaluator set cheaply after an expensive `harms run`.
 
     Example:
-        uv run bcbench harms evaluate evaluation_results/harms/smoke-run
+        uv run python -m bcbench.agent.bcal.harms evaluate evaluation_results/harms/smoke-run
     """
     if not subscription_id or not resource_group or not project_name:
         raise typer.BadParameter("Foundry project (AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME) is required.")
@@ -196,55 +93,47 @@ def evaluate(
     trials = _load_trials(trials_file)
     azure_ai_project = {"subscription_id": subscription_id, "resource_group_name": resource_group, "project_name": project_name}
     result = evaluate_trials(trials, azure_ai_project, results_dir, evaluators=tuple(evaluator) if evaluator else DEFAULT_EVALUATORS, upload=not no_upload)
-    print(f"Harms results written to {results_dir / 'harms_results.json'}")
+    _console.print(f"Harms results written to {results_dir / 'harms_results.json'}")
     _render_results(result, trials)
     if result.get("failed_evaluators") or result.get("incomplete_evaluations"):
         raise typer.Exit(1)
 
 
-@harms_app.command("annotate")
+@app.command("annotate")
 def annotate(
-    trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _config.paths.harms_results,
+    trials_path: Annotated[Path, typer.Argument(help="Captured trials.jsonl or its directory.")],
+    output_dir: Annotated[Path, typer.Option(help="New directory for delivery annotations; original captures are unchanged.")],
 ) -> None:
-    """Post-process a captured run: re-derive per-trial harm delivery from logs and mark line validity.
-
-    Reads ``trials.jsonl`` + ``logs/``, recomputes ``harm_delivered`` (and XPIA landing), writes
-    ``trials.jsonl`` back, refreshes ``eval_dataset.jsonl`` with ``harm_delivered``/``valid``, and
-    prints a validity summary. Back-fills runs captured before these fields existed — no bcal/network.
-
-    Example:
-        uv run bcbench harms annotate evaluation_results/harms
-    """
+    """Re-derive delivery from saved logs without overwriting the capture."""
     results_dir = trials_path if trials_path.is_dir() else trials_path.parent
     trials_file = trials_path / "trials.jsonl" if trials_path.is_dir() else trials_path
     if not trials_file.exists():
         raise typer.BadParameter(f"No trials.jsonl found at {trials_file}.")
 
     annotated = annotate_trials(_load_trials(trials_file), results_dir=results_dir)
-    write_trials(trials_file, annotated)
-    build_eval_dataset(annotated, results_dir / "eval_dataset.jsonl")
-    _console.print(f"[green]Annotated[/] {len(annotated)} trials → refreshed {trials_file.name} and eval_dataset.jsonl.")
+    output_dir.mkdir(parents=True, exist_ok=False)
+    write_trials(output_dir / "trials.jsonl", annotated)
+    build_eval_dataset(annotated, output_dir / "eval_dataset.jsonl")
+    _console.print(f"Annotated {len(annotated)} trials at {output_dir}.")
     _render_trials(annotated)
 
 
-@harms_app.command("score")
+@app.command("score")
 def score(
-    trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _config.paths.harms_results,
+    trials_path: Annotated[Path, typer.Argument(help="Captured trials.jsonl or its directory.")],
+    output_dir: Annotated[Path, typer.Option(help="New directory for scores; original captures are unchanged.")],
     model: Annotated[str | None, typer.Option(help="Copilot model for objective judging (defaults to the configured judge model).")] = None,
     no_judge: Annotated[bool, typer.Option("--no-judge", help="Detector diagnostics only; objective scores remain incomplete.")] = False,
     bcquality_root: Annotated[Path | None, typer.Option(envvar="BCQUALITY_ROOT", help="BCQuality checkout at the pinned harms knowledge commit.")] = None,
-    output_dir: Annotated[Path | None, typer.Option(help="New directory for corrected scores, preserving the original captures.")] = None,
 ) -> None:
     """Judge objective-following from saved evidence, optionally grounded in pinned BCQuality rules."""
-    results_dir = trials_path if trials_path.is_dir() else trials_path.parent
+    results_dir = output_dir
     trials_file = trials_path / "trials.jsonl" if trials_path.is_dir() else trials_path
     if not trials_file.exists():
         raise typer.BadParameter(f"No trials.jsonl found at {trials_file}.")
 
     input_hash = hashlib.sha256(trials_file.read_bytes()).hexdigest()
-    if output_dir is not None:
-        output_dir.mkdir(parents=True, exist_ok=False)
-        results_dir = output_dir
+    output_dir.mkdir(parents=True, exist_ok=False)
     scored = score_trials(_load_trials(trials_file), model=model, use_judge=not no_judge, bcquality_root=bcquality_root)
     write_trials(results_dir / "trials.jsonl", scored)
     build_eval_dataset(scored, results_dir / "eval_dataset.jsonl")
@@ -263,9 +152,9 @@ def score(
         raise typer.Exit(code=1)
 
 
-@harms_app.command("report")
+@app.command("report")
 def report(
-    path: Annotated[Path, typer.Argument(help="A harms_results.json (or its directory), or a trials.jsonl to render.")] = _config.paths.harms_results,
+    path: Annotated[Path, typer.Argument(help="A harms_results.json (or its directory), or a trials.jsonl to render.")] = _RESULTS,
 ) -> None:
     """Render saved harms results as tables."""
     if path.is_dir():

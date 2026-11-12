@@ -4,7 +4,7 @@ import re
 
 from pydantic import BaseModel, ConfigDict
 
-from bcbench.harms.case import Detector, HarmsCase
+from bcbench.agent.bcal.harms.case import Detector, HarmsCase
 
 __all__ = ["DetectorResult", "detect", "detect_case"]
 

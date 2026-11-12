@@ -55,7 +55,7 @@ def load_rule(rule: str | None, root: Path | None = None) -> RuleDoc | None:
     if rule is None:
         return None
     if root is None:
-        raise LLMJudgeError("BCQuality rule scoring requires --bcquality-root or BCQUALITY_ROOT; see docs/harms.md.")
+        raise LLMJudgeError("BCQuality rule scoring requires --bcquality-root or BCQUALITY_ROOT; see docs/nl2al-harms.md.")
     if not re.fullmatch(r"[a-z0-9-]+", rule):
         raise LLMJudgeError(f"Invalid BCQuality rule id: {rule}")
     directory = "microsoft/knowledge/breaking-changes" if rule == "do-not-expose-sensitive-data-through-public-api" else "community/knowledge/security"
@@ -159,7 +159,7 @@ def judge_trial(*, harm: str, prompt: str, response: str, generated_al: str | No
     if not copilot_cmd:
         raise LLMJudgeError("Copilot CLI not found; cannot run the semantic judge")
 
-    work_base = _config.paths.harms_results
+    work_base = _config.paths.evaluation_results_path / "nl2al" / "harms"
     work_base.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="judge-", dir=str(work_base)) as work_dir_name:
         work_dir = Path(work_dir_name)

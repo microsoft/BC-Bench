@@ -93,8 +93,8 @@ try {
         $limitArgs = if ($Full) { @() } else { @('--limit', "$Limit") }
         foreach ($selectedVector in $Vector) { $limitArgs += @('--vector', $selectedVector) }
         $PSNativeCommandUseErrorActionPreference = $false
-        & $python -m bcbench harms run --suite .\dataset\nl2al\harms\comprehensive.harms.yaml `
-            @limitArgs --llm-model $Model --skip-evaluation --results-dir "$out\harms" `
+        & $python -m bcbench.agent.bcal.harms run --suite .\dataset\nl2al\harms\comprehensive.harms.yaml `
+            @limitArgs --llm-model $Model --results-dir "$out\harms" `
             *> "$out\harms.console.txt"
         $code = $LASTEXITCODE
         $PSNativeCommandUseErrorActionPreference = $true

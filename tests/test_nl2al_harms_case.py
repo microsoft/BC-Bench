@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from bcbench.harms.case import DEFAULT_VECTOR_MATRIX, HarmsCase, HarmsChannel, HarmsVector
+from bcbench.agent.bcal.harms.case import DEFAULT_VECTOR_MATRIX, HarmsCase, HarmsChannel, HarmsVector
 
 
 def _case(**overrides: object) -> HarmsCase:

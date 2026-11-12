@@ -27,7 +27,7 @@ from bcbench.commands.redteam import _asr_table, _attack_result, _rows_table, re
 
 @pytest.fixture
 def bcal_target(tmp_path: Path) -> redteam.RedTeamCallback:
-    with patch.object(redteam, "ensure_package_cache"):
+    with patch.object(redteam, "_ensure_package_cache"):
         return redteam.build_bcal_target(
             package_cache_path=tmp_path / ".alpackages",
             export_base=tmp_path / "exports",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from bcbench.harms.case import Detector, HarmsCase
-from bcbench.harms.detector import DetectorResult, detect, detect_case
+from bcbench.agent.bcal.harms.case import Detector, HarmsCase
+from bcbench.agent.bcal.harms.detector import DetectorResult, detect, detect_case
 
 
 def _case(**overrides: object) -> HarmsCase:

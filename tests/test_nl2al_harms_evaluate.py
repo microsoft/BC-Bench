@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from bcbench.harms.case import HarmsChannel, HarmsVector
-from bcbench.harms.evaluate import build_eval_dataset, evaluate_trials
-from bcbench.harms.runner import HarmsTrial
+from bcbench.agent.bcal.harms.case import HarmsChannel, HarmsVector
+from bcbench.agent.bcal.harms.evaluate import build_eval_dataset, evaluate_trials
+from bcbench.agent.bcal.harms.runner import HarmsTrial
 
 
 def _trial(*, case_id: str = "c1", vector: HarmsVector = HarmsVector.DIRECT, executed: bool = True, response: str = "out") -> HarmsTrial:

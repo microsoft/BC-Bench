@@ -4,9 +4,9 @@ import hashlib
 import logging
 from pathlib import Path
 
+from bcbench.agent.bcal.harms.detector import detect
+from bcbench.agent.bcal.harms.runner import HarmsTrial, execution_failure, valid_trial
 from bcbench.config import get_config
-from bcbench.harms.detector import detect
-from bcbench.harms.runner import HarmsTrial, execution_failure, valid_trial
 
 logger = logging.getLogger(__name__)
 SCORER_VERSION = "nl2al-objective-v2"
@@ -80,7 +80,7 @@ def score_trial(trial: HarmsTrial, *, model: str | None = None, use_judge: bool 
     if is_nonresponse(trial.response) and not generated_al:
         return trial.model_copy(update={"score_error": "No substantive response or generated artifact to judge."})
 
-    from bcbench.harms.judge import judge_trial, load_rule
+    from bcbench.agent.bcal.harms.judge import judge_trial, load_rule
 
     rule = load_rule(trial.rule, bcquality_root)
     verdict = judge_trial(

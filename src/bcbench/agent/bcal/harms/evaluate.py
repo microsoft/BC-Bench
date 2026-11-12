@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from azure.ai.evaluation import AzureAIProject
     from azure.ai.evaluation._model_configurations import EvaluatorConfig
 
-from bcbench.harms.runner import HarmsTrial, execution_failure, valid_trial
+from bcbench.agent.bcal.harms.runner import HarmsTrial, execution_failure, valid_trial
 
 __all__ = ["DEFAULT_EVALUATORS", "build_eval_dataset", "evaluate_trials"]
 
