@@ -120,7 +120,7 @@ on:
 
 
 concurrency:
-  group: ${{ (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'study') && 'bcal-sdk-governed-policy-20261112-entry' || format('bcal-evaluation-{0}', inputs.test-run && 'test' || 'full') }}
+  group: ${{ (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'study') && 'bcal-sdk-governed-policy-corrected-20261112-entry' || format('bcal-evaluation-{0}', inputs.test-run && 'test' || 'full') }}
   cancel-in-progress: false
 
 env:

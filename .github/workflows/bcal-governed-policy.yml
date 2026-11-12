@@ -13,7 +13,7 @@ permissions:
   actions: read
   id-token: write
 concurrency:
-  group: bcal-sdk-governed-policy-20261112
+  group: bcal-sdk-governed-policy-corrected-20261112
   cancel-in-progress: false
 env:
   BCAL_STUDY_WORK: C:\bgs
@@ -37,7 +37,8 @@ jobs:
         run: |
           if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'Study reruns are not authorized.' }
           New-Item -ItemType Directory study-sanitized -Force | Out-Null
-          @{status='setup';modelsAdmitted=0;benchCommit=$env:GITHUB_SHA;studyId='bcal-sdk-governed-policy-20261112'} | ConvertTo-Json | Set-Content study-sanitized\setup.json
+          $study = Get-Content experiments\bcal-sdk-policy\study.json -Raw | ConvertFrom-Json
+          @{status='setup';modelsAdmitted=0;benchCommit=$env:GITHUB_SHA;studyId=$study.studyId} | ConvertTo-Json | Set-Content study-sanitized\setup.json
       - uses: ./.github/actions/setup-bcal-governed-study
         with:
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -86,6 +87,8 @@ jobs:
           $receipt = Get-Content preflight-receipt\preflight.json -Raw | ConvertFrom-Json
           if ($receipt.status -ne 'passed' -or $receipt.modelsAdmitted -ne 0 -or $receipt.benchCommit -ne $env:GITHUB_SHA -or $receipt.package.sha256 -ne 'aea6037faa835faa7d64ad95b17dd8240645ea25bc70e257213c8fa3c3ff80de') { throw 'Preflight receipts failed admission.' }
           $study = Get-Content experiments\bcal-sdk-policy\study.json -Raw | ConvertFrom-Json
+          $inputsSha256 = (Get-FileHash experiments\bcal-sdk-policy\study.json -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($receipt.studyId -ne $study.studyId -or $receipt.inputsSha256 -ne $inputsSha256) { throw 'Preflight belongs to a different study manifest.' }
           $budget = $study.budget
           $reserved = $budget.preflightReservationSeconds + $budget.controllerReservationSeconds + 8*$budget.pairReservationSeconds + $budget.summaryReservationSeconds
           if ($reserved -gt 28800 -or $budget.historicalMeasuredSeconds + $budget.unresolvedLocalReservationSeconds + 28800 -gt 180000) { throw 'Aggregate historical+study reservations exceed authorization.' }

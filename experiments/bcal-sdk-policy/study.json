@@ -1,6 +1,7 @@
 {
   "schemaVersion": "1",
-  "studyId": "bcal-sdk-governed-policy-20261112",
+  "studyId": "bcal-sdk-governed-policy-corrected-20261112",
+  "relationship": "Separately authorized corrected16 study; never replaces, retries or pools cells from the preserved incomplete study43239801312.",
   "cohort": "original-smoke4-v1",
   "repeatCount": 2,
   "variants": [
@@ -82,16 +83,21 @@
   },
   "budget": {
     "originalEnvelopeSeconds": 180000,
-    "historicalMeasuredSeconds": 62677.474418000085,
+    "historicalMeasuredSeconds": 73844.47441800009,
+    "originalLocalMeasuredSeconds": 62677.474418000085,
     "unresolvedLocalReservationSeconds": 1500,
     "studyCeilingSeconds": 28800,
-    "preflightReservationSeconds": 1014,
-    "preservedFailedPreflight": {
-      "runId": 43236707356,
-      "benchCommit": "d0db24baaa5760558233dd0ff7a80cc61308678a",
-      "fullJobSeconds": 414,
-      "modelsAdmitted": 0,
-      "failure": "Redundant standalone archive HTTP read; existing install action succeeded"
+    "preflightReservationSeconds": 600,
+    "preservedPriorHostedStudy": {
+      "studyId": "bcal-sdk-governed-policy-20261112",
+      "benchCommit": "b810300629ba2bea515d520706f8b68d12b99c09",
+      "runIds": [43236707356, 43238851621, 43239801312],
+      "fullJobSeconds": [414, 287, 10466],
+      "totalMeasuredSeconds": 11167,
+      "capturedCells": 12,
+      "judgedCells": 4,
+      "evidenceSealSha256": "a59a333972044a065516f1d7d4213c9ef612b45a9391ecbe0355a10512a57101",
+      "status": "incomplete-preserved-not-replaced"
     },
     "controllerReservationSeconds": 300,
     "pairReservationSeconds": 3360,

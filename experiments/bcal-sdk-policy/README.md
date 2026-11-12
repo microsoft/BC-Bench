@@ -14,17 +14,25 @@ This compares legacy/BCAL planning with SDK/Copilot planning and self-review,
 not source-patch A/B or pure orchestration parity.
 
 The 8-hour aggregate grant includes preflight, setup, all worker attempts,
-judge, controller and artifacts. Disjoint job reservations total 28,734 seconds;
-66 seconds remain for runner/controller finalization. A worker never admits
+judge, controller and artifacts. Disjoint job reservations total 28,320 seconds;
+480 seconds remain for runner/controller finalization. A worker never admits
 another attempt without a full 1,500-second evaluation and separate
 100-second judge reservation. GitHub's job timeouts cap each reservation.
 There are no evaluation retries or default switches. Final measured accounting
 must use all jobs' start/end timestamps, including failures and preflight.
 
+The separately authorized corrected study is
+`bcal-sdk-governed-policy-corrected-20261112`, not a replacement or silent retry
+of the incomplete original study. Its historical charge carries the original
+62,677.474418 seconds plus **all 11,167 seconds** of the earlier hosted jobs;
+the original unresolved 1,500-second hold remains separate. It has a new
+8-hour aggregate ceiling within the remaining original 50-hour envelope,
+with the same fixed cases, policies, repeats, package, models and judges.
+
 The original no-model admission run
 [43236707356](https://github.com/microsoft/BC-Bench/actions/runs/43236707356)
 failed a redundant standalone feed read after the existing installation succeeded.
-Its full 414-second job charge remains in the preflight grant; the original ref
+Its full 414-second job charge remains in the historical charge; the original ref
 and failed receipt are preserved. Admission now reuses the install action's exact
 cached nupkg rather than introducing a second private-feed downloader. This is
 not a repeated or replacement semantic attempt.
@@ -37,7 +45,8 @@ canonical legacy `model_response` events corroborated by the main route's HTTP
 responses, without weakening terminal/compile/export checks. Original receipts
 remain immutable; completed but unjudged cells have unavailable quality, not
 zero, and cannot be rejudged after ephemeral raw output is gone. This fix does
-not authorize a semantic retry, replacement, or additional dispatch.
+not retroactively repair the original study. Only the separate corrected
+study's approved16 cells may be dispatched after its same-SHA no-model preflight.
 
 Package/source, dataset, prompts, assertions and all 350 symbol hashes are
 checked before inference. The existing feed/OIDC/Key Vault actions are reused.

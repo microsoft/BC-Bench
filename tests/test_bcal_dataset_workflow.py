@@ -56,7 +56,7 @@ def test_bcal_run_identity_includes_tier_and_package_selection():
 
     assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ${{{{ inputs.bcal-feed || 'official' }}}}@${{{{ inputs.bcal-version || 'latest' }}}} ")
     assert "format('bcal-evaluation-{0}', inputs.test-run && 'test' || 'full')" in workflow["concurrency"]["group"]
-    assert "bcal-sdk-governed-policy-20261112-entry" in workflow["concurrency"]["group"]
+    assert "bcal-sdk-governed-policy-corrected-20261112-entry" in workflow["concurrency"]["group"]
 
 
 def test_bcal_completion_review_model_offers_external_models_or_none():

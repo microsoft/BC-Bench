@@ -40,6 +40,9 @@ def write_json(path: Path, value: object) -> None:
 def study() -> dict:
     value = json.loads((INPUTS / "study.json").read_bytes())
     budget = value["budget"]
+    prior = budget["preservedPriorHostedStudy"]
+    require(prior["totalMeasuredSeconds"] == sum(prior["fullJobSeconds"]), "Prior hosted job charges do not reconcile.")
+    require(abs(budget["historicalMeasuredSeconds"] - budget["originalLocalMeasuredSeconds"] - prior["totalMeasuredSeconds"]) < 1e-6, "Prior hosted charges are missing from carry-forward.")
     reserved = budget["preflightReservationSeconds"] + budget["controllerReservationSeconds"] + budget["pairCount"] * budget["pairReservationSeconds"] + budget["summaryReservationSeconds"]
     if reserved > 28800 or budget["historicalMeasuredSeconds"] + budget["unresolvedLocalReservationSeconds"] + 28800 > budget["originalEnvelopeSeconds"]:
         raise ValueError("Aggregate budget does not fit the approved carry-forward envelope.")

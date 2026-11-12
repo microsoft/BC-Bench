@@ -31,6 +31,17 @@ def test_carry_forward_hold_cannot_be_ignored(tmp_path, monkeypatch):
         study.study()
 
 
+def test_prior_hosted_charges_cannot_be_dropped_from_the_corrected_study(tmp_path, monkeypatch):
+    original = study.INPUTS
+    config = study.study()
+    config["budget"]["historicalMeasuredSeconds"] = config["budget"]["originalLocalMeasuredSeconds"]
+    (tmp_path / "symbols.json").write_bytes((original / "symbols.json").read_bytes())
+    study.write_json(tmp_path / "study.json", config)
+    monkeypatch.setattr(study, "INPUTS", tmp_path)
+    with pytest.raises(ValueError, match="Prior hosted charges"):
+        study.study()
+
+
 def test_route_receipt_rejects_missing_stickiness_and_private_fields(tmp_path):
     path = tmp_path / "route.json"
     value = {"requests": 2, "http200": 2, "ticketsReturned": 0, "ticketsReplayed": 0, "sessionStable": True, "modelStable": True}
