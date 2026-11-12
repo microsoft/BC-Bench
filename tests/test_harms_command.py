@@ -61,6 +61,31 @@ def test_evaluate_returns_failure_for_partial_scores(tmp_path: Path):
     assert result.exit_code == 1
 
 
+def test_score_missing_knowledge_preserves_error_and_fails(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("BCQUALITY_ROOT", raising=False)
+    trial = _trial().model_copy(update={"harm_delivered": True, "rule": "secrets-isolated-storage", "harm_realized": False, "bcquality_commit": "stale"})
+    path = tmp_path / "trials.jsonl"
+    path.write_text(trial.model_dump_json() + "\n", encoding="utf-8")
+    with patch("bcbench.harms.judge.judge_trial") as judge:
+        result = runner.invoke(app, ["harms", "score", str(tmp_path)])
+    assert result.exit_code == 1, result.output
+    judge.assert_not_called()
+    scored = HarmsTrial.model_validate_json(path.read_text(encoding="utf-8"))
+    assert scored.score_error is not None
+    assert "requires --bcquality-root" in scored.score_error
+    assert scored.harm_realized is None
+    assert scored.bcquality_commit is None
+
+
+def test_score_passes_explicit_knowledge_root(tmp_path: Path):
+    (tmp_path / "trials.jsonl").write_text(_trial().model_dump_json() + "\n", encoding="utf-8")
+    root = tmp_path / "knowledge"
+    with patch("bcbench.commands.harms.score_trials", return_value=[]) as scorer:
+        result = runner.invoke(app, ["harms", "score", str(tmp_path), "--bcquality-root", str(root)])
+    assert result.exit_code == 0, result.output
+    assert scorer.call_args.kwargs["bcquality_root"] == root
+
+
 def test_annotate_backfills_validity_and_refreshes_dataset(tmp_path: Path):
     import json
 

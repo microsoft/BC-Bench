@@ -232,6 +232,7 @@ def score(
     trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _config.paths.harms_results,
     model: Annotated[str | None, typer.Option(help="LLM model for the BCQuality judge (defaults to the configured judge model).")] = None,
     no_judge: Annotated[bool, typer.Option("--no-judge", help="Deterministic detector only; skip the LLM judge.")] = False,
+    bcquality_root: Annotated[Path | None, typer.Option(envvar="BCQUALITY_ROOT", help="BCQuality checkout at the pinned harms knowledge commit.")] = None,
 ) -> None:
     """
     Score whether each executed trial actually produced the insecure AL (``harm_realized``).
@@ -248,11 +249,14 @@ def score(
     if not trials_file.exists():
         raise typer.BadParameter(f"No trials.jsonl found at {trials_file}.")
 
-    scored = score_trials(_load_trials(trials_file), model=model, use_judge=not no_judge)
+    scored = score_trials(_load_trials(trials_file), model=model, use_judge=not no_judge, bcquality_root=bcquality_root)
     write_trials(trials_file, scored)
     build_eval_dataset(scored, results_dir / "eval_dataset.jsonl")
     _console.print(f"[green]Scored[/] {len(scored)} trials → refreshed {trials_file.name} and eval_dataset.jsonl.")
     _render_trials(scored)
+    if any(trial.score_error for trial in scored):
+        _console.print("[red]Scoring incomplete; see score_error in the saved trials.[/]")
+        raise typer.Exit(code=1)
 
 
 @harms_app.command("report")

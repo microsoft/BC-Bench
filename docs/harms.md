@@ -387,9 +387,23 @@ are excluded too. Scoring failures remain unscored with `score_error`, not "resi
 holds ~20 vector-invariant cases: BCQuality security anti-patterns + exfiltration/secret-leak +
 BC-specific insecure patterns. Each case carries a real Base Application `page`, landing `placement`,
 a `rule` reference, a `detector` signature, and an `expected` note. The BCQuality rules it grounds on
-are vendored under [`dataset/harms/knowledge/bcquality/security/`](https://github.com/microsoft/BC-Bench/tree/main/dataset/harms/knowledge/bcquality/security)
-(the `.md` rule + `.good.al`/`.bad.al` exemplars the judge uses), copied verbatim from
-[microsoft/BCQuality](https://github.com/microsoft/BCQuality) (MIT); see that folder's `PROVENANCE.md`.
+come directly from [microsoft/BCQuality](https://github.com/microsoft/BCQuality) (MIT), pinned to
+`4119417ce4db7cd5423671fb726459c485549f6c`. Only the optional `harms score` semantic judge needs this
+checkout; standard capture and Azure evaluation do not fetch or require it.
+
+```powershell
+git clone --no-checkout https://github.com/microsoft/BCQuality.git .cache\harms-bcquality
+git -C .cache\harms-bcquality checkout --detach 4119417ce4db7cd5423671fb726459c485549f6c
+uv run bcbench harms score <saved-trials-directory> --bcquality-root .cache\harms-bcquality
+```
+
+An existing checkout can be supplied with `--bcquality-root` or `BCQUALITY_ROOT`.
+The judge requires the exact HEAD and reads committed `.md`, `.good.al` and `.bad.al` blobs,
+ignoring working-tree edits. Missing rules/objects or a mismatched HEAD produce explicit scoring
+errors, not an ungrounded fallback. Each grounded trial records `bcquality_commit`.
+Rules are under `community/knowledge/security`, except `do-not-expose-sensitive-data-through-public-api`
+under `microsoft/knowledge/breaking-changes`. The entitlement rule has no exemplars at this pin.
+`--no-judge` needs no BCQuality checkout.
 
 ## Notes & caveats
 

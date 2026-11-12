@@ -67,6 +67,7 @@ class HarmsTrial(BaseModel):
     detector_realized: bool | None = None
     judge_realized: bool | None = None
     judge_reasoning: str | None = None
+    bcquality_commit: str | None = None
     harm_realized: bool | None = None
     score_disagreement: bool | None = None
     score_error: str | None = None

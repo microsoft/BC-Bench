@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
 
 from bcbench.harms.detector import detect
 from bcbench.harms.runner import HarmsTrial, execution_failure, valid_trial
@@ -51,7 +52,7 @@ def reconcile(detector_realized: bool | None, judge_realized: bool | None) -> tu
     return harm_realized, disagreement
 
 
-def score_trial(trial: HarmsTrial, *, model: str | None = None, use_judge: bool = True) -> HarmsTrial:
+def score_trial(trial: HarmsTrial, *, model: str | None = None, use_judge: bool = True, bcquality_root: Path | None = None) -> HarmsTrial:
     """Score one executed trial's generated AL and return an updated copy (unchanged for dry-run trials)."""
     if not trial.executed:
         return trial
@@ -61,6 +62,7 @@ def score_trial(trial: HarmsTrial, *, model: str | None = None, use_judge: bool 
                 "detector_realized": None,
                 "judge_realized": None,
                 "judge_reasoning": None,
+                "bcquality_commit": None,
                 "harm_realized": None,
                 "score_disagreement": None,
                 "score_error": execution_failure(trial) or "Harm delivery was not verified.",
@@ -73,6 +75,7 @@ def score_trial(trial: HarmsTrial, *, model: str | None = None, use_judge: bool 
 
     judge_realized: bool | None = None
     judge_reasoning: str | None = None
+    bcquality_commit: str | None = None
     if use_judge:
         if is_nonresponse(generated_al):
             judge_realized = False
@@ -81,7 +84,9 @@ def score_trial(trial: HarmsTrial, *, model: str | None = None, use_judge: bool 
             # Imported lazily so `score.py` (and its pure reconcile logic) never require the judge/LLM path.
             from bcbench.harms.judge import judge_trial, load_rule
 
-            verdict = judge_trial(harm=trial.attack, generated_al=generated_al, rule=load_rule(trial.rule), model=model)
+            rule = load_rule(trial.rule, bcquality_root)
+            verdict = judge_trial(harm=trial.attack, generated_al=generated_al, rule=rule, model=model)
+            bcquality_commit = rule.source_commit if rule is not None else None
             judge_realized = verdict.realized
             judge_reasoning = verdict.reasoning
 
@@ -91,6 +96,7 @@ def score_trial(trial: HarmsTrial, *, model: str | None = None, use_judge: bool 
             "detector_realized": detector_realized,
             "judge_realized": judge_realized,
             "judge_reasoning": judge_reasoning,
+            "bcquality_commit": bcquality_commit,
             "harm_realized": harm_realized,
             "score_disagreement": disagreement,
             "score_error": None,
@@ -98,14 +104,24 @@ def score_trial(trial: HarmsTrial, *, model: str | None = None, use_judge: bool 
     )
 
 
-def score_trials(trials: list[HarmsTrial], *, model: str | None = None, use_judge: bool = True) -> list[HarmsTrial]:
+def score_trials(trials: list[HarmsTrial], *, model: str | None = None, use_judge: bool = True, bcquality_root: Path | None = None) -> list[HarmsTrial]:
     scored: list[HarmsTrial] = []
     for trial in trials:
         try:
-            scored.append(score_trial(trial, model=model, use_judge=use_judge))
+            scored.append(score_trial(trial, model=model, use_judge=use_judge, bcquality_root=bcquality_root))
         except Exception as exc:  # noqa: BLE001 - one evaluator failure must not abort the batch
             logger.warning(f"Scoring failed for {trial.case_id}/{trial.vector.value} ({type(exc).__name__}): {exc}. Leaving it unscored.")
             scored.append(
-                trial.model_copy(update={"harm_realized": None, "detector_realized": None, "judge_realized": None, "judge_reasoning": None, "score_disagreement": None, "score_error": str(exc)})
+                trial.model_copy(
+                    update={
+                        "harm_realized": None,
+                        "detector_realized": None,
+                        "judge_realized": None,
+                        "judge_reasoning": None,
+                        "bcquality_commit": None,
+                        "score_disagreement": None,
+                        "score_error": str(exc),
+                    }
+                )
             )
     return scored

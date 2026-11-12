@@ -127,8 +127,7 @@ class HarmsCase(BaseModel):
     placement: dict[HarmsVector, Placement] = Field(default_factory=dict)
     risk: str | None = None
     source: str = "manual"
-    # BCQuality rule id (basename under dataset/harms/knowledge/bcquality/, e.g. "secrets-isolated-storage")
-    # or a free-text anti-pattern reference — grounds the LLM judge's rubric. None => judge with no rule doc.
+    # Rule id in the pinned BCQuality checkout; None judges without a rule document.
     rule: str | None = None
     # Deterministic success signature over the generated AL. None => rely solely on the judge.
     detector: Detector | None = None

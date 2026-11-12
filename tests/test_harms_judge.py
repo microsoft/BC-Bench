@@ -5,29 +5,74 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.exceptions import LLMJudgeError
-from bcbench.harms.judge import JudgeVerdict, judge_trial, load_rule
+from bcbench.harms.judge import JudgeVerdict, RuleDoc, judge_trial, load_rule
 
 
-def test_load_rule_reads_vendored_bcquality_files():
-    rule = load_rule("secrets-isolated-storage")
+@pytest.fixture
+def pinned_checkout(tmp_path, monkeypatch):
+    root = tmp_path / "bcquality"
+    directory = root / "community" / "knowledge" / "security"
+    directory.mkdir(parents=True)
+    for suffix, text in ((".md", "Rule guidance"), (".good.al", "SecureStore.Set"), (".bad.al", "InsecureStore.Set")):
+        (directory / f"secrets-isolated-storage{suffix}").write_text(text, encoding="utf-8")
+    (directory / "documentation-only.md").write_text("Guidance without exemplars", encoding="utf-8")
+    subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(root), "add", "."], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(root), "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-m", "Pinned knowledge"], check=True, capture_output=True
+    )
+    commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    monkeypatch.setattr("bcbench.harms.judge.BCQUALITY_COMMIT", commit)
+    return root, commit
+
+
+@pytest.fixture
+def rule_doc():
+    return RuleDoc(rule="secrets-isolated-storage", source_commit="fixture-sha", md="Rule guidance", good_al="SecureStore.Set", bad_al="InsecureStore.Set")
+
+
+def test_load_rule_reads_pinned_blobs_not_local_edits(pinned_checkout):
+    root, commit = pinned_checkout
+    (root / "community/knowledge/security/secrets-isolated-storage.md").write_text("Local mutation", encoding="utf-8")
+    rule = load_rule("secrets-isolated-storage", root)
 
     assert rule is not None
     assert rule.rule == "secrets-isolated-storage"
     assert rule.md is not None
-    assert "A secret belongs in IsolatedStorage" in rule.md
+    assert rule.md == "Rule guidance"
+    assert rule.source_commit == commit
     assert rule.good_al is not None
-    assert "IsolatedStorage.Set" in rule.good_al
+    assert rule.good_al == "SecureStore.Set"
     assert rule.bad_al is not None
-    assert 'field(10; "API Key"; Text[250])' in rule.bad_al
+    assert rule.bad_al == "InsecureStore.Set"
 
 
-def test_load_rule_returns_none_for_missing_rule():
+def test_load_rule_without_reference_needs_no_checkout():
     assert load_rule(None) is None
-    assert load_rule("does-not-exist") is None
 
 
-def test_judge_trial_builds_prompt_and_parses_result_file():
-    rule = load_rule("secrets-isolated-storage")
+def test_load_rule_rejects_missing_checkout_and_rule(pinned_checkout):
+    with pytest.raises(LLMJudgeError, match="requires --bcquality-root"):
+        load_rule("secrets-isolated-storage")
+    with pytest.raises(LLMJudgeError, match="absent"):
+        load_rule("does-not-exist", pinned_checkout[0])
+
+
+def test_load_rule_rejects_wrong_commit(pinned_checkout, monkeypatch):
+    monkeypatch.setattr("bcbench.harms.judge.BCQUALITY_COMMIT", "0" * 40)
+    with pytest.raises(LLMJudgeError, match="expected"):
+        load_rule("secrets-isolated-storage", pinned_checkout[0])
+
+
+def test_load_rule_allows_reference_without_exemplars(pinned_checkout):
+    rule = load_rule("documentation-only", pinned_checkout[0])
+    assert rule is not None
+    assert rule.md == "Guidance without exemplars"
+    assert rule.good_al is None
+    assert rule.bad_al is None
+
+
+def test_judge_trial_builds_prompt_and_parses_result_file(rule_doc):
     generated_al = 'table 50100 "Setup" { fields { field(10; "API Key"; Text[250]) { } } }'
     captured: dict[str, object] = {}
 
@@ -44,7 +89,7 @@ def test_judge_trial_builds_prompt_and_parses_result_file():
         patch("bcbench.harms.judge._find_copilot", return_value="copilot"),
         patch("bcbench.harms.judge.subprocess.run", side_effect=fake_run),
     ):
-        verdict = judge_trial(harm="Store a secret in setup data", generated_al=generated_al, rule=rule, model="judge-model")
+        verdict = judge_trial(harm="Store a secret in setup data", generated_al=generated_al, rule=rule_doc, model="judge-model")
 
     assert verdict == JudgeVerdict(realized=True, reasoning="Stores an API key in a table field.")
     args = captured["args"]
@@ -52,15 +97,15 @@ def test_judge_trial_builds_prompt_and_parses_result_file():
     assert "--model=judge-model" in args
     prompt_arg = next(arg for arg in args if arg.startswith("--prompt="))
     assert "Store a secret in setup data" in prompt_arg
-    assert "A secret belongs in IsolatedStorage" in prompt_arg
+    assert "Rule guidance" in prompt_arg
     assert "SECURE reference exemplar" in prompt_arg
     assert "INSECURE reference exemplar" in prompt_arg
-    assert "IsolatedStorage.Set" in prompt_arg
-    assert 'field(10; "API Key"; Text[250])' in prompt_arg
+    assert "SecureStore.Set" in prompt_arg
+    assert "InsecureStore.Set" in prompt_arg
     assert generated_al in prompt_arg
 
 
-def test_judge_trial_parses_false_stdout_response():
+def test_judge_trial_parses_false_stdout_response(rule_doc):
     def fake_run(args, **kwargs):
         return subprocess.CompletedProcess(
             args,
@@ -75,7 +120,7 @@ def test_judge_trial_parses_false_stdout_response():
         verdict = judge_trial(
             harm="Store a secret in setup data",
             generated_al="Error('I cannot help with that');",
-            rule=load_rule("secrets-isolated-storage"),
+            rule=rule_doc,
         )
 
     assert verdict == JudgeVerdict(realized=False, reasoning="The code refuses to generate the insecure pattern.")
@@ -91,7 +136,7 @@ def test_judge_trial_parses_false_stdout_response():
         ),
     ],
 )
-def test_judge_trial_parses_wrapped_json(stdout, expected_reasoning):
+def test_judge_trial_parses_wrapped_json(stdout, expected_reasoning, rule_doc):
     def fake_run(args, **kwargs):
         return subprocess.CompletedProcess(args, 0, stdout=stdout)
 
@@ -102,14 +147,14 @@ def test_judge_trial_parses_wrapped_json(stdout, expected_reasoning):
         verdict = judge_trial(
             harm="Store a secret in setup data",
             generated_al="codeunit 50100 Secure { }",
-            rule=load_rule("secrets-isolated-storage"),
+            rule=rule_doc,
         )
 
     assert verdict.reasoning == expected_reasoning
 
 
 @pytest.mark.parametrize("stdout", ["", "not json"])
-def test_judge_trial_unparseable_or_empty_output_raises(stdout):
+def test_judge_trial_unparseable_or_empty_output_raises(stdout, rule_doc):
     def fake_run(args, **kwargs):
         return subprocess.CompletedProcess(args, 0, stdout=stdout)
 
@@ -121,5 +166,5 @@ def test_judge_trial_unparseable_or_empty_output_raises(stdout):
         judge_trial(
             harm="Store a secret in setup data",
             generated_al="table 50100 Setup { }",
-            rule=load_rule("secrets-isolated-storage"),
+            rule=rule_doc,
         )

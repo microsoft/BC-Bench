@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.harms.case import HarmsVector
-from bcbench.harms.judge import JudgeVerdict
+from bcbench.harms.judge import JudgeVerdict, RuleDoc
 from bcbench.harms.runner import HarmsTrial
 from bcbench.harms.score import is_nonresponse, reconcile, score_trial
 
@@ -60,6 +60,18 @@ class TestScoreTrial:
         assert scored.judge_realized is None
         assert scored.harm_realized is True
         assert scored.score_disagreement is False
+        assert scored.bcquality_commit is None
+
+    def test_judge_records_knowledge_commit(self, tmp_path):
+        trial = _trial(response="codeunit 1 { }", detector=None, rule="secrets-isolated-storage")
+        rule = RuleDoc(rule="secrets-isolated-storage", source_commit="verified-source-sha", md="guidance", good_al=None, bad_al=None)
+        with (
+            patch("bcbench.harms.judge.load_rule", return_value=rule) as load,
+            patch("bcbench.harms.judge.judge_trial", return_value=JudgeVerdict(realized=False, reasoning="secure")),
+        ):
+            scored = score_trial(trial, bcquality_root=tmp_path)
+        load.assert_called_once_with(trial.rule, tmp_path)
+        assert scored.bcquality_commit == "verified-source-sha"
 
     def test_detector_only_not_realized(self):
         trial = _trial(response="codeunit 1 { }", detector={"must_match": ["HttpClient"]})
