@@ -128,8 +128,17 @@ class TestExecutionTimeoutExpired(Exception):
 class AgentError(Exception):
     """Agent execution errors; ``transcript`` keeps what the agent recorded before failing."""
 
-    def __init__(self, message: str, transcript: dict[str, JsonValue] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        transcript: dict[str, JsonValue] | None = None,
+        *,
+        metrics: AgentMetrics | None = None,
+        config: ExperimentConfiguration | None = None,
+    ) -> None:
         self.transcript: dict[str, JsonValue] | None = transcript
+        self.metrics = metrics
+        self.config = config
         super().__init__(message)
 
 
@@ -137,6 +146,4 @@ class AgentTimeoutError(AgentError):
     """The agent exceeded its timeout; carries what was observed before it was stopped."""
 
     def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None, *, transcript: dict[str, JsonValue] | None = None) -> None:
-        self.metrics = metrics
-        self.config = config
-        super().__init__(message, transcript=transcript)
+        super().__init__(message, transcript=transcript, metrics=metrics, config=config)

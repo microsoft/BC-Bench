@@ -105,3 +105,48 @@ The following studies are infrastructure-invalid and must not be scored or compa
 - `41686175570` / `41686175782`: nullable interaction-choice result-contract incompatibility;
 - `41691412171` / `41691423433`: missing Gate A opt-in and empty model-visible workspaces;
 - `41798148490` / `41798152826`: random protected `app.json` UUID caused baseline/candidate seed-receipt divergence.
+
+## Bounded SDK/legacy compatibility smoke
+
+The separate selector `experiments\bcal-sdk-policy\study.json` pins package
+`30.0.46.34884-beta` (source `7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d`),
+350 exact symbols, the same four ordinary tasks from the corrected hosted study,
+and the four repaired authority cases. Each runs once per runtime: **16 attempts
+total**, not 16 per variant. This compares legacy+bcal with SDK+copilot policies,
+not pure orchestration parity. It does not dispatch the historical authority
+selector, calibration repetitions, full validation, or any replacement attempts.
+
+The existing **Evaluation with bcal** Actions workflow isolates `validation-phase`
+`preflight` and `smoke` from its ordinary/scheduled evaluation paths. Smoke
+admission requires the successful same-SHA, same-manifest zero-model preflight
+run ID. Preflight materializes all four production authority fixtures and verifies
+their seed contracts and symbol bytes without calling a model. Eight pair jobs
+run at most four workers, with the two runtimes sequential and counterbalanced.
+The eight-hour aggregate ceiling includes preflight, setup, controllers, judges,
+failures, cleanup, and reservations; historical charges and the unresolved local
+pilot hold remain charged to the original envelope. Reruns and semantic retries
+are not admitted.
+
+Ordinary checklist quality and deterministic authority outcomes are reported
+separately. Native tools retain namespace distinctions; authority ordering uses
+complete canonical evidence and `scenarioStepId`, and a compile must follow the
+last mutation in the event sequence. Missing evidence never proves compliance.
+Native no-change/read-only turns do not acquire a blanket fresh-compile
+requirement; runtime domain-completion invariants still apply.
+
+`plan_action` remains the BCAL durable-plan contract, not SDK Plan-to-Autopilot
+approval. No scenario approval translation or authority waiver is performed.
+Packaged no-model RPC admission confirmed the contextual custom `ask_user`
+callback, scripted acceptance/decline/cancel, and forbidden namespaces. The three
+interactive cases pin their actual 32/31-tool catalog; retained intent has no
+interaction channel and pins the 31/30-tool catalog. Diagnostic prompt hashes
+are provenance, not substitutes for actual per-attempt identities. Availability
+selectors such as `custom:ask_user` are distinct from the unqualified RPC lookup
+name. These checks and the hosted preflight do not establish model authority
+compliance or authorize waived interaction assertions.
+
+Only sanitized scores, booleans, counts, known identifiers, hashes, trace
+completeness, and exception classifications may be uploaded to this public
+repository. Raw AL, prompts, transcripts, error text, package bytes, certificates,
+and routing tickets remain runner-ephemeral. Detailed failures cannot be recovered
+or rejudged from publication alone after teardown.

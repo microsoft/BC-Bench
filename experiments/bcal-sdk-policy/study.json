@@ -1,0 +1,185 @@
+{
+  "schemaVersion": "1",
+  "studyId": "bcal-stacked-sdk-smoke-20261112",
+  "relationship": "Approved smaller smoke above PR1011: four unchanged ordinary tasks and four repaired authority scenarios, once per runtime. No full validation, replacement, retries, or pooling with historical studies.",
+  "cohort": "ordinary4-authority4-v1",
+  "repeatCount": 1,
+  "variants": [
+    "legacy",
+    "copilot-sdk"
+  ],
+  "datasets": [
+    {
+      "category": "nl2al",
+      "lane": "ordinary-quality",
+      "tier": "gold",
+      "file": "dataset\\nl2al.jsonl",
+      "datasetSha256": "fce1a4c1d4b63d9b593b5d8c2c14a65727c5c6063dc0cf5d754208619aac4ab9",
+      "selectedEntries": [
+        {
+          "instanceId": "nl2al__move-name-customer-card-2",
+          "taskPromptSha256": "00c19b5c51e84bd754bf46ea23a2d5b436dd0d6a66acbd258062ed5512345b37",
+          "expectedSha256": "35f2894e966a9fcafa084821314c38a1acf5a796b161d8ee62f6b73b538e9641",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__add-industry-field-customer-card-2",
+          "taskPromptSha256": "1f1c3172cd3b519e7ecc6d8e3fa1ade4b8ae2c9eb03e474420c031cc5ef9fe60",
+          "expectedSha256": "73ce5fba24bc24ee9037c26f94e1ba2141b82258e189b1780e962e6054d1cb4f",
+          "environmentSetupVersion": "28.0"
+        }
+      ]
+    },
+    {
+      "category": "nl2al",
+      "lane": "ordinary-quality",
+      "tier": "challenge",
+      "file": "dataset\\nl2al_challenge.jsonl",
+      "datasetSha256": "8563f49db15fa3fc90f466e677109944a83e5ddcbe99024ec5ff5588e47cdd36",
+      "selectedEntries": [
+        {
+          "instanceId": "nl2al__event-subscriber-onafterpostsalesdoc-2",
+          "taskPromptSha256": "ff3d7eda4239324262403549e0b8dc43e2d1aad7157db8261d720543ef85bf07",
+          "expectedSha256": "a2a785392593035fe4e47f7e19d538d97680da5dc58d3fd6bc646c0c5c6e44fa",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-internal-notes-blob-2",
+          "taskPromptSha256": "98ecb3d306bf443f448220b9108a5a473550d2a19aa123f93c6651b03586d64e",
+          "expectedSha256": "0c53ee380451ed6aa20bc8611fdd4596c7fe79a94aba8dd0a605b64de292e712",
+          "environmentSetupVersion": "28.0"
+        }
+      ]
+    },
+    {
+      "category": "bcal-scenario",
+      "lane": "authority",
+      "tier": "gold",
+      "file": "dataset\\bcal_scenario.jsonl",
+      "datasetSha256": "21e0b77de9dd691e62947bdc13b5e15a54acad0b2962926096ebc387f5e3aa7c",
+      "selectedEntries": [
+        {
+          "instanceId": "bcal-scenario__authority-direct-and-corrected-scope-1",
+          "entrySha256": "30522e53c050f08135a6e387cdc00dc1075eeca7bb72e9fd7c9821950b889a7a",
+          "sdkToolCatalogSha256": "ee8050f61ad6eece90b18acd6523d179042e70a7740be47853e131a468534c7c",
+          "diagnosticSystemPromptSha256": "7fb90c8e3758541ca65a8ac2859ce10fce9bd551df232dc4ee3b3225e5f7098d"
+        },
+        {
+          "instanceId": "bcal-scenario__authority-rejected-permission-1",
+          "entrySha256": "c4095ecb51eb50359c180e435e20fb57b2beb6a40ffc924de3c93c5578979ceb",
+          "sdkToolCatalogSha256": "ee8050f61ad6eece90b18acd6523d179042e70a7740be47853e131a468534c7c",
+          "diagnosticSystemPromptSha256": "43c4037bd3d638c28620ee7b730dabd21d3012f61b968e9ef056567348eec16e"
+        },
+        {
+          "instanceId": "bcal-scenario__authority-retained-intent-1",
+          "entrySha256": "27fbb5e1eb6fd8852d0e07b14d25bda48f8825685add914cd81a52d2da92664a",
+          "sdkToolCatalogSha256": "53cbf24393521600b170c5840c5721292be4953c5b1e194e137489ba5e7ba81b",
+          "diagnosticSystemPromptSha256": "bd78d05979a2bb957cda2b6eaf1517f67e207eac7c98213ab8fc82d43994d127"
+        },
+        {
+          "instanceId": "bcal-scenario__authority-untrusted-evidence-1",
+          "entrySha256": "3089259b4bac629da8324e2fd742b93655c8b9fc7a85ab51464ef1e95000ed29",
+          "sdkToolCatalogSha256": "ee8050f61ad6eece90b18acd6523d179042e70a7740be47853e131a468534c7c",
+          "diagnosticSystemPromptSha256": "ae8734ce82ce55cf107e30579b79a98753a598cf385ed937430b3b0c441dab68"
+        }
+      ]
+    }
+  ],
+  "symbolsManifestSha256": "cee5605b0cb36d894c3f723d4942c8d78053b07cd31151f61e78c78aa7bf6399",
+  "authorityContractAdmission": {
+    "indexSha256": "7b52f117075741de628d0348926dbd7c8111415f803b5e8279eb986e3e792dcd",
+    "rawReceiptSha256": "45d9f0b3084a7eb6304c25a695850d18a6d4417f61b89c5aaae9184e612779db",
+    "chargedSeconds": 380,
+    "includedInLocalNoModelReservation": true,
+    "modelCalls": 0,
+    "limitations": "Packaged RPC/catalog/scripted callback contract only; manually injected turn state, unused.invalid route. No model authority, compile, hosted routing, process-tree stress or evaluation admission. Diagnostic prompt hashes are provenance; actual per-attempt prompt identities remain recorded independently."
+  },
+  "package": {
+    "id": "Microsoft.BusinessCentral.BCal.CLI",
+    "version": "30.0.46.34884-beta",
+    "productVersion": "30.0.46.34884+7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "sourceCommitSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "commonBaseSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "stablePatchId": "no-patch",
+    "buildId": 3049448,
+    "sha256": "aea6037faa835faa7d64ad95b17dd8240645ea25bc70e257213c8fa3c3ff80de",
+    "bytes": 306389504,
+    "framework": "net10.0",
+    "files": 460,
+    "sdkPackageVersion": "1.0.29",
+    "sdkRuntimeVersion": "1.0.107",
+    "nativeCatalogSha256": "53cbf24393521600b170c5840c5721292be4953c5b1e194e137489ba5e7ba81b",
+    "indexSha256": "e0d3f04ed40b264bf5407b36cd54a5a1efe88606d15ebe80c457675f156436f6",
+    "independentSealSha256": "71167a6426626623672daf1ac469441a7d97f76f1d04790dc8ff336d5b4aaf91"
+  },
+  "inference": {
+    "provider": "bc-eval-m365-test@0.6.1",
+    "model": "gpt-55-chat",
+    "reasoning": null,
+    "sdkMaxModelRequests": 64,
+    "sdkTimeoutSeconds": 1200,
+    "clientSourceSha256": "f4dfdd0148debfc2de8a3cabfa49b00c9f8b01bfcbfa4a78708c7d0459cfe815"
+  },
+  "judge": {
+    "model": "gpt-56-ceres",
+    "scorerSha256": "c563e569520b202e725d46ac58497868fefd8d48662fb8a305c9a397e14c398d",
+    "timeoutSeconds": 90,
+    "storage": "none"
+  },
+  "budget": {
+    "originalEnvelopeSeconds": 180000,
+    "historicalMeasuredSeconds": 87651.47441800009,
+    "originalLocalMeasuredSeconds": 62677.474418000085,
+    "unresolvedLocalReservationSeconds": 1500,
+    "studyCeilingSeconds": 28800,
+    "preflightReservationSeconds": 480,
+    "localNoModelAdmissionReservationSeconds": 600,
+    "preservedPriorHostedStudy": {
+      "studyId": "bcal-sdk-governed-policy-20261112",
+      "benchCommit": "b810300629ba2bea515d520706f8b68d12b99c09",
+      "runIds": [
+        43236707356,
+        43238851621,
+        43239801312
+      ],
+      "fullJobSeconds": [
+        414,
+        287,
+        10466
+      ],
+      "totalMeasuredSeconds": 11167,
+      "capturedCells": 12,
+      "judgedCells": 4,
+      "evidenceSealSha256": "a59a333972044a065516f1d7d4213c9ef612b45a9391ecbe0355a10512a57101",
+      "status": "incomplete-preserved-not-replaced"
+    },
+    "preservedCorrectedHostedStudy": {
+      "studyId": "bcal-sdk-governed-policy-corrected-20261112",
+      "benchCommit": "5a94182240a8fdbac9e016a0f0731d410c3aa766",
+      "runIds": [
+        43271075872,
+        43272067835
+      ],
+      "fullJobSeconds": [
+        286,
+        13521
+      ],
+      "totalMeasuredSeconds": 13807,
+      "capturedCells": 16,
+      "judgedCells": 15,
+      "evidenceSealSha256": "d97aba18cf47d4723a59ede386810b11301baf42219f4ef0f8ddc0186d10ff41",
+      "status": "terminal-preserved-not-replaced"
+    },
+    "controllerReservationSeconds": 300,
+    "pairReservationSeconds": 3360,
+    "summaryReservationSeconds": 540,
+    "pairCount": 8,
+    "perAttemptSeconds": 1500,
+    "watchdogSeconds": 1430,
+    "maxWorkers": 4,
+    "localPauseSealSha256": "42ffa60e99f5b47d2817701d1588da9302cc9afc013b1204aed1d139beadcc12",
+    "infrastructureInvalidOriginalSeconds": 32288.592491100077,
+    "replacement": "Original local000 excluded with full charge; exactly-one linked replacement001 retained. Local016 unresolved/unscored,1500s held;15 completed/104 never admitted. Never resume or pool with hosted outcomes."
+  },
+  "publication": "User approved sanitized evidence only for this smaller smoke: scores, metadata, trace completeness, safe exception classes, and hashes. No raw AL/prompts/private package/keys/tickets/arbitrary error text; no Kusto/Braintrust. Raw remains runner-ephemeral; detailed failures cannot be recovered or publication-only rejudged after teardown."
+}

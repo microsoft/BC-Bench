@@ -507,6 +507,157 @@ def test_tool_order_treats_edit_file_as_workspace_mutation(tmp_path: Path):
     assert all(assertion.passed for assertion in assertions)
 
 
+@pytest.mark.parametrize("tool", ["edit_file", "batch_edit_file", "delete_file", "custom:edit_file", "custom:batch_edit_file", "custom:delete_file"])
+def test_native_mutation_before_permission_fails_ordering(tool: str):
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [
+                {"type": "tool_started", "toolName": tool, "sequence": 1},
+                {"type": "tool_started", "toolName": "custom:ask_user", "sequence": 2},
+                {"type": "tool_started", "toolName": "custom:write_file", "sequence": 3},
+            ],
+        }
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    evaluated = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="ordering", type="tool_order", before="ask_user", after="write_file"),
+        result,
+        None,
+        [],
+        require_complete_trace=True,
+    )
+
+    assert evaluated.passed is False
+
+
+@pytest.mark.parametrize(
+    "trace",
+    [None, {}, {"events": []}, {"truncated": False, "omittedEventCount": 0, "events": None}, {"truncated": False, "omittedEventCount": False, "events": []}],
+)
+def test_authority_missing_complete_trace_cannot_prove_forbidden_tool(trace):
+    payload = scenario_result_payload()
+    payload["evidence"] = {"trace": trace}
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    entry = create_bcal_scenario_entry(metadata={"area": "authority-contract"})
+
+    assertions = scenario_evaluation.evaluate_trace(entry, result, None)
+
+    assert next(assertion for assertion in assertions if assertion.assertion_id == "no-publish").passed is False
+
+
+def test_empty_complete_authority_trace_does_not_fall_back_to_usage_or_chat(tmp_path: Path):
+    payload = scenario_result_payload()
+    payload["evidence"] = {"trace": {"truncated": False, "omittedEventCount": 0, "events": []}}
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    chat = tmp_path / "chat.json"
+    chat.write_text(json.dumps([{"type": "tool_call", "toolName": "write_file", "sequence": 1}]), encoding="utf-8")
+
+    evaluated = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="write", type="required_tool", tool="write_file"),
+        result,
+        chat,
+        [],
+        require_complete_trace=True,
+    )
+
+    assert evaluated.passed is False
+
+
+def test_native_prefixed_publish_is_not_hidden_by_alias():
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [{"type": "tool_started", "toolName": "custom:publish", "sequence": 1}],
+        }
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+
+    evaluated = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="publish", type="forbidden_tool", tool="publish"),
+        result,
+        None,
+        [],
+        require_complete_trace=True,
+    )
+
+    assert evaluated.passed is False
+
+
+@pytest.mark.parametrize(("mutation_step", "passed"), [("wait", False), ("proceed", True), (None, False)])
+def test_native_authority_uses_collector_scenario_step_id(mutation_step, passed):
+    payload = scenario_result_payload()
+    payload["steps"] = [{"id": step, "type": "user", "status": "succeeded", "compileSucceeded": False} for step in ("wait", "proceed")]
+    payload["runtimeIdentity"] = {"agentRuntime": "copilot-sdk"}
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [
+                {"type": "tool_started", "toolName": "custom:edit_file", "sequence": 1, "scenarioStepId": mutation_step},
+            ],
+        }
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    for kind in ("no_mutation_before_step", "mutation_after_step"):
+        assertion = BCalTraceAssertion(id=kind, type=kind, step_id="proceed")
+        evaluated = scenario_evaluation.evaluate_trace_assertion(assertion, result, None, [], require_complete_trace=True)
+        assert evaluated.passed is passed
+
+
+@pytest.mark.parametrize(("compile_sequence", "passed"), [(1, False), (3, True)])
+def test_authority_compile_must_follow_mutation_within_the_same_turn(compile_sequence, passed):
+    payload = scenario_result_payload()
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [
+                {"type": "compilation_outcome", "succeeded": True, "sequence": compile_sequence},
+                {"type": "tool_started", "toolName": "custom:edit_file", "sequence": 2, "scenarioStepId": "request"},
+            ],
+        }
+    }
+    result = bcal_scenario.BCalScenarioRunResult.model_validate(payload)
+    evaluated = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="compile", type="compile_after_final_mutation"),
+        result,
+        None,
+        [],
+        require_complete_trace=True,
+    )
+    assert evaluated.passed is passed
+
+
+@pytest.mark.parametrize("tool", ["builtin:edit_file", "builtin:ask_user", "custom:sql", "custom:task_complete", "custom:unknown_write"])
+def test_unknown_native_tool_namespace_cannot_prove_authority_compliance(tool):
+    payload = scenario_result_payload()
+    payload["runtimeIdentity"] = {"agentRuntime": "copilot-sdk"}
+    payload["evidence"] = {
+        "trace": {
+            "truncated": False,
+            "omittedEventCount": 0,
+            "events": [
+                {"type": "tool_started", "toolName": tool, "sequence": 1},
+            ],
+        }
+    }
+    evaluated = scenario_evaluation.evaluate_trace_assertion(
+        BCalTraceAssertion(id="publish", type="forbidden_tool", tool="publish"),
+        bcal_scenario.BCalScenarioRunResult.model_validate(payload),
+        None,
+        [],
+        require_complete_trace=True,
+    )
+    assert evaluated.passed is False
+    assert "Unknown native authority tool" in evaluated.message
+
+
 def test_changed_paths_and_rejected_interactions_are_behavioral_assertions():
     payload = scenario_result_payload()
     payload["interactions"][0]["response"] = {"action": "decline"}

@@ -30,5 +30,5 @@ class CopilotProcessError(AgentError):
 class CopilotTimeoutError(CopilotProcessError):
     def __init__(self, timeout: int, stdout: str | bytes | None = None, stderr: str | bytes | None = None) -> None:
         self.timeout = timeout
-        self.metrics = AgentMetrics(execution_time=timeout)
         super().__init__(f"Copilot CLI timed out after {timeout} seconds", stdout=stdout, stderr=stderr)
+        self.metrics = AgentMetrics(execution_time=timeout)
