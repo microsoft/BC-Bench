@@ -169,6 +169,10 @@ credentials and Copilot Requests permission, and uploads selected evidence, not 
 
 The first hosted attempt, [43149879650](https://github.com/microsoft/BC-Bench/actions/runs/43149879650),
 could not obtain the old `28.0.46665.52171` artifact. Subsequent harms runs use latest BC as explicitly
-requested; the normal source currently resolves `29.1.57326.57994`. Hosted execution is **not yet
-proven** until the bounded latest-build run completes. Old-version captures remain separate and
-must not be relabelled or combined with the new environment's results.
+requested. [43154723277](https://github.com/microsoft/BC-Bench/actions/runs/43154723277) downloaded
+`29.1.57326.57994`, reached Ceres and delivered all three selected vectors; both indirect cases
+compiled. Its final console summary failed under Windows cp1252, and the npm judge shim lost its
+multiline command-line prompt. The dedicated entry point now follows the main CLI's UTF-8 setup,
+and judgment sends the prompt on stdin. Hosted judgment remains **unproven** pending verification
+of those fixes. Old-version captures remain separate and must not be relabelled or combined with
+the new environment's results.

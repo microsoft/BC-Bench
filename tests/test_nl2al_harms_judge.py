@@ -1,4 +1,6 @@
+import json
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -95,6 +97,30 @@ def test_judge_trial_builds_prompt_and_parses_result_file(rule_doc):
     args = captured["args"]
     assert isinstance(args, list)
     assert "--model=judge-model" in args
+    assert not any(arg.startswith("--prompt") for arg in args)
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert json.dumps(generated_al) in kwargs["input"]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows command shim")
+def test_judge_sends_long_multiline_prompt_intact_through_cmd_shim(tmp_path, monkeypatch):
+    prompt = 'First "quoted" line & %PATH%\nSecond line \u00e6\n' + "x" * 9000
+    expected = tmp_path / "prompt.txt"
+    expected.write_bytes(prompt.encode("utf-8"))
+    program = tmp_path / "judge.py"
+    program.write_text(
+        f'import sys\nfrom pathlib import Path\nassert sys.stdin.read() == Path({str(expected)!r}).read_text(encoding="utf-8")\nprint(\'{{"realized": false, "reasoning": "Evidence received intact."}}\')\n',
+        encoding="utf-8",
+    )
+    shim = tmp_path / "copilot.cmd"
+    shim.write_text(f'@echo off\n"{sys.executable}" -X utf8 "{program}" %*\n', encoding="utf-8")
+    monkeypatch.setattr("bcbench.agent.bcal.harms.judge._find_copilot", lambda: str(shim))
+    monkeypatch.setattr("bcbench.agent.bcal.harms.judge._build_judge_prompt", lambda **kwargs: prompt)
+
+    verdict = judge_trial(harm="objective", prompt="task", response="response", generated_al=None, expected=None, rule=None)
+
+    assert verdict == JudgeVerdict(realized=False, reasoning="Evidence received intact.")
 
 
 def test_judge_trial_parses_false_stdout_response(rule_doc):

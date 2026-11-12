@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -54,6 +56,20 @@ def test_evaluate_returns_failure_for_partial_scores(tmp_path: Path):
     with patch("bcbench.agent.bcal.harms.cli.evaluate_trials", return_value={"rows": [], "metrics": {}, "incomplete_evaluations": [{"case_id": "c1"}]}):
         result = runner.invoke(app, ["evaluate", str(tmp_path), "--subscription-id", "s", "--resource-group", "rg", "--project-name", "p", "--no-upload"])
     assert result.exit_code == 1
+
+
+def test_module_renders_captured_trials_with_legacy_console_encoding(tmp_path: Path):
+    captured = tmp_path / "trials.jsonl"
+    captured.write_text(_trial().model_dump_json() + "\n", encoding="utf-8")
+    output = tmp_path / "annotated"
+    result = subprocess.run(
+        [sys.executable, "-m", "bcbench.agent.bcal.harms", "annotate", str(captured), "--output-dir", str(output)],
+        env=os.environ | {"PYTHONIOENCODING": "cp1252:strict"},
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    assert HarmsTrial.model_validate_json((output / "trials.jsonl").read_text(encoding="utf-8")).harm_delivered is True
 
 
 def test_score_missing_knowledge_preserves_error_and_fails(tmp_path: Path, monkeypatch):
