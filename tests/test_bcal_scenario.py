@@ -16,7 +16,6 @@ import bcbench.evaluate.bcal_scenario as scenario_evaluation
 from bcbench.agent.bcal import BCalBackendConfig, bc_eval_llm_api_bridge
 from bcbench.agent.bcal import scenario as bcal_scenario
 from bcbench.dataset import BCalDeterministicArtifactAssertion, BCalScenarioEntry, BCalTraceAssertion
-from bcbench.evaluate.bcal_scenario import evaluate_trace
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationCategory, HarnessName
 from tests.conftest import create_evaluation_context
@@ -384,7 +383,7 @@ def test_trace_uses_chat_order_and_confirmed_choice(tmp_path: Path):
         encoding="utf-8",
     )
 
-    assertions = evaluate_trace(entry, result, chat)
+    assertions = scenario_evaluation.evaluate_trace(entry, result, chat)
 
     assert all(assertion.passed for assertion in assertions)
 
@@ -417,7 +416,7 @@ def test_trace_prefers_gate_a_canonical_trace(tmp_path: Path):
     chat = tmp_path / "chat.json"
     chat.write_text(json.dumps([{"type": "tool_call", "toolName": "publish", "sequence": 0}]), encoding="utf-8")
 
-    assertions = evaluate_trace(entry, result, chat)
+    assertions = scenario_evaluation.evaluate_trace(entry, result, chat)
 
     assert all(assertion.passed for assertion in assertions)
     assert result.prompt_evidence == payload["evidence"]["promptEvidence"]
@@ -503,7 +502,7 @@ def test_tool_order_treats_edit_file_as_workspace_mutation(tmp_path: Path):
         encoding="utf-8",
     )
 
-    assertions = evaluate_trace(entry, result, chat)
+    assertions = scenario_evaluation.evaluate_trace(entry, result, chat)
 
     assert all(assertion.passed for assertion in assertions)
 

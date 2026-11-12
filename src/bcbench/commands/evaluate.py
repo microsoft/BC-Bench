@@ -33,7 +33,8 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BCalScenarioEntry
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline
+from bcbench.evaluate import CodeReviewPipeline
+from bcbench.evaluate import base as evaluate_base
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import (
@@ -349,7 +350,7 @@ class MockHarness(AgentHarness[BaseDatasetEntry, HarnessName]):
         return AgentResult()
 
 
-class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
+class MockEvaluationPipeline(evaluate_base.EvaluationPipeline[BaseDatasetEntry]):
     """Mock pipeline for testing evaluation infrastructure.
 
     This pipeline simulates agent execution without requiring actual BC container setup.
