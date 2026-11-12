@@ -192,14 +192,15 @@ and `external-model: gpt-56-ceres`; keep `test-run: true` for preflight. Do not 
 prerelease when comparing runs.
 
 Commit the checkout before evaluating. Use paths without spaces for the checkout/bridge, a fresh
-results directory, and the exact downloaded BC artifact version. The wrapper records the source
+results directory with a short absolute path (long Windows paths can prevent symbol copying),
+and the exact downloaded BC artifact version. The wrapper records the source
 revision, model, runtime files, bridge packages, dataset and symbol hashes. It uses all original
 symbol packages; no session-local cache replacement or helper is required.
 
 ```powershell
 $runtime = (Resolve-Path .\.tools\bcal\bcal.exe).Path
 $artifactVersion = '<exact downloaded BC 28.0 artifact version>'
-$run = Join-Path $PWD ('evaluation_results\ceres-' + (Get-Date -Format yyyyMMdd-HHmmss))
+$run = Join-Path 'C:\bcbench-runs' ('ceres-' + (Get-Date -Format yyyyMMdd-HHmmss))
 
 # Bounded preflight: one gold entry, then one comprehensive case across all six vectors.
 .\scripts\Run-NL2ALEvaluation.ps1 -Category accuracy -BcalExecutable $runtime `

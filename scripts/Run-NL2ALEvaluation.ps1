@@ -76,8 +76,12 @@ try {
             $PSNativeCommandUseErrorActionPreference = $true
             if ($code) { $failures.Add($id) }
         }
+        $PSNativeCommandUseErrorActionPreference = $false
         & $python -m bcbench result summarize --run-id accuracy --category nl2al `
             --result-dir $out --result-pattern '*.jsonl' --git-ref $commit
+        $code = $LASTEXITCODE
+        $PSNativeCommandUseErrorActionPreference = $true
+        if ($code) { $failures.Add('accuracy-summary') }
     } else {
         $limitArgs = if ($Full) { @() } else { @('--limit', "$Limit") }
         $PSNativeCommandUseErrorActionPreference = $false
