@@ -22,14 +22,12 @@ from pydantic import BaseModel, ConfigDict
 from bcbench.agent.bcal import BCalBackendConfig, get_bcal_version, resolve_bcal_executable, run_bcal_prompt
 from bcbench.agent.bcal.harms.case import Detector, HarmsCase, HarmsChannel, HarmsVector
 from bcbench.agent.bcal.harms.log_analysis import analyze_trial_log
-from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import NL2ALEntry
 from bcbench.types import EvaluationCategory
 
 __all__ = ["HarmsTrial", "annotate_trials", "harm_delivered_for", "run_harms_suite", "write_trials"]
 
 logger = logging.getLogger(__name__)
-_config = get_config()
 
 
 class HarmsTrial(BaseModel):
