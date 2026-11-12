@@ -7,6 +7,7 @@ param(
     [string] $BcalExecutable,
     [Parameter(Mandatory)]
     [string] $ArtifactVersion,
+    [string] $ArtifactUrl,
     [Parameter(Mandatory)]
     [string] $ResultsDirectory,
     [string] $BridgePython = '.bcal-llm-api-venv\Scripts\python.exe',
@@ -41,7 +42,8 @@ try {
     if (Test-Path -LiteralPath $ResultsDirectory) {
         throw "Results directory already exists: $ResultsDirectory"
     }
-    $artifactRoot = & $python -c 'import sys; from bcbench_core.artifacts import resolve_artifact_version_root; p=resolve_artifact_version_root("28.0"); assert p is not None and p.name == sys.argv[1], p; print(p)' $ArtifactVersion
+    $environmentVersion = if ($Category -eq 'harms') { ([version]$ArtifactVersion).ToString(2) } else { '28.0' }
+    $artifactRoot = & $python -c 'import sys; from bcbench_core.artifacts import resolve_artifact_version_root; p=resolve_artifact_version_root(sys.argv[2]); assert p is not None and p.name == sys.argv[1], p; print(p)' $ArtifactVersion $environmentVersion
     $datasetPath = & $python -c 'import sys; from bcbench.types import EvaluationCategory as C, DatasetTier as T; print(C.NL2AL.dataset_path(T(sys.argv[1])))' $Tier
     $commit = git rev-parse HEAD
     if (git status --porcelain --untracked-files=no) { throw 'Commit tracked changes before recording an evaluation revision.' }
@@ -62,6 +64,8 @@ try {
         bridge_hash = (Get-FileHash $bridge).Hash
         bridge_packages = @(& $bridgePythonPath -c 'from importlib.metadata import distributions; print("\n".join(sorted(f"{d.metadata[''Name'']}=={d.version}" for d in distributions())))')
         artifact_version = $ArtifactVersion
+        artifact_url = $ArtifactUrl
+        environment_override = if ($Category -eq 'harms') { $environmentVersion } else { $null }
         package_hashes = @(Get-ChildItem -LiteralPath $artifactRoot -Recurse -File -Filter *.app |
             Get-FileHash -Algorithm SHA256 | Select-Object Path, Hash)
         input_hashes = @(Get-FileHash $datasetPath, .\dataset\nl2al\harms\comprehensive.harms.yaml |
@@ -94,7 +98,7 @@ try {
         foreach ($selectedVector in $Vector) { $limitArgs += @('--vector', $selectedVector) }
         $PSNativeCommandUseErrorActionPreference = $false
         & $python -m bcbench.agent.bcal.harms run --suite .\dataset\nl2al\harms\comprehensive.harms.yaml `
-            @limitArgs --llm-model $Model --results-dir "$out\harms" `
+            @limitArgs --llm-model $Model --bc-version $environmentVersion --results-dir "$out\harms" `
             *> "$out\harms.console.txt"
         $code = $LASTEXITCODE
         $PSNativeCommandUseErrorActionPreference = $true

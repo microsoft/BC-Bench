@@ -269,23 +269,42 @@ jobs:
         shell: pwsh
         run: npm install -g @github/copilot@1.0.82
 
-      - name: Cache pinned BC artifacts
-        id: harms-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: C:\bcartifacts.cache
-          key: bcartifacts-harms-28.0.46665.52171
-
-      - name: Download pinned BC artifacts
-        if: steps.harms-cache.outputs.cache-hit != 'true'
+      - name: Resolve latest supported BC sandbox
+        id: harms-artifact
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           Import-Module BcContainerHelper
-          $url = Get-BCArtifactUrl -version '28.0.46665.52171' -country w1 -select Latest
-          if (-not $url) { throw 'Pinned BC artifact is unavailable.' }
-          Download-Artifacts -artifactUrl $url -includePlatform
+          $url = Get-BCArtifactUrl -type Sandbox -country w1 -select Latest
+          if (-not $url) { throw 'No supported BC sandbox artifact is available.' }
+          $version = ([uri]$url).Segments[-2].Trim('/')
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "url=$url" >> $env:GITHUB_OUTPUT
+          New-Item -ItemType Directory -Path $env:HARMS_OUTPUT -Force | Out-Null
+          @{
+            version = $version
+            url = $url
+            resolved_at = [DateTime]::UtcNow.ToString('o')
+            helper_version = (Get-Module BcContainerHelper).Version.ToString()
+          } | ConvertTo-Json | Set-Content "$env:HARMS_OUTPUT\artifact-resolution.json"
+
+      - name: Cache resolved BC artifacts
+        id: harms-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\bcartifacts.cache
+          key: bcartifacts-harms-${{ steps.harms-artifact.outputs.version }}
+
+      - name: Download resolved BC artifacts
+        if: steps.harms-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        env:
+          BC_ARTIFACT_URL: ${{ steps.harms-artifact.outputs.url }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module BcContainerHelper
+          Download-Artifacts -artifactUrl $env:BC_ARTIFACT_URL -includePlatform
 
       - name: Fetch LLM API certificate
         shell: pwsh
@@ -304,13 +323,15 @@ jobs:
         shell: pwsh
         env:
           BOUNDED: ${{ inputs.test-run }}
+          BC_ARTIFACT_VERSION: ${{ steps.harms-artifact.outputs.version }}
+          BC_ARTIFACT_URL: ${{ steps.harms-artifact.outputs.url }}
         run: |
           $env:LLM_API_CERTIFICATE_FILE = "$env:RUNNER_TEMP\llm-api-cert.pfx"
           $selection = if ($env:BOUNDED -eq 'true') {
             @{ Limit = 1; Vector = @('direct', 'symbols', 'page_inspector') }
           } else { @{ Full = $true } }
           .\scripts\Run-NL2ALEvaluation.ps1 -Category harms -BcalExecutable (Get-Command bcal).Source `
-            -ArtifactVersion 28.0.46665.52171 -Model $env:BCAL_LLM_MODEL `
+            -ArtifactVersion $env:BC_ARTIFACT_VERSION -ArtifactUrl $env:BC_ARTIFACT_URL -Model $env:BCAL_LLM_MODEL `
             -ResultsDirectory "$env:HARMS_OUTPUT\capture" @selection
 
       - name: Judge objectives and check coverage
@@ -333,6 +354,7 @@ jobs:
         with:
           name: nl2al-harms-${{ github.run_id }}
           path: |
+            ${{ env.HARMS_OUTPUT }}\artifact-resolution.json
             ${{ env.HARMS_OUTPUT }}\capture\protocol.json
             ${{ env.HARMS_OUTPUT }}\capture\execution-summary.json
             ${{ env.HARMS_OUTPUT }}\capture\harms.console.txt

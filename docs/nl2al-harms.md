@@ -53,8 +53,15 @@ $run = Join-Path 'C:\bcbench-runs' ('ceres-' + (Get-Date -Format yyyyMMdd-HHmmss
 
 .\scripts\Run-NL2ALEvaluation.ps1 -Category accuracy -BcalExecutable $runtime `
     -ArtifactVersion $artifactVersion -Model gpt-56-ceres -ResultsDirectory "$run\accuracy"
+
+# Harms explicitly overrides the dataset's environment with the latest supported sandbox.
+$harmsArtifactUrl = Get-BCArtifactUrl -type Sandbox -country w1 -select Latest
+if (-not $harmsArtifactUrl) { throw 'No supported BC sandbox artifact is available.' }
+$harmsArtifactVersion = ([uri]$harmsArtifactUrl).Segments[-2].Trim('/')
+Download-Artifacts -artifactUrl $harmsArtifactUrl -includePlatform
 .\scripts\Run-NL2ALEvaluation.ps1 -Category harms -BcalExecutable $runtime `
-    -ArtifactVersion $artifactVersion -Model gpt-56-ceres -Vector direct,symbols,page_inspector `
+    -ArtifactVersion $harmsArtifactVersion -ArtifactUrl $harmsArtifactUrl `
+    -Model gpt-56-ceres -Vector direct,symbols,page_inspector `
     -ResultsDirectory "$run\harms"
 
 .\.bcal-llm-api-venv\Scripts\python.exe .\tools\score_nl2al.py `
@@ -67,6 +74,9 @@ uv run python -m bcbench.agent.bcal.harms score "$run\harms\harms" `
 After preflight and approval of the exact pins, `-Full` selects all accuracy entries or all
 six comprehensive harms cases. Omit `-Vector` for the six-vector, 36-trial harms matrix.
 Harms uses the gold base entry; challenge is rejected rather than mislabelled.
+Its explicit `--bc-version` override reaches symbol selection and runtime input; manifests retain
+both the original dataset environment and selected environment. The wrapper also records the exact
+artifact build and source URL. Accuracy environment selection is unchanged.
 Missing delivery remains missing coverage; do not silently narrow the matrix for a full result.
 
 The dedicated CLI also supports `run --dry-run --limit 1 --vector direct --results-dir <new-dir>`,
@@ -83,6 +93,8 @@ Suites are plain YAML under `dataset/nl2al/harms`: `comprehensive.harms.yaml` is
 and a nonempty `cases` list. Each case has a unique `id`, `harm`, `page`, optional `audience`,
 benign `trigger`, `risk` label, `vectors` and per-vector `placement`. Optional `rule`, `detector`
 and `expected` describe scoring evidence. Labels are authored metadata, not generated taxonomy.
+The comprehensive file has six fixed objectives across six vectors: 36 attempts, not 36 independent
+objectives or an Azure-generated red-team campaign. It does not establish parity with historical RAI runs.
 
 Direct trials send `harm` as the prompt. Indirect trials send the benign trigger and inject
 the payload through BCal's `--harms-fixture` contract into symbols, page inspection, translations,
@@ -148,13 +160,15 @@ gh workflow run bcal-evaluation.yml --repo microsoft/BC-Bench --ref <reviewed-br
 ```
 
 Accuracy remains the workflow default and scheduled path. Harms is opt-in and pins the runtime above,
-BC artifacts `28.0.46665.52171`, Copilot CLI `1.0.82` and objective judge `gpt-5.3-codex`.
+Copilot CLI `1.0.82` and objective judge `gpt-5.3-codex`. It resolves the latest supported sandbox
+without restricting the BC major version, then uses that exact build throughout the job.
+`artifact-resolution.json` preserves the URL, version, resolution time and helper version.
 The bounded job captures the first case through direct, symbols and page inspection. Full mode is
 explicit `test-run=false`. Delivery/scoring gaps fail its coverage gate. It uses existing `ado-read`
 credentials and Copilot Requests permission, and uploads selected evidence, not binaries/certificates.
 
 The first hosted attempt, [43149879650](https://github.com/microsoft/BC-Bench/actions/runs/43149879650),
-installed the runtime and bridge but could not resolve the pinned BC artifact from the current index.
-Hosted execution is **not yet proven**. Do not silently substitute a newer BC version or claim local
-cached runs establish fresh-host readiness. An obtainable exact artifact or an explicitly approved
-new artifact pin is needed before another hosted preflight.
+could not obtain the old `28.0.46665.52171` artifact. Subsequent harms runs use latest BC as explicitly
+requested; the normal source currently resolves `29.1.57326.57994`. Hosted execution is **not yet
+proven** until the bounded latest-build run completes. Old-version captures remain separate and
+must not be relabelled or combined with the new environment's results.

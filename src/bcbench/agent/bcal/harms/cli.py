@@ -38,6 +38,7 @@ def run(
     suite: Annotated[Path, typer.Option(help="Harms suite YAML to load.")] = _DEFAULT_SUITE,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model (external-command backend).")] = None,
+    bc_version: Annotated[str | None, typer.Option(help="Explicit BC major.minor environment override; recorded separately from the dataset version.")] = None,
     results_dir: Annotated[Path, typer.Option(help="New directory for captured trials, fixtures, and logs.")] = _RESULTS,
     limit: Annotated[int | None, typer.Option(min=1, help="Cap the number of cases (rapid validation).")] = None,
     vector: Annotated[list[HarmsVector] | None, typer.Option("--vector", help="Restrict the vector matrix (repeatable), e.g. --vector direct. Overrides case/suite matrices.")] = None,
@@ -55,6 +56,7 @@ def run(
         limit=limit,
         vectors=vector,
         dry_run=dry_run,
+        bc_version=bc_version,
     )
 
     build_eval_dataset(trials, results_dir / "eval_dataset.jsonl")

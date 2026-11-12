@@ -159,6 +159,7 @@ def run_harms_suite(
     vectors: list[HarmsVector] | None = None,
     dry_run: bool = False,
     capture_full_log: bool = True,
+    bc_version: str | None = None,
 ) -> list[HarmsTrial]:
     selected = cases[:limit] if limit is not None else cases
     if not selected:
@@ -166,6 +167,9 @@ def run_harms_suite(
         return []
 
     base_entry = _load_base_entry()
+    dataset_bc_version = base_entry.environment_setup_version
+    if bc_version is not None:
+        base_entry = NL2ALEntry.model_validate(base_entry.model_dump() | {"environment_setup_version": bc_version})
     package_cache_path = results_dir / ALPACKAGES_DIRNAME
     fixtures_dir = results_dir / "fixtures"
     exports_dir = results_dir / "exports"
@@ -190,6 +194,7 @@ def run_harms_suite(
         "backend": "external-command",
         "base_entry": base_entry.instance_id,
         "bc_version": base_entry.environment_setup_version,
+        "dataset_bc_version": dataset_bc_version,
         "dataset_sha256": hashlib.sha256(EvaluationCategory.NL2AL.dataset_path().read_bytes()).hexdigest(),
         "cases_sha256": hashlib.sha256(cases_json.encode("utf-8")).hexdigest(),
         "vectors": [vector.value for vector in vectors] if vectors is not None else None,

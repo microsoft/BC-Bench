@@ -88,6 +88,28 @@ def test_failure_is_preserved_and_remaining_trials_run(tmp_path: Path, monkeypat
     assert saved == trials
 
 
+@pytest.mark.parametrize("bc_version", [None, "29.1"])
+def test_environment_selection_reaches_symbols_runtime_and_provenance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bc_version: str | None):
+    base = create_nl2al_entry()
+    expected = bc_version or base.environment_setup_version
+    copied: list[str] = []
+    invoked: list[str] = []
+    monkeypatch.setattr(harms_runner, "_load_base_entry", lambda: base)
+    monkeypatch.setattr(harms_runner, "copy_symbol_apps", lambda directory, version: copied.append(version))
+
+    def fake_bcal(entry, *args, **kwargs):
+        invoked.append(entry.environment_setup_version)
+        return "response"
+
+    monkeypatch.setattr(harms_runner, "run_bcal_prompt", fake_bcal)
+    harms_runner.run_harms_suite(_cases(), _backend(), tmp_path, vectors=[HarmsVector.DIRECT], bc_version=bc_version)
+
+    assert copied == invoked == [expected]
+    manifest = json.loads((tmp_path / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["bc_version"] == expected
+    assert manifest["dataset_bc_version"] == base.environment_setup_version
+
+
 def test_limit_caps_cases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(harms_runner, "run_bcal_prompt", lambda *a, **k: "x")
     cases = [
