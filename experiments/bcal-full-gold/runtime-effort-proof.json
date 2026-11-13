@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "1",
+  "status": "passed",
+  "packageSha256": "ebffb46e7822f24c0e953bafa4b7d3d9ae8d3de6312d8e8dbeb2625773b5b6d8",
+  "packageSourceCommitSha": "5f6e2ffbdb2ea8360e9f0f52074413114d7c885a",
+  "requestedSdkEffort": "none",
+  "observedSdkWireEffort": "none",
+  "nativeSdkInvoked": true,
+  "mismatchRejectedBeforeProvider": true,
+  "legacyBridgeVerified": true,
+  "packageProof": {
+    "indexSha256": "f431a2c3e92459c87a1bf07f15f112c902bab4843b179d7f53d35f7aed905f0f",
+    "sealSha256": "f307ab6a581e1a5ab9adc7adf285d3be6e79df3bf6ccf683773f34443528df94",
+    "inventorySha256": "c34d17722f5cf90565020a3dd8c8d73c1f4ee058a1a39f970a9a7f7b891dafa9",
+    "nativeProductionHandlerReceiptSha256": "70dda102f3b594627db3997ed68577f44621c29dc52826616d8ac18e7a806e7f",
+    "admittedFramework": "net10.0",
+    "binarySha256": "568b57cfa9f6766dbb15a5a46aa7721c4acbf84a746177c3a748994e1914b55f",
+    "assemblySha256": "39fb1ecf76312f92305afbf5eb6d01ed1688830aad19c2139b580f5e4badce22",
+    "allSealedFilesIndependentlyVerified": 22,
+    "archiveFiles": 460,
+    "unchangedRuntimeTreeFiles": 225,
+    "sdkPackageVersion": "1.0.29",
+    "sdkRuntimeVersion": "1.0.107",
+    "nativeWindowsSignatures": "valid",
+    "bcalSignatures": "unsigned unofficial build, unchanged disclosure"
+  },
+  "sdkObservations": {
+    "none": {
+      "capabilityOverride": true,
+      "wireApi": "responses",
+      "reasoningEffort": "none",
+      "parallelToolCalls": false,
+      "offlineHttpRequests": 1,
+      "providerRequests": 0,
+      "maxOutputTokensPresent": false
+    },
+    "mismatch": {
+      "requestedEffort": "none",
+      "generatedEffort": "medium",
+      "terminalState": "model-options-mismatch",
+      "offlineHttpRequests": 0,
+      "providerRequests": 0
+    },
+    "unset": {
+      "capabilityOverride": null,
+      "observedEffort": "medium",
+      "providerRequests": 0
+    },
+    "scope": "Actual packaged native generator through production BcalRequests into offline HTTP. Synthetic HTTP400 is a capture sentinel, not provider/domain success. Exact7f already generated explicit none; this patch adds capability and fail-closed wire assurance.",
+    "catalogScope": "Server-free helper catalog is not a designated study catalog. Preserve the existing context-specific study pins and require actual per-case runtime identity; no authority admission or token-budget parity is inferred."
+  },
+  "legacyBridgeProof": {
+    "benchSourceSha": "4e297f17751b3dd06f2f2b7506a689d4468b9298",
+    "receiptSha256": "802c0f9c77d061b236009eb82ce7b8c4a04dda9cd7a70d1a10b5dbf03d394228",
+    "sealSha256": "ebd2e9e575723e50df9acb0e11b695ae1eb6f2395844d036220335429267b028",
+    "runnerSha256": "6e22d6e73b95381a3e8e000d3eac00d1a5464252b3a71bed36e4c570796bc62b",
+    "transportSha256": "0ced338bd406bc89e90fad3e28ca42f041ecf700f64fe3a065c42f3ad6a8ad9b",
+    "sharedProxySha256": "e4b5b8c182ed249d94b65b7fb7499973f4db7d8ff47f7462fec8c7628278eace",
+    "legacyRequestedEffort": null,
+    "appliedBridgeEffort": "none",
+    "positiveCases": 4,
+    "rejectedBeforeHttpCases": 4,
+    "providerRequests": 0,
+    "scope": "Actual OpenAI3.45 serializer and selected bridge/shared proxy/pinned transport with synthetic CommandAIClient-shaped main/auxiliary inputs, with/without tools. Not an actual DevExp product invocation."
+  },
+  "buildSetupAccounting": {
+    "owner": "runtime-package",
+    "receiptSha256": "f74f2a56b107378171d2b672f46ffeacacbe570339157b3175b7c9986587da67",
+    "buildId": 3054921,
+    "url": "https://dev.azure.com/dynamicssmb2/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_build/results?buildId=3054921",
+    "result": "succeeded",
+    "queueWaitSeconds": 12.0389554,
+    "buildWallSeconds": 3213.9469627,
+    "queueToTerminalSeconds": 3225.9859181,
+    "allJobCount": 3,
+    "sumJobElapsedSeconds": 3470.7599999,
+    "note": "Separate setup ownership. Wall, queue-to-terminal and overlapping all-job duration are non-additive alternatives; never add all three or double-count this build under Bench runs. Monetary cost unavailable."
+  }
+}

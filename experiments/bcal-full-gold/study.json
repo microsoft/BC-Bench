@@ -802,21 +802,21 @@
   "symbolsManifestSha256": "cee5605b0cb36d894c3f723d4942c8d78053b07cd31151f61e78c78aa7bf6399",
   "package": {
     "id": "Microsoft.BusinessCentral.BCal.CLI",
-    "version": "30.0.46.34884-beta",
-    "productVersion": "30.0.46.34884+7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
-    "sourceCommitSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "version": "30.0.46.40357-beta",
+    "productVersion": "30.0.46.40357+5f6e2ffbdb2ea8360e9f0f52074413114d7c885a",
+    "sourceCommitSha": "5f6e2ffbdb2ea8360e9f0f52074413114d7c885a",
     "commonBaseSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
-    "stablePatchId": "no-patch",
-    "buildId": 3049448,
-    "sha256": "aea6037faa835faa7d64ad95b17dd8240645ea25bc70e257213c8fa3c3ff80de",
-    "bytes": 306389504,
+    "stablePatchId": "79c566b3b4f288f095b37fe93fea906d035192b3",
+    "buildId": 3054921,
+    "sha256": "ebffb46e7822f24c0e953bafa4b7d3d9ae8d3de6312d8e8dbeb2625773b5b6d8",
+    "bytes": 306390161,
     "framework": "net10.0",
     "files": 460,
     "sdkPackageVersion": "1.0.29",
     "sdkRuntimeVersion": "1.0.107",
     "nativeCatalogSha256": "53cbf24393521600b170c5840c5721292be4953c5b1e194e137489ba5e7ba81b",
-    "indexSha256": "e0d3f04ed40b264bf5407b36cd54a5a1efe88606d15ebe80c457675f156436f6",
-    "independentSealSha256": "71167a6426626623672daf1ac469441a7d97f76f1d04790dc8ff336d5b4aaf91"
+    "indexSha256": "f431a2c3e92459c87a1bf07f15f112c902bab4843b179d7f53d35f7aed905f0f",
+    "independentSealSha256": "f307ab6a581e1a5ab9adc7adf285d3be6e79df3bf6ccf683773f34443528df94"
   },
   "inference": {
     "provider": "bc-eval-m365-test@0.6.1",
@@ -843,7 +843,10 @@
     "purpose": "Bounded exact-model protocol/tool-schema and sticky-route compatibility admission before220 workload attempts; explicit none on both main protocols, unchanged Ceres judge.",
     "chatEnvelope": "Production legacy model/messages/tools/max_completion_tokens16384 plus approved bridge reasoning_effort=none, no tool_choice. Responses direct synthetic input/tools/max1024/reasoning.effort=none/parallel_tool_calls=false; actual SDK effort fidelity separately required."
   },
-  "runtimeEffortProof": null,
+  "runtimeEffortProof": {
+    "file": "experiments\\bcal-full-gold\\runtime-effort-proof.json",
+    "sha256": "7a231f5e665990c0b06b1d65db3db8efbf0a2e6bad6212f7c955ac9941fc555d"
+  },
   "preservedExplicitNoneProbes": {
     "runId": 43408162530,
     "sourceSha": "643f6174d66fd66d8e6d12b142ba937c725c0617",

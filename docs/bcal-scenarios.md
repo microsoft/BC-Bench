@@ -128,6 +128,13 @@ Responses admission uses synthetic input/tools, `parallel_tool_calls=false`,
 `reasoning.effort=none` and bounded max1024, not a native output-cap parity claim.
 Actual packaged SDK serialization/guard proof must be bound before same-SHA
 admission; requested effort metadata alone is insufficient.
+The full-gold selector pins the governed `30.0.46.40357-beta` package from build
+3054921, source `5f6e2ffbdb2ea8360e9f0f52074413114d7c885a`. Its hash-bound
+`runtime-effort-proof.json` records actual packaged native serialization through
+the production handler and mismatch rejection before HTTP. Offline capture is
+not provider/domain success; the helper catalog does not replace the retained
+context-specific study catalog. Package-build setup accounting is separate from
+Bench Actions usage and must not be double-counted.
 All earlier default-effort failures and direct probes remain charged separately,
 not reinterpreted as successful admission. No automatic retry loop is permitted.
 Prior studies and their limits/seals remain
