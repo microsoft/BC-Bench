@@ -165,11 +165,15 @@ The user-authorized diagnostics repeat has separate
 `full-gold-repeat-preflight` and `full-gold-repeat` phases. Its
 `bcal-full-gold-repeat` profile inherits the hash-bound original manifest without
 modifying historical selectors, policy, or results. The original and repeat each
-retain their own once-only dispatch guard. The repeat's package and runtime-proof
-bindings remain null until the new governed package is verified; setup must stop
-before package installation rather than implicitly install latest. Actual
-package-bound command-client/collector events and Bench projection proof are
-required before model-backed routing or any of the same 110-by-2 attempts.
+retain their own once-only dispatch guard. The repeat pins diagnostic package
+`30.0.46.42492-beta`, build `3057056`, source
+`8178001108d3147df9e4b367f87536d6f3665479`, with hash-bound native effort and
+actual packaged command-client/collector events verified through Bench projection.
+The six command/response stage families are present; `command_io` coverage proves
+pre-cancellation, not arbitrary non-cancellation stream failures. Missing package
+or proof bindings stop setup before installation, never implicitly install latest.
+These offline proofs are required before the separate same-SHA hosted admission
+and any of the same 110-by-2 attempts; they do not prove provider/domain success.
 The repeat preserves explicit none, Ceres, scoring, sequential pair order and
 maximum 32 pair workers; its measurements are disjoint from the original run.
 

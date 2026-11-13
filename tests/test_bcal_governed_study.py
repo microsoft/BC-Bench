@@ -269,6 +269,7 @@ def test_full_gold_rejects_hidden_exclusions(tmp_path, monkeypatch):
 
 def test_repeat_rejects_unadmitted_or_historical_package_and_selection_overrides(tmp_path, monkeypatch):
     config = json.loads((ROOT / "experiments" / "bcal-full-gold-repeat" / "study.json").read_bytes())
+    config.update(package=None, runtimeDiagnosticsProof=None)
     monkeypatch.setattr(study, "INPUTS", tmp_path)
     study.write_json(tmp_path / "study.json", config)
     with pytest.raises(ValueError, match="diagnostic runtime package"):

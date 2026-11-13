@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1",
+  "status": "passed",
+  "packageSha256": "17683f88c9ebed8dbe9570479fa8870a2ce41c5396c50521a107a5716b784bef",
+  "packageSourceCommitSha": "8178001108d3147df9e4b367f87536d6f3665479",
+  "packageProof": {
+    "indexSha256": "195d0432bc37c235590604273004579eff24b0e076377b1580c4358d0a377efc",
+    "sealSha256": "68af169c0d5b8449ce7445d58b8bc19a57ff55288d8aeb183e1bd12a7674cdab",
+    "inventorySha256": "b7025eddd32132bc0c8c057f5c8b1ef78ce1e54e1f4a18d979a59b10616975bb",
+    "producerReceiptSha256": "a5ef39c0719cc718afd8ff1f95f198609b3fb34409ed6626edae6408f24c0dde",
+    "exactFixtureHandoffSealSha256": "00e0e525b7bf1f3157a916938b667a61891959b89577571b182fed36de43629c",
+    "exactPackagedFixtureSha256": "e1faa8d6856762d22921672bce37e3e9d5744d65e88f1709ca366f6020939a8e",
+    "equivalentRepositoryFixtureSha256": "8a5da3004199e682990a69ba59b364911bb667e0509a14d13f2e1f4e441b7ad8",
+    "nativeProductionHandlerReceiptSha256": "6bfafca0dbca7bcd2bc3d0e6f6cda5cfa41c44305671c4b17704758e7a5a65e9",
+    "independentlyVerifiedSealedFiles": 28,
+    "archiveAndStageFilesVerified": 460,
+    "unchangedRuntimeTreeFilesVerified": 225,
+    "unchangedSdkAssemblyVerified": true,
+    "admittedFramework": "net10.0",
+    "binarySha256": "f85d7eaa5ceae93c3ed240a2adf2771f14c5ef265f77ce1254de6078f6ae8767",
+    "assemblySha256": "035415a08fd2ec65c12e5f1a22ad6ca0c743cbb5d38a9b0252666a98ff686559"
+  },
+  "providerRequests": 0,
+  "networkRequests": 0,
+  "requestedSdkEffort": "none",
+  "observedSdkWireEffort": "none",
+  "nativeSdkInvoked": true,
+  "mismatchRejectedBeforeProvider": true,
+  "legacyBridgeVerified": true,
+  "legacyBridgeProof": {
+    "benchImplementationCommit": "6343717653f4b4d6247864289d81fec61e59254c",
+    "receiptSha256": "ab538ea640483a96aae8d41a9142ee134fda2ef42a4d44c8268b7de87b950eec",
+    "sealSha256": "4d1d0a7d3d843d0db5808c22bb7d239b2f4810eb05fda2f39a5cbb8d1a981a44",
+    "sourceHashes": {
+      "scripts\\bcal_governed_study.py": "6155448d68afa3fb01b5447cd7834519580b8829b3cc211fa90a5b7f1fbda0c6",
+      "scripts\\bcal_study_transport.py": "db6c9dc10da22a8a0e82f9c882e06313f69117a18fd6da1a2cf7cfc39418dc36",
+      "src\\bcbench\\agent\\bcal\\bc_eval_sdk_proxy.py": "e4b5b8c182ed249d94b65b7fb7499973f4db7d8ff47f7462fec8c7628278eace"
+    }
+  },
+  "buildSetupAccounting": {
+    "buildId": 3057056,
+    "queueTime": "2026-11-13T18:33:12.195175Z",
+    "startTime": "2026-11-13T18:33:22.1784961Z",
+    "finishTime": "2026-11-13T19:14:43.4564131Z",
+    "queueWaitSeconds": 9.9833211,
+    "buildWallSeconds": 2481.277917,
+    "queueToTerminalSeconds": 2491.2612381,
+    "allJobCount": 3,
+    "sumJobElapsedSeconds": 2666.7366666000003,
+    "accounting": "Distinct non-additive setup metrics; overlapping job durations are not elapsed wall time. Not model usage/cost."
+  },
+  "scope": "Actual packaged native generator and production BcalRequests into offline HTTP; synthetic400 is a capture sentinel. Unset retains medium/no override, explicit none has capability true and parallel false, mismatch stops before HTTP. No token-budget parity, contextual authority/catalog admission or provider/domain success is inferred. Preserve designated study catalogs; helper catalog is not substituted."
+}

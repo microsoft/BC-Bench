@@ -10,9 +10,33 @@
     "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"
   },
   "relationship": "One separately authorized repeat of the original110x2gold after diagnostic producer and Bench consumer admission. Original selectors, scoring, Sol explicit none, Ceres and max32 remain unchanged. No cell retries/replacements or additional repeats.",
-  "package": null,
-  "runtimeEffortProof": null,
-  "runtimeDiagnosticsProof": null,
+  "package": {
+    "id": "Microsoft.BusinessCentral.BCal.CLI",
+    "version": "30.0.46.42492-beta",
+    "productVersion": "30.0.46.42492+8178001108d3147df9e4b367f87536d6f3665479",
+    "sourceCommitSha": "8178001108d3147df9e4b367f87536d6f3665479",
+    "commonBaseSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "diagnosticPatchBaseSha": "5f6e2ffbdb2ea8360e9f0f52074413114d7c885a",
+    "diagnosticPatchId": "2c63f10bb934514a073f9d4d046a3ed2c80b8464",
+    "buildId": 3057056,
+    "sha256": "17683f88c9ebed8dbe9570479fa8870a2ce41c5396c50521a107a5716b784bef",
+    "bytes": 306393510,
+    "framework": "net10.0",
+    "files": 460,
+    "sdkPackageVersion": "1.0.29",
+    "sdkRuntimeVersion": "1.0.107",
+    "nativeCatalogSha256": "53cbf24393521600b170c5840c5721292be4953c5b1e194e137489ba5e7ba81b",
+    "indexSha256": "195d0432bc37c235590604273004579eff24b0e076377b1580c4358d0a377efc",
+    "independentSealSha256": "68af169c0d5b8449ce7445d58b8bc19a57ff55288d8aeb183e1bd12a7674cdab"
+  },
+  "runtimeEffortProof": {
+    "file": "experiments\\bcal-full-gold-repeat\\runtime-effort-proof.json",
+    "sha256": "f6de5c0cb307d5f8900e94bc9126c82459d523fe1c38eef6e7ae7e1991be3c9c"
+  },
+  "runtimeDiagnosticsProof": {
+    "file": "experiments\\bcal-full-gold-repeat\\runtime-diagnostics-proof.json",
+    "sha256": "fe3918a3cac62b7b3df8e992273add38ce9e70a01c96cfbff5e816cf5a5dbc26"
+  },
   "historicalAccounting": {
     "preservedOriginalGold": {
       "runId": 43422730966,
