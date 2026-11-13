@@ -383,6 +383,44 @@ def route_failure_diagnostics(path: Path) -> dict[str, object]:
     return {**result, "counterEvidenceAvailable": {"requests", "http200"} <= counters.keys(), "counters": counters}
 
 
+def legacy_diagnostic_receipt(path: Path) -> dict:
+    if not path.exists():
+        return {"available": False, "events": None}
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return {"available": True, "valid": False, "errorCategory": "io", "events": None}
+    result = {"available": True, "sourceSha256": hashlib.sha256(raw).hexdigest(), "valid": False, "events": None}
+    try:
+        value = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return result
+    if not isinstance(value, dict) or value.get("schemaVersion") != 1 or not isinstance(value.get("events"), list):
+        return result
+    allowed = {
+        "phase": {"command", "input", "client", "response", "serialization", "output", "request", "headers", "body", "guard"},
+        "outcome": {"started", "failed", "received", "completed", "emitted", "invalid_json", "invalid_object", "missing_choices", "empty_choices", "missing_message", "message_present"},
+        "category": {"unknown", "timeout", "transport", "json_decode", "body_decode", "http_status", "response_validation", "model_mismatch", "effort_mismatch", "command_io", "client_disconnect"},
+    }
+    events = []
+    for event in value["events"]:
+        if not isinstance(event, dict) or not {"phase", "outcome"} <= event.keys():
+            return result
+        safe = {key: event[key] if isinstance(event.get(key), str) and event[key] in choices else None for key, choices in allowed.items() if key in event}
+        for key in ("httpStatus", "requestsObserved"):
+            if key in event:
+                number = event[key]
+                safe[key] = number if type(number) is int and (100 <= number <= 599 if key == "httpStatus" else number >= 0) else None
+        if "observedAtUtc" in event:
+            try:
+                timestamp = datetime.fromisoformat(event["observedAtUtc"])
+                safe["observedAtUtc"] = timestamp.astimezone(UTC).isoformat() if timestamp.tzinfo is not None else None
+            except (TypeError, ValueError):
+                safe["observedAtUtc"] = None
+        events.append(safe)
+    return {**result, "valid": True, "events": events}
+
+
 def provider_failure(error: urllib.error.HTTPError) -> dict:
     raw = error.read(65536)
     text = raw.decode("utf-8", errors="replace").lower()
@@ -572,6 +610,8 @@ def trace_projection(transcript: dict) -> dict:
         "tool_started",
         "native_completion_intent",
         "native_plan_approval",
+        "model_interrupted",
+        "turn_interrupted",
     }
     events = []
     for event in raw_events if isinstance(raw_events, list) else []:
@@ -586,13 +626,20 @@ def trace_projection(transcript: dict) -> dict:
             safe["scenarioStepIdSha256"] = hashlib.sha256(event["scenarioStepId"].encode()).hexdigest()
         if event.get("type") == "native_plan_approval" and event.get("status") in {"approved", "not_approved"}:
             safe["status"] = event["status"]
+        if event.get("type") in {"model_interrupted", "turn_interrupted"}:
+            for key, allowed in (
+                ("operation", {"delivery", "turn"}),
+                ("status", {"interrupted", "failed", "canceled"}),
+                ("interruptionReason", {"failed", "canceled"}),
+            ):
+                safe[key] = event[key] if isinstance(event.get(key), str) and event[key] in allowed else None
         events.append(safe)
     return {
         "complete": complete,
         "truncated": trace.get("truncated") if type(trace.get("truncated")) is bool else None,
         "omittedEventCount": trace.get("omittedEventCount") if type(trace.get("omittedEventCount")) is int else None,
         "events": events,
-        "contentProjection": "numeric-and-hash-only",
+        "contentProjection": "numeric-hash-and-allowlisted-enums",
         "originalTraceSha256": hashlib.sha256(json.dumps(trace, sort_keys=True).encode()).hexdigest(),
     }
 
@@ -750,6 +797,10 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
             BCAL_LLM_COMMAND=subprocess.list2cmdline([os.environ["BCAL_STUDY_INFERENCE_PYTHON"], str(ROOT / "scripts" / "bcal_study_transport.py"), "bridge"]),
         )
         required_effort = config["inference"]["reasoning"]
+        if runtime == "legacy":
+            bridge_diagnostics = work / "bridge-diagnostics"
+            bridge_diagnostics.mkdir()
+            env["BCAL_STUDY_BRIDGE_DIAGNOSTICS"] = str(bridge_diagnostics)
         if required_effort is not None:
             env["BCAL_STUDY_REASONING_EFFORT"] = required_effort
         with ExitStack() as stack:
@@ -875,6 +926,13 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
     finally:
         attempt.setdefault("seconds", time.monotonic() - started)
         attempt["totalIncludingJudgeSeconds"] = time.monotonic() - started
+        if runtime == "legacy":
+            attempt["legacyDiagnostics"] = {
+                "transport": legacy_diagnostic_receipt(work / "HostAgent-chat-completions.audit.diagnostics.json"),
+                "bridgeInvocations": [legacy_diagnostic_receipt(path) for path in sorted((work / "bridge-diagnostics").glob("bridge-*.json"))],
+                "invocationOrder": "not-established",
+                "runtimeClientException": None,
+            }
         for role, wire in (("main", "responses" if runtime == "copilot-sdk" else "chat-completions"), ("auxiliary", "chat-completions"), ("judge", "chat-completions")):
             path = work / f"{'Judge' if role == 'judge' else 'HostAgent'}-{wire}.audit.json"
             if path.exists():

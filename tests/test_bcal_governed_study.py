@@ -9,6 +9,197 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("governed_study_test", ROOT / "scripts" / "bcal_governed_study.py")
 study = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(study)
+transport_spec = importlib.util.spec_from_file_location("governed_transport_diagnostics_test", ROOT / "scripts" / "bcal_study_transport.py")
+transport = importlib.util.module_from_spec(transport_spec)
+transport_spec.loader.exec_module(transport)
+
+
+@pytest.mark.parametrize("stage", ["request", "body", "non200", "success"])
+def test_legacy_transport_distinguishes_headers_from_body_failure(stage):
+    httpx = pytest.importorskip("httpx")
+
+    events = []
+    private = "PRIVATE PROMPT RESPONSE SECRET"
+
+    class Stream(httpx.SyncByteStream):
+        def __iter__(self):
+            yield private.encode()
+            if stage == "body":
+                raise httpx.ReadError(private)
+
+    def respond(request):
+        if stage == "request":
+            raise httpx.ConnectTimeout(private, request=request)
+        return httpx.Response(503 if stage == "non200" else 200, stream=Stream())
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        request = client.build_request("POST", "https://offline.invalid", content=private)
+
+        def run():
+            with transport.forward_response(client, request, RuntimeError, events.append) as response:
+                assert response.status_code == (503 if stage == "non200" else 200)
+                assert b"".join(response.iter_bytes()) == private.encode()
+
+        if stage in {"request", "body"}:
+            with pytest.raises(RuntimeError, match="Governed transport failed"):
+                run()
+            assert events[-1] == {"phase": stage, "outcome": "failed", "category": "timeout" if stage == "request" else "transport"}
+        else:
+            run()
+            assert events[-1] == {"phase": "body", "outcome": "completed"}
+        if stage != "request":
+            assert events[0] == {"phase": "headers", "outcome": "received", "httpStatus": 503 if stage == "non200" else 200}
+    assert private not in json.dumps(events)
+
+
+@pytest.mark.parametrize("failure", ["non200", "transport", "json", "validation", "empty_choices", "missing_message", "success"])
+def test_legacy_bridge_retains_failure_boundary_without_content_or_retries(tmp_path, monkeypatch, failure):
+    import io
+    import sys
+    from types import SimpleNamespace
+
+    httpx = pytest.importorskip("httpx")
+    openai = pytest.importorskip("openai")
+
+    private = "PRIVATE PROMPT RESPONSE SECRET"
+    calls = []
+    real_openai = openai.OpenAI
+
+    def respond(request):
+        calls.append(request)
+        if failure == "transport":
+            raise httpx.ReadError(private, request=request)
+        if failure == "non200":
+            return httpx.Response(503, json={"error": {"message": private}})
+        if failure == "json":
+            return httpx.Response(200, content=b"{", headers={"content-type": "application/json"})
+        body = {
+            "id": "offline",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "gpt-56-reasoning-sol",
+            "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": private}}],
+        }
+        if failure == "validation":
+            body["choices"] = private
+        elif failure == "empty_choices":
+            body["choices"] = []
+        elif failure == "missing_message":
+            body["choices"] = [{"index": 0, "finish_reason": "stop"}]
+        return httpx.Response(200, json=body)
+
+    def client(**kwargs):
+        return real_openai(**kwargs, http_client=httpx.Client(transport=httpx.MockTransport(respond)), _strict_response_validation=failure == "validation")
+
+    monkeypatch.setattr(openai, "OpenAI", client)
+    monkeypatch.setenv("BCAL_STUDY_BRIDGE_DIAGNOSTICS", str(tmp_path))
+    monkeypatch.setenv("BCAL_LLM_MODEL", "gpt-56-reasoning-sol")
+    monkeypatch.setenv("BCAL_STUDY_REASONING_EFFORT", "none")
+    monkeypatch.setenv("BCAL_STUDY_CHAT_URL", "https://offline.invalid")
+    monkeypatch.setenv("BCAL_SDK_PROXY_KEY", private)
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps({"model": "gpt-56-reasoning-sol", "messages": [{"role": "user", "content": private}]}).encode())))
+    stdout = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", stdout)
+    if failure in {"non200", "transport", "json", "validation"}:
+        with pytest.raises((openai.OpenAIError, json.JSONDecodeError)):
+            transport.bridge()
+        assert stdout.getvalue() == ""
+    else:
+        transport.bridge()
+        assert isinstance(json.loads(stdout.getvalue()), dict)
+    assert len(calls) == 1
+    assert json.loads(calls[0].content)["reasoning_effort"] == "none"
+    receipts = list(tmp_path.glob("bridge-*.json"))
+    assert len(receipts) == 1
+    safe = study.legacy_diagnostic_receipt(receipts[0])
+    assert safe["valid"] is True
+    assert private not in json.dumps(safe)
+    events = safe["events"]
+    if failure in {"non200", "transport", "json", "validation"}:
+        diagnostic = next(event for event in events if event["phase"] == "client" and event["outcome"] == "failed")
+        assert diagnostic["category"] == {"non200": "http_status", "transport": "transport", "json": "json_decode", "validation": "response_validation"}[failure]
+        if failure == "non200":
+            assert diagnostic["httpStatus"] == 503
+    else:
+        assert (
+            next(event for event in events if event["phase"] == "response")["outcome"]
+            == {"empty_choices": "empty_choices", "missing_message": "missing_message", "success": "message_present"}[failure]
+        )
+        assert events[-1]["outcome"] == "emitted"
+
+
+def test_legacy_diagnostic_receipt_redacts_unknowns_and_does_not_fabricate_missing_evidence(tmp_path):
+    path = tmp_path / "safe.json"
+    assert study.legacy_diagnostic_receipt(path) == {"available": False, "events": None}
+    path.write_text("{")
+    assert study.legacy_diagnostic_receipt(path)["valid"] is False
+    study.write_json(
+        path,
+        {
+            "schemaVersion": 1,
+            "events": [{"phase": "PRIVATE", "outcome": "PRIVATE", "category": "PRIVATE", "httpStatus": True, "requestsObserved": 3, "message": "PRIVATE", "Authorization": "PRIVATE"}],
+        },
+    )
+    safe = study.legacy_diagnostic_receipt(path)
+    assert safe["events"] == [{"phase": None, "outcome": None, "category": None, "httpStatus": None, "requestsObserved": 3}]
+    assert "PRIVATE" not in json.dumps(safe)
+
+
+def test_interruption_projection_retains_only_known_enums_and_hashes():
+    trace = {
+        "truncated": False,
+        "omittedEventCount": 0,
+        "events": [
+            {"type": "model_interrupted", "operation": "delivery", "status": "interrupted", "interruptionReason": "failed", "message": "PRIVATE", "callId": "PRIVATE"},
+            {"type": "turn_interrupted", "operation": "turn", "status": "canceled", "interruptionReason": "canceled"},
+            {"type": "model_interrupted", "operation": "PRIVATE", "status": "PRIVATE", "interruptionReason": "PRIVATE"},
+        ],
+    }
+    safe = study.trace_projection({"evidence": {"trace": trace}})
+    assert safe["complete"] is True
+    assert safe["events"][0]["type"] == "model_interrupted"
+    assert {key: safe["events"][0][key] for key in ("operation", "status", "interruptionReason")} == {"operation": "delivery", "status": "interrupted", "interruptionReason": "failed"}
+    assert safe["events"][1]["status"] == "canceled"
+    assert safe["events"][2]["interruptionReason"] is None
+    assert "PRIVATE" not in json.dumps(safe)
+
+
+def test_legacy_body_client_disconnect_is_not_reported_as_completed():
+    httpx = pytest.importorskip("httpx")
+    events = []
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b"private"))) as client:
+        request = client.build_request("POST", "https://offline.invalid")
+        with pytest.raises(BrokenPipeError), transport.forward_response(client, request, RuntimeError, events.append):
+            raise BrokenPipeError("PRIVATE")
+    assert events[-1] == {"phase": "body", "outcome": "failed", "category": "client_disconnect"}
+    assert not any(event["outcome"] == "completed" for event in events)
+    assert "PRIVATE" not in json.dumps(events)
+
+
+def test_attempt_finally_preserves_legacy_diagnostics_without_runtime_success(tmp_path, monkeypatch):
+    work = tmp_path / "attempt"
+    public = tmp_path / "public.json"
+    monkeypatch.setenv("BCAL_STUDY_WORK", str(tmp_path))
+
+    def fail(_):
+        study.write_json(
+            work / "HostAgent-chat-completions.audit.diagnostics.json", {"schemaVersion": 1, "events": [{"phase": "headers", "outcome": "received", "httpStatus": 503, "message": "PRIVATE"}]}
+        )
+        (work / "bridge-diagnostics").mkdir()
+        study.write_json(work / "bridge-diagnostics" / "bridge-test.json", {"schemaVersion": 1, "events": [{"phase": "command", "outcome": "started"}]})
+        raise ValueError("PRIVATE")
+
+    monkeypatch.setattr(study, "verify_package", fail)
+    with pytest.raises(ValueError, match="PRIVATE"):
+        study.run_attempt(study.pairs()[0], "legacy", work, {}, public)
+    value = json.loads(public.read_bytes())
+    assert value["status"] == "evidence-or-infrastructure-error"
+    assert value["quality"] is None
+    assert value["legacyDiagnostics"]["transport"]["events"] == [{"phase": "headers", "outcome": "received", "httpStatus": 503}]
+    assert value["legacyDiagnostics"]["bridgeInvocations"][0]["events"] == [{"phase": "command", "outcome": "started"}]
+    assert value["legacyDiagnostics"]["runtimeClientException"] is None
+    assert value["legacyDiagnostics"]["invocationOrder"] == "not-established"
+    assert "PRIVATE" not in json.dumps(value)
 
 
 def test_fixed_cohort_is_repeat_aware_and_counterbalanced():
@@ -565,6 +756,7 @@ def test_governed_transport_resets_ticket_and_verifies_configured_effort(tmp_pat
     monkeypatch.setattr(httpx, "HTTPTransport", lambda: httpx.MockTransport(upstream))
     monkeypatch.setenv("LLM_API_CERTIFICATE_FILE", str(tmp_path / "not-read.pfx"))
     monkeypatch.setenv("BCAL_SDK_PROXY_KEY", "local-test-only")
+    monkeypatch.setenv("BCAL_AGENT_RUNTIME", "legacy")
     monkeypatch.setattr(transport, "load_proxy", lambda: SimpleNamespace(ProxyError=RuntimeError, _handler=lambda _key, _model, _wire, forward: forward))
 
     class Server:
@@ -605,10 +797,17 @@ def test_governed_transport_resets_ticket_and_verifies_configured_effort(tmp_pat
     assert observed == ["", "PRIVATE-OPAQUE", ""]
     assert len(set(sessions)) == 1
     assert "PRIVATE-OPAQUE" not in (tmp_path / "audit.json").read_text()
+    diagnostics = study.legacy_diagnostic_receipt(tmp_path / "audit.diagnostics.json")
+    assert diagnostics["valid"] is True
+    assert "PRIVATE-OPAQUE" not in json.dumps(diagnostics)
+    headers = [event for event in diagnostics["events"] if event["phase"] == "headers"]
+    assert [event["requestsObserved"] for event in headers] == [1, 2, 3]
+    assert all(event["httpStatus"] == 200 and event["observedAtUtc"] for event in headers)
     if required_effort:
         audit = json.loads((tmp_path / "audit.json").read_bytes())
         assert audit["requests"] == audit["effortVerifiedRequests"] == 3
         assert audit["effortRejectedRequests"] == 1
+        assert diagnostics["events"][-1]["category"] == "effort_mismatch"
         with pytest.raises(ValueError, match="reasoning effort"):
             study.route_receipt(tmp_path / "audit.json", required_reasoning_effort="none")
 

@@ -9,12 +9,17 @@ import json
 import os
 import sys
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
 from types import ModuleType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import httpx
 
 
 def load_proxy() -> ModuleType:
@@ -31,6 +36,42 @@ def write_json(path: Path, value: object) -> None:
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(value), encoding="utf-8")
     temporary.replace(path)
+
+
+def exception_category(error: Exception) -> str:
+    import httpx
+
+    if isinstance(error, httpx.TimeoutException):
+        return "timeout"
+    if isinstance(error, httpx.TransportError):
+        return "transport"
+    if isinstance(error, json.JSONDecodeError):
+        return "json_decode"
+    if isinstance(error, UnicodeError):
+        return "body_decode"
+    return "unknown"
+
+
+@contextmanager
+def forward_response(client: httpx.Client, request: httpx.Request, proxy_error: type[Exception], record: Callable[[dict], None]) -> Iterator:
+    import httpx
+
+    phase = "request"
+    try:
+        response = client.send(request, stream=True)
+        phase = "body"
+        record({"phase": "headers", "outcome": "received", "httpStatus": response.status_code})
+        try:
+            yield response
+            record({"phase": "body", "outcome": "completed"})
+        finally:
+            response.close()
+    except httpx.HTTPError as error:
+        record({"phase": phase, "outcome": "failed", "category": exception_category(error)})
+        raise proxy_error("Governed transport failed") from None
+    except (BrokenPipeError, ConnectionResetError, TimeoutError):
+        record({"phase": phase, "outcome": "failed", "category": "client_disconnect"})
+        raise
 
 
 def serve(args: argparse.Namespace) -> None:
@@ -53,6 +94,15 @@ def serve(args: argparse.Namespace) -> None:
         counts["explicitNoneVerifiedRequests"] = 0
     if args.required_reasoning_effort:
         counts.update(reasoningEffort=args.required_reasoning_effort, effortVerifiedRequests=0, effortRejectedRequests=0)
+    diagnostics = {"schemaVersion": 1, "events": []}
+    diagnostic_lock = Lock()
+    retain_diagnostics = args.step == "HostAgent" and args.wire_api == "chat-completions" and os.environ.get("BCAL_AGENT_RUNTIME") == "legacy"
+
+    def record(event: dict) -> None:
+        if retain_diagnostics:
+            with diagnostic_lock:
+                diagnostics["events"].append({"observedAtUtc": datetime.now(UTC).isoformat(), "requestsObserved": counts["requests"], **event})
+                write_json(args.audit.with_suffix(".diagnostics.json"), diagnostics)
 
     class Affinity(httpx.BaseTransport):
         def __init__(self) -> None:
@@ -67,6 +117,7 @@ def serve(args: argparse.Namespace) -> None:
                 if body.get("model") != args.model or request.headers.get("X-ModelType") != expected or request.headers.get("x-llm-models") != expected:
                     counts["modelStable"] = False
                     write_json(args.audit, counts)
+                    record({"phase": "guard", "outcome": "failed", "category": "model_mismatch"})
                     raise ProxyError("Governed model routing mismatch")
                 if args.explicit_none_probe:
                     effort_matches = (
@@ -87,6 +138,7 @@ def serve(args: argparse.Namespace) -> None:
                     if not matches:
                         counts["effortRejectedRequests"] += 1
                         write_json(args.audit, counts)
+                        record({"phase": "guard", "outcome": "failed", "category": "effort_mismatch"})
                         raise ProxyError("Governed outbound reasoning effort mismatch")
                     counts["effortVerifiedRequests"] += 1
                 request.headers["X-SessionId"] = session
@@ -111,26 +163,61 @@ def serve(args: argparse.Namespace) -> None:
 
         @contextmanager
         def forward(route: str, body: dict[str, object]) -> Iterator:
-            try:
-                request = client.build_request("POST", ENDPOINTS["TEST"] + route, json=body, headers={"Authorization": "Bearer " + token()})
-                response = client.send(request, stream=True)
-                try:
-                    yield response
-                finally:
-                    response.close()
-            except httpx.HTTPError as error:
-                raise ProxyError(f"Governed transport failed ({type(error).__name__})") from None
+            request = client.build_request("POST", ENDPOINTS["TEST"] + route, json=body, headers={"Authorization": "Bearer " + token()})
+            with forward_response(client, request, ProxyError, record) as response:
+                yield response
 
         write_json(args.audit, counts)
+        if retain_diagnostics:
+            write_json(args.audit.with_suffix(".diagnostics.json"), diagnostics)
         with ThreadingHTTPServer(("127.0.0.1", 0), proxy._handler(os.environ["BCAL_SDK_PROXY_KEY"], args.model, args.wire_api, forward)) as server:
             write_json(args.ready, {"base_url": f"http://127.0.0.1:{server.server_port}", "pid": os.getpid()})
             server.serve_forever()
 
 
+def bridge_response_shape(response: str) -> str:
+    try:
+        body = json.loads(response)
+    except json.JSONDecodeError:
+        return "invalid_json"
+    if not isinstance(body, dict):
+        return "invalid_object"
+    choices = body.get("choices")
+    if not isinstance(choices, list):
+        return "missing_choices"
+    if not choices:
+        return "empty_choices"
+    if not isinstance(choices[0], dict) or not isinstance(choices[0].get("message"), dict):
+        return "missing_message"
+    return "message_present"
+
+
 def bridge() -> None:
+    directory = os.environ.get("BCAL_STUDY_BRIDGE_DIAGNOSTICS")
+    path = Path(directory) / f"bridge-{uuid.uuid4().hex}.json" if directory else None
+    events = []
+
+    def record(event: dict) -> None:
+        if path is not None:
+            events.append({"observedAtUtc": datetime.now(UTC).isoformat(), **event})
+            write_json(path, {"schemaVersion": 1, "events": events})
+
+    record({"phase": "command", "outcome": "started"})
+    try:
+        _bridge(record)
+    except Exception as error:
+        record({"phase": "command", "outcome": "failed", "category": exception_category(error)})
+        raise
+
+
+def _bridge(record: Callable[[dict], None]) -> None:
     from openai import OpenAI
 
-    request = json.loads(sys.stdin.buffer.read().decode("utf-8-sig"))
+    try:
+        request = json.loads(sys.stdin.buffer.read().decode("utf-8-sig"))
+    except (ValueError, UnicodeError) as error:
+        record({"phase": "input", "outcome": "failed", "category": exception_category(error)})
+        raise
     if request.get("model") != os.environ.get("BCAL_LLM_MODEL", "gpt-55-chat") or not isinstance(request.get("messages"), list):
         raise ValueError("Unexpected external-command model or messages.")
     effort = os.environ.get("BCAL_STUDY_REASONING_EFFORT")
@@ -145,8 +232,36 @@ def bridge() -> None:
         kwargs["reasoning_effort"] = effort
     kwargs.setdefault("max_completion_tokens", 16384)
     with OpenAI(base_url=os.environ["BCAL_STUDY_CHAT_URL"] + "/v1", api_key=os.environ["BCAL_SDK_PROXY_KEY"], max_retries=0, timeout=240) as client:
-        response = client.chat.completions.create(**kwargs)
-        sys.stdout.write(response.model_dump_json(exclude_none=True))
+        record({"phase": "client", "outcome": "started"})
+        try:
+            response = client.chat.completions.create(**kwargs)
+        except Exception as error:
+            from openai import APIConnectionError, APIResponseValidationError, APIStatusError, APITimeoutError
+
+            category = exception_category(error)
+            diagnostic = {"phase": "client", "outcome": "failed", "category": category}
+            if isinstance(error, APIStatusError):
+                diagnostic.update(category="http_status", httpStatus=error.status_code)
+            elif isinstance(error, APITimeoutError):
+                diagnostic["category"] = "timeout"
+            elif isinstance(error, APIConnectionError):
+                diagnostic["category"] = "transport"
+            elif isinstance(error, APIResponseValidationError):
+                diagnostic["category"] = "response_validation"
+            record(diagnostic)
+            raise
+        try:
+            encoded = response.model_dump_json(exclude_none=True)
+        except Exception as error:
+            record({"phase": "serialization", "outcome": "failed", "category": exception_category(error)})
+            raise
+        record({"phase": "response", "outcome": bridge_response_shape(encoded)})
+        try:
+            sys.stdout.write(encoded)
+        except OSError:
+            record({"phase": "output", "outcome": "failed", "category": "command_io"})
+            raise
+        record({"phase": "command", "outcome": "emitted"})
 
 
 def judge(args: argparse.Namespace) -> None:

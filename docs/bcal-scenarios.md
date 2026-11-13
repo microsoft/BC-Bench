@@ -142,6 +142,19 @@ historical; the user approved extending the previous aggregate limit for this fi
 not a new monetary or numeric ceiling. Actual all-job usage must be reported.
 The existing smoke selection and ordinary/scheduled defaults are unchanged.
 
+Governed legacy attempts also retain content-free `legacyDiagnostics` before
+cleanup: upstream header status versus body/transport failure, fixed bridge
+input/client/serialization/output stages, response shape, and UTC observation
+times. Existing request counts, effort audits and sticky-route checks remain
+unchanged. A successful header or emitted command response does not prove
+successful product-side parsing. Missing diagnostic files remain unavailable;
+unknown classifications remain null. Interrupted trace event types and their
+allowlisted operation/status/reason enums survive projection alongside their
+existing hashes. Raw responses, exception strings and private logs are not
+published. Product-side command launch/exit and parsing classifications require
+an additive runtime emission contract; Bench cannot reconstruct those from the
+generic exit-1 wrapper or retroactively recover the sealed historical exceptions.
+
 The separately authorized `full-gold-none-probe` phase only checks explicit
 `none` compatibility: one tool-bearing Sol Chat request, then one direct
 Responses request, stopping on the first failure without retries or a judge.
