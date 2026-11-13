@@ -115,10 +115,15 @@ once per runtime (220 attempts), no challenge or authority cases. The exact
 main alias is `gpt-56-reasoning-sol`, with reasoning effort omitted/default;
 the judge remains `gpt-56-ceres`. Each pair runs sequentially and the workflow
 admits at most 32 pair workers total. A same-SHA gate verifies package/symbols
-without inference, then performs exactly five bounded protocol/routing requests
+without inference, then performs at most five bounded protocol/routing requests
 (two main Chat, two main Responses, one judge Chat), separately accounted from
-semantic attempts. Prior studies and their limits/seals remain historical; the
-user approved extending the previous aggregate limit for this fixed workload,
+semantic attempts, stopping at the first failure. Chat admission preserves the
+production legacy envelope: tools present, `max_completion_tokens=16384`,
+no `tool_choice` or `reasoning_effort`; its prompt/tool schema are synthetic,
+not a benchmark attempt. Responses admission is unchanged. The two earlier
+failed admissions remain charged; one corrected-envelope admission is approved,
+not an automatic retry loop. Prior studies and their limits/seals remain
+historical; the user approved extending the previous aggregate limit for this fixed workload,
 not a new monetary or numeric ceiling. Actual all-job usage must be reported.
 The existing smoke selection and ordinary/scheduled defaults are unchanged.
 

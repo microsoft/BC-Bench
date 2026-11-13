@@ -84,7 +84,12 @@ def test_full_gold_routing_admission_is_bounded_and_preserves_partial_charges(tm
         assert "reasoning_effort" not in body
         assert "reasoning" not in body
         assert body["tools"]
-        assert body["tool_choice"] == "none"
+        if current["wire"] == "responses":
+            assert body["tool_choice"] == "none"
+            assert body["max_output_tokens"] == 1024
+        else:
+            assert set(body) == {"model", "messages", "tools", "max_completion_tokens"}
+            assert body["max_completion_tokens"] == 16384
         requests.append(body)
         current["count"] += 1
         failed = len(requests) == fail_at
@@ -130,7 +135,12 @@ def test_sol_bridge_omits_default_effort_and_rejects_unspecified_effort_override
     monkeypatch.setenv("BCAL_LLM_MODEL", "gpt-56-reasoning-sol")
     monkeypatch.setenv("BCAL_STUDY_CHAT_URL", "http://unused.invalid")
     monkeypatch.setenv("BCAL_SDK_PROXY_KEY", "test-only")
-    body = {"model": "gpt-56-reasoning-sol", "messages": [], "reasoning_effort": effort, "tools": []}
+    body = {
+        "model": "gpt-56-reasoning-sol",
+        "messages": [{"role": "user", "content": "Return only OK."}],
+        "reasoning_effort": effort,
+        "tools": [{"type": "function", "function": {"name": "admission_probe", "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}}}],
+    }
     monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps(body).encode())))
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     if effort:
@@ -139,8 +149,7 @@ def test_sol_bridge_omits_default_effort_and_rejects_unspecified_effort_override
         assert not observed
     else:
         transport.bridge()
-        assert observed[0]["model"] == body["model"]
-        assert "reasoning_effort" not in observed[0]
+        assert observed == [{"model": body["model"], "messages": body["messages"], "tools": body["tools"], "max_completion_tokens": 16384}]
 
 
 def test_provider_failure_preserves_safe_status_and_parameter_without_raw_error():

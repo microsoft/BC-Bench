@@ -402,7 +402,7 @@ def routing_preflight(args: argparse.Namespace) -> None:
                             body.update(input="Return only OK.", max_output_tokens=1024, tools=[{"type": "function", **function}], tool_choice="none")
                             route = "/responses"
                         else:
-                            body.update(messages=[{"role": "user", "content": "Return only OK."}], max_completion_tokens=1024, tools=[{"type": "function", "function": function}], tool_choice="none")
+                            body.update(messages=[{"role": "user", "content": "Return only OK."}], max_completion_tokens=16384, tools=[{"type": "function", "function": function}])
                             route = "/chat/completions"
                         request = urllib.request.Request(
                             url + route,

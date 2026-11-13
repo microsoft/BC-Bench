@@ -838,7 +838,8 @@
     "mainResponsesRequests": 2,
     "judgeChatRequests": 1,
     "semanticCaseAttempts": 0,
-    "purpose": "Bounded exact-model protocol/tool-schema and sticky-route compatibility admission before the220 workload attempts; no reasoning effort set."
+    "purpose": "Bounded exact-model protocol/tool-schema and sticky-route compatibility admission before the220 workload attempts; no reasoning effort set.",
+    "chatEnvelope": "Production legacy keys model/messages/tools/max_completion_tokens, max16384, no tool_choice or reasoning_effort. Synthetic admission prompt/schema, not a semantic task; Responses envelope unchanged."
   },
   "preservedFailedAdmissions": [
     {
@@ -850,6 +851,16 @@
       "successfulProviderResponses": 0,
       "semanticCaseAttempts": 0,
       "result": "Package/auth/symbol/selection checks passed; first Sol Chat admission failed HTTPError. Original receipt did not retain status/body diagnostics, so exact provider cause is unknown. Original evidence retained unchanged; subsequent bounded admission adds sanitized status/parameter signals, not alias/effort substitution."
+    },
+    {
+      "runId": 43389245796,
+      "sourceSha": "570519b70ded599675155d631131381401905d28",
+      "inputsSha256": "3751982c0a27c01d124428ae0a070ac4d2e2ccb829220df66c85d46555a067c2",
+      "allJobSeconds": 253,
+      "actualProviderRequests": 1,
+      "successfulProviderResponses": 0,
+      "semanticCaseAttempts": 0,
+      "result": "Package/auth/symbol/selection checks passed; first Sol Chat request HTTP400 parameter reasoning_effort, effort/tools signals. Original admission-only tool_choice=none/max1024 differs from production; one separately authorized corrected-envelope admission follows, not an unchanged retry or forced-none workaround. Prior receipts/reports/seals remain immutable."
     }
   ],
   "historicalAccounting": {
