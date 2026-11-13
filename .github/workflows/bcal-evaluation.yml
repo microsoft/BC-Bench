@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.category || 'bcal-scenario' }} ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}${{ (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke') && format(' / stacked-smoke {0}', inputs.validation-phase) || '' }}
+run-name: BCal ${{ inputs.category || 'bcal-scenario' }} ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}${{ (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke') && format(' / stacked-smoke {0}', inputs.validation-phase) || '' }}${{ startsWith(inputs.validation-phase, 'full-gold') && format(' / paired {0}', inputs.validation-phase) || '' }}
 permissions:
   contents: read
   actions: write
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       validation-phase:
-        description: "Isolated approved 16-attempt smoke; ordinary preserves existing evaluation"
+        description: "Isolated approved smoke or full-gold pair; ordinary preserves existing evaluation"
         required: false
         default: ordinary
         type: choice
@@ -16,8 +16,10 @@ on:
           - ordinary
           - preflight
           - smoke
+          - full-gold-preflight
+          - full-gold
       preflight-run-id:
-        description: "Exact successful same-SHA no-model preflight for the bounded smoke"
+        description: "Exact successful same-SHA admission run for the selected governed workload"
         required: false
         default: ""
         type: string
@@ -85,7 +87,7 @@ on:
 
 
 concurrency:
-  group: ${{ (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke') && 'bcal-stacked-sdk-smoke-20261112-entry' || format('bcal-evaluation-{0}-{1}', inputs.category || 'bcal-scenario', inputs.test-run && 'test' || 'full') }}
+  group: ${{ startsWith(inputs.validation-phase, 'full-gold') && 'bcal-full-gold-sol-paired-20261113-entry' || (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke') && 'bcal-stacked-sdk-smoke-20261112-entry' || format('bcal-evaluation-{0}-{1}', inputs.category || 'bcal-scenario', inputs.test-run && 'test' || 'full') }}
   cancel-in-progress: false
 
 env:
@@ -95,7 +97,7 @@ env:
 
 jobs:
   governed-validation:
-    if: inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke'
+    if: inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke' || startsWith(inputs.validation-phase, 'full-gold')
     uses: ./.github/workflows/bcal-governed-policy.yml
     permissions:
       contents: read

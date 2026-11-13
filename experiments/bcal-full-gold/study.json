@@ -1,0 +1,871 @@
+{
+  "schemaVersion": "1",
+  "studyId": "bcal-full-gold-sol-paired-20261113",
+  "relationship": "New user-approved full-gold workload, separate from the closed 16-attempt smoke and earlier studies. Exactly one attempt per gold case per runtime; authority/challenge excluded; no retries, replacements, promotion or merge.",
+  "cohort": "full-gold-paired-v1",
+  "repeatCount": 1,
+  "caseCount": 110,
+  "variants": [
+    "legacy",
+    "copilot-sdk"
+  ],
+  "maxWorkers": 32,
+  "pairTimeoutSeconds": 4500,
+  "referenceRun": {
+    "id": 39588298418,
+    "sourceSha": "cc98ace425040010507ebc41db2a4d779d1de017",
+    "caseCount": 110,
+    "selectorDrift": false
+  },
+  "datasets": [
+    {
+      "category": "nl2al",
+      "lane": "ordinary-quality",
+      "tier": "gold",
+      "file": "dataset\\nl2al.jsonl",
+      "datasetSha256": "fce1a4c1d4b63d9b593b5d8c2c14a65727c5c6063dc0cf5d754208619aac4ab9",
+      "selectedEntries": [
+        {
+          "instanceId": "nl2al__move-name-customer-card-2",
+          "taskPromptSha256": "00c19b5c51e84bd754bf46ea23a2d5b436dd0d6a66acbd258062ed5512345b37",
+          "expectedSha256": "35f2894e966a9fcafa084821314c38a1acf5a796b161d8ee62f6b73b538e9641",
+          "entrySha256": "e4b9affc2bffecb28ba48d2dc5f5f4b14a54459ae7bbc9f3aecdee95cf7b77bc",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__add-industry-field-customer-card-2",
+          "taskPromptSha256": "1f1c3172cd3b519e7ecc6d8e3fa1ade4b8ae2c9eb03e474420c031cc5ef9fe60",
+          "expectedSha256": "73ce5fba24bc24ee9037c26f94e1ba2141b82258e189b1780e962e6054d1cb4f",
+          "entrySha256": "ffd37448be732c1177383f40de3831a921deebc9a2a09f6efd27b691ab04e183",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__add-manufacturer-field-item-card-2",
+          "taskPromptSha256": "551aaf6886f884eb84828f7de409d7f27d0123310de3b872682b6b2c614dcd88",
+          "expectedSha256": "ecdf3c6d9ca4f12dd16247597861324bc965c8b1c910ef35686dbd3e21ed1f8c",
+          "entrySha256": "a4f3a2d2eb3da5e218e2ddb97f3a7580b3871a05f60147aa515db988c7e87db9",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__sales-order-credit-limit-notification-2",
+          "taskPromptSha256": "11ba2da4be74ba36deaf1af0ec9de09f594ee741968e2d90c1ba41312a39ccc5",
+          "expectedSha256": "6f035a3f2ad1aef972bc93b74777cefc28c68bb2c39504ceefdeee325e14cb04",
+          "entrySha256": "50b32771244040d5264d0f42caa3af7e9441791d53f69c9231458c9ee21e981c",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__block-invoice-posting-without-email-2",
+          "taskPromptSha256": "1388e04f202a2bac1a6ab6488a2503598f5c68f29ed01ce3b206bbf58f530107",
+          "expectedSha256": "cdc60a2c7cdb832c2173c1abbe32cfb95cd58b0d75565669c93ea0c803fc0c49",
+          "entrySha256": "36f7190aeabace6b733280b909ceecee3a87c2fc1d187895eeb33640889a1df7",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__out-of-stock-items-list-page-2",
+          "taskPromptSha256": "ac6eedcf04ecddd9285076d6d4f1ef4a0dde9f2086cb324d142fab73f9e3e1ee",
+          "expectedSha256": "6ac31088aedbf570c99e48c402b1d930fbcfe295e706862c67188da8a9d6a640",
+          "entrySha256": "525ed04284548b49e5e4fb6851c9ca7d6233101825e5adcb7aeb79e3e2f849f7",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__vendor-card-hold-payments-toggle-2",
+          "taskPromptSha256": "c2141a77fa61779ce2b0a77fe6b355784c7f9568691527b929fd1d115dec0f4d",
+          "expectedSha256": "242fceddea672539b2944a947d65f10fa1f8e26baca4771c0c032df30ad9e2cf",
+          "entrySha256": "9a156bb75cd277a89f41d6dbbcfdc1450ae54d3f0c2853b1c8eff26657619888",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__sales-order-min-amount-on-release-2",
+          "taskPromptSha256": "f544028f45e219bb863795d898375d8505f8672624e99b99fa132a46f59ef8d7",
+          "expectedSha256": "e0a91c71447ecb02752b2b1a81634bc5649e1db773d641296806a1bfc14a54d4",
+          "entrySha256": "4a84e9a5e1d89517dd6c9f0656661aa727ba7dbc4089712fded992c17bec1fb9",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-card-preferred-contact-method-2",
+          "taskPromptSha256": "63bec9e5b77adb76f8b1ef031c00b89098b048c4ab729879f0b7d51b4ae88599",
+          "expectedSha256": "67aa4bfa1a3af65bb5a6ea20e3357c670d48c9b02d7f3d01b33abe3e932b7413",
+          "entrySha256": "8dfae072771b675283baccbabb450563ee10fe1ddf538854414643adfefa8dd9",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__posted-shipment-show-customer-phone-2",
+          "taskPromptSha256": "db5af2bf7e55f8ba9baf550bd57ad85c5b775077e1f05cf4c8eacb774af86503",
+          "expectedSha256": "e260a8138b4d107440b6ff09c9a15070245f68cce5d7519b02ad2137a0b08817",
+          "entrySha256": "5055580ea647f9b46848185378103e0255aec7d7b95b4ef0e611436ef509dec8",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__fix-wrong-field-customer-name-2",
+          "taskPromptSha256": "3e2376e9229c19372e0864ece8d9e613abff440fe047eb278de79ff3424fb37c",
+          "expectedSha256": "58ecf82d95bfca84ff7a233cf7f734b72ba1fc6458040a06f6f4badbe329caaa",
+          "entrySha256": "f4b0e3779f651c976507cfdc92535362f87ede1c208b6044c00a70df91120f80",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__fix-wrong-table-name-customers-to-customer-2",
+          "taskPromptSha256": "95502573d647c52ea83cf6bee3c2612a08ac3260d7b50642e59ba62c08f1eea8",
+          "expectedSha256": "d528c876cbb8740a029d038e213195d02a4a8542bba8c1346e2f3836e5348458",
+          "entrySha256": "44b268b6f2a314c9b256c7220474a038c8947c6ea6baaf43ee18a7707c05310a",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__vip-styleexpr-customer-list-2",
+          "taskPromptSha256": "b58672ae5a8af2cc716e831593256a24b81f0bc92e91dd2f2e5cb4b0680a0b47",
+          "expectedSha256": "96cbc264cd1a39c828efb50f28693799e72b17ecf74a0e4944acd578fd810d16",
+          "entrySha256": "6c6c8b8e9bf1c6d413c2ec3f0746fe978cf2c5f7e7e6b05d56b874d250ec99ee",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__loyalty-points-balance-readonly-2",
+          "taskPromptSha256": "636003422730d4d9cb71cfa91991acf1be95d6f84266086453cc4061353ba37f",
+          "expectedSha256": "bdc50e2ca2a855b7da37518c6215571ac5737741ffbfe6f713187cf5a6d51e5a",
+          "entrySha256": "528b9b109d1b674fccf0dbe581c55d16493b0b038b4f9630540cbe4e6738234b",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__vendor-category-enum-2",
+          "taskPromptSha256": "ef20a686648cc87a413ffec493be276f5218017bd4ec98318de1ab01633ed192",
+          "expectedSha256": "f9184e94f6c1efb6062437d34eba6e33bb3ca0fe4bb01b150bc533f851125fd1",
+          "entrySha256": "a6d7b12edac4c2daf4a08558868b71ee8568db4022d7c3e9ea664c9b9be08dae",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__block-purchase-order-without-vendor-vat-2",
+          "taskPromptSha256": "986956299ff4e15d265894c368b7f6d00435a3d91f5c11590236b9a618d37f3c",
+          "expectedSha256": "c3d46db1afc6d25b99ccd16e5d87baf35783162ca6d531ac5fc022d37e8f0ce4",
+          "entrySha256": "5aa55a3e1cb61f2a113927a3526c65310151dd654238cbc23dc473701e73dbb3",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__reorder-trigger-days-validation-2",
+          "taskPromptSha256": "b25008f8fddbcb96ec46f5f277d0389c0f9ae147d1aa7909efa4e5f2eea0b355",
+          "expectedSha256": "d5410519512040a3e1ff95e70aae3c59707df3bb5264de728eb6d9b0ce4cbffc",
+          "entrySha256": "23f590d8f2a4a4ccd40507d6cea5570bbb9b2f021f3733676f243bf5fe66bbb2",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__hazardous-item-styleexpr-list-2",
+          "taskPromptSha256": "a69744964671f62bc3351dcb083361b9e28e373ac2ed2500518f2305d0b5ed20",
+          "expectedSha256": "897b0c27fdba6600fa03f36c4f51932fe60fbcaea62aefdf1b5e00b74b42c0fa",
+          "entrySha256": "d0d6a129faa29ab5a8270dff24fac42c0d63a14581ad19b79a1c8045228e92e2",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__quality-check-log-table-2",
+          "taskPromptSha256": "f331d5ebfbdb9600c41ca0d3e5a6237973657b8fc4da97d7a8d7c2ce239ad033",
+          "expectedSha256": "4933ba6b4ce85aa3bd57037d5cf249f09adefe1c6c8c9845af57f341da3710ad",
+          "entrySha256": "8b4a1682f42e7c7a1b975d7df12ba329524a9a3ddaf0392985bf40d7e9bdf616",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__item-country-of-origin-tablerelation-2",
+          "taskPromptSha256": "1793c2abe73a52032ebd8603e4b783f2c613532d7445a1d8a19a182502715697",
+          "expectedSha256": "ce891d7c5d083022e1807c7f4e5f523b6ebc29a4a8f3090837fb295daf58ddb2",
+          "entrySha256": "f1461816ba687ec89ee209e75dee851e5860ddc7a55b7b2238a651a19f2a3761",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__open-bin-contents-action-item-card-2",
+          "taskPromptSha256": "6afeb92323c10e595e0e46074881d1bcb6f8639df31a67d21b2ea697e1086dc9",
+          "expectedSha256": "b39e667e53c0e08e3720738119a7f0d6beea2baaaa195877bd80d3b6bdfc5ea4",
+          "entrySha256": "062462e4c12d5258111626a4db6c4f293b0135c37d83d484cfefa516082bcb1b",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__block-quote-release-over-credit-2",
+          "taskPromptSha256": "c5d352dc560dfd50f6e61532c9281c888870adad0b2319aa6f7e8738be4f530d",
+          "expectedSha256": "57bc39e1180510b7ae5a26e7c5240e0105447192375846c95547a212df831b01",
+          "entrySha256": "fa978d67038c9e59fa871eb1db4b4783f207bc222ce9bd45b5d83a4f4df1d669",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__sales-order-internal-reference-field-2",
+          "taskPromptSha256": "443ae7f427714d14669529bdb9beeadf1395892ff27c7acd7b47ee12147405db",
+          "expectedSha256": "2d36d474f1da0a2bb02217aa4442fb2dc0ae95b05002cc21d942ee9136011d94",
+          "entrySha256": "589be81c102dd26af6588e25020fdba518cc31bb4b2cf55c65a84f6664dddd27",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__salesperson-from-user-setup-default-2",
+          "taskPromptSha256": "373168b96d531b27c18e41d55b9179d88e5ecd752c557ee2b9578155c6251bc4",
+          "expectedSha256": "f0195396a1228f52922b28f2caf68d43edf0dc40f8a7d695891cdad129e06d51",
+          "entrySha256": "1aea2fa97e64f64165141ff94ac5f43c8427c04a69ffcfb4d4dd14af16d0d4b5",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__delivery-window-on-shipment-2",
+          "taskPromptSha256": "a4692f4bddf8172aac3c29109fe1fc0e7307b96a9bc868f54572ed176a0c99d7",
+          "expectedSha256": "8bb2831723a3cb30c21537fc6e669851bfa86fb942106df554abf1a0c849f5cb",
+          "entrySha256": "2ece594e184aa25987b2c01716c452e0a6c800680cc2f2d92314ad0369a69c5d",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__cycle-count-schedule-table-2",
+          "taskPromptSha256": "1b550f76b1f0b261d754226cac6940011e4abcffb8bebadbb9c6273c52820748",
+          "expectedSha256": "229cc155aeb88b5276f1e93e38241cdb4698184d24afb03e8c738cd47e103c7c",
+          "entrySha256": "146cea23a21ea337650c3b828d99b7ec5f27efdbe80da011ff24a702722458d5",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__trial-balance-diff-codeunit-2",
+          "taskPromptSha256": "8f76f2cc96d85ee8d16f2ffda21e3953fd200d03d19b84b48a36e595d86fb7cd",
+          "expectedSha256": "6348d416fc446c8e1d30bb4779e064e45b033b2a1bf27cfeeb7b5f6c01b4a844",
+          "entrySha256": "85498996ea32112dd7044afe9471e0d3b8ec5c663c66bc50be49b1d13a9296bc",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__contact-list-company-size-pageext-2",
+          "taskPromptSha256": "df3a6c96d7a656988880e4ebfbb9432584412b0f9bbdc865028e0c1f724c6b54",
+          "expectedSha256": "dc60b756d5b8d10c28750cda40ed886c581987d61c46f5466d9b60e55e4471d9",
+          "entrySha256": "1af18f2c31e1321305511ea539d1d325f21049202bb544d15e9130d2f12a6e1f",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__employee-emergency-contact-phone-2",
+          "taskPromptSha256": "f1b0f4e1d3e0c30a08e7a7da93f1baf74c73ca20b5101176b7b8bd8d7b92c4c3",
+          "expectedSha256": "0effa733ff5287769c406badb6ae5945c0d2be0f563fc265b3f39cf14140c81f",
+          "entrySha256": "010a249700171508d9cdf60b28670129dd2059110d28cebaad48b96700f4021f",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__employee-termination-date-validation-2",
+          "taskPromptSha256": "96aef17041fcd89ede7b910c086fa7a617c18ea9c4cc9463412e706901c190fa",
+          "expectedSha256": "bfa751d9c6b867c5f4a5e28358d69e687f8620e75a96e4e67ce95816497265f6",
+          "entrySha256": "2177b188fcda27c3439b25463c1c433259035866c264c7e12473001ca0c9fc72",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__mark-period-reconciled-codeunit-2",
+          "taskPromptSha256": "e9d61058c9e8054df2d38971808fc57e8bd87476f8afc29f9ceec6c06531cdf1",
+          "expectedSha256": "1dbed5517bba631a137d642e18cad3ffe9893847fe367c07811cee5773bc1d71",
+          "entrySha256": "e6d2f8e355eb9068dec0dc1dc895b10eba1115d2ccd774ed164cd733e36d7380",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__rc-pageext-orderprocessor-sections-group-2",
+          "taskPromptSha256": "bbcdcbe02450cc1343cf9c9019005621fb37e9d1f484abfee1dac4b96a1a82ca",
+          "expectedSha256": "a70e59e7fe7fe6c11cd7263fbaae2374bb026dee7a3be0dcd04bf9ede3320723",
+          "entrySha256": "d8221d057f4fec8a5d5351df8d7a795977096ec204cc61e53a4837f66be92d44",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__persona-item-storage-condition-enduser-2",
+          "taskPromptSha256": "5688a7af27afcbaaf11d4dcbe12d07c1139849d5024f949261cc40dbec2cb4d9",
+          "expectedSha256": "ddddc605fa0c0f2bef367637196499adebfdc2c7b593b50d55e99fda7e670722",
+          "entrySha256": "3ea7bad7867be0686dbc2f9033187c93bf43fec390a0db8c5d072d36d295be5f",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__persona-salesperson-required-release-enduser-2",
+          "taskPromptSha256": "45f677085a49ed8bf1077ea3ba83bd42cd71b978ae833f5a8570654cba5a0c05",
+          "expectedSha256": "3fbbbeaf33a222e7b1a987884c97ad6253331fb4ddab2e1d9b62c977207eccf1",
+          "entrySha256": "567420ff3047389cce2de730f32d3bca9b704613b8e1e259394fe01189d02748",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__persona-item-low-stock-warning-consultant-2",
+          "taskPromptSha256": "1555286db674e27b3ac7aabaacf1aa022b86b9d07fd7a37380a7039248660405",
+          "expectedSha256": "27a26a8d52723a7fe8a48745182e535ab1bcd84ce2c2704cb51ac5391494e825",
+          "entrySha256": "8cafd95ea8af50cf5ba1e7879f8afd0941e69edd02f26ac1a6018d42d8221898",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__item-warranty-months-field-2",
+          "taskPromptSha256": "c2d98f88120f3da2f6a76153ce35c754ca5f278f97e6f1e981a4499dac947640",
+          "expectedSha256": "6a0f4020a208a298a1ccc7d4090641582f593073cfdef1a9996038e423e38571",
+          "entrySha256": "062e7f8ab65bbd3d0795a62e810903a1239e9e1941394a1d9efd0f7912154793",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__vendor-preferred-currency-field-2",
+          "taskPromptSha256": "707913a622b97372ae15dd915159fc4479aa88691cd0cb69a18fa5405c7cf363",
+          "expectedSha256": "b4abea6d2605d9fdc0d081ae4a453894a30bd22bf83dd54746e429d4c0348df6",
+          "entrySha256": "d00edab958a3d9547fe506ecdc3b6596e4d7d3fc8b1efed195d54ac20a87ea38",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-next-review-date-field-2",
+          "taskPromptSha256": "f848ba5848909b62355935634ad44eabe3e6da1543f3366d17eb8e45ed7fe66a",
+          "expectedSha256": "478ccdd2132ececee197bc6daa5bfbc974a7abedbe05967c2bfe2ca58d7ab0c5",
+          "entrySha256": "f720b7303d02b91f8d6131b0f0175ef77b5c2c79c98b2b7af7b3b62881845bb2",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__contact-linkedin-url-field-2",
+          "taskPromptSha256": "649579d47c189b0a259b4e1f971ca69696fce4e0af865443faec20231bed1836",
+          "expectedSha256": "40b8baf466fac962f45ce5df99d184971d114ea82312e905cb525c20f9dd3138",
+          "entrySha256": "a0c03463cef6b088eeab3784f1d8ca7fc4bc58965a7aaea6138124327685c49d",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__vendor-payment-block-reason-field-2",
+          "taskPromptSha256": "bb375fee3e063561c6adb2025de71b049356c54bde51fa7bee53540771d20b8e",
+          "expectedSha256": "064551aeb6911f28d28d154822fb6114a1996e91a512b0fe8853401609743889",
+          "entrySha256": "763e11f3b888a5e727ffc0e771d9b23d90f4ab82ad2e4e6112d01ac260602240",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__gl-account-budget-note-field-2",
+          "taskPromptSha256": "18cb55d68a2f65ea21bdf863aca9643733e4a58d739d77469abbe9760109e800",
+          "expectedSha256": "e99ca6b5970ad0aab58febe1561656ab2202da9fd9412e02f511f34ada904c40",
+          "entrySha256": "866613fd04545d005c012e8dea10f49c29d369975aa8eccd00bbc23719b68841",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-list-balance-column-2",
+          "taskPromptSha256": "5cdc6ec20da2b60fa4322e9c0e1640ebd412957c4ae6945b7a58ab5926d2ab73",
+          "expectedSha256": "0806ac1090a51d555215a08d36aacbc2905b1145d4efaea23d8efa7b8a5379bf",
+          "entrySha256": "ae86de060714da8c6f82648f1466e10d3f1d8454cb4025cb120e64efc04a6e99",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__employee-emergency-contact-name-field-2",
+          "taskPromptSha256": "db250f051231aae24a24cfdaf8ccf4a040b254e001aa71cc129b6d5a5feac022",
+          "expectedSha256": "11b97d0c820187dd8fffc564ed525f7be801ee8e86fe97db6348085f6e66d321",
+          "entrySha256": "220b54a7cde79caa6378075d21030cd052ce25d4e85ed178dd87ade9a46622ae",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__item-handling-fee-field-2",
+          "taskPromptSha256": "8e7f84d4ae22b902394b08f142acdd7d422457f1ac088a6759b0ec4f4a544803",
+          "expectedSha256": "336ea6d05534e9d3f28edf20ce9f5ac7e92eb50ce714f66efb922c46b1335709",
+          "entrySha256": "55961d5ca936a5863dad3a747f0a668cf66763bd2912676ea34fbab9639f701a",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__resource-certification-date-field-2",
+          "taskPromptSha256": "59537c594e394849428de8e29f42007e57b9c7e210dd59fb985c3facfcda7ad2",
+          "expectedSha256": "941858787467a1f07bff5233b0cea5b71fcdeb75d07af98c24fda667998097b6",
+          "entrySha256": "5a110bfb63c3b2cfafd3a7a396c25ca04d73171d122ae1f0a9189555a1940104",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__job-internal-review-note-field-2",
+          "taskPromptSha256": "af7fd8d790ab77e863b4b6278e4854b79b45907fdbebf6cea037878597313967",
+          "expectedSha256": "cd7483fa1353f45d7d1cb2c7670642153d9def6ef62074ea70e223705932acb1",
+          "entrySha256": "24385b8e2cb1603547c7f01ce22c69ddc307e1967b6566a41c5f9f8ed282f8e1",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-posted-shipments-action-2",
+          "taskPromptSha256": "30c1e19d3e47c02cd09af99a64e0e44df274f53b081fe8c66f6518b57a7e612d",
+          "expectedSha256": "ef7a6070750eb9bca4870b59ae7293762b5fd9a76ab245300119f499c3d97465",
+          "entrySha256": "d61bcf53c0f9700fd65528bece15a2c86a8945c6c6785d0cdb08bd0155d9b986",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-website-url-field-2",
+          "taskPromptSha256": "87721097ff170309154cbfffad83deedc99356e4c36e093486e4274e03b28ca6",
+          "expectedSha256": "3c76d396778ffc1e0b6a3a9cd7102f870fba36411e959cf1b3c3432e32adf4f9",
+          "entrySha256": "c2310b2320b36725384ae9e8be90c6ddb638b4125af345f5b1a4648519672c56",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__item-storage-note-field-2",
+          "taskPromptSha256": "66919a9fdb1301db9a0fce8fb0c52e425364c4bd3ddbe05bb167be8ae6b66415",
+          "expectedSha256": "56811c8c4c1f8228dd9d77c4e0395c1f0307a0859c61935f1f1c56fdc38ad4d5",
+          "entrySha256": "002f2f1691c7fabb94449298d85ca25e847c6fe8b6c49fa93a1dbae732ceae4c",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__contact-preferred-language-field-2",
+          "taskPromptSha256": "91f8b955bb7a8cc84aa86ccb0d29634e4b5a5d8dadab0d4954702709f795698b",
+          "expectedSha256": "a0340fc3b582b517d39a89a4cb8e7597c4787e9d441903e1a51189c9bb5db89c",
+          "entrySha256": "d4381524e0bdeb286569ffa3a65da7cd1248833caf2d41cf381d814b4feb57a8",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__fixed-asset-location-note-field-2",
+          "taskPromptSha256": "f329283c0c13fec8b290f8bde04bd57d4e36d06ba5a0a3dcb8d67821c47da456",
+          "expectedSha256": "5fed6b1762ac3a63b8cedaca830f722c7f08e93b9dd6bd9cbe339b6b1ef438ca",
+          "entrySha256": "57004dbdfc4af26e823cb595317249903cf65c96cc714ab283dd3b29df70ff16",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-website-secondary-email-2",
+          "taskPromptSha256": "fd4cf79f765ba663f58a46fafa2a02e00dae290c5c0c709f74bb894a8461af55",
+          "expectedSha256": "ceb050edbdb9faccfe96a602a78f7463cd68d683a0d5c678b3e30637cfc11e09",
+          "entrySha256": "89e4a4d6a0408cee59f992535166251d5b0ea8af6d2c96fad0cc7923a2b7bb56",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__gl-account-needs-review-flag-2",
+          "taskPromptSha256": "6fa4152484329c43d9ae3c1bd34c2134fedf430fbe88ed5a6fe066f5d58c20e7",
+          "expectedSha256": "25c48675f305c7c0b1ccae9bffde88b7cbb58ae6ad0ebc412369a31beffbfe2c",
+          "entrySha256": "84f05a2353eef4112cebd685838cc37f5fa6cc73f19854788f76ec1814b2c9ca",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__item-max-line-discount-field-2",
+          "taskPromptSha256": "5c3408efe965ed7d7b105dd9348ea008a6dd154106e4adab3444289a5556f2d1",
+          "expectedSha256": "3e712ead7852c07074498f67a5e63dc020af01793192eccdca35cfa270a37765",
+          "entrySha256": "f3acb20df434dac14f12b254d954a18b103dc300168534d94ae0d931ee762ecb",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-internal-credit-score-field-2",
+          "taskPromptSha256": "ea9040b992f8661ab2edffe5ae319bade6209cedbaf3c0b9847f42baed5393cb",
+          "expectedSha256": "6d2f0eed9e92ef5683b14715ee2a90885511990b175059f38aedbb9ec2e034f9",
+          "entrySha256": "ef4a60e75116e9511a1a8031a872a3e4b300d78349817ca67a8a46425b84857d",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__vendor-open-purchase-invoices-action-2",
+          "taskPromptSha256": "bdd1ae3b0b654c636148e0fc44a0ab60d20103501d9383bd8a5dc0cc9f8321a1",
+          "expectedSha256": "e825e890d9c93667cac73500fc845e94d448e4a931267cf7bb7a40e66001aac9",
+          "entrySha256": "5523b7ba90ed33912217a78c469b655932f4b1354ecea017172060dc445f1cb3",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__item-list-unit-cost-column-2",
+          "taskPromptSha256": "25451d5be8e2c2393a8c28fe9c16f4f1ad550f197ae95ee9ad0ef3c927c48d6f",
+          "expectedSha256": "4b2cf68d82d4e66c015641d7cae0a4dcebe549e24301f53fc445c8e74786f77e",
+          "entrySha256": "d059627066b8722900bc26b5552d334b345906bac85a413960badd4066d75663",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__item-fragile-flag-2",
+          "taskPromptSha256": "306ccfa80b1251e01eb33b5038a327f253a225838d417c8cfc48878e691b80ea",
+          "expectedSha256": "d3657a767838c1262c1e2621cbbdb73fd319e7cd29273d5ff16d773d76bb7efb",
+          "entrySha256": "c50a0379f2a65c62d78d5b7d6b79c7e40ee2ecc5fbad2db79bad716b536b4d00",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__sales-order-rush-flag-2",
+          "taskPromptSha256": "be4c02b7a75ab914ce2e732228ad601d21a2f9197858bf92b6f263e1ea7f2175",
+          "expectedSha256": "addb7770240475221b71fadd6ab32c41ebb9c5a45dc0307718aa481fdf8a6b34",
+          "entrySha256": "21e1a721af0469ff6c4980c8d3a81ac7505930ad7a7203bd3c0dc1ca6d09f36e",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-preferred-delivery-day-enum-2",
+          "taskPromptSha256": "863652f374f0d7deb158d41cfc43b922019a130cc0151141e5b30da0ed8ab878",
+          "expectedSha256": "d4ac2b808e159531e47b9dde30d549915d7f902684161d33984ad9d71018215f",
+          "entrySha256": "410aa62c36cc482b60c7756874c2dc5eb03ef35be8ff2867752b368df66fdc3f",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__vendor-onboarding-complete-flag-2",
+          "taskPromptSha256": "8fdd9e1171961c9088e5a9a70448d6fa0971fccd1336378bf26bdac67e15f346",
+          "expectedSha256": "0a16a9ae2bd99b6dfa5537df254eabeb52e1f9942ce666147d4c425cb131f4a4",
+          "entrySha256": "4ba1634fd25047db187450ab5bf2d432ced9aa7ca91b861d5e7df5efe9503d5f",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-list-salesperson-column-2",
+          "taskPromptSha256": "8223870b0968476d8164a9acd343978d63455aa36edbbb0973dd22d6f11c41e1",
+          "expectedSha256": "0daf7b44044b626e01c30470ec7ac6949685781ccb60de46a8944fb4030f2aa6",
+          "entrySha256": "a30ec6bc9c47b61368ed8b07aeabf9a21fce2b8706aa5dfcb07ad8c9d1bb9f28",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__job-priority-enum-2",
+          "taskPromptSha256": "e2d948416770a4289ed300f9e6ea527ba70634f6c7700d4182886e3e46154472",
+          "expectedSha256": "9a0cf7b3dc6037c080c471f0a7dfc562025beb209ecbdc27c584e55ceccacd92",
+          "entrySha256": "69229c069928c4d18568e2f223055ad21b66fb1ef7f167d958e662edf677cff3",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-hide-customer-list-name-1",
+          "taskPromptSha256": "3d27f6f7ec248dd1887faa782222fc6a5d1cfcfa962ea1da4d0ecfe6cec98ee2",
+          "expectedSha256": "e341b2dce7eda6564f0dfadafb2bd851328b810f3c446737f9938cebbb9e07dc",
+          "entrySha256": "ccd136a66e0eb0f99657adb11c59027cf1926bd0e9e526b376171516586a343b",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-vendor-phone-after-email-1",
+          "taskPromptSha256": "014d6db691d5c0a5f5758addacdfc50f226d70f60b5c30a78ba31dea8563a97b",
+          "expectedSha256": "72f01c8d9dd0f32f048f33196d9b422af3f07266defa56d2be458f2d6830e72d",
+          "entrySha256": "2faef3dcaf76a6aed0fec72a6adbd552ef8eaa4498440900fe0fa1620b3b6834",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-sales-order-salesperson-visible-1",
+          "taskPromptSha256": "89c210708cee021d1cd8966f5891c044727a7c4872630a28a1555c48eb4f9696",
+          "expectedSha256": "8efc90c6733a48f0c27d833edd59b216c64d1790710c4597bded5eb74e5d5f10",
+          "entrySha256": "566343763e28ab74890fd04d203226362f7879fc041e5dec6b0f54f6791703c6",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-vendor-maintained-categories-1",
+          "taskPromptSha256": "20739c64941a80f38978a8d71b4dc1c060822a9a481832d1b0f9a6e14dcb6bac",
+          "expectedSha256": "ee7e06351fed4153fd0b91d53e3304d7a61ae580ac01998ee33183292bddef70",
+          "entrySha256": "95235442ccb5cc9f76323da57abe2ba2598c937b0a74c0c9feb4950e2d73c431",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-vendor-favorite-1",
+          "taskPromptSha256": "3b8422e9dad06a1ac5c5f88a9736944b53316fcabf7ffcde057bd7447f5ec290",
+          "expectedSha256": "6c967deb6a8bfa5e1606321c85c27575ac9b9254d69574d93cafaa791bcfe1ba",
+          "entrySha256": "4988eb9ab95a223c81d1cfb3d174aca56816a5a5e2e3b20d926780b6babfe122",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-purchase-next-month-cue-1",
+          "taskPromptSha256": "1e98fc9891987e2543535071cbf81ae93af8816c61018d681116b2f4db7385fe",
+          "expectedSha256": "6ce39c58f589bb06ffee724b3b6107158988b1a059ffbbc74f16b51a355c1937",
+          "entrySha256": "8506aa3c1a85c002137239309b9510d7f9e97732cc3097807bde360b67d0934e",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-shipment-complaint-log-1",
+          "taskPromptSha256": "9aaa1cc72a7d0e27746db08366d428074c2dd46a08421efbcf42f85df856a9b9",
+          "expectedSha256": "e76c0da93711911c9bd34e2b9331787622bd1f34ecd7549c08ade081fbb33575",
+          "entrySha256": "f07c441b6670c90e83b9fedfded0061292da0f2fc66fc1aa5780bff70b2b2fe9",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-van-mileage-maintenance-1",
+          "taskPromptSha256": "3b95f17c1d2b3985d2bdca3ffed0aa74e8c0a7d01c184f33b1b3216561e4f826",
+          "expectedSha256": "46c706bb81d270da27a7df454ceab5c0e8800d55887efb72d32b1a57c1aeab8f",
+          "entrySha256": "902a2ecf90e5d7c8aeaa6c21c85f4a973624c1b8e3d71727d4a024ed1cd5b8ee",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-product-sample-followup-1",
+          "taskPromptSha256": "e6d9a2aa92359a8e66942ff0d76dae386d275159208e95acb9851bdfb916b7e5",
+          "expectedSha256": "c3159e15f82289094cfdfb1ddc6ad714b3871ec0de3166b49c68e58adca3831b",
+          "entrySha256": "207867ccff187ac41b79ec4a6f91ad07d0161d8011fa042f3f36997e35094458",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__collected-overdue-collection-review-1",
+          "taskPromptSha256": "dea56e3109aa8853027f2d5b6c20f6aa5bdfebffa1cb69543a021f11be670e11",
+          "expectedSha256": "445266c31d1bc14a6dc2548a83c791cbbd45f1c1c2334ea9a0e0f850d1facc1f",
+          "entrySha256": "b74756fe662195499caef800c902413849074a60c3a4219ae17fd50d89f54f64",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-released-order-count-drilldown-1",
+          "taskPromptSha256": "e2938a37a957834bcac0f3925d4d357cb6c2296c23b57a00444dc5411344034f",
+          "expectedSha256": "ea73b05133dbbab2b4b1a87a3d1cb22da7df7f166965d30f257eb31269c426fa",
+          "entrySha256": "2d55ebcd25c5aafde17ae7f933de674612a40a74b339f109b78a6002c52812aa",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__item-margin-display-zero-boundary-1",
+          "taskPromptSha256": "3c6353d5dd1d45a6a225b30ffd10da4748c9d907bd38a130ccef672eff00f2d3",
+          "expectedSha256": "1a87e1d3a0b47626e917a4c6816c867b6089fdb6383c3486e50f51c9e836d043",
+          "entrySha256": "13b4f2ea388dc196538ec99a62ff037e5c3c9b7060a2dfde9fb0191d45eab1b6",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__read-only-compliance-register-permission-set-1",
+          "taskPromptSha256": "d3e3daf384017ce804c9644710008a952e00132d229544c815ab1cdf87b9bdc0",
+          "expectedSha256": "efb692d30e782f274f7b55c6c64bbeb418061d69bdb0f953e87cf1a86ad09304",
+          "entrySha256": "e24812fc98df0a92e05736e31ddf178b04cc0b917ac1a1bbbf3a7ea122942552",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__purchase-receipt-window-workdate-1",
+          "taskPromptSha256": "be2d59806320d70a2de4031c490c626776bc5ef60ba4dc3c2cb9f3431526364f",
+          "expectedSha256": "8e39f21603dcc280e34532e38a0ce88bd543f0b6cd23c740b778ad646cc1fb29",
+          "entrySha256": "a8eaf47bddf7e79479da5fd976f0d166d97336d23485bffdcae6e1abffb1b536",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__customer-reminder-days-danish-1",
+          "taskPromptSha256": "0c6e1be475217569c4d1304d074ce5ff150bb7472b52302003559512ac97b4a5",
+          "expectedSha256": "804a48a6ef232de84e993bf2df2811be2285d3602e6bcd48d99f6b768753a335",
+          "entrySha256": "3880a5190e4104413478445db6c77d30b56c1875136ae5f0d6d7c592388516cc",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-item-scoped-reference-catalog-1",
+          "taskPromptSha256": "6a3bce57752b5f03b8eb443635f50ecbe59749c115c35041a24e9ac349834ba4",
+          "expectedSha256": "b69836589b9132d277288a39ff60683ea539e0fc0f4df953f58f7015cae5342c",
+          "entrySha256": "8120be61b83720c40fc6b999b5e58a5fd22e8e72fddb5e69eec8684305f71a00",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-location-bin-pair-integrity-1",
+          "taskPromptSha256": "70bb78e4a4879253714138947c728556538dbe19fe966f28ed1ebdd11d13aa26",
+          "expectedSha256": "b42256d06c36ad497398d3085661ce81f0545d27a99a6d63d2c8b034cf2896d9",
+          "entrySha256": "78032e30636753de27ae317779d84bfba54d1e641d4ccdf6c403131d38e2a584",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-sales-eligible-variant-picker-1",
+          "taskPromptSha256": "fc701e279ea82157d9cdf19191324a8101fc1940e3cec145586fc95ef1e4e29a",
+          "expectedSha256": "bba84435f40b6975ddba38b44648b8538cac88ef8b92655c8bf76aa2ee02da61",
+          "entrySha256": "32a85fa55dd4db97dbdece85a4506ef854032210a28a9bc9d4fa67a536644fa9",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-kind-directed-partner-reference-1",
+          "taskPromptSha256": "9bd13be03a7d25e4ae0b8d867f430319032bba2bbd7213786fc108f450fcd339",
+          "expectedSha256": "4054c2eb48ce74454ae886a68051301e5cebe188157ba8cd9a524956155439af",
+          "entrySha256": "ebaea001e470a6e6aee4b77b47bc721fdf9fb263b51d7fa6a9efe8b6b4a36583",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-item-label-junction-management-1",
+          "taskPromptSha256": "6467632ea9c58da58120390982573c3822c8a834ce8e0d791f2bcd4019562e9b",
+          "expectedSha256": "297d21441abeff8f7df108c1bc9a08bfff0dd17a88889a3258229e6e9668a82b",
+          "entrySha256": "05b00c45a8e929449c4549344b3206b8182e49ab8477250b20e68658e674478b",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-compound-revision-modal-selection-1",
+          "taskPromptSha256": "75056bb8d22a65e166469a91c20a36660773fca53b2d8b64db357aaa90359a9e",
+          "expectedSha256": "23bf3bcb757ff17682834ff8eadb78a675c8d8842b9cf69126029892b154fe2f",
+          "entrySha256": "6677f403330a6b1b3bd567d8bc540aba78e18cd8e0d4d2e8419febe1b1484797",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-next-pending-total-order-1",
+          "taskPromptSha256": "478a9c6ae4918953e11531b605bdcf1ac1d8ffeba61eed2382f2fd2e208c463c",
+          "expectedSha256": "bba5e89077ece596188fa30561b85349f2b40e9dfcf7d2b7526fa35c808f365e",
+          "entrySha256": "e59953cd416abb80f32050ede9471fe2b7a827560e35631e133ab76e495fabe1",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-task-sheet-parent-child-lifecycle-1",
+          "taskPromptSha256": "aca518adb850bca862bd59c128844db55f8665f37f3a293e81b92803760ffcc2",
+          "expectedSha256": "3cafe555dbdb4d75eeb9b2d11e618d1b01a711831248e4e2b1fda8b005ec2502",
+          "entrySha256": "ff5daf764cec602ca4563d98e7b50c9f54f0f59ad15e4e4aeb856ca805b8d03f",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-filing-group-acyclic-hierarchy-1",
+          "taskPromptSha256": "6126ae211ba291d9ed0a7b1c4212ae50a3653e3e5476291e2c6e191d4b21a04e",
+          "expectedSha256": "b8b4e655c323648ea0dc5a9efee830881e142c2f1094e2d0489e0a4a01d5a60f",
+          "entrySha256": "c0607c0688255ee1118458146220b3626ac99d98a0b77d28284bbf7c5e5ec57c",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-left-outer-slot-directory-1",
+          "taskPromptSha256": "33821cf7938a905b5e45d381c34821ccab353716c322096c6ac4623c6982b023",
+          "expectedSha256": "a92da0450340dc5d9bfcbcba3af58f623d1d23ca68e43fcf06fb29124298b7f1",
+          "entrySha256": "30b35a3e82c1896ca6232204c8f99170c2775b45d5ddd77337cd23d4e135a654",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-base-translation-anti-join-1",
+          "taskPromptSha256": "edae02d7042f268dc74d39c78fa0931e1fa0a7c1969b5a7de7239a091ee97b0e",
+          "expectedSha256": "ac857f7b7cd5e2e7a287823266b1e4b69ccd4404def9317b101ba03a5c0fac16",
+          "entrySha256": "40ae0f11de0b308d039ce3d21c306a461bfa558931fa558037ae3879cf13c723",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-latest-approved-revision-per-group-1",
+          "taskPromptSha256": "d5b674e1f45a8dcacb2ff29625845befc8ef6b1da81533110e23803fe7748d0e",
+          "expectedSha256": "60aab13c11911ef7f4f10b215ad769a3642ca4ef460726c4367583f371d8e261",
+          "entrySha256": "71a61ed79d4d1ef0efa6731b68a10b1ef35965ded4f6e9d6427c82b6ad11bbde",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-calendar-month-proration-1",
+          "taskPromptSha256": "656b84a9dedd661502348a40bcbbd5f680db5834de6fe4e44b75ace65a0d4644",
+          "expectedSha256": "9d2ce58a6916e50e83806e31249eb363f59260242ba576ac1857cba69d3daf3a",
+          "entrySha256": "e01624861d0eb76790526f4a4a5b534b2e23e1f1963790ef243632d7cef644f4",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-progressive-travel-charge-1",
+          "taskPromptSha256": "4ed4aee7af2ffa0b6522c6078b2b821111f56657e99e9e8f111a72d41b8c343a",
+          "expectedSha256": "1899d9c7216faa63ab8ae04e359f7db3bdd90b1b51598bbb5486b9dd80cbf2cd",
+          "entrySha256": "c6e579d874ae21f52bc5ce76af0585629f61701d53565d586dad3110bb314636",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-three-way-cost-allocation-1",
+          "taskPromptSha256": "57bdf86e6c6aae262a4b33695a62f42257d62334ef9c7a1b2d9d1a1efaf38f46",
+          "expectedSha256": "855f3c3209f93a92dd3540a753314640782b55ecbd47cf872fe3204aaa2165c3",
+          "entrySha256": "6778a222efe8b9a28a9ce3271ec1212a50ae9ed6a9ef9481b3dd60a933dd1c95",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-business-day-offset-preview-1",
+          "taskPromptSha256": "d5742357bb76c7625be35fd8d4bdf5459d0081ba9ac6e079a8f69f226894d824",
+          "expectedSha256": "e2121238fa1643b8038ea553332b7ff58bbbdf7076bc74724fec1f61b6b66f19",
+          "entrySha256": "6d58d0c142be38c24a23570dab376efeb75a915b059e60187255706473ac5a64",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-campaign-window-overlap-1",
+          "taskPromptSha256": "377e91c7f71e3555b53515cc8fc9a14e58560f2c61425f943045c8cfcd27b7d2",
+          "expectedSha256": "3f9d05468cf6b96f1ee99571f0d5ce04169eb1f14bbaef171b65bcc8d8ef3fab",
+          "entrySha256": "df68c9435153f78c35078012270c2e9200ae6ab2ac7f382df51b9fc631c351d5",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-dateformula-safety-check-schedule-1",
+          "taskPromptSha256": "18d20b0901286dc34f0d136b04e4c40f233d199dea00a9551018ff0088bc2d4e",
+          "expectedSha256": "b1816eda41a88e0315c739443f784b0d9b88a3a826781bc5cea1499bf9831728",
+          "entrySha256": "cf959b9049c6c79dd0d189a2cd7bf8c69f44643cfb9901e1796911430ca8f3e0",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-two-point-calibration-1",
+          "taskPromptSha256": "09a1775a078496957376d2c444ef1123ad03a7560079003f6ec86275b68c7c93",
+          "expectedSha256": "94ab3016e9d067e914f6d2d4f9512797d93ab932df3746899ff6943aca1681b4",
+          "entrySha256": "cf3068ab6d93b8f9944b71098da1d45d8e68c67ccea2033205dff02133baa85a",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-service-task-state-transitions-1",
+          "taskPromptSha256": "f12db6e219b2d05f9a629a2fec37aa207642cd4a7f4f654be97bc872ca9d35ad",
+          "expectedSha256": "74a5e803e8b92211d29a6a6e78cfb967262ae1f87433a0d1b2bbbcba10d4e6b1",
+          "entrySha256": "6dd1e49b164a77ba63119da46e5c6ecc59e5a0a4ac3ff9240fa2eda37b8a0264",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-customer-email-review-invalidation-1",
+          "taskPromptSha256": "1cd8cec45b73aea26941a56f18758ccfc6fa883399dfc33bf4eb9c1188ceb4d9",
+          "expectedSha256": "fd67828cab4dab83b3507b2c60f2c3bf1f7117bb85148bc82657f302e29dc54d",
+          "entrySha256": "9cf135bbe14159d67f2e48d11bde3e22aab74d7fa9290aed4cf2773d52f2df6c",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-unit-price-one-level-undo-1",
+          "taskPromptSha256": "429cdf04cad897df2990a7bcff5183159d26fc84ab52505e54046d7d991d4350",
+          "expectedSha256": "6b9c07e3f1a6dc33900c713858a7ccfea8821643bdd97d9278bed2814ae561e3",
+          "entrySha256": "84be10c4756098981c7fc43a4d477dd7008509c85811e4a768f40d2f64627e13",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-incremental-labor-billing-preview-1",
+          "taskPromptSha256": "a1f0a977593de2b91a4e0c533a3f0ffa2d8b8aa5ae990e5446414d79c77f5495",
+          "expectedSha256": "14c56181abb71465ed56a9a04d471beee157c9023182dc84dc8261963a0db584",
+          "entrySha256": "9b273491e4f518349aee5410a065c18aa5ee7c27c28d84e9e569f35fc6e9217e",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-allowance-rate-configuration-fallback-1",
+          "taskPromptSha256": "9f21e98c5863e06bbc289d94ee5d3bc22c0b2e04280c14d8bc8a11ce4d32e48b",
+          "expectedSha256": "f30bb155f130412f80f99ebe0f3d11de5267bb688e31a89965a30a18cb96e232",
+          "entrySha256": "7e21c5d90f587709d17bafa9e09690642677791140ea9fb82f6d0ce46965a0f5",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-safe-customer-city-lookup-1",
+          "taskPromptSha256": "91e12d1dca208f523e3fdbbf4f25a921b12e712f9d1179bac271f75ee3b73fef",
+          "expectedSha256": "2b3aaf1d6be984ece9a83cf5be9268cdc6bfcdd14a47143a9ed0fa9801c275b3",
+          "entrySha256": "2be87313cf7e3dc3429ea949fbc2af564bc76d55d239d7d6ada9d0c34582c542",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-preserve-caller-record-view-1",
+          "taskPromptSha256": "1a0bfe0122e3486816592f8f17e634704c53644ab2db687b3f5cc52c04ed0ce6",
+          "expectedSha256": "e561b6b4d957af297f5a39685d0dbaff0c022c00270a2afb8b8ddb1b86f0bd4e",
+          "entrySha256": "9c1e13fdd7ba18d1f0651864bfee7ada6604d23397a172e568a55c3804dbc578",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-customer-csv-export-1",
+          "taskPromptSha256": "b7b9a7f3b66b4576beeb0ecf11f147e522a9e5c95c4308f68e65d9b07a563898",
+          "expectedSha256": "13a11670c1eb057e70d7ef13214f159e4dd2125ab81bbdf8b67bbf47b51594f9",
+          "entrySha256": "90c4b0a685f80988eba52c8b30e1c79268283ca7df0e79b7b8821968f7ded2be",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-typed-item-json-snapshot-1",
+          "taskPromptSha256": "8dcb19ddc505c197984e20277cdd0b13c562c3837220d7f5c7c6e4a8c4f5b787",
+          "expectedSha256": "cd243cf20ec08d2210e1498febbd71f1a7d4349edc5ca8d47a16ef75f331d6f0",
+          "entrySha256": "2e1ee3cbe9c6dbc5aa970236819def4d6caea84191bd14ddeb7c90c90e926be4",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-atomic-json-request-parser-1",
+          "taskPromptSha256": "6e93ac853562423e71889374a475ee4c4f93bed6fa8700ccf40b33d01e5d3ede",
+          "expectedSha256": "a6f8250fef5ee48f2ac4b24a2d5d2cbbed8fe4ac0eef7d60db80cb1960d9fac5",
+          "entrySha256": "91c720b790e592c082981c85ae18060e81bd1fa8ba19b19472125cd955c1b124",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-vendor-xml-summary-1",
+          "taskPromptSha256": "331d61c009cc8a55c1c27603e8027922ca34d0a6d51d649e97a831d2897c1149",
+          "expectedSha256": "57b227e380ff2780e0c5e424366395d09ef2cee3dcdb50bac859bef068ac88e4",
+          "entrySha256": "aa359fb7c47aa1a5582af19ba51e573962f1e0c5ef20e3bf5db4a67bfc713518",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-company-scoped-data-upgrade-1",
+          "taskPromptSha256": "394a18341fc64ec1bea20583090326a5a513b5992321a99548e01f1e10f549d8",
+          "expectedSha256": "0c5337b6d6925b41d0207f0aa50329203a3f48ab50b0c53989fbdcfcafb3c928",
+          "entrySha256": "fef11206698507981dbef1a4073662aa915d4afbd82105da441a4f1c7ea8aae7",
+          "environmentSetupVersion": "28.0"
+        },
+        {
+          "instanceId": "nl2al__expanded-enum-interface-fee-dispatch-1",
+          "taskPromptSha256": "1f6b410225b787543d89bc41ea811006dbca11fb8faf31b2383b555fc64aa815",
+          "expectedSha256": "d21e9b3ca5fe18bd216ece0d3afd996ddc9358381f4d98a3742d629a290869db",
+          "entrySha256": "dba026d9852431ccc41e40fc70b789f9d18faa73a5c8c6dc9ed20dec2e79b872",
+          "environmentSetupVersion": "28.0"
+        }
+      ]
+    }
+  ],
+  "symbolsManifestFile": "experiments\\bcal-sdk-policy\\symbols.json",
+  "symbolsManifestSha256": "cee5605b0cb36d894c3f723d4942c8d78053b07cd31151f61e78c78aa7bf6399",
+  "package": {
+    "id": "Microsoft.BusinessCentral.BCal.CLI",
+    "version": "30.0.46.34884-beta",
+    "productVersion": "30.0.46.34884+7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "sourceCommitSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "commonBaseSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "stablePatchId": "no-patch",
+    "buildId": 3049448,
+    "sha256": "aea6037faa835faa7d64ad95b17dd8240645ea25bc70e257213c8fa3c3ff80de",
+    "bytes": 306389504,
+    "framework": "net10.0",
+    "files": 460,
+    "sdkPackageVersion": "1.0.29",
+    "sdkRuntimeVersion": "1.0.107",
+    "nativeCatalogSha256": "53cbf24393521600b170c5840c5721292be4953c5b1e194e137489ba5e7ba81b",
+    "indexSha256": "e0d3f04ed40b264bf5407b36cd54a5a1efe88606d15ebe80c457675f156436f6",
+    "independentSealSha256": "71167a6426626623672daf1ac469441a7d97f76f1d04790dc8ff336d5b4aaf91"
+  },
+  "inference": {
+    "provider": "bc-eval-m365-test@0.6.1",
+    "model": "gpt-56-reasoning-sol",
+    "reasoning": null,
+    "sdkMaxModelRequests": 64,
+    "sdkTimeoutSeconds": 1200,
+    "clientSourceSha256": "f4dfdd0148debfc2de8a3cabfa49b00c9f8b01bfcbfa4a78708c7d0459cfe815"
+  },
+  "judge": {
+    "model": "gpt-56-ceres",
+    "scorerSha256": "c563e569520b202e725d46ac58497868fefd8d48662fb8a305c9a397e14c398d",
+    "timeoutSeconds": 90,
+    "storage": "none"
+  },
+  "routingAdmission": {
+    "maximumRequests": 5,
+    "mainChatRequests": 2,
+    "mainResponsesRequests": 2,
+    "judgeChatRequests": 1,
+    "semanticCaseAttempts": 0,
+    "purpose": "Bounded exact-model protocol/tool-schema and sticky-route compatibility admission before the220 workload attempts; no reasoning effort set."
+  },
+  "historicalAccounting": {
+    "priorMeasuredSecondsUnchanged": 87651.47441800009,
+    "originalPilotHoldSecondsUnchanged": 1500,
+    "closedSmokeHostedMeasuredSeconds": 12802,
+    "closedSmokeLocalConservativeChargeIncludingHoldSeconds": 600,
+    "closedSmokeConservativeChargeSeconds": 13402,
+    "closedSmokeRunIds": [
+      43292888269,
+      43293977171,
+      43295048932
+    ],
+    "closedSmokeSourceSha": "e98e36e2ce12c5f03c62115a93dd58b7bad59edf",
+    "closedSmokeEvidenceSealSha256": "2b18bda9b3c358699223bce6d9ce575d66fd83c884bc6f5ce0384ad696ccbd15",
+    "authorization": "The user approved this fixed full110-case paired workload and extending the prior aggregate limit as necessary. No new monetary/numeric aggregate ceiling was specified; practical attempt/job timeouts and measured all-job usage remain required. Prior ledgers/seals are immutable."
+  },
+  "stack": {
+    "number": 1026,
+    "members": [
+      890,
+      1011,
+      1025
+    ],
+    "topBaseBranch": "esbenk-bcal-authority-scenarios",
+    "topOriginalBaseSha": "6f6fe8fefa4fb1d35a8e272d0e313d6551da68f1",
+    "observedLowerHeadShaAtPreparation": "091edb113bd13905812976a7eb3fff9039c2fc41",
+    "lowerDrift": "One lower-owner legacy bridge review fix; preserved without mutating/rebasing lower refs. This study pins the actual committed top-layer source."
+  },
+  "publication": "Sanitized counts/scores/latency/usage availability/compile-domain-export flags/exception classes/hashes only. No raw AL, prompts, transcripts, upstream bodies, private package, certificate or sticky tickets. Raw remains runner-ephemeral; no detailed failure recovery or publication-only rejudge."
+}

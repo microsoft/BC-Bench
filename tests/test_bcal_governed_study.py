@@ -27,6 +27,122 @@ def test_fixed_cohort_is_repeat_aware_and_counterbalanced():
     }
 
 
+def test_full_gold_selects_every_case_once_per_runtime(monkeypatch):
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold")
+    pairs = study.pairs()
+    gold = [json.loads(line) for line in (ROOT / "dataset" / "nl2al.jsonl").read_text().splitlines() if line]
+    assert len(pairs) == 110
+    assert {pair["instanceId"] for pair in pairs} == {row["instance_id"] for row in gold}
+    assert len({(pair["instanceId"], runtime) for pair in pairs for runtime in pair["order"]}) == 220
+    assert all(pair["tier"] == "gold" and pair["lane"] == "ordinary-quality" and pair["category"] == "nl2al" for pair in pairs)
+    assert study.study()["inference"]["model"] == "gpt-56-reasoning-sol"
+    assert study.study()["inference"]["reasoning"] is None
+
+
+def test_full_gold_rejects_hidden_exclusions(tmp_path, monkeypatch):
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold")
+    config = study.study()
+    config["datasets"][0]["selectedEntries"].pop()
+    study.write_json(tmp_path / "study.json", config)
+    monkeypatch.setattr(study, "INPUTS", tmp_path)
+    with pytest.raises(ValueError, match="without exclusions"):
+        study.pairs()
+
+
+def test_full_gold_summary_keeps_all_unattempted_cells(tmp_path, monkeypatch):
+    from argparse import Namespace
+
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold")
+    with pytest.raises(ValueError, match="incomplete"):
+        study.summary(Namespace(work=tmp_path, output=tmp_path / "summary"))
+    result = json.loads((tmp_path / "summary" / "comparison.json").read_bytes())
+    assert result["expected"] == 220
+    assert len(result["missing"]) == 220
+    assert set(result["lanes"]) == {"ordinary-quality"}
+    assert result["lanes"]["ordinary-quality"]["legacy"]["expected"] == 110
+
+
+@pytest.mark.parametrize("fail_at", [None, 2])
+def test_full_gold_routing_admission_is_bounded_and_preserves_partial_charges(tmp_path, monkeypatch, fail_at):
+    import io
+    from argparse import Namespace
+    from contextlib import contextmanager
+
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold")
+    requests = []
+    current = {}
+
+    @contextmanager
+    def fake_proxy(_work, _env, model, wire, role):
+        current.update(model=model, wire=wire, audit=tmp_path / f"{role}-{wire}.json", count=0)
+        study.write_json(current["audit"], {"requests": 0, "http200": 0, "ticketsReturned": 0, "ticketsReplayed": 0, "sessionStable": True, "modelStable": True})
+        yield "http://unused.invalid", current["audit"]
+
+    def respond(request, timeout):
+        body = json.loads(request.data)
+        assert body["model"] == current["model"]
+        assert "reasoning_effort" not in body
+        assert "reasoning" not in body
+        assert body["tools"]
+        assert body["tool_choice"] == "none"
+        requests.append(body)
+        current["count"] += 1
+        failed = len(requests) == fail_at
+        count = current["count"]
+        study.write_json(current["audit"], {"requests": count, "http200": count - failed, "ticketsReturned": count - failed, "ticketsReplayed": count - 1, "sessionStable": True, "modelStable": True})
+        if failed:
+            raise TimeoutError("simulated upstream failure")
+        return io.StringIO(json.dumps({"output": []} if current["wire"] == "responses" else {"choices": []}))
+
+    monkeypatch.setattr(study, "proxy", fake_proxy)
+    monkeypatch.setattr(study.urllib.request, "urlopen", respond)
+    args = Namespace(work=tmp_path, output=tmp_path)
+    if fail_at:
+        with pytest.raises(TimeoutError):
+            study.routing_preflight(args)
+    else:
+        study.routing_preflight(args)
+    receipt = json.loads((tmp_path / "routing-preflight.json").read_bytes())
+    assert receipt["requests"] == len(requests) == (fail_at or 5)
+    assert receipt["status"] == ("failed" if fail_at else "passed")
+    assert all(body["model"] == "gpt-56-reasoning-sol" for body in requests[:4])
+
+
+@pytest.mark.parametrize("effort", [None, "high"])
+def test_sol_bridge_omits_default_effort_and_rejects_unspecified_effort_override(monkeypatch, effort):
+    import io
+    import sys
+    from contextlib import nullcontext
+    from types import ModuleType, SimpleNamespace
+
+    transport_spec = importlib.util.spec_from_file_location("gold_transport_test", ROOT / "scripts" / "bcal_study_transport.py")
+    transport = importlib.util.module_from_spec(transport_spec)
+    transport_spec.loader.exec_module(transport)
+    observed = []
+    api = ModuleType("openai")
+
+    def create(**kwargs):
+        observed.append(kwargs)
+        return SimpleNamespace(model_dump_json=lambda **_: "{}")
+
+    api.OpenAI = lambda **_: nullcontext(SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    monkeypatch.setitem(sys.modules, "openai", api)
+    monkeypatch.setenv("BCAL_LLM_MODEL", "gpt-56-reasoning-sol")
+    monkeypatch.setenv("BCAL_STUDY_CHAT_URL", "http://unused.invalid")
+    monkeypatch.setenv("BCAL_SDK_PROXY_KEY", "test-only")
+    body = {"model": "gpt-56-reasoning-sol", "messages": [], "reasoning_effort": effort, "tools": []}
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps(body).encode())))
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    if effort:
+        with pytest.raises(ValueError, match="unspecified"):
+            transport.bridge()
+        assert not observed
+    else:
+        transport.bridge()
+        assert observed[0]["model"] == body["model"]
+        assert "reasoning_effort" not in observed[0]
+
+
 def test_carry_forward_hold_cannot_be_ignored(tmp_path, monkeypatch):
     original = study.INPUTS
     config = study.study()
@@ -245,7 +361,7 @@ def test_existing_workflow_is_the_only_dispatch_and_reuses_actions():
     workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "bcal-governed-policy.yml").read_text())
     action = yaml.safe_load((ROOT / ".github" / "actions" / "setup-bcal-governed-study" / "action.yml").read_text())
     assert caller["jobs"]["get-entries"]["if"] == "(inputs.validation-phase == '' || inputs.validation-phase == 'ordinary') && !(inputs.llm-preflight-only || false)"
-    assert workflow["jobs"]["pairs"]["strategy"]["max-parallel"] == 4
+    assert workflow["jobs"]["pairs"]["strategy"]["max-parallel"] == "${{ inputs.phase == 'full-gold' && 32 || 4 }}"
     assert any(step.get("uses") == "./.github/actions/install-bcal" for step in action["runs"]["steps"])
     assert any(step.get("uses") == "./.github/actions/setup-python-uv" for step in action["runs"]["steps"])
     assert all(

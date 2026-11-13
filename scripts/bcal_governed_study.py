@@ -19,7 +19,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS = ROOT / "experiments" / "bcal-sdk-policy"
+INPUTS = ROOT / "experiments" / os.environ.get("BCAL_STUDY_PROFILE", "bcal-sdk-policy")
+
+
+def symbols_manifest() -> Path:
+    config = json.loads((INPUTS / "study.json").read_bytes())
+    return ROOT / config["symbolsManifestFile"] if "symbolsManifestFile" in config else INPUTS / "symbols.json"
 
 
 def digest(path: Path) -> str:
@@ -39,6 +44,19 @@ def write_json(path: Path, value: object) -> None:
 
 def study() -> dict:
     value = json.loads((INPUTS / "study.json").read_bytes())
+    if value.get("cohort") == "full-gold-paired-v1":
+        require(
+            value["repeatCount"] == 1
+            and value["variants"] == ["legacy", "copilot-sdk"]
+            and value["caseCount"] == 110
+            and value["maxWorkers"] == 32
+            and value["inference"]["model"] == "gpt-56-reasoning-sol"
+            and value["inference"]["reasoning"] is None
+            and value["judge"]["model"] == "gpt-56-ceres",
+            "Only the approved full-gold paired Sol workload is admitted.",
+        )
+        require(digest(symbols_manifest()) == value["symbolsManifestSha256"], "Symbol manifest changed.")
+        return value
     budget = value["budget"]
     prior = budget["preservedPriorHostedStudy"]
     corrected = budget["preservedCorrectedHostedStudy"]
@@ -60,24 +78,40 @@ def study() -> dict:
     )
     if reserved > 28800 or budget["historicalMeasuredSeconds"] + budget["unresolvedLocalReservationSeconds"] + 28800 > budget["originalEnvelopeSeconds"]:
         raise ValueError("Aggregate budget does not fit the approved carry-forward envelope.")
-    if digest(INPUTS / "symbols.json") != value["symbolsManifestSha256"]:
+    if digest(symbols_manifest()) != value["symbolsManifestSha256"]:
         raise ValueError("Symbol manifest changed.")
     return value
 
 
 def pairs() -> list[dict]:
     result = []
-    for dataset in study()["datasets"]:
+    config = study()
+    full_gold = config.get("cohort") == "full-gold-paired-v1"
+    for dataset in config["datasets"]:
         path = ROOT / dataset["file"]
         if digest(path) != dataset["datasetSha256"]:
             raise ValueError("Dataset changed.")
         data = {row["instance_id"]: row for line in path.read_text(encoding="utf-8").splitlines() if line for row in [json.loads(line)]}
+        if full_gold:
+            require(
+                dataset["category"] == "nl2al"
+                and dataset["tier"] == "gold"
+                and dataset["lane"] == "ordinary-quality"
+                and len(data) == 110
+                and set(data) == {item["instanceId"] for item in dataset["selectedEntries"]},
+                "Full gold must select every case exactly once without exclusions.",
+            )
         for selected in dataset["selectedEntries"]:
             row = data[selected["instanceId"]]
             if dataset["category"] == "nl2al":
                 prompt = hashlib.sha256(row["nl_prompt"].encode()).hexdigest()
                 expected = hashlib.sha256(json.dumps(row["expected"], sort_keys=True).encode()).hexdigest()
                 require(prompt == selected["taskPromptSha256"] and expected == selected["expectedSha256"], "Entry prompt or assertions changed.")
+                if full_gold:
+                    require(
+                        hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest() == selected["entrySha256"] and row["environment_setup_version"] == "28.0",
+                        "Full-gold entry or symbol version changed.",
+                    )
             else:
                 require(dataset["category"] == "bcal-scenario" and row["metadata"]["area"] == "authority-contract", "Only repaired authority scenarios are admitted.")
                 require(hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest() == selected["entrySha256"], "Authority fixture, seed, steps or assertions changed.")
@@ -95,8 +129,11 @@ def pairs() -> list[dict]:
                     "sdkToolCatalogSha256": selected["sdkToolCatalogSha256"] if dataset["lane"] == "authority" else study()["package"]["nativeCatalogSha256"],
                 }
             )
-    require(len(result) == 8 and sum(pair["lane"] == "authority" for pair in result) == 4, "Only four ordinary and four authority pairs are admitted.")
-    require(len({pair["instanceId"] for pair in result}) == 8, "Duplicate smoke selectors are not admitted.")
+    if full_gold:
+        require(len(result) == 110 and all(pair["lane"] == "ordinary-quality" for pair in result), "Exactly110 full-gold pairs are required.")
+    else:
+        require(len(result) == 8 and sum(pair["lane"] == "authority" for pair in result) == 4, "Only four ordinary and four authority pairs are admitted.")
+    require(len({pair["instanceId"] for pair in result}) == len(result), "Duplicate study selectors are not admitted.")
     return result
 
 
@@ -114,7 +151,7 @@ def fixtures(args: argparse.Namespace) -> None:
         BCalScenarioPipeline().setup_workspace(entry, workspace)
         write_execution_manifest(entry, workspace / "execution.json")
         seed = workspace_seed_evidence(workspace / "app")
-        symbols = json.loads((INPUTS / "symbols.json").read_bytes())["files"]
+        symbols = json.loads(symbols_manifest().read_bytes())["files"]
         require(
             {path.name: digest(path) for path in (workspace / ".bcal-symbols" / ".alpackages").glob("*.app")} == {Path(item["path"]).name: item["sha256"] for item in symbols},
             "Authority materialization did not use the exact350 symbols.",
@@ -128,7 +165,7 @@ def fixtures(args: argparse.Namespace) -> None:
 
 
 def verify_symbols() -> dict:
-    manifest = json.loads((INPUTS / "symbols.json").read_bytes())
+    manifest = json.loads(symbols_manifest().read_bytes())
     root = Path(os.environ.get("BCAL_STUDY_SYMBOL_CACHE", r"C:\bcartifacts.cache\sandbox")) / manifest["cacheVersion"]
     expected = {item["path"]: item["sha256"] for item in manifest["files"]}
     observed = {str(path.relative_to(root)): digest(path) for path in root.rglob("*.app")}
@@ -137,7 +174,7 @@ def verify_symbols() -> dict:
     roots = sorted(root.parent.glob("28.0.*"), key=lambda item: tuple(map(int, item.name.split("."))))
     if roots[-1] != root:
         raise ValueError("Pipeline would select a different28.0 symbol cache.")
-    return {"count": 350, "setSha256": manifest["setSha256"], "manifestSha256": digest(INPUTS / "symbols.json")}
+    return {"count": 350, "setSha256": manifest["setSha256"], "manifestSha256": digest(symbols_manifest())}
 
 
 def verify_package(stage: Path) -> Path:
@@ -207,7 +244,8 @@ def preflight(args: argparse.Namespace) -> None:
         receipt["symbols"] = verify_symbols()
         receipt["pairCount"] = len(pairs())
         receipt["authoritySeeds"] = json.loads((args.work / "fixtures.json").read_bytes())
-        require(len(receipt["authoritySeeds"]) == 4, "Four production-materialized authority seeds are required.")
+        expected_seeds = sum(pair["lane"] == "authority" for pair in pairs())
+        require(len(receipt["authoritySeeds"]) == expected_seeds, "Authority materializations differ from the selected workload.")
         from azure.identity import CertificateCredential
         from bc_eval.llm.llm_api import SCOPE, LlmApiSettings
 
@@ -282,6 +320,71 @@ def route_receipt(path: Path) -> dict:
     return value
 
 
+def routing_preflight(args: argparse.Namespace) -> None:
+    config = study()
+    require(config.get("cohort") == "full-gold-paired-v1", "Routing admission is only configured for full gold.")
+    receipt = {
+        "studyId": config["studyId"],
+        "benchCommit": os.environ.get("GITHUB_SHA"),
+        "inputsSha256": digest(INPUTS / "study.json"),
+        "status": "in-progress",
+        "kind": "bounded-routing-admission-not-semantic-attempts",
+        "requestLimit": 5,
+        "reasoningEffort": None,
+        "routes": [],
+    }
+    started = time.monotonic()
+    env = {**os.environ, "BCAL_SDK_PROXY_KEY": secrets.token_urlsafe(32)}
+    try:
+        for model, wire, role, count in (
+            (config["inference"]["model"], "chat-completions", "HostAgent", 2),
+            (config["inference"]["model"], "responses", "HostAgent", 2),
+            (config["judge"]["model"], "chat-completions", "Judge", 1),
+        ):
+            route_receipt_row = {"model": model, "wireApi": wire, "role": role, "requests": 0}
+            receipt["routes"].append(route_receipt_row)
+            with proxy(args.work, env, model, wire, role) as (url, audit):
+                try:
+                    for _ in range(count):
+                        body = {"model": model}
+                        function = {
+                            "name": "admission_probe",
+                            "description": "Unused schema admission only.",
+                            "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+                        }
+                        if wire == "responses":
+                            body.update(input="Return only OK.", max_output_tokens=1024, tools=[{"type": "function", **function}], tool_choice="none")
+                            route = "/responses"
+                        else:
+                            body.update(messages=[{"role": "user", "content": "Return only OK."}], max_completion_tokens=1024, tools=[{"type": "function", "function": function}], tool_choice="none")
+                            route = "/chat/completions"
+                        request = urllib.request.Request(
+                            url + route,
+                            data=json.dumps(body).encode(),
+                            headers={"Authorization": "Bearer " + env["BCAL_SDK_PROXY_KEY"], "Content-Type": "application/json"},
+                        )
+                        with urllib.request.urlopen(request, timeout=250) as response:
+                            result = json.load(response)
+                        require(
+                            isinstance(result, dict) and (isinstance(result.get("output"), list) if wire == "responses" else isinstance(result.get("choices"), list)),
+                            "Provider response protocol differs.",
+                        )
+                finally:
+                    counters = json.loads(audit.read_bytes())
+                    if type(counters.get("requests")) is int and counters["requests"] >= 0:
+                        route_receipt_row["requests"] = counters["requests"]
+                    route_receipt_row.update(route_receipt(audit))
+                require(route_receipt_row["requests"] == count and route_receipt_row["http200"] == count, "Routing admission was not exactly the bounded successful calls.")
+        receipt["status"] = "passed"
+    except Exception as error:
+        receipt.update(status="failed", errorClass=type(error).__name__)
+        raise
+    finally:
+        receipt["seconds"] = time.monotonic() - started
+        receipt["requests"] = sum(row["requests"] for row in receipt["routes"])
+        write_json(args.output / "routing-preflight.json", receipt)
+
+
 def trace_projection(transcript: dict) -> dict:
     trace = transcript.get("evidence", {}).get("trace") or {}
     raw_events = trace.get("events")
@@ -352,13 +455,14 @@ def sanitize_row(row: dict, runtime: str, *, sdk_catalog_sha256: str | None = No
 
     transcript = row["transcript"]
     identity = transcript["runtimeIdentity"]
+    model = study()["inference"]["model"]
     config = BCalBackendConfig(
         command="governed-memory-only-chat-route",
-        model="gpt-55-chat",
+        model=model,
         agent_runtime=BCalAgentRuntime(runtime),
         agent_planning=BCalAgentPlanning.COPILOT if runtime == "copilot-sdk" else None,
         sdk_provider="openai" if runtime == "copilot-sdk" else None,
-        sdk_model="gpt-55-chat" if runtime == "copilot-sdk" else None,
+        sdk_model=model if runtime == "copilot-sdk" else None,
         sdk_max_model_requests=64 if runtime == "copilot-sdk" else None,
         sdk_timeout_seconds=1200 if runtime == "copilot-sdk" else None,
         inference_provider="bc-eval-m365-test@0.6.1",
@@ -453,6 +557,9 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
         "inputsSha256": digest(INPUTS / "study.json"),
         "benchCommit": os.environ.get("GITHUB_SHA"),
         "runtime": runtime,
+        "mainModel": config["inference"]["model"],
+        "reasoningEffort": None,
+        "judgeModel": config["judge"]["model"],
         "status": "admitted",
         "quality": None,
         "testPassed": None,
@@ -468,7 +575,7 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
         env.update(
             PATH=str(binary.parent) + os.pathsep + os.environ["PATH"],
             BCAL_AGENT_RUNTIME=runtime,
-            BCAL_LLM_MODEL="gpt-55-chat",
+            BCAL_LLM_MODEL=config["inference"]["model"],
             BCAL_LLM_PROVIDER="bc-eval-m365-test@0.6.1",
             BCAL_LLM_WIRE_API="chat-completions",
             BCAL_INFERENCE_PROVIDER="bc-eval-m365-test@0.6.1",
@@ -476,15 +583,15 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
             BCAL_LLM_COMMAND=subprocess.list2cmdline([os.environ["BCAL_STUDY_INFERENCE_PYTHON"], str(ROOT / "scripts" / "bcal_study_transport.py"), "bridge"]),
         )
         with ExitStack() as stack:
-            chat_url, chat_audit = stack.enter_context(proxy(work, env, "gpt-55-chat", "chat-completions", "HostAgent"))
+            chat_url, chat_audit = stack.enter_context(proxy(work, env, config["inference"]["model"], "chat-completions", "HostAgent"))
             env["BCAL_STUDY_CHAT_URL"] = chat_url
             main_audit = chat_audit
             if runtime == "copilot-sdk":
-                sdk_url, main_audit = stack.enter_context(proxy(work, env, "gpt-55-chat", "responses", "HostAgent"))
+                sdk_url, main_audit = stack.enter_context(proxy(work, env, config["inference"]["model"], "responses", "HostAgent"))
                 env.update(
                     BCAL_SDK_PROVIDER="openai",
                     BCAL_SDK_BASE_URL=sdk_url + "/v1",
-                    BCAL_SDK_MODEL="gpt-55-chat",
+                    BCAL_SDK_MODEL=config["inference"]["model"],
                     BCAL_SDK_API_KEY_ENV="BCAL_SDK_PROXY_KEY",
                     BCAL_SDK_MAX_MODEL_REQUESTS="64",
                     BCAL_SDK_TIMEOUT_SECONDS="1200",
@@ -540,7 +647,7 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
         require(pair["lane"] == "authority" or attempt["execution"]["freshCompiled"] is not False or not attempt["execution"]["completed"], "A stale compile cannot be a successful result.")
         dataset = next(item for item in config["datasets"] if item["tier"] == pair["tier"] and item["category"] == pair["category"])
         entry = next(json.loads(line) for line in (ROOT / dataset["file"]).read_text(encoding="utf-8").splitlines() if json.loads(line)["instance_id"] == pair["instanceId"])
-        expected = json.loads((INPUTS / "symbols.json").read_bytes())["files"]
+        expected = json.loads(symbols_manifest().read_bytes())["files"]
         symbols = work / "workspace" / (".bcal-symbols" if pair["lane"] == "authority" else entry["project_paths"][0]) / ".alpackages"
         require({path.name: digest(path) for path in symbols.glob("*.app")} == {Path(item["path"]).name: item["sha256"] for item in expected}, "Materialized symbols do not match frozen350.")
         attempt["materializedSymbolsVerified"] = True
@@ -620,7 +727,7 @@ def run_pair(args: argparse.Namespace) -> None:
         "studyId": config["studyId"],
         "pair": pair,
         "status": "setup",
-        "grantSeconds": config["budget"]["pairReservationSeconds"],
+        "grantSeconds": config.get("pairTimeoutSeconds", config.get("budget", {}).get("pairReservationSeconds")),
         "admitted": [],
         "benchCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "inputsSha256": digest(INPUTS / "study.json"),
@@ -631,7 +738,7 @@ def run_pair(args: argparse.Namespace) -> None:
         prepare_package(args.work / "package")
         verify_symbols()
         for runtime in pair["order"]:
-            require(time.time() - started + 1500 + 100 <= config["budget"]["pairReservationSeconds"] - 30, "Do not admit work without full attempt, judge and cleanup reservations.")
+            require(time.time() - started + 1500 + 100 <= receipt["grantSeconds"] - 30, "Do not admit work without full attempt, judge and cleanup reservations.")
             receipt["admitted"].append(runtime)
             write_json(path, receipt)
             result = run_attempt(pair, runtime, args.work / f"pair-{args.pair}" / runtime, env, args.output / f"attempt-{args.pair}-{runtime}.json")
@@ -658,21 +765,37 @@ def summary(args: argparse.Namespace) -> None:
         records[key] = row
     scoreable = [row for row in records.values() if row.get("status") in ("judged", "agent-failed") and row.get("firstModelResponse") is True]
     missing = [{"pair": key[0], "runtime": key[1]} for key in expected if key not in records]
+    lanes = sorted({pair["lane"] for pair in expected.values()})
+    expected_count = len(expected)
     result = {
         "studyId": config["studyId"],
+        "inputsSha256": digest(INPUTS / "study.json"),
+        "benchCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "mainModel": config["inference"]["model"],
+        "reasoningEffort": config["inference"]["reasoning"],
+        "judgeModel": config["judge"]["model"],
+        "package": config["package"],
+        "symbolsManifestSha256": config["symbolsManifestSha256"],
         "kind": "descriptive-policy-comparison-not-noninferiority",
-        "expected": 16,
+        "expected": expected_count,
         "captured": len(records),
         "scoreable": len(scoreable),
-        "complete": len(scoreable) == 16,
+        "complete": len(scoreable) == expected_count,
         "missing": missing,
         "attempts": list(records.values()),
         "lanes": {
             lane: {
                 runtime: {
-                    "expected": 4,
+                    "expected": sum(pair["lane"] == lane for pair in pairs()),
                     "captured": sum(row["lane"] == lane and row["runtime"] == runtime for row in records.values()),
                     "judged": sum(row["lane"] == lane and row["runtime"] == runtime and row["status"] == "judged" for row in records.values()),
+                    "modelBacked": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("modelBacked") is True for row in records.values()),
+                    "agentFailed": sum(row["lane"] == lane and row["runtime"] == runtime and row["status"] == "agent-failed" for row in records.values()),
+                    "timeouts": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("timeout") is True for row in records.values()),
+                    "domainCompleted": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("execution", {}).get("completed") is True for row in records.values()),
+                    "exported": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("execution", {}).get("exported") is True for row in records.values()),
+                    "freshCompiled": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("execution", {}).get("freshCompiled") is True for row in records.values()),
+                    "freshCompileUnknown": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("execution", {}).get("freshCompiled") is None for row in records.values()),
                     "qualityPasses": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("testPassed") is True for row in records.values()),
                     "deterministicAuthorityPasses": sum(
                         row["lane"] == lane and row["runtime"] == runtime and row.get("authority", {}).get("deterministicCompliant") is True for row in records.values()
@@ -682,23 +805,23 @@ def summary(args: argparse.Namespace) -> None:
                 }
                 for runtime in config["variants"]
             }
-            for lane in ("ordinary-quality", "authority")
+            for lane in lanes
         },
-        "historicalLocalBudget": config["budget"],
+        "historicalLocalBudget": config.get("budget", config.get("historicalAccounting")),
         "limitations": [
             "Same source/package; intentional planning/prompt/catalog and Responses-vs-chat differences, not pure runtime parity.",
-            "One repeat/eight fixed cases only: four ordinary tasks and four authority scenarios, separate outcomes. No noninferiority, production readiness, full-validation or policy-scan claim.",
+            f"One repeat/{len(pairs())} fixed cases, separate lanes. Descriptive results, not noninferiority, production readiness or a policy-scan claim.",
             "Main+auxiliary+judge tickets are session-local memory only; new persistent legacy/judge routing differs from historical per-process empty-ticket adapters.",
             "Provider cost is unavailable. Token subtotals may be incomplete; unavailable is null, never measured zero.",
             "Only sanitized identity/numeric/boolean/hash evidence retained publicly. Raw AL/prompts/private receipts/package/certificate never published; ephemeral runner-local raw files expire with runner.",
             "The original local120-slot pilot is paused/incomplete, not resumed, replaced or pooled. Infrastructure-invalid original and linked replacement/full charge retained; unresolved016 remains unscored with1500s held.",
-            "Static disjoint job grants count setup/evaluation/judge/artifact/controller time; final Actions job start/end accounting is required after terminal completion, including preflight and failures.",
+            "Practical job timeouts include setup/evaluation/judge/artifact/controller time; final Actions job start/end accounting is required after terminal completion, including preflight and failures.",
         ],
     }
     lines = [
         "# Governed BCAL policy comparison",
         "",
-        f"Captured **{len(records)}/16**, scoreable **{len(scoreable)}/16**. {'Complete descriptive study.' if result['complete'] else 'INCOMPLETE; no complete-comparison claim.'}",
+        f"Captured **{len(records)}/{expected_count}**, scoreable **{len(scoreable)}/{expected_count}**. {'Complete descriptive study.' if result['complete'] else 'INCOMPLETE; no complete-comparison claim.'}",
         "",
         "| Lane | Pair | Runtime | Status | Quality | Authority compliance | Seconds |",
         "|---|---|---|---|---:|---|---:|",
@@ -717,10 +840,10 @@ def summary(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("matrix", "fixtures", "preflight", "pair", "summary"))
+    parser.add_argument("command", choices=("matrix", "fixtures", "preflight", "routing-preflight", "pair", "summary"))
     parser.add_argument("--work", type=Path, default=Path(os.environ.get("BCAL_STUDY_WORK", ".bcal-study-private")))
     parser.add_argument("--output", type=Path, default=Path("study-sanitized"))
-    parser.add_argument("--pair", type=int, choices=range(8))
+    parser.add_argument("--pair", type=int)
     args = parser.parse_args()
     try:
         if args.command == "fixtures":
@@ -729,11 +852,14 @@ def main() -> None:
             sys.stdout.write(json.dumps({"include": [{"pair": row["index"]} for row in pairs()]}) + "\n")
         elif args.command == "preflight":
             preflight(args)
+        elif args.command == "routing-preflight":
+            routing_preflight(args)
         elif args.command == "summary":
             summary(args)
         elif args.pair is None:
             parser.error("--pair is required")
         else:
+            require(0 <= args.pair < len(pairs()), "Pair index is outside the immutable selection.")
             run_pair(args)
     except Exception as error:  # noqa: BLE001 - public logs must never contain private upstream bodies or generated code
         sys.stderr.write(f"Study {args.command} stopped: {type(error).__name__}\n")

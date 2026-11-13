@@ -106,6 +106,22 @@ The following studies are infrastructure-invalid and must not be scored or compa
 - `41691412171` / `41691423433`: missing Gate A opt-in and empty model-visible workspaces;
 - `41798148490` / `41798152826`: random protected `app.json` UUID caused baseline/candidate seed-receipt divergence.
 
+## Paired full-gold follow-up
+
+The separately approved full-gold follow-up uses
+`experiments\bcal-full-gold\study.json` and the existing evaluation workflow's
+`full-gold-preflight` / `full-gold` phases. It selects all 110 ordinary gold cases
+once per runtime (220 attempts), no challenge or authority cases. The exact
+main alias is `gpt-56-reasoning-sol`, with reasoning effort omitted/default;
+the judge remains `gpt-56-ceres`. Each pair runs sequentially and the workflow
+admits at most 32 pair workers total. A same-SHA gate verifies package/symbols
+without inference, then performs exactly five bounded protocol/routing requests
+(two main Chat, two main Responses, one judge Chat), separately accounted from
+semantic attempts. Prior studies and their limits/seals remain historical; the
+user approved extending the previous aggregate limit for this fixed workload,
+not a new monetary or numeric ceiling. Actual all-job usage must be reported.
+The existing smoke selection and ordinary/scheduled defaults are unchanged.
+
 ## Bounded SDK/legacy compatibility smoke
 
 The separate selector `experiments\bcal-sdk-policy\study.json` pins package

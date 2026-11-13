@@ -13,7 +13,7 @@ permissions:
   actions: read
   id-token: write
 concurrency:
-  group: bcal-stacked-sdk-smoke-20261112
+  group: ${{ startsWith(inputs.phase, 'full-gold') && 'bcal-full-gold-sol-paired-20261113' || 'bcal-stacked-sdk-smoke-20261112' }}
   cancel-in-progress: false
 env:
   BCAL_STUDY_WORK: C:\bgs
@@ -22,11 +22,12 @@ env:
   LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
   LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
   LLM_API_ENVIRONMENT: TEST
+  BCAL_STUDY_PROFILE: ${{ startsWith(inputs.phase, 'full-gold') && 'bcal-full-gold' || 'bcal-sdk-policy' }}
 jobs:
   preflight:
-    if: inputs.phase == 'preflight'
+    if: inputs.phase == 'preflight' || inputs.phase == 'full-gold-preflight'
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: ${{ inputs.phase == 'full-gold-preflight' && 25 || 10 }}
     environment:
       name: ado-read
       deployment: false
@@ -37,7 +38,7 @@ jobs:
         run: |
           if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'Study reruns are not authorized.' }
           New-Item -ItemType Directory study-sanitized -Force | Out-Null
-          $study = Get-Content experiments\bcal-sdk-policy\study.json -Raw | ConvertFrom-Json
+          $study = Get-Content "experiments\$env:BCAL_STUDY_PROFILE\study.json" -Raw | ConvertFrom-Json
           @{status='setup';modelsAdmitted=0;benchCommit=$env:GITHUB_SHA;studyId=$study.studyId} | ConvertTo-Json | Set-Content study-sanitized\setup.json
       - uses: ./.github/actions/setup-bcal-governed-study
         with:
@@ -45,6 +46,10 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           official-feed-url: ${{ secrets.BCAL_FEED_URL }}
           experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
+      - name: Admit exact Sol chat, Responses and unchanged judge routes
+        if: inputs.phase == 'full-gold-preflight'
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py routing-preflight --work $env:BCAL_STUDY_WORK --output study-sanitized
       - name: Retain sanitized preflight only
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -59,14 +64,15 @@ jobs:
         run: |
           if (Test-Path -LiteralPath 'C:\bgs\llm-api-cert.pfx') { Remove-Item -LiteralPath 'C:\bgs\llm-api-cert.pfx' -Force }
   admit:
-    if: inputs.phase == 'smoke'
+    if: inputs.phase == 'smoke' || inputs.phase == 'full-gold'
     runs-on: windows-latest
     timeout-minutes: 5
     outputs:
-      matrix: ${{ steps.admit.outputs.matrix }}
+      matrix: ${{ steps.admit.outputs.matrix || steps.gold.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Verify immutable preflight, duplicates and disjoint reservations
+        if: inputs.phase == 'smoke'
         id: admit
         shell: pwsh
         env:
@@ -109,6 +115,50 @@ jobs:
           New-Item -ItemType Directory study-sanitized -Force | Out-Null
           @{studyId=$study.studyId;benchCommit=$env:GITHUB_SHA;preflightRunId=$env:PREFLIGHT_RUN_ID;priorLocalBudget=$budget;measuredPreflightSeconds=$preflightSeconds;reservedStudySeconds=$reserved;rerunsAllowed=$false} | ConvertTo-Json -Depth 20 | Set-Content study-sanitized\admission.json
           'matrix={"include":[{"pair":0},{"pair":1},{"pair":2},{"pair":3},{"pair":4},{"pair":5},{"pair":6},{"pair":7}]}' >> $env:GITHUB_OUTPUT
+      - uses: ./.github/actions/setup-python-uv
+        if: inputs.phase == 'full-gold'
+      - name: Verify immutable full-gold admission and reject duplicate workloads
+        if: inputs.phase == 'full-gold'
+        id: gold
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight-run-id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1' -or $env:PREFLIGHT_RUN_ID -notmatch '^\d+$') { throw 'A first dispatch and exact admission run are required.' }
+          $preflight = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:PREFLIGHT_RUN_ID" | ConvertFrom-Json
+          if ($preflight.conclusion -ne 'success' -or $preflight.run_attempt -ne 1 -or $preflight.head_sha -ne $env:GITHUB_SHA -or $preflight.display_title -notlike '*paired full-gold-preflight') { throw 'Full-gold admission state/source/mode differs.' }
+          $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
+          if ($runs.total_count -gt 100) { throw 'Duplicate inventory is incomplete.' }
+          if (@($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title -like '*paired full-gold' }).Count) { throw 'The full-gold workload already has a dispatch; no retries/replacements.' }
+          gh run download $env:PREFLIGHT_RUN_ID --repo $env:GITHUB_REPOSITORY --name sdk-policy-preflight --dir preflight-receipt
+          $receipt = Get-Content preflight-receipt\preflight.json -Raw | ConvertFrom-Json
+          $routing = Get-Content preflight-receipt\routing-preflight.json -Raw | ConvertFrom-Json
+          $studyPath = "experiments\$env:BCAL_STUDY_PROFILE\study.json"
+          $study = Get-Content $studyPath -Raw | ConvertFrom-Json
+          $hash = (Get-FileHash $studyPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          foreach ($item in @($receipt, $routing)) {
+            if ($item.status -ne 'passed' -or $item.benchCommit -ne $env:GITHUB_SHA -or $item.inputsSha256 -ne $hash -or $item.studyId -ne $study.studyId) { throw 'Admission receipts differ from exact source/manifest.' }
+          }
+          if ($receipt.modelsAdmitted -ne 0 -or $receipt.pairCount -ne 110 -or $receipt.package.sha256 -ne $study.package.sha256 -or $receipt.symbols.count -ne 350 -or $routing.requests -ne 5 -or $routing.routes.Count -ne 3) { throw 'Full-gold package/selection/routing admission differs.' }
+          if (@($routing.routes | Where-Object { $_.requests -ne $_.http200 -or !$_.sessionStable -or !$_.modelStable }).Count) { throw 'Routing admission failed.' }
+          $expectedRoutes = @(
+            @{model='gpt-56-reasoning-sol';wire='chat-completions';role='HostAgent';count=2},
+            @{model='gpt-56-reasoning-sol';wire='responses';role='HostAgent';count=2},
+            @{model='gpt-56-ceres';wire='chat-completions';role='Judge';count=1}
+          )
+          for ($i = 0; $i -lt 3; $i++) {
+            $observed = $routing.routes[$i]; $expected = $expectedRoutes[$i]
+            if ($observed.model -ne $expected.model -or $observed.wireApi -ne $expected.wire -or $observed.role -ne $expected.role -or $observed.requests -ne $expected.count -or ($expected.count -gt 1 -and $observed.ticketsReplayed -lt 1)) { throw 'Exact model/protocol/sticky routing differs.' }
+          }
+          if ($null -ne $routing.reasoningEffort -or $routing.requestLimit -ne 5) { throw 'Routing effort or bound differs.' }
+          $matrix = .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py matrix
+          "matrix=$matrix" >> $env:GITHUB_OUTPUT
+          New-Item -ItemType Directory study-sanitized -Force | Out-Null
+          @{studyId=$study.studyId;benchCommit=$env:GITHUB_SHA;inputsSha256=$hash;preflightRunId=$env:PREFLIGHT_RUN_ID;expectedPairs=110;expectedSemanticAttempts=220;maxPairWorkers=32;authorization=$study.historicalAccounting.authorization;rerunsAllowed=$false} | ConvertTo-Json -Depth 20 | Set-Content study-sanitized\admission.json
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -118,15 +168,15 @@ jobs:
           if-no-files-found: warn
   pairs:
     needs: admit
-    if: inputs.phase == 'smoke'
+    if: inputs.phase == 'smoke' || inputs.phase == 'full-gold'
     runs-on: windows-latest
-    timeout-minutes: 56
+    timeout-minutes: ${{ inputs.phase == 'full-gold' && 75 || 56 }}
     environment:
       name: ado-read
       deployment: false
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: ${{ inputs.phase == 'full-gold' && 32 || 4 }}
       matrix: ${{ fromJson(needs.admit.outputs.matrix) }}
     steps:
       - name: Start this pair's disjoint all-inclusive grant
@@ -161,7 +211,7 @@ jobs:
           if (Test-Path -LiteralPath 'C:\bgs\llm-api-cert.pfx') { Remove-Item -LiteralPath 'C:\bgs\llm-api-cert.pfx' -Force }
   summarize:
     needs: [admit, pairs]
-    if: always() && inputs.phase == 'smoke'
+    if: always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold')
     runs-on: windows-latest
     timeout-minutes: 6
     steps:

@@ -104,9 +104,13 @@ def bridge() -> None:
     from openai import OpenAI
 
     request = json.loads(sys.stdin.buffer.read().decode("utf-8-sig"))
-    if request.get("model") != "gpt-55-chat" or not isinstance(request.get("messages"), list):
+    if request.get("model") != os.environ.get("BCAL_LLM_MODEL", "gpt-55-chat") or not isinstance(request.get("messages"), list):
         raise ValueError("Unexpected external-command model or messages.")
+    if request["model"] == "gpt-56-reasoning-sol" and request.get("reasoning_effort") is not None:
+        raise ValueError("The approved Sol comparison leaves reasoning effort unspecified.")
     kwargs = {key: request[key] for key in ("model", "messages", "tools", "reasoning_effort", "max_completion_tokens") if key in request}
+    if kwargs.get("reasoning_effort") is None:
+        kwargs.pop("reasoning_effort", None)
     kwargs.setdefault("max_completion_tokens", 16384)
     with OpenAI(base_url=os.environ["BCAL_STUDY_CHAT_URL"] + "/v1", api_key=os.environ["BCAL_SDK_PROXY_KEY"], max_retries=0, timeout=240) as client:
         response = client.chat.completions.create(**kwargs)
@@ -146,7 +150,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     server = commands.add_parser("serve")
-    server.add_argument("--model", choices=("gpt-55-chat", "gpt-56-ceres"), required=True)
+    server.add_argument("--model", choices=("gpt-55-chat", "gpt-56-reasoning-sol", "gpt-56-ceres"), required=True)
     server.add_argument("--wire-api", choices=("responses", "chat-completions"), required=True)
     server.add_argument("--step", choices=("HostAgent", "Judge"), required=True)
     server.add_argument("--ready", type=Path, required=True)
