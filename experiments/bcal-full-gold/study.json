@@ -840,6 +840,18 @@
     "semanticCaseAttempts": 0,
     "purpose": "Bounded exact-model protocol/tool-schema and sticky-route compatibility admission before the220 workload attempts; no reasoning effort set."
   },
+  "preservedFailedAdmissions": [
+    {
+      "runId": 43388111250,
+      "sourceSha": "6ee226a1d154c4a8dadcd4b47aa8d956e7253954",
+      "inputsSha256": "7a93928c49e40d68f1894f5b5f79b71694708a8cf4db337874fbc0fe09c2c1a4",
+      "allJobSeconds": 257,
+      "actualProviderRequests": 1,
+      "successfulProviderResponses": 0,
+      "semanticCaseAttempts": 0,
+      "result": "Package/auth/symbol/selection checks passed; first Sol Chat admission failed HTTPError. Original receipt did not retain status/body diagnostics, so exact provider cause is unknown. Original evidence retained unchanged; subsequent bounded admission adds sanitized status/parameter signals, not alias/effort substitution."
+    }
+  ],
   "historicalAccounting": {
     "priorMeasuredSecondsUnchanged": 87651.47441800009,
     "originalPilotHoldSecondsUnchanged": 1500,
@@ -865,7 +877,7 @@
     "topBaseBranch": "esbenk-bcal-authority-scenarios",
     "topOriginalBaseSha": "6f6fe8fefa4fb1d35a8e272d0e313d6551da68f1",
     "observedLowerHeadShaAtPreparation": "091edb113bd13905812976a7eb3fff9039c2fc41",
-    "lowerDrift": "One lower-owner legacy bridge review fix; preserved without mutating/rebasing lower refs. This study pins the actual committed top-layer source."
+    "lowerDrift": "Read exact091edb11 diff and confirmed with owning session: Code Quality Protocol stub bodies and shutdown comment only; no concrete runtime/callgraph/serialization/broker change. Structural stub bodies are not exercised and governed execution uses scripts/bcal_study_transport.py instead. No routing/correctness/security/result relevance; pinned inherited ancestry retained without unnecessary sync/probe or lower mutation."
   },
   "publication": "Sanitized counts/scores/latency/usage availability/compile-domain-export flags/exception classes/hashes only. No raw AL, prompts, transcripts, upstream bodies, private package, certificate or sticky tickets. Raw remains runner-ephemeral; no detailed failure recovery or publication-only rejudge."
 }

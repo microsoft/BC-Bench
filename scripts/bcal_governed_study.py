@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Iterator
@@ -320,6 +321,51 @@ def route_receipt(path: Path) -> dict:
     return value
 
 
+def provider_failure(error: urllib.error.HTTPError) -> dict:
+    raw = error.read(65536)
+    text = raw.decode("utf-8", errors="replace").lower()
+    try:
+        body = json.loads(raw)
+    except (ValueError, UnicodeError):
+        body = {}
+    detail = body.get("error", {}) if isinstance(body, dict) else {}
+    if not isinstance(detail, dict):
+        detail = {}
+    parameter = detail.get("param")
+    allowed_parameters = {
+        "model",
+        "tools",
+        "tool_choice",
+        "max_completion_tokens",
+        "max_output_tokens",
+        "max_tokens",
+        "reasoning_effort",
+        "stream",
+        "messages",
+        "input",
+        "response_format",
+        "temperature",
+        "top_p",
+    }
+    return {
+        "httpStatus": error.code,
+        "responseBodySha256": hashlib.sha256(raw).hexdigest(),
+        "parameter": parameter if isinstance(parameter, str) and parameter in allowed_parameters else None,
+        "providerCodeSha256": hashlib.sha256(str(detail.get("code")).encode()).hexdigest() if detail.get("code") is not None else None,
+        "signals": {
+            "mentionsReasoningEffort": "reasoning_effort" in text,
+            "mentionsTools": "tool" in text,
+            "mentionsToolChoice": "tool_choice" in text,
+            "mentionsCompletionTokenLimit": "max_completion_tokens" in text or "max_output_tokens" in text,
+            "unsupportedParameter": "unsupported parameter" in text or "unsupported_parameter" in text,
+            "unsupportedValue": "unsupported value" in text or "unsupported_value" in text,
+            "modelUnavailable": "model_not_found" in text or "deploymentnotfound" in text or "model not found" in text,
+            "permissionDenied": "permission_denied" in text or "unauthorized" in text or "access denied" in text,
+            "invalidSchema": "invalid schema" in text or "invalid_function_parameters" in text,
+        },
+    }
+
+
 def routing_preflight(args: argparse.Namespace) -> None:
     config = study()
     require(config.get("cohort") == "full-gold-paired-v1", "Routing admission is only configured for full gold.")
@@ -363,8 +409,12 @@ def routing_preflight(args: argparse.Namespace) -> None:
                             data=json.dumps(body).encode(),
                             headers={"Authorization": "Bearer " + env["BCAL_SDK_PROXY_KEY"], "Content-Type": "application/json"},
                         )
-                        with urllib.request.urlopen(request, timeout=250) as response:
-                            result = json.load(response)
+                        try:
+                            with urllib.request.urlopen(request, timeout=250) as response:
+                                result = json.load(response)
+                        except urllib.error.HTTPError as error:
+                            route_receipt_row["failure"] = provider_failure(error)
+                            raise
                         require(
                             isinstance(result, dict) and (isinstance(result.get("output"), list) if wire == "responses" else isinstance(result.get("choices"), list)),
                             "Provider response protocol differs.",

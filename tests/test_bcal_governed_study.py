@@ -143,6 +143,20 @@ def test_sol_bridge_omits_default_effort_and_rejects_unspecified_effort_override
         assert "reasoning_effort" not in observed[0]
 
 
+def test_provider_failure_preserves_safe_status_and_parameter_without_raw_error():
+    import io
+    import urllib.error
+
+    raw = json.dumps({"error": {"code": "unsupported_parameter", "param": "reasoning_effort", "message": "Unsupported parameter reasoning_effort with tools; secret-ticket-123"}}).encode()
+    error = urllib.error.HTTPError("http://unused.invalid", 400, "Bad Request", {}, io.BytesIO(raw))
+    result = study.provider_failure(error)
+    assert result["httpStatus"] == 400
+    assert result["parameter"] == "reasoning_effort"
+    assert result["signals"]["unsupportedParameter"] is True
+    assert result["signals"]["mentionsTools"] is True
+    assert "secret-ticket" not in json.dumps(result)
+
+
 def test_carry_forward_hold_cannot_be_ignored(tmp_path, monkeypatch):
     original = study.INPUTS
     config = study.study()
