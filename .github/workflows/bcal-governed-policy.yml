@@ -25,9 +25,9 @@ env:
   BCAL_STUDY_PROFILE: ${{ startsWith(inputs.phase, 'full-gold') && 'bcal-full-gold' || 'bcal-sdk-policy' }}
 jobs:
   preflight:
-    if: inputs.phase == 'preflight' || inputs.phase == 'full-gold-preflight'
+    if: inputs.phase == 'preflight' || inputs.phase == 'full-gold-preflight' || inputs.phase == 'full-gold-none-probe'
     runs-on: windows-latest
-    timeout-minutes: ${{ inputs.phase == 'full-gold-preflight' && 25 || 10 }}
+    timeout-minutes: ${{ startsWith(inputs.phase, 'full-gold') && 25 || 10 }}
     environment:
       name: ado-read
       deployment: false
@@ -50,11 +50,15 @@ jobs:
         if: inputs.phase == 'full-gold-preflight'
         shell: pwsh
         run: .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py routing-preflight --work $env:BCAL_STUDY_WORK --output study-sanitized
+      - name: Probe explicit-none Sol Chat then Responses once each
+        if: inputs.phase == 'full-gold-none-probe'
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py explicit-none-probe --work $env:BCAL_STUDY_WORK --output study-sanitized
       - name: Retain sanitized preflight only
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: sdk-policy-preflight
+          name: ${{ inputs.phase == 'full-gold-none-probe' && 'sol-explicit-none-probe' || 'sdk-policy-preflight' }}
           path: study-sanitized\*.json
           retention-days: 30
           if-no-files-found: error

@@ -43,10 +43,14 @@ def serve(args: argparse.Namespace) -> None:
     settings = LlmApiSettings.from_env()
     if settings.environment != "TEST":
         raise ValueError("This study only admits the TEST provider.")
+    if args.explicit_none_probe and (args.model != "gpt-56-reasoning-sol" or args.step != "HostAgent"):
+        raise ValueError("Explicit-none probes only admit the unchanged Sol main alias.")
     credential = CertificateCredential(settings.tenant_id, settings.client_id, certificate_path=os.environ["LLM_API_CERTIFICATE_FILE"], send_certificate_chain=True)
     token = get_bearer_token_provider(credential, SCOPE)
     session = str(uuid.uuid4())
     counts = {"requests": 0, "http200": 0, "ticketsReturned": 0, "ticketsReplayed": 0, "sessionStable": True, "modelStable": True}
+    if args.explicit_none_probe:
+        counts["explicitNoneVerifiedRequests"] = 0
 
     class Affinity(httpx.BaseTransport):
         def __init__(self) -> None:
@@ -62,6 +66,15 @@ def serve(args: argparse.Namespace) -> None:
                     counts["modelStable"] = False
                     write_json(args.audit, counts)
                     raise ProxyError("Governed model routing mismatch")
+                if args.explicit_none_probe:
+                    effort_matches = (
+                        body.get("reasoning_effort") == "none" and "reasoning" not in body
+                        if args.wire_api == "chat-completions"
+                        else body.get("reasoning") == {"effort": "none"} and "reasoning_effort" not in body
+                    )
+                    if not effort_matches or not body.get("tools") or "tool_choice" in body or counts["requests"]:
+                        raise ProxyError("Explicit-none probe outbound policy mismatch")
+                    counts["explicitNoneVerifiedRequests"] += 1
                 request.headers["X-SessionId"] = session
                 request.headers["X-InteractionId"] = session
                 request.headers["x-sticky-route-session-ticket"] = self.ticket
@@ -155,6 +168,7 @@ def main() -> None:
     server.add_argument("--step", choices=("HostAgent", "Judge"), required=True)
     server.add_argument("--ready", type=Path, required=True)
     server.add_argument("--audit", type=Path, required=True)
+    server.add_argument("--explicit-none-probe", action="store_true")
     commands.add_parser("bridge")
     scorer = commands.add_parser("judge")
     scorer.add_argument("--input", type=Path, required=True)

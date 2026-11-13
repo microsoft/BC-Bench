@@ -17,6 +17,7 @@ on:
           - preflight
           - smoke
           - full-gold-preflight
+          - full-gold-none-probe
           - full-gold
       preflight-run-id:
         description: "Exact successful same-SHA admission run for the selected governed workload"

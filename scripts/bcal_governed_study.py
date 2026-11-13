@@ -265,7 +265,7 @@ def preflight(args: argparse.Namespace) -> None:
 
 
 @contextmanager
-def proxy(work: Path, env: dict[str, str], model: str, wire: str, step: str) -> Iterator[tuple[str, Path]]:
+def proxy(work: Path, env: dict[str, str], model: str, wire: str, step: str, *, explicit_none_probe: bool = False) -> Iterator[tuple[str, Path]]:
     ready, audit = work / f"{step}-{wire}.ready.json", work / f"{step}-{wire}.audit.json"
     command = [
         os.environ["BCAL_STUDY_INFERENCE_PYTHON"],
@@ -282,6 +282,8 @@ def proxy(work: Path, env: dict[str, str], model: str, wire: str, step: str) -> 
         "--audit",
         str(audit),
     ]
+    if explicit_none_probe:
+        command.append("--explicit-none-probe")
     with (work / f"{step}-{wire}.console.txt").open("w", encoding="utf-8") as console:
         process = subprocess.Popen(command, env=env, stdout=console, stderr=subprocess.STDOUT)
         try:
@@ -306,9 +308,12 @@ def proxy(work: Path, env: dict[str, str], model: str, wire: str, step: str) -> 
                 process.wait(timeout=10)
 
 
-def route_receipt(path: Path) -> dict:
+def route_receipt(path: Path, *, explicit_none_probe: bool = False) -> dict:
     value = json.loads(path.read_bytes())
-    if set(value) != {"requests", "http200", "ticketsReturned", "ticketsReplayed", "sessionStable", "modelStable"}:
+    expected = {"requests", "http200", "ticketsReturned", "ticketsReplayed", "sessionStable", "modelStable"}
+    if explicit_none_probe:
+        expected.add("explicitNoneVerifiedRequests")
+    if set(value) != expected:
         raise ValueError("Unexpected route receipt.")
     if (
         any(type(value[key]) is not int or value[key] < 0 for key in ("requests", "http200", "ticketsReturned", "ticketsReplayed"))
@@ -316,6 +321,8 @@ def route_receipt(path: Path) -> dict:
         or value["modelStable"] is not True
     ):
         raise ValueError("Invalid route counters.")
+    if explicit_none_probe and (type(value["explicitNoneVerifiedRequests"]) is not int or value["explicitNoneVerifiedRequests"] != value["requests"]):
+        raise ValueError("Explicit-none outbound effort was not verified.")
     if value["requests"] > 1 and value["http200"] and not value["ticketsReplayed"]:
         raise ValueError("No cross-turn sticky route proof.")
     return value
@@ -366,7 +373,7 @@ def provider_failure(error: urllib.error.HTTPError) -> dict:
     }
 
 
-def routing_preflight(args: argparse.Namespace) -> None:
+def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = False) -> None:
     config = study()
     require(config.get("cohort") == "full-gold-paired-v1", "Routing admission is only configured for full gold.")
     receipt = {
@@ -374,22 +381,28 @@ def routing_preflight(args: argparse.Namespace) -> None:
         "benchCommit": os.environ.get("GITHUB_SHA"),
         "inputsSha256": digest(INPUTS / "study.json"),
         "status": "in-progress",
-        "kind": "bounded-routing-admission-not-semantic-attempts",
-        "requestLimit": 5,
-        "reasoningEffort": None,
+        "kind": "explicit-none-protocol-probes-not-gold-admission" if explicit_none_probe else "bounded-routing-admission-not-semantic-attempts",
+        "requestLimit": 2 if explicit_none_probe else 5,
+        "reasoningEffort": "none" if explicit_none_probe else None,
         "routes": [],
     }
+    if explicit_none_probe:
+        receipt.update(semanticAttempts=0, goldAdmission=False, sdkExecution=False, stickyReplayProven=False)
     started = time.monotonic()
     env = {**os.environ, "BCAL_SDK_PROXY_KEY": secrets.token_urlsafe(32)}
     try:
-        for model, wire, role, count in (
+        routes = (
             (config["inference"]["model"], "chat-completions", "HostAgent", 2),
             (config["inference"]["model"], "responses", "HostAgent", 2),
             (config["judge"]["model"], "chat-completions", "Judge", 1),
-        ):
+        )
+        if explicit_none_probe:
+            routes = tuple((model, wire, role, 1) for model, wire, role, _ in routes[:2])
+        for model, wire, role, count in routes:
             route_receipt_row = {"model": model, "wireApi": wire, "role": role, "requests": 0}
             receipt["routes"].append(route_receipt_row)
-            with proxy(args.work, env, model, wire, role) as (url, audit):
+            probe_options = {"explicit_none_probe": True} if explicit_none_probe else {}
+            with proxy(args.work, env, model, wire, role, **probe_options) as (url, audit):
                 try:
                     for _ in range(count):
                         body = {"model": model}
@@ -404,6 +417,19 @@ def routing_preflight(args: argparse.Namespace) -> None:
                         else:
                             body.update(messages=[{"role": "user", "content": "Return only OK."}], max_completion_tokens=16384, tools=[{"type": "function", "function": function}])
                             route = "/chat/completions"
+                        if explicit_none_probe:
+                            if wire == "responses":
+                                body.pop("tool_choice")
+                                body.update(input=[{"role": "user", "content": "Return only OK."}], reasoning={"effort": "none"}, parallel_tool_calls=False)
+                            else:
+                                body["reasoning_effort"] = "none"
+                            route_receipt_row["requestShape"] = {
+                                "keys": sorted(body),
+                                "toolCount": len(body["tools"]),
+                                "reasoningEffort": "none",
+                                "maxCompletionTokens": body.get("max_completion_tokens"),
+                                "maxOutputTokens": body.get("max_output_tokens"),
+                            }
                         request = urllib.request.Request(
                             url + route,
                             data=json.dumps(body).encode(),
@@ -419,11 +445,39 @@ def routing_preflight(args: argparse.Namespace) -> None:
                             isinstance(result, dict) and (isinstance(result.get("output"), list) if wire == "responses" else isinstance(result.get("choices"), list)),
                             "Provider response protocol differs.",
                         )
+                        if explicit_none_probe:
+                            if wire == "responses":
+                                require(
+                                    result.get("status") == "completed" and not result.get("error") and any(item.get("type") in {"message", "function_call"} for item in result["output"]),
+                                    "Responses probe did not complete.",
+                                )
+                            else:
+                                require(
+                                    bool(result["choices"])
+                                    and all(
+                                        choice.get("finish_reason") in {"stop", "tool_calls"}
+                                        and isinstance(choice.get("message"), dict)
+                                        and (choice["message"].get("content") or choice["message"].get("tool_calls"))
+                                        for choice in result["choices"]
+                                    ),
+                                    "Chat probe did not complete.",
+                                )
+                            route_receipt_row["responseProtocolValid"] = True
+                            usage = result.get("usage")
+                            route_receipt_row["usage"] = (
+                                {
+                                    key: value
+                                    for key, value in usage.items()
+                                    if key in {"input_tokens", "output_tokens", "total_tokens", "prompt_tokens", "completion_tokens"} and type(value) is int and value >= 0
+                                }
+                                if isinstance(usage, dict)
+                                else None
+                            )
                 finally:
                     counters = json.loads(audit.read_bytes())
                     if type(counters.get("requests")) is int and counters["requests"] >= 0:
                         route_receipt_row["requests"] = counters["requests"]
-                    route_receipt_row.update(route_receipt(audit))
+                    route_receipt_row.update(route_receipt(audit, **probe_options))
                 require(route_receipt_row["requests"] == count and route_receipt_row["http200"] == count, "Routing admission was not exactly the bounded successful calls.")
         receipt["status"] = "passed"
     except Exception as error:
@@ -432,7 +486,7 @@ def routing_preflight(args: argparse.Namespace) -> None:
     finally:
         receipt["seconds"] = time.monotonic() - started
         receipt["requests"] = sum(row["requests"] for row in receipt["routes"])
-        write_json(args.output / "routing-preflight.json", receipt)
+        write_json(args.output / ("explicit-none-probe.json" if explicit_none_probe else "routing-preflight.json"), receipt)
 
 
 def trace_projection(transcript: dict) -> dict:
@@ -890,7 +944,7 @@ def summary(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("matrix", "fixtures", "preflight", "routing-preflight", "pair", "summary"))
+    parser.add_argument("command", choices=("matrix", "fixtures", "preflight", "routing-preflight", "explicit-none-probe", "pair", "summary"))
     parser.add_argument("--work", type=Path, default=Path(os.environ.get("BCAL_STUDY_WORK", ".bcal-study-private")))
     parser.add_argument("--output", type=Path, default=Path("study-sanitized"))
     parser.add_argument("--pair", type=int)
@@ -904,6 +958,8 @@ def main() -> None:
             preflight(args)
         elif args.command == "routing-preflight":
             routing_preflight(args)
+        elif args.command == "explicit-none-probe":
+            routing_preflight(args, explicit_none_probe=True)
         elif args.command == "summary":
             summary(args)
         elif args.pair is None:

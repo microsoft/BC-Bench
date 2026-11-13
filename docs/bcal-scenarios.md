@@ -127,6 +127,18 @@ historical; the user approved extending the previous aggregate limit for this fi
 not a new monetary or numeric ceiling. Actual all-job usage must be reported.
 The existing smoke selection and ordinary/scheduled defaults are unchanged.
 
+The separately authorized `full-gold-none-probe` phase only checks explicit
+`none` compatibility: one tool-bearing Sol Chat request, then one direct
+Responses request, stopping on the first failure without retries or a judge.
+Chat sends `reasoning_effort="none"` with production max16384; Responses sends
+`reasoning.effort="none"` with `parallel_tool_calls=false`, synthetic input/tools,
+and bounded max1024. Neither forces tool choice. The transport verifies the
+outgoing effort and retains safe counters/diagnostics in a distinct artifact.
+This is not gold admission, a default-policy switch, SDK execution/fidelity
+proof, semantic validation, or sticky replay proof. The full-gold selector's
+omitted-effort policy remains unchanged; any subsequent comparable SDK/legacy
+policy requires separate approval and actual SDK wire-effort verification.
+
 ## Bounded SDK/legacy compatibility smoke
 
 The separate selector `experiments\bcal-sdk-policy\study.json` pins package

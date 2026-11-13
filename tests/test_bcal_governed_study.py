@@ -166,6 +166,83 @@ def test_provider_failure_preserves_safe_status_and_parameter_without_raw_error(
     assert "secret-ticket" not in json.dumps(result)
 
 
+@pytest.mark.parametrize("fail_at", [None, 1, 2])
+def test_explicit_none_probes_are_separate_bounded_and_stop_on_first_failure(tmp_path, monkeypatch, fail_at):
+    import io
+    import urllib.error
+    from argparse import Namespace
+    from contextlib import contextmanager
+
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold")
+    current = {}
+    requests = []
+
+    @contextmanager
+    def fake_proxy(_work, _env, model, wire, role, *, explicit_none_probe):
+        assert explicit_none_probe
+        assert model == "gpt-56-reasoning-sol"
+        assert role == "HostAgent"
+        current.update(wire=wire, audit=tmp_path / f"{wire}.json")
+        study.write_json(current["audit"], {"requests": 0, "http200": 0, "ticketsReturned": 0, "ticketsReplayed": 0, "sessionStable": True, "modelStable": True, "explicitNoneVerifiedRequests": 0})
+        yield "http://unused.invalid", current["audit"]
+
+    def respond(request, timeout):
+        body = json.loads(request.data)
+        assert body["model"] == "gpt-56-reasoning-sol"
+        assert body["tools"]
+        assert "tool_choice" not in body
+        if current["wire"] == "responses":
+            assert body["reasoning"] == {"effort": "none"}
+            assert "reasoning_effort" not in body
+            assert body["parallel_tool_calls"] is False
+            assert body["max_output_tokens"] == 1024
+        else:
+            assert body["reasoning_effort"] == "none"
+            assert "reasoning" not in body
+            assert body["max_completion_tokens"] == 16384
+        requests.append(body)
+        failed = len(requests) == fail_at
+        study.write_json(
+            current["audit"],
+            {"requests": 1, "http200": int(not failed), "ticketsReturned": int(not failed), "ticketsReplayed": 0, "sessionStable": True, "modelStable": True, "explicitNoneVerifiedRequests": 1},
+        )
+        if failed:
+            raise urllib.error.HTTPError(request.full_url, 400, "Bad Request", {}, io.BytesIO(b'{"error":{"param":"reasoning_effort"}}'))
+        return io.StringIO(
+            json.dumps({"status": "completed", "output": [{"type": "message"}]} if current["wire"] == "responses" else {"choices": [{"finish_reason": "stop", "message": {"content": "OK"}}]})
+        )
+
+    monkeypatch.setattr(study, "proxy", fake_proxy)
+    monkeypatch.setattr(study.urllib.request, "urlopen", respond)
+    args = Namespace(work=tmp_path, output=tmp_path)
+    if fail_at:
+        with pytest.raises(urllib.error.HTTPError):
+            study.routing_preflight(args, explicit_none_probe=True)
+    else:
+        study.routing_preflight(args, explicit_none_probe=True)
+    receipt = json.loads((tmp_path / "explicit-none-probe.json").read_bytes())
+    assert receipt["requestLimit"] == 2
+    assert receipt["requests"] == len(requests) == (fail_at or 2)
+    assert receipt["status"] == ("failed" if fail_at else "passed")
+    assert receipt["kind"] == "explicit-none-protocol-probes-not-gold-admission"
+    assert receipt["reasoningEffort"] == "none"
+    assert receipt["goldAdmission"] is receipt["sdkExecution"] is receipt["stickyReplayProven"] is False
+    assert receipt["semanticAttempts"] == 0
+    assert not (tmp_path / "routing-preflight.json").exists()
+    assert study.study()["inference"]["reasoning"] is None
+
+
+@pytest.mark.parametrize("verified", [None, 0, True])
+def test_explicit_none_receipt_requires_actual_outbound_effort_verification(tmp_path, verified):
+    value = {"requests": 1, "http200": 1, "ticketsReturned": 1, "ticketsReplayed": 0, "sessionStable": True, "modelStable": True}
+    if verified is not None:
+        value["explicitNoneVerifiedRequests"] = verified
+    path = tmp_path / "route.json"
+    study.write_json(path, value)
+    with pytest.raises(ValueError, match=r"Unexpected|verified"):
+        study.route_receipt(path, explicit_none_probe=True)
+
+
 def test_carry_forward_hold_cannot_be_ignored(tmp_path, monkeypatch):
     original = study.INPUTS
     config = study.study()
@@ -352,7 +429,7 @@ def test_governed_transport_resets_missing_response_ticket_without_persisting_it
                     response.read()
 
     monkeypatch.setattr(transport, "ThreadingHTTPServer", Server)
-    transport.serve(Namespace(model=model, step="HostAgent", wire_api="chat-completions", audit=tmp_path / "audit.json", ready=tmp_path / "ready.json"))
+    transport.serve(Namespace(model=model, step="HostAgent", wire_api="chat-completions", audit=tmp_path / "audit.json", ready=tmp_path / "ready.json", explicit_none_probe=False))
     assert observed == ["", "PRIVATE-OPAQUE", ""]
     assert len(set(sessions)) == 1
     assert "PRIVATE-OPAQUE" not in (tmp_path / "audit.json").read_text()
@@ -385,6 +462,12 @@ def test_existing_workflow_is_the_only_dispatch_and_reuses_actions():
     action = yaml.safe_load((ROOT / ".github" / "actions" / "setup-bcal-governed-study" / "action.yml").read_text())
     assert caller["jobs"]["get-entries"]["if"] == "(inputs.validation-phase == '' || inputs.validation-phase == 'ordinary') && !(inputs.llm-preflight-only || false)"
     assert workflow["jobs"]["pairs"]["strategy"]["max-parallel"] == "${{ inputs.phase == 'full-gold' && 32 || 4 }}"
+    assert workflow["jobs"]["admit"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold'"
+    assert workflow["jobs"]["pairs"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold'"
+    assert workflow["jobs"]["summarize"]["if"] == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold')"
+    probe_step = next(step for step in workflow["jobs"]["preflight"]["steps"] if step.get("if") == "inputs.phase == 'full-gold-none-probe'")
+    assert "explicit-none-probe" in probe_step["run"]
+    assert not any("routing-preflight" in step.get("run", "") for step in workflow["jobs"]["preflight"]["steps"] if step.get("if") == "inputs.phase == 'full-gold-none-probe'")
     assert any(step.get("uses") == "./.github/actions/install-bcal" for step in action["runs"]["steps"])
     assert any(step.get("uses") == "./.github/actions/setup-python-uv" for step in action["runs"]["steps"])
     assert all(
