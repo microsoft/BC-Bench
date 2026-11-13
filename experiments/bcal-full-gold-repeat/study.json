@@ -3,7 +3,7 @@
   "studyId": "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1",
   "baselineStudy": {
     "file": "experiments\\bcal-full-gold\\study.json",
-    "sha256": "c2c6a77922804a61f54bee25b58217728b0960f30e74a281a5050d45154f0919"
+    "sha256": "1e9c638a70aa8a5e45deb3716dae5a48705910ade71f1dca3f6f24c221776f86"
   },
   "repeatOf": {
     "runId": 43422730966,

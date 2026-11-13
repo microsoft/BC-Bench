@@ -165,7 +165,10 @@ The user-authorized diagnostics repeat has separate
 `full-gold-repeat-preflight` and `full-gold-repeat` phases. Its
 `bcal-full-gold-repeat` profile inherits the hash-bound original manifest without
 modifying historical selectors, policy, or results. The original and repeat each
-retain their own once-only dispatch guard. The repeat pins diagnostic package
+retain their own once-only dispatch guard. The baseline pin identifies the exact
+historical Git LF bytes; only CRLF checkout line endings are normalized before
+verification, not JSON content, whitespace or selection changes.
+The repeat pins diagnostic package
 `30.0.46.42492-beta`, build `3057056`, source
 `8178001108d3147df9e4b367f87536d6f3665479`, with hash-bound native effort and
 actual packaged command-client/collector events verified through Bench projection.

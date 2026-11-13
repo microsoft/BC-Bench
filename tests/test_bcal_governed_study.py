@@ -267,6 +267,29 @@ def test_full_gold_rejects_hidden_exclusions(tmp_path, monkeypatch):
         study.pairs()
 
 
+@pytest.mark.parametrize("line_ending", [b"\n", b"\r\n"])
+def test_repeat_preserves_git_baseline_across_checkout_line_endings(tmp_path, monkeypatch, line_ending):
+    config = json.loads((ROOT / "experiments" / "bcal-full-gold-repeat" / "study.json").read_bytes())
+    baseline_bytes = (ROOT / config["baselineStudy"]["file"]).read_bytes().replace(b"\r\n", b"\n")
+    baseline = json.loads(baseline_bytes)
+    baseline_path = tmp_path / config["baselineStudy"]["file"]
+    baseline_path.parent.mkdir(parents=True)
+    baseline_path.write_bytes(baseline_bytes.replace(b"\n", line_ending))
+    inputs = tmp_path / "repeat"
+    study.write_json(inputs / "study.json", config)
+    monkeypatch.setattr(study, "ROOT", tmp_path)
+    monkeypatch.setattr(study, "INPUTS", inputs)
+
+    assert study.study_manifest()["datasets"] == baseline["datasets"]
+    assert study.study_manifest()["inference"] == baseline["inference"]
+    assert study.study_manifest()["judge"] == baseline["judge"]
+
+    baseline["datasets"][0]["selectedEntries"].pop()
+    study.write_json(baseline_path, baseline)
+    with pytest.raises(ValueError, match="Original full-gold manifest changed"):
+        study.study_manifest()
+
+
 def test_repeat_rejects_unadmitted_or_historical_package_and_selection_overrides(tmp_path, monkeypatch):
     config = json.loads((ROOT / "experiments" / "bcal-full-gold-repeat" / "study.json").read_bytes())
     config.update(package=None, runtimeDiagnosticsProof=None)

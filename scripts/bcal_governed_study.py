@@ -53,12 +53,13 @@ def study_manifest() -> dict:
         require(
             isinstance(binding, dict)
             and binding.get("file") == "experiments\\bcal-full-gold\\study.json"
-            and binding.get("sha256") == "c2c6a77922804a61f54bee25b58217728b0960f30e74a281a5050d45154f0919",
+            and binding.get("sha256") == "1e9c638a70aa8a5e45deb3716dae5a48705910ade71f1dca3f6f24c221776f86",
             "Only the immutable original full-gold study may seed this repeat.",
         )
         baseline_path = ROOT / binding["file"]
-        require(digest(baseline_path) == binding["sha256"], "Original full-gold manifest changed.")
-        baseline = json.loads(baseline_path.read_bytes())
+        baseline_lf_bytes = baseline_path.read_bytes().replace(b"\r\n", b"\n")
+        require(hashlib.sha256(baseline_lf_bytes).hexdigest() == binding["sha256"], "Original full-gold manifest changed.")
+        baseline = json.loads(baseline_lf_bytes)
         require(
             value.get("studyId") == "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1"
             and value.get("repeatOf") == {"runId": 43422730966, "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"}
