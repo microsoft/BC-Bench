@@ -148,12 +148,30 @@ input/client/serialization/output stages, response shape, and UTC observation
 times. Existing request counts, effort audits and sticky-route checks remain
 unchanged. A successful header or emitted command response does not prove
 successful product-side parsing. Missing diagnostic files remain unavailable;
-unknown classifications remain null. Interrupted trace event types and their
+unrecognized classifications remain null. Interrupted trace event types and their
 allowlisted operation/status/reason enums survive projection alongside their
 existing hashes. Raw responses, exception strings and private logs are not
 published. Product-side command launch/exit and parsing classifications require
 an additive runtime emission contract; Bench cannot reconstruct those from the
 generic exit-1 wrapper or retroactively recover the sealed historical exceptions.
+The producer's optional `modelFailure` stays on the correlated `model_interrupted`
+event. Bench preserves its actual snake-case stage/category values and optional
+signed 32-bit exit code, plus hashed call/step/composition identity and numeric
+prompt-use sequence. It does not coerce guessed enum casing or copy the exception
+into a duplicate top-level schema. An observed `unknown` enum is distinct from
+missing or unrecognized fields.
+
+The user-authorized diagnostics repeat has separate
+`full-gold-repeat-preflight` and `full-gold-repeat` phases. Its
+`bcal-full-gold-repeat` profile inherits the hash-bound original manifest without
+modifying historical selectors, policy, or results. The original and repeat each
+retain their own once-only dispatch guard. The repeat's package and runtime-proof
+bindings remain null until the new governed package is verified; setup must stop
+before package installation rather than implicitly install latest. Actual
+package-bound command-client/collector events and Bench projection proof are
+required before model-backed routing or any of the same 110-by-2 attempts.
+The repeat preserves explicit none, Ceres, scoring, sequential pair order and
+maximum 32 pair workers; its measurements are disjoint from the original run.
 
 The separately authorized `full-gold-none-probe` phase only checks explicit
 `none` compatibility: one tool-bearing Sol Chat request, then one direct

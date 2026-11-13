@@ -19,7 +19,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import httpx
+    import httpx2 as httpx
 
 
 def load_proxy() -> ModuleType:
@@ -39,7 +39,7 @@ def write_json(path: Path, value: object) -> None:
 
 
 def exception_category(error: Exception) -> str:
-    import httpx
+    import httpx2 as httpx
 
     if isinstance(error, httpx.TimeoutException):
         return "timeout"
@@ -53,8 +53,8 @@ def exception_category(error: Exception) -> str:
 
 
 @contextmanager
-def forward_response(client: httpx.Client, request: httpx.Request, proxy_error: type[Exception], record: Callable[[dict], None]) -> Iterator:
-    import httpx
+def forward_response(client: httpx.Client, request: httpx.Request, proxy_error: type[Exception], record: Callable[[dict], None]) -> Iterator[httpx.Response]:
+    import httpx2 as httpx
 
     phase = "request"
     try:

@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -21,10 +22,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUTS = ROOT / "experiments" / os.environ.get("BCAL_STUDY_PROFILE", "bcal-sdk-policy")
+MODEL_FAILURE_STAGES = frozenset({"unknown", "command_start", "command_io", "command_exit", "response_json", "response_choices", "response_message"})
+MODEL_FAILURE_CATEGORIES = frozenset({"unknown", "canceled", "json", "process", "io", "invalid_operation", "argument"})
 
 
 def symbols_manifest() -> Path:
-    config = json.loads((INPUTS / "study.json").read_bytes())
+    config = study_manifest()
     return ROOT / config["symbolsManifestFile"] if "symbolsManifestFile" in config else INPUTS / "symbols.json"
 
 
@@ -43,8 +46,47 @@ def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
-def study() -> dict:
+def study_manifest() -> dict:
     value = json.loads((INPUTS / "study.json").read_bytes())
+    if "baselineStudy" in value:
+        binding = value["baselineStudy"]
+        require(
+            isinstance(binding, dict)
+            and binding.get("file") == "experiments\\bcal-full-gold\\study.json"
+            and binding.get("sha256") == "c2c6a77922804a61f54bee25b58217728b0960f30e74a281a5050d45154f0919",
+            "Only the immutable original full-gold study may seed this repeat.",
+        )
+        baseline_path = ROOT / binding["file"]
+        require(digest(baseline_path) == binding["sha256"], "Original full-gold manifest changed.")
+        baseline = json.loads(baseline_path.read_bytes())
+        require(
+            value.get("studyId") == "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1"
+            and value.get("repeatOf") == {"runId": 43422730966, "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"}
+            and set(value)
+            <= {"schemaVersion", "studyId", "baselineStudy", "repeatOf", "relationship", "package", "runtimeEffortProof", "runtimeDiagnosticsProof", "historicalAccounting", "publication"},
+            "Only the separately approved diagnostics repeat is admitted; selectors and scoring cannot be overridden.",
+        )
+        require(
+            isinstance(value.get("package"), dict)
+            and isinstance(value["package"].get("sha256"), str)
+            and re.fullmatch("[0-9a-f]{64}", value["package"]["sha256"])
+            and isinstance(value["package"].get("sourceCommitSha"), str)
+            and re.fullmatch("[0-9a-f]{40}", value["package"]["sourceCommitSha"])
+            and value["package"].get("sha256") != baseline["package"]["sha256"]
+            and value["package"].get("sourceCommitSha") != baseline["package"]["sourceCommitSha"],
+            "The repeat diagnostic runtime package has not been admitted.",
+        )
+        require(
+            all(value["package"].get(key) == baseline["package"][key] for key in ("id", "nativeCatalogSha256", "sdkPackageVersion", "sdkRuntimeVersion", "framework")),
+            "The diagnostic repeat must preserve the original native/catalog contract.",
+        )
+        require(isinstance(value.get("runtimeDiagnosticsProof"), dict), "Actual packaged diagnostic producer proof has not been admitted.")
+        value = {**baseline, **value}
+    return value
+
+
+def study() -> dict:
+    value = study_manifest()
     if value.get("cohort") == "full-gold-paired-v1":
         require(
             value["repeatCount"] == 1
@@ -256,6 +298,48 @@ def verify_runtime_effort_proof() -> dict[str, str] | None:
     return {"file": filename, "sha256": checksum}
 
 
+def verify_runtime_diagnostics_proof() -> dict[str, str] | None:
+    config = study()
+    if "repeatOf" not in config:
+        return None
+    binding = config["runtimeDiagnosticsProof"]
+    filename, checksum = binding.get("file"), binding.get("sha256")
+    require(isinstance(filename, str) and isinstance(checksum, str), "Runtime diagnostics proof binding is malformed.")
+    path = (ROOT / filename).resolve()
+    require(path.is_relative_to(ROOT) and digest(path) == checksum, "Runtime diagnostics proof binding differs.")
+    proof = json.loads(path.read_bytes())
+    require(
+        proof.get("status") == "passed"
+        and proof.get("packageSha256") == config["package"]["sha256"]
+        and proof.get("packageSourceCommitSha") == config["package"]["sourceCommitSha"]
+        and proof.get("commandClientInvoked") is True
+        and proof.get("invocationCollectorInvoked") is True
+        and type(proof.get("providerRequests")) is int
+        and proof["providerRequests"] == 0
+        and proof.get("consumerProjectionVerified") is True,
+        "Actual packaged producer and safe Bench consumer have not both been verified.",
+    )
+    events = proof.get("observedModelInterruptions")
+    require(
+        isinstance(events, list)
+        and all(
+            isinstance(event, dict)
+            and event.get("type") == "model_interrupted"
+            and isinstance(event.get("modelFailure"), dict)
+            and set(event["modelFailure"]) <= {"stage", "exceptionCategory", "exitCode"}
+            and isinstance(event["modelFailure"].get("exceptionCategory"), str)
+            and event["modelFailure"]["exceptionCategory"] in MODEL_FAILURE_CATEGORIES
+            and isinstance(event["modelFailure"].get("stage"), str)
+            and event["modelFailure"]["stage"] in MODEL_FAILURE_STAGES
+            and (event["modelFailure"].get("exitCode") is None or (type(event["modelFailure"]["exitCode"]) is int and -(2**31) <= event["modelFailure"]["exitCode"] < 2**31))
+            for event in events
+        )
+        and {event["modelFailure"]["stage"] for event in events} >= {"command_start", "command_io", "command_exit", "response_json", "response_choices", "response_message"},
+        "Runtime diagnostics proof does not cover the required command and response boundaries.",
+    )
+    return {"file": filename, "sha256": checksum}
+
+
 def preflight(args: argparse.Namespace) -> None:
     receipt = {
         "schemaVersion": "1",
@@ -269,6 +353,7 @@ def preflight(args: argparse.Namespace) -> None:
     write_json(args.output / "preflight.json", receipt)
     started = time.monotonic()
     try:
+        receipt["runtimeDiagnosticsProof"] = verify_runtime_diagnostics_proof()
         receipt["runtimeEffortProof"] = verify_runtime_effort_proof()
         receipt["package"] = prepare_package(args.work / "package")
         receipt["symbols"] = verify_symbols()
@@ -469,6 +554,10 @@ def provider_failure(error: urllib.error.HTTPError) -> dict:
 def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = False) -> None:
     config = study()
     require(config.get("cohort") == "full-gold-paired-v1", "Routing admission is only configured for full gold.")
+    if "repeatOf" in config:
+        require(not explicit_none_probe, "Extra explicit-none probes are not authorized for the diagnostic repeat.")
+        verify_runtime_diagnostics_proof()
+        verify_runtime_effort_proof()
     receipt = {
         "studyId": config["studyId"],
         "benchCommit": os.environ.get("GITHUB_SHA"),
@@ -619,7 +708,7 @@ def trace_projection(transcript: dict) -> dict:
             continue
         safe = {key: event[key] for key in ("sequence", "turn", "iteration", "inputLength", "requestedToolCallCount", "succeeded") if type(event.get(key)) in (int, bool)}
         safe["type"] = event["type"] if event.get("type") in types else "other-event"
-        for key in ("toolName", "operation", "inputHash", "callId", "fromState", "toState", "status"):
+        for key in ("toolName", "operation", "inputHash", "callId", "compositionId", "fromState", "toState", "status"):
             if isinstance(event.get(key), str):
                 safe[key + "Sha256"] = hashlib.sha256(event[key].encode()).hexdigest()
         if isinstance(event.get("scenarioStepId"), str):
@@ -633,6 +722,18 @@ def trace_projection(transcript: dict) -> dict:
                 ("interruptionReason", {"failed", "canceled"}),
             ):
                 safe[key] = event[key] if isinstance(event.get(key), str) and event[key] in allowed else None
+        if event.get("type") == "model_interrupted":
+            if type(event.get("promptUseSequence")) is int:
+                safe["promptUseSequence"] = event["promptUseSequence"]
+            failure = event.get("modelFailure")
+            if isinstance(failure, dict):
+                safe["modelFailure"] = {
+                    "stage": failure["stage"] if isinstance(failure.get("stage"), str) and failure["stage"] in MODEL_FAILURE_STAGES else None,
+                    "exceptionCategory": failure["exceptionCategory"] if isinstance(failure.get("exceptionCategory"), str) and failure["exceptionCategory"] in MODEL_FAILURE_CATEGORIES else None,
+                    "exitCode": failure["exitCode"] if type(failure.get("exitCode")) is int and -(2**31) <= failure["exitCode"] < 2**31 else None,
+                }
+            else:
+                safe["modelFailure"] = None
         events.append(safe)
     return {
         "complete": complete,
@@ -931,7 +1032,6 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
                 "transport": legacy_diagnostic_receipt(work / "HostAgent-chat-completions.audit.diagnostics.json"),
                 "bridgeInvocations": [legacy_diagnostic_receipt(path) for path in sorted((work / "bridge-diagnostics").glob("bridge-*.json"))],
                 "invocationOrder": "not-established",
-                "runtimeClientException": None,
             }
         for role, wire in (("main", "responses" if runtime == "copilot-sdk" else "chat-completions"), ("auxiliary", "chat-completions"), ("judge", "chat-completions")):
             path = work / f"{'Judge' if role == 'judge' else 'HostAgent'}-{wire}.audit.json"
@@ -957,6 +1057,7 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
 
 def run_pair(args: argparse.Namespace) -> None:
     config = study()
+    verify_runtime_diagnostics_proof()
     verify_runtime_effort_proof()
     pair = pairs()[args.pair]
     started = float(os.environ.get("BCAL_STUDY_JOB_STARTED_UNIX", time.time()))
@@ -1079,7 +1180,7 @@ def summary(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("matrix", "fixtures", "preflight", "routing-preflight", "explicit-none-probe", "pair", "summary"))
+    parser.add_argument("command", choices=("matrix", "fixtures", "runtime-proofs", "preflight", "routing-preflight", "explicit-none-probe", "pair", "summary"))
     parser.add_argument("--work", type=Path, default=Path(os.environ.get("BCAL_STUDY_WORK", ".bcal-study-private")))
     parser.add_argument("--output", type=Path, default=Path("study-sanitized"))
     parser.add_argument("--pair", type=int)
@@ -1087,6 +1188,8 @@ def main() -> None:
     try:
         if args.command == "fixtures":
             fixtures(args)
+        elif args.command == "runtime-proofs":
+            sys.stdout.write(json.dumps({"runtimeEffortProof": verify_runtime_effort_proof(), "runtimeDiagnosticsProof": verify_runtime_diagnostics_proof()}) + "\n")
         elif args.command == "matrix":
             sys.stdout.write(json.dumps({"include": [{"pair": row["index"]} for row in pairs()]}) + "\n")
         elif args.command == "preflight":

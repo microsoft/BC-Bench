@@ -1,0 +1,19 @@
+{
+  "sequence": 2,
+  "type": "model_interrupted",
+  "scenarioStepId": "step-2",
+  "turn": 3,
+  "iteration": 4,
+  "callId": "model:3:4:delivery:1",
+  "operation": "delivery",
+  "status": "interrupted",
+  "promptUseSequence": 1,
+  "compositionId": "df6d2bdc0acba2e44a353840dfc47423c54855e56ca7572bcba4a9bfef78bad7",
+  "succeeded": false,
+  "interruptionReason": "failed",
+  "modelFailure": {
+    "stage": "response_choices",
+    "exceptionCategory": "argument",
+    "exitCode": 0
+  }
+}

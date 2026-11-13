@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -16,7 +17,7 @@ transport_spec.loader.exec_module(transport)
 
 @pytest.mark.parametrize("stage", ["request", "body", "non200", "success"])
 def test_legacy_transport_distinguishes_headers_from_body_failure(stage):
-    httpx = pytest.importorskip("httpx")
+    httpx = pytest.importorskip("httpx2")
 
     events = []
     private = "PRIVATE PROMPT RESPONSE SECRET"
@@ -58,7 +59,7 @@ def test_legacy_bridge_retains_failure_boundary_without_content_or_retries(tmp_p
     import sys
     from types import SimpleNamespace
 
-    httpx = pytest.importorskip("httpx")
+    httpx = pytest.importorskip("httpx2")
     openai = pytest.importorskip("openai")
 
     private = "PRIVATE PROMPT RESPONSE SECRET"
@@ -164,8 +165,34 @@ def test_interruption_projection_retains_only_known_enums_and_hashes():
     assert "PRIVATE" not in json.dumps(safe)
 
 
+def test_actual_producer_fixture_preserves_failure_and_correlation_without_content():
+    event = json.loads((ROOT / "tests" / "fixtures" / "bcal_legacy_model_interrupted.json").read_bytes())
+    event["message"] = "PRIVATE"
+    event["modelFailure"].update(stack="PRIVATE", command="PRIVATE", exceptionType="PRIVATE")
+    safe = study.trace_projection({"evidence": {"trace": {"truncated": False, "omittedEventCount": 0, "events": [event]}}})
+    failure = safe["events"][0]
+    assert failure["modelFailure"] == {"stage": "response_choices", "exceptionCategory": "argument", "exitCode": 0}
+    assert (failure["turn"], failure["iteration"], failure["promptUseSequence"]) == (3, 4, 1)
+    assert failure["callIdSha256"] == hashlib.sha256(event["callId"].encode()).hexdigest()
+    assert failure["scenarioStepIdSha256"] == hashlib.sha256(event["scenarioStepId"].encode()).hexdigest()
+    assert failure["compositionIdSha256"] == hashlib.sha256(event["compositionId"].encode()).hexdigest()
+    assert "PRIVATE" not in json.dumps(safe)
+
+
+@pytest.mark.parametrize("failure", [None, {"stage": "ResponseChoices", "exceptionCategory": "PRIVATE", "exitCode": True}, {"stage": "unknown", "exceptionCategory": "unknown", "exitCode": 2**31}])
+def test_product_failure_projection_preserves_unknowns_without_casing_or_exit_coercion(failure):
+    event = {"type": "model_interrupted", "modelFailure": failure}
+    safe = study.trace_projection({"evidence": {"trace": {"events": [event]}}})["events"][0]["modelFailure"]
+    if failure is None:
+        assert safe is None
+    else:
+        assert safe["exitCode"] is None
+        assert safe["stage"] == ("unknown" if failure["stage"] == "unknown" else None)
+        assert "PRIVATE" not in json.dumps(safe)
+
+
 def test_legacy_body_client_disconnect_is_not_reported_as_completed():
-    httpx = pytest.importorskip("httpx")
+    httpx = pytest.importorskip("httpx2")
     events = []
     with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b"private"))) as client:
         request = client.build_request("POST", "https://offline.invalid")
@@ -197,7 +224,7 @@ def test_attempt_finally_preserves_legacy_diagnostics_without_runtime_success(tm
     assert value["quality"] is None
     assert value["legacyDiagnostics"]["transport"]["events"] == [{"phase": "headers", "outcome": "received", "httpStatus": 503}]
     assert value["legacyDiagnostics"]["bridgeInvocations"][0]["events"] == [{"phase": "command", "outcome": "started"}]
-    assert value["legacyDiagnostics"]["runtimeClientException"] is None
+    assert "runtimeClientException" not in value["legacyDiagnostics"]
     assert value["legacyDiagnostics"]["invocationOrder"] == "not-established"
     assert "PRIVATE" not in json.dumps(value)
 
@@ -238,6 +265,102 @@ def test_full_gold_rejects_hidden_exclusions(tmp_path, monkeypatch):
     monkeypatch.setattr(study, "INPUTS", tmp_path)
     with pytest.raises(ValueError, match="without exclusions"):
         study.pairs()
+
+
+def test_repeat_rejects_unadmitted_or_historical_package_and_selection_overrides(tmp_path, monkeypatch):
+    config = json.loads((ROOT / "experiments" / "bcal-full-gold-repeat" / "study.json").read_bytes())
+    monkeypatch.setattr(study, "INPUTS", tmp_path)
+    study.write_json(tmp_path / "study.json", config)
+    with pytest.raises(ValueError, match="diagnostic runtime package"):
+        study.study()
+    baseline = json.loads((ROOT / config["baselineStudy"]["file"]).read_bytes())
+    config["package"] = baseline["package"]
+    study.write_json(tmp_path / "study.json", config)
+    with pytest.raises(ValueError, match="diagnostic runtime package"):
+        study.study()
+    config["package"] = {**baseline["package"], "sha256": "0" * 64, "sourceCommitSha": "0" * 40}
+    for key in ("sha256", "sourceCommitSha"):
+        valid = config["package"][key]
+        config["package"][key] = None
+        study.write_json(tmp_path / "study.json", config)
+        with pytest.raises(ValueError, match="diagnostic runtime package"):
+            study.study()
+        config["package"][key] = valid
+    study.write_json(tmp_path / "study.json", config)
+    with pytest.raises(ValueError, match="producer proof"):
+        study.study()
+    config["runtimeDiagnosticsProof"] = {"file": "test-only.json", "sha256": "0" * 64}
+    study.write_json(tmp_path / "study.json", config)
+    pairs = study.pairs()
+    assert len(pairs) == 110
+    assert len({(pair["instanceId"], runtime) for pair in pairs for runtime in pair["order"]}) == 220
+    assert study.study()["datasets"] == baseline["datasets"]
+    assert study.study()["inference"] == baseline["inference"]
+    assert study.study()["judge"] == baseline["judge"]
+    config["datasets"] = []
+    study.write_json(tmp_path / "study.json", config)
+    with pytest.raises(ValueError, match="cannot be overridden"):
+        study.study()
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        None,
+        "packageSha256",
+        "commandClientInvoked",
+        "invocationCollectorInvoked",
+        "consumerProjectionVerified",
+        "providerRequests",
+        "observedModelInterruptions",
+        "missingModelFailure",
+        "rawException",
+        "booleanExit",
+        "overflowExit",
+    ],
+)
+def test_repeat_requires_actual_packaged_diagnostics_and_consumer_proof(tmp_path, monkeypatch, invalid):
+    from argparse import Namespace
+
+    config = json.loads((ROOT / "experiments" / "bcal-full-gold" / "study.json").read_bytes())
+    config["repeatOf"] = {"runId": 43422730966}
+    proof = {
+        "status": "passed",
+        "packageSha256": config["package"]["sha256"],
+        "packageSourceCommitSha": config["package"]["sourceCommitSha"],
+        "commandClientInvoked": True,
+        "invocationCollectorInvoked": True,
+        "consumerProjectionVerified": True,
+        "providerRequests": 0,
+        "observedModelInterruptions": [
+            {"type": "model_interrupted", "modelFailure": {"stage": stage, "exceptionCategory": "unknown"}}
+            for stage in ("command_start", "command_io", "command_exit", "response_json", "response_choices", "response_message")
+        ],
+    }
+    if invalid == "missingModelFailure":
+        del proof["observedModelInterruptions"][0]["modelFailure"]
+    elif invalid == "rawException":
+        proof["observedModelInterruptions"][0]["modelFailure"]["exceptionMessage"] = "PRIVATE"
+    elif invalid == "booleanExit":
+        proof["observedModelInterruptions"][0]["modelFailure"]["exitCode"] = False
+    elif invalid == "overflowExit":
+        proof["observedModelInterruptions"][0]["modelFailure"]["exitCode"] = 2**31
+    elif invalid is not None:
+        proof[invalid] = False
+    path = tmp_path / "proof.json"
+    study.write_json(path, proof)
+    config["runtimeDiagnosticsProof"] = {"file": path.name, "sha256": study.digest(path)}
+    monkeypatch.setattr(study, "ROOT", tmp_path)
+    monkeypatch.setattr(study, "study", lambda: config)
+    if invalid:
+        with pytest.raises(ValueError, match=r"verified|boundaries"):
+            study.preflight(Namespace(work=tmp_path, output=tmp_path))
+        assert not (tmp_path / "package").exists()
+    else:
+        assert study.verify_runtime_diagnostics_proof() == config["runtimeDiagnosticsProof"]
+        path.write_text("{}")
+        with pytest.raises(ValueError, match="binding differs"):
+            study.verify_runtime_diagnostics_proof()
 
 
 def test_full_gold_summary_keeps_all_unattempted_cells(tmp_path, monkeypatch):
@@ -724,7 +847,7 @@ def test_governed_transport_resets_ticket_and_verifies_configured_effort(tmp_pat
     from contextlib import nullcontext
     from types import ModuleType, SimpleNamespace
 
-    httpx = pytest.importorskip("httpx")
+    httpx = pytest.importorskip("httpx2")
 
     transport_spec = importlib.util.spec_from_file_location("smoke_transport_test", ROOT / "scripts" / "bcal_study_transport.py")
     transport = importlib.util.module_from_spec(transport_spec)
@@ -838,10 +961,17 @@ def test_existing_workflow_is_the_only_dispatch_and_reuses_actions():
     workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "bcal-governed-policy.yml").read_text())
     action = yaml.safe_load((ROOT / ".github" / "actions" / "setup-bcal-governed-study" / "action.yml").read_text())
     assert caller["jobs"]["get-entries"]["if"] == "(inputs.validation-phase == '' || inputs.validation-phase == 'ordinary') && !(inputs.llm-preflight-only || false)"
-    assert workflow["jobs"]["pairs"]["strategy"]["max-parallel"] == "${{ inputs.phase == 'full-gold' && 32 || 4 }}"
-    assert workflow["jobs"]["admit"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold'"
-    assert workflow["jobs"]["pairs"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold'"
-    assert workflow["jobs"]["summarize"]["if"] == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold')"
+    assert workflow["jobs"]["pairs"]["strategy"]["max-parallel"] == "${{ startsWith(inputs.phase, 'full-gold') && 32 || 4 }}"
+    assert workflow["jobs"]["admit"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat'"
+    assert workflow["jobs"]["pairs"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat'"
+    assert workflow["jobs"]["summarize"]["if"] == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat')"
+    repeat_admission = next(step for step in workflow["jobs"]["admit"]["steps"] if step.get("id") == "gold")
+    assert repeat_admission["env"]["STUDY_PHASE"] == "${{ inputs.phase }}"
+    assert '"*paired $($env:STUDY_PHASE)"' in repeat_admission["run"]
+    assert "runtime-proofs" in repeat_admission["run"]
+    assert "$receipt.runtimeDiagnosticsProof.sha256" in repeat_admission["run"]
+    package_step = next(step for step in action["runs"]["steps"] if step.get("id") == "package")
+    assert package_step["run"].index("runtime-proofs") < package_step["run"].index('"version=')
     probe_step = next(step for step in workflow["jobs"]["preflight"]["steps"] if step.get("if") == "inputs.phase == 'full-gold-none-probe'")
     assert "explicit-none-probe" in probe_step["run"]
     assert not any("routing-preflight" in step.get("run", "") for step in workflow["jobs"]["preflight"]["steps"] if step.get("if") == "inputs.phase == 'full-gold-none-probe'")

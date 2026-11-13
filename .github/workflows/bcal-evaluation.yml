@@ -19,6 +19,8 @@ on:
           - full-gold-preflight
           - full-gold-none-probe
           - full-gold
+          - full-gold-repeat-preflight
+          - full-gold-repeat
       preflight-run-id:
         description: "Exact successful same-SHA admission run for the selected governed workload"
         required: false
@@ -88,7 +90,7 @@ on:
 
 
 concurrency:
-  group: ${{ startsWith(inputs.validation-phase, 'full-gold') && 'bcal-full-gold-sol-paired-20261113-entry' || (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke') && 'bcal-stacked-sdk-smoke-20261112-entry' || format('bcal-evaluation-{0}-{1}', inputs.category || 'bcal-scenario', inputs.test-run && 'test' || 'full') }}
+  group: ${{ startsWith(inputs.validation-phase, 'full-gold-repeat') && 'bcal-full-gold-legacy-diagnostics-repeat1-entry' || startsWith(inputs.validation-phase, 'full-gold') && 'bcal-full-gold-sol-paired-20261113-entry' || (inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke') && 'bcal-stacked-sdk-smoke-20261112-entry' || format('bcal-evaluation-{0}-{1}', inputs.category || 'bcal-scenario', inputs.test-run && 'test' || 'full') }}
   cancel-in-progress: false
 
 env:

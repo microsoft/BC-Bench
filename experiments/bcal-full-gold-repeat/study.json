@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1",
+  "studyId": "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1",
+  "baselineStudy": {
+    "file": "experiments\\bcal-full-gold\\study.json",
+    "sha256": "c2c6a77922804a61f54bee25b58217728b0960f30e74a281a5050d45154f0919"
+  },
+  "repeatOf": {
+    "runId": 43422730966,
+    "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"
+  },
+  "relationship": "One separately authorized repeat of the original110x2gold after diagnostic producer and Bench consumer admission. Original selectors, scoring, Sol explicit none, Ceres and max32 remain unchanged. No cell retries/replacements or additional repeats.",
+  "package": null,
+  "runtimeEffortProof": null,
+  "runtimeDiagnosticsProof": null,
+  "historicalAccounting": {
+    "preservedOriginalGold": {
+      "runId": 43422730966,
+      "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f",
+      "executedAttempts": 217,
+      "judgedAttempts": 184,
+      "allJobSeconds": 163067,
+      "sealSha256": "cb58a9b3675cec61742b7312ad34fe79d5d3f971f3df1142007a5203819f6964"
+    },
+    "preservedOriginalAdmission": {
+      "runId": 43422005248,
+      "allJobSeconds": 246,
+      "providerRequests": 5,
+      "semanticAttempts": 0
+    },
+    "authorization": "The user separately authorized one same110x2gold repeat when diagnostics are complete and actual package/source-bound gates pass. No new numerical aggregate ceiling was specified. All new setup/admission/job/controller/failure charges and provider/judge calls must be separately measured; no historical ledger or score is rewritten.",
+    "runtimeBuildAccountingOwner": "40ee7234-ef48-4bf9-9856-012a6fc402cb",
+    "benchRunAccountingOwner": "2f726078-020b-476e-ba01-1e4f403e0893"
+  },
+  "publication": "Strict sanitized counts, quality, usage availability, hashes, allowlisted diagnostic enums and numeric statuses only. Never publish raw prompts/AL/bodies/messages/exception text/stacks/commands/credentials/private logs/package. Missing diagnostic fields remain unknown; no private sink provisioned."
+}
