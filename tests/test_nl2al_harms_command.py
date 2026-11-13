@@ -114,37 +114,50 @@ def test_diagnostic_scoring_fails_without_overwriting_capture(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("selection", "error"),
+    "selection",
     [
-        (["-Category", "harms", "-Tier", "challenge"], "challenge tier is unsupported"),
-        (["-Category", "accuracy", "-Suite", "private.yaml"], "Suite selection is only supported for harms"),
+        {"Category": "harms", "Tier": "challenge"},
+        {"Category": "accuracy", "Suite": "private.yaml"},
     ],
 )
-def test_unsupported_selection_rejected_before_setup(tmp_path, selection, error):
+def test_unsupported_selection_rejected_before_setup(tmp_path, selection):
     pwsh = shutil.which("pwsh")
     if not pwsh:
         pytest.skip("PowerShell is required")
     target = tmp_path / "capture"
+    setup_marker = tmp_path / "setup-entered"
+    options = tmp_path / "options.json"
+    options.write_text(json.dumps(selection | {"BcalExecutable": "absent.exe", "ArtifactVersion": "28.0", "ResultsDirectory": str(target)}), encoding="utf-8")
+    harness = tmp_path / "guard.ps1"
+    harness.write_text(
+        """
+param($Wrapper, $Options, $SetupMarker)
+$ErrorActionPreference = 'Stop'
+function Resolve-Path {
+    New-Item -ItemType File -Path $SetupMarker | Out-Null
+    throw 'Unexpected setup'
+}
+$parameters = Get-Content -LiteralPath $Options -Raw | ConvertFrom-Json -AsHashtable
+& $Wrapper @parameters
+""",
+        encoding="utf-8",
+    )
     completed = subprocess.run(
         [
             pwsh,
             "-NoProfile",
             "-File",
+            str(harness),
             str(Path(__file__).parents[1] / "scripts" / "Run-NL2ALEvaluation.ps1"),
-            *selection,
-            "-BcalExecutable",
-            "absent.exe",
-            "-ArtifactVersion",
-            "28.0",
-            "-ResultsDirectory",
-            str(target),
+            str(options),
+            str(setup_marker),
         ],
         capture_output=True,
         text=True,
         check=False,
     )
     assert completed.returncode != 0
-    assert error in completed.stderr
+    assert not setup_marker.exists()
     assert not target.exists()
 
 
@@ -162,6 +175,7 @@ def test_wrapper_passes_and_hashes_private_suite(tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("synthetic", encoding="utf-8")
     suite = _suite(tmp_path)
+    (root / "runtime" / "bcal.ps1").write_text("'synthetic-runtime'\n", encoding="utf-8")
     output = root / "capture"
     harness = tmp_path / "harness.ps1"
     harness.write_text(
@@ -175,7 +189,7 @@ function Resolve-Path {
     param([string] $LiteralPath, [string] $Path)
     $value = if ($LiteralPath) { $LiteralPath } else { $Path }
     if ($value -like '*python.exe') { [pscustomobject]@{ Path = 'Invoke-TestPython' } }
-    elseif ($value -like '*bcal.exe') { [pscustomobject]@{ Path = "$Root\runtime\Invoke-TestBcal" } }
+    elseif ($value -like '*bcal.exe') { [pscustomobject]@{ Path = Join-Path $Root 'runtime/bcal.ps1' } }
     else { Microsoft.PowerShell.Management\Resolve-Path -LiteralPath $value }
 }
 function Invoke-TestPython {
@@ -188,7 +202,6 @@ function Invoke-TestPython {
         $args | ConvertTo-Json | Set-Content "$Output\invocation.json"
     }
 }
-Set-Item -Path "function:$Root\runtime\Invoke-TestBcal" -Value { 'synthetic-runtime' }
 & "$Root\scripts\Run-NL2ALEvaluation.ps1" -Category harms -Suite $Suite `
     -BcalExecutable "$Root\runtime\bcal.exe" -BridgePython "$Root\bridge-python.exe" `
     -ArtifactVersion 29.1.1.1 -ResultsDirectory $Output

@@ -51,11 +51,11 @@ def test_bcal_downloads_symbols_from_the_selected_tier():
     assert '-Category nl2al -Tier "$env:TIER"' in step["run"]
 
 
-def test_bcal_run_identity_includes_tier_and_package_selection():
+def test_bcal_concurrency_separates_accuracy_and_harms():
     workflow = _workflow("bcal-evaluation.yml")
 
-    assert workflow["run-name"].startswith(f"BCal {SELECTED_TIER} ${{{{ inputs.bcal-feed || 'official' }}}}@${{{{ inputs.bcal-version || 'latest' }}}} ")
-    assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}"
+    assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.evaluation-kind || 'accuracy' }}-${{ inputs.test-run && 'test' || 'full' }}"
+    assert workflow["concurrency"]["cancel-in-progress"] is False
 
 
 def test_bcal_completion_review_model_offers_external_models_or_none():
