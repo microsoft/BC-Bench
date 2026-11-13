@@ -30,19 +30,23 @@ _STICKY_ROUTE_BROKER_FAMILY_ENV = "BCBENCH_STICKY_ROUTE_BROKER_FAMILY"
 
 class _RawResponse(Protocol):
     @property
-    def headers(self) -> Mapping[str, str]: ...
+    def headers(self) -> Mapping[str, str]:
+        raise NotImplementedError
 
     def parse(self) -> object: ...
 
 
 class _RawCompletions(Protocol):
-    def create(self, **kwargs: object) -> object: ...
+    def create(self, **kwargs: object) -> object:
+        raise NotImplementedError
 
 
 class _TicketStore(Protocol):
-    def get(self, model: str) -> str: ...
+    def get(self, model: str) -> str:
+        pass
 
-    def set(self, model: str, ticket: str) -> None: ...
+    def set(self, model: str, ticket: str) -> None:
+        pass
 
 
 class _MemoryTicketStore:
@@ -157,6 +161,8 @@ class StickyRouteTicketBroker:
                 connection.send({"operation": "shutdown"})
                 connection.recv()
         except (OSError, EOFError):
+            # Best-effort shutdown: the broker may already be gone or the control channel closed.
+            # Continue with local cleanup and thread-termination checks below.
             pass
         self._listener.close()
         self._thread.join(timeout=5)
