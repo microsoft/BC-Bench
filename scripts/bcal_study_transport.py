@@ -43,14 +43,16 @@ def serve(args: argparse.Namespace) -> None:
     settings = LlmApiSettings.from_env()
     if settings.environment != "TEST":
         raise ValueError("This study only admits the TEST provider.")
-    if args.explicit_none_probe and (args.model != "gpt-56-reasoning-sol" or args.step != "HostAgent"):
-        raise ValueError("Explicit-none probes only admit the unchanged Sol main alias.")
+    if (args.explicit_none_probe or args.required_reasoning_effort) and (args.model != "gpt-56-reasoning-sol" or args.step != "HostAgent"):
+        raise ValueError("Explicit-none policy only admits the unchanged Sol main alias.")
     credential = CertificateCredential(settings.tenant_id, settings.client_id, certificate_path=os.environ["LLM_API_CERTIFICATE_FILE"], send_certificate_chain=True)
     token = get_bearer_token_provider(credential, SCOPE)
     session = str(uuid.uuid4())
     counts = {"requests": 0, "http200": 0, "ticketsReturned": 0, "ticketsReplayed": 0, "sessionStable": True, "modelStable": True}
     if args.explicit_none_probe:
         counts["explicitNoneVerifiedRequests"] = 0
+    if args.required_reasoning_effort:
+        counts.update(reasoningEffort=args.required_reasoning_effort, effortVerifiedRequests=0, effortRejectedRequests=0)
 
     class Affinity(httpx.BaseTransport):
         def __init__(self) -> None:
@@ -75,6 +77,18 @@ def serve(args: argparse.Namespace) -> None:
                     if not effort_matches or not body.get("tools") or "tool_choice" in body or counts["requests"]:
                         raise ProxyError("Explicit-none probe outbound policy mismatch")
                     counts["explicitNoneVerifiedRequests"] += 1
+                if args.required_reasoning_effort:
+                    reasoning = body.get("reasoning")
+                    matches = (
+                        body.get("reasoning_effort") == args.required_reasoning_effort and "reasoning" not in body
+                        if args.wire_api == "chat-completions"
+                        else isinstance(reasoning, dict) and reasoning.get("effort") == args.required_reasoning_effort and "reasoning_effort" not in body
+                    )
+                    if not matches:
+                        counts["effortRejectedRequests"] += 1
+                        write_json(args.audit, counts)
+                        raise ProxyError("Governed outbound reasoning effort mismatch")
+                    counts["effortVerifiedRequests"] += 1
                 request.headers["X-SessionId"] = session
                 request.headers["X-InteractionId"] = session
                 request.headers["x-sticky-route-session-ticket"] = self.ticket
@@ -119,11 +133,16 @@ def bridge() -> None:
     request = json.loads(sys.stdin.buffer.read().decode("utf-8-sig"))
     if request.get("model") != os.environ.get("BCAL_LLM_MODEL", "gpt-55-chat") or not isinstance(request.get("messages"), list):
         raise ValueError("Unexpected external-command model or messages.")
-    if request["model"] == "gpt-56-reasoning-sol" and request.get("reasoning_effort") is not None:
-        raise ValueError("The approved Sol comparison leaves reasoning effort unspecified.")
+    effort = os.environ.get("BCAL_STUDY_REASONING_EFFORT")
+    if effort is not None and (effort != "none" or request["model"] != "gpt-56-reasoning-sol"):
+        raise ValueError("Only the governed explicit-none Sol policy is admitted.")
+    if request["model"] == "gpt-56-reasoning-sol" and request.get("reasoning_effort") not in (None, effort):
+        raise ValueError("Incoming Sol reasoning effort conflicts with the governed policy.")
     kwargs = {key: request[key] for key in ("model", "messages", "tools", "reasoning_effort", "max_completion_tokens") if key in request}
     if kwargs.get("reasoning_effort") is None:
         kwargs.pop("reasoning_effort", None)
+    if effort is not None:
+        kwargs["reasoning_effort"] = effort
     kwargs.setdefault("max_completion_tokens", 16384)
     with OpenAI(base_url=os.environ["BCAL_STUDY_CHAT_URL"] + "/v1", api_key=os.environ["BCAL_SDK_PROXY_KEY"], max_retries=0, timeout=240) as client:
         response = client.chat.completions.create(**kwargs)
@@ -169,6 +188,7 @@ def main() -> None:
     server.add_argument("--ready", type=Path, required=True)
     server.add_argument("--audit", type=Path, required=True)
     server.add_argument("--explicit-none-probe", action="store_true")
+    server.add_argument("--required-reasoning-effort", choices=("none",))
     commands.add_parser("bridge")
     scorer = commands.add_parser("judge")
     scorer.add_argument("--input", type=Path, required=True)

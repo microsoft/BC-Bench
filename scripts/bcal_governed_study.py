@@ -52,7 +52,7 @@ def study() -> dict:
             and value["caseCount"] == 110
             and value["maxWorkers"] == 32
             and value["inference"]["model"] == "gpt-56-reasoning-sol"
-            and value["inference"]["reasoning"] is None
+            and value["inference"]["reasoning"] == "none"
             and value["judge"]["model"] == "gpt-56-ceres",
             "Only the approved full-gold paired Sol workload is admitted.",
         )
@@ -221,11 +221,39 @@ def prepare_package(folder: Path) -> dict:
     if not stage.exists():
         with zipfile.ZipFile(package) as archive:
             files = [entry for entry in archive.infolist() if not entry.is_dir()]
-            if len(files) != 460 or any(not (stage / entry.filename).resolve().is_relative_to(stage.resolve()) for entry in files):
+            if len(files) != config["files"] or any(not (stage / entry.filename).resolve().is_relative_to(stage.resolve()) for entry in files):
                 raise ValueError("Unexpected governed archive inventory.")
             archive.extractall(stage)
     binary = verify_package(stage)
     return {"sha256": config["sha256"], "sourceCommitSha": config["sourceCommitSha"], "framework": "net10.0", "versionVerified": True, "binarySha256": digest(binary)}
+
+
+def verify_runtime_effort_proof() -> dict[str, str] | None:
+    config = study()
+    if config.get("cohort") != "full-gold-paired-v1":
+        return None
+    binding = config.get("runtimeEffortProof")
+    if binding is None:
+        raise ValueError("Actual governed package SDK effort proof has not been admitted.")
+    if not isinstance(binding, dict):
+        raise TypeError("Runtime effort proof binding must be an object.")
+    filename, checksum = binding.get("file"), binding.get("sha256")
+    if not isinstance(filename, str) or not isinstance(checksum, str):
+        raise TypeError("Runtime effort proof binding is malformed.")
+    path = (ROOT / filename).resolve()
+    require(path.is_relative_to(ROOT) and digest(path) == checksum, "Runtime effort proof binding differs.")
+    proof = json.loads(path.read_bytes())
+    require(
+        proof.get("status") == "passed"
+        and proof.get("packageSha256") == config["package"]["sha256"]
+        and proof.get("packageSourceCommitSha") == config["package"]["sourceCommitSha"]
+        and proof.get("requestedSdkEffort") == proof.get("observedSdkWireEffort") == config["inference"]["reasoning"]
+        and proof.get("nativeSdkInvoked") is True
+        and proof.get("mismatchRejectedBeforeProvider") is True
+        and proof.get("legacyBridgeVerified") is True,
+        "Actual package SDK/legacy effort fidelity has not been verified.",
+    )
+    return {"file": filename, "sha256": checksum}
 
 
 def preflight(args: argparse.Namespace) -> None:
@@ -241,6 +269,7 @@ def preflight(args: argparse.Namespace) -> None:
     write_json(args.output / "preflight.json", receipt)
     started = time.monotonic()
     try:
+        receipt["runtimeEffortProof"] = verify_runtime_effort_proof()
         receipt["package"] = prepare_package(args.work / "package")
         receipt["symbols"] = verify_symbols()
         receipt["pairCount"] = len(pairs())
@@ -284,6 +313,8 @@ def proxy(work: Path, env: dict[str, str], model: str, wire: str, step: str, *, 
     ]
     if explicit_none_probe:
         command.append("--explicit-none-probe")
+    if step == "HostAgent" and study()["inference"]["reasoning"] == "none":
+        command.extend(["--required-reasoning-effort", "none"])
     with (work / f"{step}-{wire}.console.txt").open("w", encoding="utf-8") as console:
         process = subprocess.Popen(command, env=env, stdout=console, stderr=subprocess.STDOUT)
         try:
@@ -308,11 +339,13 @@ def proxy(work: Path, env: dict[str, str], model: str, wire: str, step: str, *, 
                 process.wait(timeout=10)
 
 
-def route_receipt(path: Path, *, explicit_none_probe: bool = False) -> dict:
+def route_receipt(path: Path, *, explicit_none_probe: bool = False, required_reasoning_effort: str | None = None) -> dict:
     value = json.loads(path.read_bytes())
     expected = {"requests", "http200", "ticketsReturned", "ticketsReplayed", "sessionStable", "modelStable"}
     if explicit_none_probe:
         expected.add("explicitNoneVerifiedRequests")
+    if required_reasoning_effort:
+        expected.update(("reasoningEffort", "effortVerifiedRequests", "effortRejectedRequests"))
     if set(value) != expected:
         raise ValueError("Unexpected route receipt.")
     if (
@@ -323,6 +356,14 @@ def route_receipt(path: Path, *, explicit_none_probe: bool = False) -> dict:
         raise ValueError("Invalid route counters.")
     if explicit_none_probe and (type(value["explicitNoneVerifiedRequests"]) is not int or value["explicitNoneVerifiedRequests"] != value["requests"]):
         raise ValueError("Explicit-none outbound effort was not verified.")
+    if required_reasoning_effort and (
+        value["reasoningEffort"] != required_reasoning_effort
+        or type(value["effortVerifiedRequests"]) is not int
+        or value["effortVerifiedRequests"] != value["requests"]
+        or type(value["effortRejectedRequests"]) is not int
+        or value["effortRejectedRequests"] != 0
+    ):
+        raise ValueError("Governed outbound reasoning effort was not verified.")
     if value["requests"] > 1 and value["http200"] and not value["ticketsReplayed"]:
         raise ValueError("No cross-turn sticky route proof.")
     return value
@@ -383,7 +424,7 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
         "status": "in-progress",
         "kind": "explicit-none-protocol-probes-not-gold-admission" if explicit_none_probe else "bounded-routing-admission-not-semantic-attempts",
         "requestLimit": 2 if explicit_none_probe else 5,
-        "reasoningEffort": "none" if explicit_none_probe else None,
+        "reasoningEffort": "none" if explicit_none_probe else config["inference"]["reasoning"],
         "routes": [],
     }
     if explicit_none_probe:
@@ -402,6 +443,7 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
             route_receipt_row = {"model": model, "wireApi": wire, "role": role, "requests": 0}
             receipt["routes"].append(route_receipt_row)
             probe_options = {"explicit_none_probe": True} if explicit_none_probe else {}
+            required_effort = config["inference"]["reasoning"] if role == "HostAgent" else None
             with proxy(args.work, env, model, wire, role, **probe_options) as (url, audit):
                 try:
                     for _ in range(count):
@@ -417,7 +459,7 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
                         else:
                             body.update(messages=[{"role": "user", "content": "Return only OK."}], max_completion_tokens=16384, tools=[{"type": "function", "function": function}])
                             route = "/chat/completions"
-                        if explicit_none_probe:
+                        if explicit_none_probe or required_effort:
                             if wire == "responses":
                                 body.pop("tool_choice")
                                 body.update(input=[{"role": "user", "content": "Return only OK."}], reasoning={"effort": "none"}, parallel_tool_calls=False)
@@ -445,7 +487,7 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
                             isinstance(result, dict) and (isinstance(result.get("output"), list) if wire == "responses" else isinstance(result.get("choices"), list)),
                             "Provider response protocol differs.",
                         )
-                        if explicit_none_probe:
+                        if explicit_none_probe or required_effort or role == "Judge":
                             if wire == "responses":
                                 require(
                                     result.get("status") == "completed" and not result.get("error") and any(item.get("type") in {"message", "function_call"} for item in result["output"]),
@@ -477,7 +519,7 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
                     counters = json.loads(audit.read_bytes())
                     if type(counters.get("requests")) is int and counters["requests"] >= 0:
                         route_receipt_row["requests"] = counters["requests"]
-                    route_receipt_row.update(route_receipt(audit, **probe_options))
+                    route_receipt_row.update(route_receipt(audit, required_reasoning_effort=required_effort, **probe_options))
                 require(route_receipt_row["requests"] == count and route_receipt_row["http200"] == count, "Routing admission was not exactly the bounded successful calls.")
         receipt["status"] = "passed"
     except Exception as error:
@@ -567,6 +609,7 @@ def sanitize_row(row: dict, runtime: str, *, sdk_catalog_sha256: str | None = No
         agent_planning=BCalAgentPlanning.COPILOT if runtime == "copilot-sdk" else None,
         sdk_provider="openai" if runtime == "copilot-sdk" else None,
         sdk_model=model if runtime == "copilot-sdk" else None,
+        sdk_reasoning_effort=study()["inference"]["reasoning"] if runtime == "copilot-sdk" else None,
         sdk_max_model_requests=64 if runtime == "copilot-sdk" else None,
         sdk_timeout_seconds=1200 if runtime == "copilot-sdk" else None,
         inference_provider="bc-eval-m365-test@0.6.1",
@@ -662,7 +705,9 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
         "benchCommit": os.environ.get("GITHUB_SHA"),
         "runtime": runtime,
         "mainModel": config["inference"]["model"],
-        "reasoningEffort": None,
+        "reasoningEffort": config["inference"]["reasoning"],
+        "runtimeRequestedReasoningEffort": config["inference"]["reasoning"] if runtime == "copilot-sdk" else None,
+        "effortApplication": ("sdk-option-and-wire-guard" if runtime == "copilot-sdk" else "governed-command-bridge-and-wire-guard") if config["inference"]["reasoning"] is not None else None,
         "judgeModel": config["judge"]["model"],
         "status": "admitted",
         "quality": None,
@@ -686,6 +731,9 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
             BCAL_SDK_PROXY_KEY=secrets.token_urlsafe(32),
             BCAL_LLM_COMMAND=subprocess.list2cmdline([os.environ["BCAL_STUDY_INFERENCE_PYTHON"], str(ROOT / "scripts" / "bcal_study_transport.py"), "bridge"]),
         )
+        required_effort = config["inference"]["reasoning"]
+        if required_effort is not None:
+            env["BCAL_STUDY_REASONING_EFFORT"] = required_effort
         with ExitStack() as stack:
             chat_url, chat_audit = stack.enter_context(proxy(work, env, config["inference"]["model"], "chat-completions", "HostAgent"))
             env["BCAL_STUDY_CHAT_URL"] = chat_url
@@ -700,6 +748,8 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
                     BCAL_SDK_MAX_MODEL_REQUESTS="64",
                     BCAL_SDK_TIMEOUT_SECONDS="1200",
                 )
+                if required_effort is not None:
+                    env["BCAL_SDK_REASONING_EFFORT"] = required_effort
             command = [
                 sys.executable,
                 "-m",
@@ -732,8 +782,8 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
                 except AgentError:
                     attempt.update(exitCode=None, cleanupVerified=False)
                     raise
-            attempt["mainRoute"] = route_receipt(main_audit)
-            attempt["auxiliaryRoute"] = route_receipt(chat_audit) if runtime == "copilot-sdk" else None
+            attempt["mainRoute"] = route_receipt(main_audit, required_reasoning_effort=required_effort)
+            attempt["auxiliaryRoute"] = route_receipt(chat_audit, required_reasoning_effort=required_effort) if runtime == "copilot-sdk" else None
             attempt["firstModelResponse"] = attempt["mainRoute"]["http200"] > 0
         verify_owned_cleanup(binary)
         verify_package(Path(os.environ["BCAL_STUDY_WORK"]) / "package" / "stage")
@@ -811,7 +861,7 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
             path = work / f"{'Judge' if role == 'judge' else 'HostAgent'}-{wire}.audit.json"
             if path.exists():
                 try:
-                    attempt[f"{role}Route"] = route_receipt(path)
+                    attempt[f"{role}Route"] = route_receipt(path, required_reasoning_effort=config["inference"]["reasoning"] if role != "judge" else None)
                 except ValueError as error:
                     attempt["routingFailure"] = type(error).__name__
         attempt["modelBacked"] = attempt.get("mainRoute", {}).get("http200", 0) > 0
@@ -824,6 +874,7 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
 
 def run_pair(args: argparse.Namespace) -> None:
     config = study()
+    verify_runtime_effort_proof()
     pair = pairs()[args.pair]
     started = float(os.environ.get("BCAL_STUDY_JOB_STARTED_UNIX", time.time()))
     env = {**os.environ, "PYTHONPATH": str(ROOT / "src") + os.pathsep + os.environ.get("PYTHONPATH", ""), "LLM_API_ENVIRONMENT": "TEST"}

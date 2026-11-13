@@ -112,17 +112,25 @@ The separately approved full-gold follow-up uses
 `experiments\bcal-full-gold\study.json` and the existing evaluation workflow's
 `full-gold-preflight` / `full-gold` phases. It selects all 110 ordinary gold cases
 once per runtime (220 attempts), no challenge or authority cases. The exact
-main alias is `gpt-56-reasoning-sol`, with reasoning effort omitted/default;
+main alias is `gpt-56-reasoning-sol`, now with explicitly approved `none` on both runtimes;
 the judge remains `gpt-56-ceres`. Each pair runs sequentially and the workflow
 admits at most 32 pair workers total. A same-SHA gate verifies package/symbols
 without inference, then performs at most five bounded protocol/routing requests
 (two main Chat, two main Responses, one judge Chat), separately accounted from
 semantic attempts, stopping at the first failure. Chat admission preserves the
 production legacy envelope: tools present, `max_completion_tokens=16384`,
-no `tool_choice` or `reasoning_effort`; its prompt/tool schema are synthetic,
-not a benchmark attempt. Responses admission is unchanged. The two earlier
-failed admissions remain charged; one corrected-envelope admission is approved,
-not an automatic retry loop. Prior studies and their limits/seals remain
+no `tool_choice`, with approved `reasoning_effort=none` applied by the governed
+command bridge. The actual legacy CLI request has no effort field, so its
+requested identity remains unset rather than falsely reporting a runtime option.
+SDK runs explicitly pass `--sdk-reasoning-effort none`; both protocols are checked
+at the outbound transport boundary, with rejected requests blocking completion.
+Responses admission uses synthetic input/tools, `parallel_tool_calls=false`,
+`reasoning.effort=none` and bounded max1024, not a native output-cap parity claim.
+Actual packaged SDK serialization/guard proof must be bound before same-SHA
+admission; requested effort metadata alone is insufficient.
+All earlier default-effort failures and direct probes remain charged separately,
+not reinterpreted as successful admission. No automatic retry loop is permitted.
+Prior studies and their limits/seals remain
 historical; the user approved extending the previous aggregate limit for this fixed workload,
 not a new monetary or numeric ceiling. Actual all-job usage must be reported.
 The existing smoke selection and ordinary/scheduled defaults are unchanged.
@@ -135,9 +143,9 @@ Chat sends `reasoning_effort="none"` with production max16384; Responses sends
 and bounded max1024. Neither forces tool choice. The transport verifies the
 outgoing effort and retains safe counters/diagnostics in a distinct artifact.
 This is not gold admission, a default-policy switch, SDK execution/fidelity
-proof, semantic validation, or sticky replay proof. The full-gold selector's
-omitted-effort policy remains unchanged; any subsequent comparable SDK/legacy
-policy requires separate approval and actual SDK wire-effort verification.
+proof, semantic validation, or sticky replay proof. Those closed probes did not
+change the policy; the subsequent explicit user approval authorizes `none` for
+gold only after actual SDK wire-effort verification and all admission gates.
 
 ## Bounded SDK/legacy compatibility smoke
 

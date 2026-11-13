@@ -147,7 +147,7 @@ jobs:
           foreach ($item in @($receipt, $routing)) {
             if ($item.status -ne 'passed' -or $item.benchCommit -ne $env:GITHUB_SHA -or $item.inputsSha256 -ne $hash -or $item.studyId -ne $study.studyId) { throw 'Admission receipts differ from exact source/manifest.' }
           }
-          if ($receipt.modelsAdmitted -ne 0 -or $receipt.pairCount -ne 110 -or $receipt.package.sha256 -ne $study.package.sha256 -or $receipt.symbols.count -ne 350 -or $routing.requests -ne 5 -or $routing.routes.Count -ne 3) { throw 'Full-gold package/selection/routing admission differs.' }
+          if ($receipt.modelsAdmitted -ne 0 -or $receipt.pairCount -ne 110 -or $receipt.package.sha256 -ne $study.package.sha256 -or $receipt.symbols.count -ne 350 -or $routing.requests -ne 5 -or $routing.routes.Count -ne 3 -or !$study.runtimeEffortProof -or $receipt.runtimeEffortProof.sha256 -ne $study.runtimeEffortProof.sha256) { throw 'Full-gold package/selection/runtime-proof/routing admission differs.' }
           if (@($routing.routes | Where-Object { $_.requests -ne $_.http200 -or !$_.sessionStable -or !$_.modelStable }).Count) { throw 'Routing admission failed.' }
           $expectedRoutes = @(
             @{model='gpt-56-reasoning-sol';wire='chat-completions';role='HostAgent';count=2},
@@ -157,8 +157,10 @@ jobs:
           for ($i = 0; $i -lt 3; $i++) {
             $observed = $routing.routes[$i]; $expected = $expectedRoutes[$i]
             if ($observed.model -ne $expected.model -or $observed.wireApi -ne $expected.wire -or $observed.role -ne $expected.role -or $observed.requests -ne $expected.count -or ($expected.count -gt 1 -and $observed.ticketsReplayed -lt 1)) { throw 'Exact model/protocol/sticky routing differs.' }
+            if ($expected.role -eq 'HostAgent' -and ($observed.reasoningEffort -ne 'none' -or $observed.effortVerifiedRequests -ne $expected.count -or $observed.effortRejectedRequests -ne 0 -or $observed.responseProtocolValid -ne $true)) { throw 'Actual outbound main effort was not verified.' }
+            if ($expected.role -eq 'Judge' -and ($null -ne $observed.reasoningEffort -or $observed.responseProtocolValid -ne $true)) { throw 'Judge effort policy or response differs.' }
           }
-          if ($null -ne $routing.reasoningEffort -or $routing.requestLimit -ne 5) { throw 'Routing effort or bound differs.' }
+          if ($routing.reasoningEffort -ne 'none' -or $study.inference.reasoning -ne 'none' -or $routing.requestLimit -ne 5) { throw 'Routing effort or bound differs.' }
           $matrix = .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py matrix
           "matrix=$matrix" >> $env:GITHUB_OUTPUT
           New-Item -ItemType Directory study-sanitized -Force | Out-Null

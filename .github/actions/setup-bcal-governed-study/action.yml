@@ -17,13 +17,19 @@ runs:
   using: composite
   steps:
     - uses: ./.github/actions/setup-python-uv
+    - id: package
+      shell: pwsh
+      run: |
+        if ($env:BCAL_STUDY_PROFILE -notin @('bcal-sdk-policy', 'bcal-full-gold')) { throw 'Unknown governed study profile.' }
+        $study = Get-Content "experiments\$env:BCAL_STUDY_PROFILE\study.json" -Raw | ConvertFrom-Json
+        "version=$($study.package.version)" >> $env:GITHUB_OUTPUT
     - uses: ./.github/actions/install-bcal
       with:
         client-id: ${{ inputs.azure-client-id }}
         tenant-id: ${{ inputs.azure-tenant-id }}
         package-id: Microsoft.BusinessCentral.BCal.CLI
         feed: experiment
-        version: 30.0.46.34884-beta
+        version: ${{ steps.package.outputs.version }}
         official-feed-url: ${{ inputs.official-feed-url }}
         experiment-feed-url: ${{ inputs.experiment-feed-url }}
     - shell: pwsh

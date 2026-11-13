@@ -36,7 +36,7 @@ def test_full_gold_selects_every_case_once_per_runtime(monkeypatch):
     assert len({(pair["instanceId"], runtime) for pair in pairs for runtime in pair["order"]}) == 220
     assert all(pair["tier"] == "gold" and pair["lane"] == "ordinary-quality" and pair["category"] == "nl2al" for pair in pairs)
     assert study.study()["inference"]["model"] == "gpt-56-reasoning-sol"
-    assert study.study()["inference"]["reasoning"] is None
+    assert study.study()["inference"]["reasoning"] == "none"
 
 
 def test_full_gold_rejects_hidden_exclusions(tmp_path, monkeypatch):
@@ -81,12 +81,14 @@ def test_full_gold_routing_admission_is_bounded_and_preserves_partial_charges(tm
     def respond(request, timeout):
         body = json.loads(request.data)
         assert body["model"] == current["model"]
-        assert "reasoning_effort" not in body
-        assert "reasoning" not in body
         assert body["tools"]
         if current["wire"] == "responses":
-            assert body["tool_choice"] == "none"
+            assert body["reasoning"] == {"effort": "none"}
+            assert "tool_choice" not in body
             assert body["max_output_tokens"] == 1024
+        elif current["model"] == "gpt-56-reasoning-sol":
+            assert body["reasoning_effort"] == "none"
+            assert body["max_completion_tokens"] == 16384
         else:
             assert set(body) == {"model", "messages", "tools", "max_completion_tokens"}
             assert body["max_completion_tokens"] == 16384
@@ -94,10 +96,15 @@ def test_full_gold_routing_admission_is_bounded_and_preserves_partial_charges(tm
         current["count"] += 1
         failed = len(requests) == fail_at
         count = current["count"]
-        study.write_json(current["audit"], {"requests": count, "http200": count - failed, "ticketsReturned": count - failed, "ticketsReplayed": count - 1, "sessionStable": True, "modelStable": True})
+        counters = {"requests": count, "http200": count - failed, "ticketsReturned": count - failed, "ticketsReplayed": count - 1, "sessionStable": True, "modelStable": True}
+        if current["model"] == "gpt-56-reasoning-sol":
+            counters.update(reasoningEffort="none", effortVerifiedRequests=count, effortRejectedRequests=0)
+        study.write_json(current["audit"], counters)
         if failed:
             raise TimeoutError("simulated upstream failure")
-        return io.StringIO(json.dumps({"output": []} if current["wire"] == "responses" else {"choices": []}))
+        return io.StringIO(
+            json.dumps({"status": "completed", "output": [{"type": "message"}]} if current["wire"] == "responses" else {"choices": [{"finish_reason": "stop", "message": {"content": "OK"}}]})
+        )
 
     monkeypatch.setattr(study, "proxy", fake_proxy)
     monkeypatch.setattr(study.urllib.request, "urlopen", respond)
@@ -110,6 +117,8 @@ def test_full_gold_routing_admission_is_bounded_and_preserves_partial_charges(tm
     receipt = json.loads((tmp_path / "routing-preflight.json").read_bytes())
     assert receipt["requests"] == len(requests) == (fail_at or 5)
     assert receipt["status"] == ("failed" if fail_at else "passed")
+    if not fail_at:
+        assert all(route["responseProtocolValid"] is True for route in receipt["routes"])
     assert all(body["model"] == "gpt-56-reasoning-sol" for body in requests[:4])
 
 
@@ -144,12 +153,93 @@ def test_sol_bridge_omits_default_effort_and_rejects_unspecified_effort_override
     monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps(body).encode())))
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     if effort:
-        with pytest.raises(ValueError, match="unspecified"):
+        with pytest.raises(ValueError, match="governed policy"):
             transport.bridge()
         assert not observed
     else:
         transport.bridge()
         assert observed == [{"model": body["model"], "messages": body["messages"], "tools": body["tools"], "max_completion_tokens": 16384}]
+
+
+@pytest.mark.parametrize("incoming", [None, "none", "high"])
+def test_approved_bridge_applies_none_to_command_client_shape_and_rejects_conflict(monkeypatch, incoming):
+    import io
+    import sys
+    from contextlib import nullcontext
+    from types import ModuleType, SimpleNamespace
+
+    spec = importlib.util.spec_from_file_location("explicit_effort_transport", ROOT / "scripts" / "bcal_study_transport.py")
+    transport = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(transport)
+    observed = []
+    api = ModuleType("openai")
+
+    def create(**kwargs):
+        observed.append(kwargs)
+        return SimpleNamespace(model_dump_json=lambda **_: "{}")
+
+    api.OpenAI = lambda **_: nullcontext(SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    monkeypatch.setitem(sys.modules, "openai", api)
+    monkeypatch.setenv("BCAL_LLM_MODEL", "gpt-56-reasoning-sol")
+    monkeypatch.setenv("BCAL_STUDY_REASONING_EFFORT", "none")
+    monkeypatch.setenv("BCAL_STUDY_CHAT_URL", "http://unused.invalid")
+    monkeypatch.setenv("BCAL_SDK_PROXY_KEY", "offline-only")
+    body = {"model": "gpt-56-reasoning-sol", "messages": [{"role": "user", "content": "synthetic"}], "max_completion_tokens": 16384, "tools": [{"type": "function", "function": {"name": "probe"}}]}
+    if incoming is not None:
+        body["reasoning_effort"] = incoming
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps(body).encode())))
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    if incoming == "high":
+        with pytest.raises(ValueError, match="governed policy"):
+            transport.bridge()
+        assert not observed
+    else:
+        transport.bridge()
+        assert observed == [{**body, "reasoning_effort": "none"}]
+
+
+def test_gold_preflight_stops_before_package_or_auth_without_actual_sdk_proof(tmp_path, monkeypatch):
+    from argparse import Namespace
+
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold")
+    config = study.study()
+    config["runtimeEffortProof"] = None
+    monkeypatch.setattr(study, "study", lambda: config)
+    with pytest.raises(ValueError, match="SDK effort proof"):
+        study.preflight(Namespace(work=tmp_path, output=tmp_path))
+    assert json.loads((tmp_path / "preflight.json").read_bytes())["status"] == "failed"
+    assert not (tmp_path / "package").exists()
+
+
+@pytest.mark.parametrize("invalid", [None, "packageSha256", "observedSdkWireEffort", "nativeSdkInvoked", "legacyBridgeVerified", "mismatchRejectedBeforeProvider"])
+def test_runtime_effort_proof_requires_package_bound_actual_sdk_and_bridge_evidence(tmp_path, monkeypatch, invalid):
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold")
+    config = study.study()
+    proof = {
+        "status": "passed",
+        "packageSha256": config["package"]["sha256"],
+        "packageSourceCommitSha": config["package"]["sourceCommitSha"],
+        "requestedSdkEffort": "none",
+        "observedSdkWireEffort": "none",
+        "nativeSdkInvoked": True,
+        "mismatchRejectedBeforeProvider": True,
+        "legacyBridgeVerified": True,
+    }
+    if invalid is not None:
+        proof[invalid] = False
+    path = tmp_path / "proof.json"
+    study.write_json(path, proof)
+    config["runtimeEffortProof"] = {"file": path.name, "sha256": study.digest(path)}
+    monkeypatch.setattr(study, "ROOT", tmp_path)
+    monkeypatch.setattr(study, "study", lambda: config)
+    if invalid:
+        with pytest.raises(ValueError, match="fidelity"):
+            study.verify_runtime_effort_proof()
+    else:
+        assert study.verify_runtime_effort_proof() == config["runtimeEffortProof"]
+        path.write_text("{}")
+        with pytest.raises(ValueError, match="binding differs"):
+            study.verify_runtime_effort_proof()
 
 
 def test_provider_failure_preserves_safe_status_and_parameter_without_raw_error():
@@ -204,7 +294,18 @@ def test_explicit_none_probes_are_separate_bounded_and_stop_on_first_failure(tmp
         failed = len(requests) == fail_at
         study.write_json(
             current["audit"],
-            {"requests": 1, "http200": int(not failed), "ticketsReturned": int(not failed), "ticketsReplayed": 0, "sessionStable": True, "modelStable": True, "explicitNoneVerifiedRequests": 1},
+            {
+                "requests": 1,
+                "http200": int(not failed),
+                "ticketsReturned": int(not failed),
+                "ticketsReplayed": 0,
+                "sessionStable": True,
+                "modelStable": True,
+                "explicitNoneVerifiedRequests": 1,
+                "reasoningEffort": "none",
+                "effortVerifiedRequests": 1,
+                "effortRejectedRequests": 0,
+            },
         )
         if failed:
             raise urllib.error.HTTPError(request.full_url, 400, "Bad Request", {}, io.BytesIO(b'{"error":{"param":"reasoning_effort"}}'))
@@ -229,7 +330,7 @@ def test_explicit_none_probes_are_separate_bounded_and_stop_on_first_failure(tmp
     assert receipt["goldAdmission"] is receipt["sdkExecution"] is receipt["stickyReplayProven"] is False
     assert receipt["semanticAttempts"] == 0
     assert not (tmp_path / "routing-preflight.json").exists()
-    assert study.study()["inference"]["reasoning"] is None
+    assert study.study()["inference"]["reasoning"] == "none"
 
 
 @pytest.mark.parametrize("verified", [None, 0, True])
@@ -371,7 +472,8 @@ def test_transport_reuses_proxy_without_loading_the_full_bench_environment():
     subprocess.run([sys.executable, "-I", "-S", "-c", code], check=True)
 
 
-def test_governed_transport_resets_missing_response_ticket_without_persisting_it(tmp_path, monkeypatch):
+@pytest.mark.parametrize("required_effort", [None, "none"])
+def test_governed_transport_resets_ticket_and_verifies_configured_effort(tmp_path, monkeypatch, required_effort):
     import sys
     from argparse import Namespace
     from contextlib import nullcontext
@@ -382,7 +484,7 @@ def test_governed_transport_resets_missing_response_ticket_without_persisting_it
     transport_spec = importlib.util.spec_from_file_location("smoke_transport_test", ROOT / "scripts" / "bcal_study_transport.py")
     transport = importlib.util.module_from_spec(transport_spec)
     transport_spec.loader.exec_module(transport)
-    model = "gpt-55-chat"
+    model = "gpt-56-reasoning-sol" if required_effort else "gpt-55-chat"
     observed = []
     sessions = []
 
@@ -425,14 +527,36 @@ def test_governed_transport_resets_missing_response_ticket_without_persisting_it
 
         def serve_forever(self):
             for _ in range(3):
-                with self.forward("/chat/completions", {"model": model}) as response:
+                body = {"model": model}
+                if required_effort:
+                    body["reasoning_effort"] = required_effort
+                with self.forward("/chat/completions", body) as response:
                     response.read()
+            if required_effort:
+                with pytest.raises(RuntimeError, match="reasoning effort mismatch"), self.forward("/chat/completions", {"model": model}):
+                    pytest.fail("Missing effort must not be forwarded.")
 
     monkeypatch.setattr(transport, "ThreadingHTTPServer", Server)
-    transport.serve(Namespace(model=model, step="HostAgent", wire_api="chat-completions", audit=tmp_path / "audit.json", ready=tmp_path / "ready.json", explicit_none_probe=False))
+    transport.serve(
+        Namespace(
+            model=model,
+            step="HostAgent",
+            wire_api="chat-completions",
+            audit=tmp_path / "audit.json",
+            ready=tmp_path / "ready.json",
+            explicit_none_probe=False,
+            required_reasoning_effort=required_effort,
+        )
+    )
     assert observed == ["", "PRIVATE-OPAQUE", ""]
     assert len(set(sessions)) == 1
     assert "PRIVATE-OPAQUE" not in (tmp_path / "audit.json").read_text()
+    if required_effort:
+        audit = json.loads((tmp_path / "audit.json").read_bytes())
+        assert audit["requests"] == audit["effortVerifiedRequests"] == 3
+        assert audit["effortRejectedRequests"] == 1
+        with pytest.raises(ValueError, match="reasoning effort"):
+            study.route_receipt(tmp_path / "audit.json", required_reasoning_effort="none")
 
 
 def test_legacy_model_response_is_not_gated_on_the_native_sdk_counter():

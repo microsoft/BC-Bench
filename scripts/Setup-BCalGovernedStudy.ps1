@@ -15,7 +15,8 @@ foreach ($name in @('inference', 'judge')) {
 
 $env:BCAL_STUDY_INFERENCE_PYTHON = "$work\inference\Scripts\python.exe"
 $env:BCAL_STUDY_JUDGE_PYTHON = "$work\judge\Scripts\python.exe"
-$installedRoot = "$HOME\.dotnet\tools\.store\microsoft.businesscentral.bcal.cli\30.0.46.34884-beta"
+$study = Get-Content "experiments\$env:BCAL_STUDY_PROFILE\study.json" -Raw | ConvertFrom-Json
+$installedRoot = "$HOME\.dotnet\tools\.store\microsoft.businesscentral.bcal.cli\$($study.package.version)"
 $installed = @(Get-ChildItem $installedRoot -Filter bcal.exe -File -Recurse | Where-Object { $_.FullName -match '\\net10\.0\\any\\bcal\.exe$' })
 if ($installed.Count -ne 1) { throw 'Expected exactly one installed net10 BCAL.' }
 $env:BCAL_STUDY_INSTALLED_BINARY = $installed[0].FullName

@@ -821,7 +821,9 @@
   "inference": {
     "provider": "bc-eval-m365-test@0.6.1",
     "model": "gpt-56-reasoning-sol",
-    "reasoning": null,
+    "reasoning": "none",
+    "legacyEffortApplication": "Governed command bridge assigns explicit none to actual CommandAIClient-shaped main/auxiliary Chat requests; outbound guard verifies without changing ordinary/default behavior.",
+    "sdkEffortApplication": "Explicit SDK option plus actual package and Bench outbound Responses effort guards; requested option alone is not effective-effort proof.",
     "sdkMaxModelRequests": 64,
     "sdkTimeoutSeconds": 1200,
     "clientSourceSha256": "f4dfdd0148debfc2de8a3cabfa49b00c9f8b01bfcbfa4a78708c7d0459cfe815"
@@ -838,8 +840,20 @@
     "mainResponsesRequests": 2,
     "judgeChatRequests": 1,
     "semanticCaseAttempts": 0,
-    "purpose": "Bounded exact-model protocol/tool-schema and sticky-route compatibility admission before the220 workload attempts; no reasoning effort set.",
-    "chatEnvelope": "Production legacy keys model/messages/tools/max_completion_tokens, max16384, no tool_choice or reasoning_effort. Synthetic admission prompt/schema, not a semantic task; Responses envelope unchanged."
+    "purpose": "Bounded exact-model protocol/tool-schema and sticky-route compatibility admission before220 workload attempts; explicit none on both main protocols, unchanged Ceres judge.",
+    "chatEnvelope": "Production legacy model/messages/tools/max_completion_tokens16384 plus approved bridge reasoning_effort=none, no tool_choice. Responses direct synthetic input/tools/max1024/reasoning.effort=none/parallel_tool_calls=false; actual SDK effort fidelity separately required."
+  },
+  "runtimeEffortProof": null,
+  "preservedExplicitNoneProbes": {
+    "runId": 43408162530,
+    "sourceSha": "643f6174d66fd66d8e6d12b142ba937c725c0617",
+    "inputsSha256": "c5f1c4dd3338dc2fd6b3dc4a2b1c4237fb5c1fc4e026219110c475d4e9828716",
+    "allJobSeconds": 174,
+    "actualProviderRequests": 2,
+    "successfulProviderResponses": 2,
+    "semanticCaseAttempts": 0,
+    "sealSha256": "e05fe041009bc020a04ad90ed7f049c26f58d1ca2d329796f62d738cbfdeea0e",
+    "scope": "Direct explicit-none compatibility only; no SDK fidelity, sticky replay, gold admission or policy-switch authorization inferred from that earlier probe."
   },
   "preservedFailedAdmissions": [
     {
@@ -861,6 +875,17 @@
       "successfulProviderResponses": 0,
       "semanticCaseAttempts": 0,
       "result": "Package/auth/symbol/selection checks passed; first Sol Chat request HTTP400 parameter reasoning_effort, effort/tools signals. Original admission-only tool_choice=none/max1024 differs from production; one separately authorized corrected-envelope admission follows, not an unchanged retry or forced-none workaround. Prior receipts/reports/seals remain immutable."
+    },
+    {
+      "runId": 43403628307,
+      "sourceSha": "ff82816851e0eb2b01e193c0505710a2ff46f5a1",
+      "inputsSha256": "c5f1c4dd3338dc2fd6b3dc4a2b1c4237fb5c1fc4e026219110c475d4e9828716",
+      "allJobSeconds": 245,
+      "actualProviderRequests": 1,
+      "successfulProviderResponses": 0,
+      "semanticCaseAttempts": 0,
+      "sealSha256": "2618f242b2b481539eb790dd6da815e326268a9eb124395a16fab1779f147d93",
+      "result": "Production-faithful Chat max16384, effort/tool_choice omitted, still first-request HTTP400 with tools/effort signals. No SDK/judge/semantic requests. Sealed evidence and charge preserved; later explicit-none is separately authorized policy, not a successful retry of this omitted-effort contract."
     }
   ],
   "historicalAccounting": {
