@@ -25,7 +25,7 @@
   "commandClientInvoked": true,
   "invocationCollectorInvoked": true,
   "consumerProjectionVerified": true,
-  "consumerSourceSha256": "6155448d68afa3fb01b5447cd7834519580b8829b3cc211fa90a5b7f1fbda0c6",
+  "consumerSourceSha256": "df860ebe2f1ba40989587f7a981930142741e3adc8fe3e8c7502887bc8fa0b7b",
   "observedModelInterruptions": [
     {
       "sequence": 2,

@@ -31,13 +31,22 @@
   },
   "runtimeEffortProof": {
     "file": "experiments\\bcal-full-gold-repeat\\runtime-effort-proof.json",
-    "sha256": "f6de5c0cb307d5f8900e94bc9126c82459d523fe1c38eef6e7ae7e1991be3c9c"
+    "sha256": "19a6ccd50581fced648bdcb6e6577c4e7d93fb9b99a4896544cf58de41da0b13"
   },
   "runtimeDiagnosticsProof": {
     "file": "experiments\\bcal-full-gold-repeat\\runtime-diagnostics-proof.json",
-    "sha256": "fe3918a3cac62b7b3df8e992273add38ce9e70a01c96cfbff5e816cf5a5dbc26"
+    "sha256": "5e0ec7d45fab3dcc767479c8ef5902cd5d93317be933c2d5e336d2560b329f2c"
   },
   "historicalAccounting": {
+    "preservedFailedRepeatAdmission": {
+      "runId": 43492586038,
+      "sourceSha": "70a3de0f75ae89785fe968b992445011b05c0e9d",
+      "allJobSeconds": 29,
+      "providerRequests": 0,
+      "semanticAttempts": 0,
+      "failureStage": "repeat-baseline-identity-before-package-installation",
+      "cause": "Local CRLF hash differed from unchanged historical Git LF bytes. Correct only the repeat pin and canonical checkout handling; preserve the failed run."
+    },
     "preservedOriginalGold": {
       "runId": 43422730966,
       "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f",

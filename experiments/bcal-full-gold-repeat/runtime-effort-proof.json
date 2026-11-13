@@ -28,11 +28,11 @@
   "mismatchRejectedBeforeProvider": true,
   "legacyBridgeVerified": true,
   "legacyBridgeProof": {
-    "benchImplementationCommit": "6343717653f4b4d6247864289d81fec61e59254c",
-    "receiptSha256": "ab538ea640483a96aae8d41a9142ee134fda2ef42a4d44c8268b7de87b950eec",
-    "sealSha256": "4d1d0a7d3d843d0db5808c22bb7d239b2f4810eb05fda2f39a5cbb8d1a981a44",
+    "benchImplementationCommit": "9788c30e5ed971061dc5bce481b1d42fc81eb96d",
+    "receiptSha256": "f7b4eb56475932c4cbe2f00918873b668b9c6112e762800d23efb4ee9753dfd2",
+    "sealSha256": "2c10aa85e8ccce1b9894ce90682be579a4f9027912839572eee26efa5b0d9705",
     "sourceHashes": {
-      "scripts\\bcal_governed_study.py": "6155448d68afa3fb01b5447cd7834519580b8829b3cc211fa90a5b7f1fbda0c6",
+      "scripts\\bcal_governed_study.py": "df860ebe2f1ba40989587f7a981930142741e3adc8fe3e8c7502887bc8fa0b7b",
       "scripts\\bcal_study_transport.py": "db6c9dc10da22a8a0e82f9c882e06313f69117a18fd6da1a2cf7cfc39418dc36",
       "src\\bcbench\\agent\\bcal\\bc_eval_sdk_proxy.py": "e4b5b8c182ed249d94b65b7fb7499973f4db7d8ff47f7462fec8c7628278eace"
     }
