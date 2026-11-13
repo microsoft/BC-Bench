@@ -369,6 +369,20 @@ def route_receipt(path: Path, *, explicit_none_probe: bool = False, required_rea
     return value
 
 
+def route_failure_diagnostics(path: Path) -> dict[str, object]:
+    result: dict[str, object] = {"verified": False, "auditSha256": digest(path)}
+    try:
+        value = json.loads(path.read_bytes())
+    except json.JSONDecodeError:
+        return {**result, "counterEvidenceAvailable": False, "errorClass": "JSONDecodeError"}
+    if not isinstance(value, dict):
+        return {**result, "counterEvidenceAvailable": False, "errorClass": "InvalidCounterObject"}
+    counters = {
+        key: value[key] for key in ("requests", "http200", "ticketsReturned", "ticketsReplayed", "effortVerifiedRequests", "effortRejectedRequests") if type(value.get(key)) is int and value[key] >= 0
+    }
+    return {**result, "counterEvidenceAvailable": {"requests", "http200"} <= counters.keys(), "counters": counters}
+
+
 def provider_failure(error: urllib.error.HTTPError) -> dict:
     raw = error.read(65536)
     text = raw.decode("utf-8", errors="replace").lower()
@@ -519,7 +533,11 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
                     counters = json.loads(audit.read_bytes())
                     if type(counters.get("requests")) is int and counters["requests"] >= 0:
                         route_receipt_row["requests"] = counters["requests"]
-                    route_receipt_row.update(route_receipt(audit, required_reasoning_effort=required_effort, **probe_options))
+                    try:
+                        route_receipt_row.update(route_receipt(audit, required_reasoning_effort=required_effort, **probe_options))
+                    except ValueError:
+                        route_receipt_row["routeFailure"] = route_failure_diagnostics(audit)
+                        raise
                 require(route_receipt_row["requests"] == count and route_receipt_row["http200"] == count, "Routing admission was not exactly the bounded successful calls.")
         receipt["status"] = "passed"
     except Exception as error:
@@ -864,8 +882,15 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
                     attempt[f"{role}Route"] = route_receipt(path, required_reasoning_effort=config["inference"]["reasoning"] if role != "judge" else None)
                 except ValueError as error:
                     attempt["routingFailure"] = type(error).__name__
-        attempt["modelBacked"] = attempt.get("mainRoute", {}).get("http200", 0) > 0
-        attempt["upstreamRequests"] = sum(attempt.get(f"{role}Route", {}).get("requests", 0) for role in (("main", "auxiliary") if runtime == "copilot-sdk" else ("main",)))
+                    attempt[f"{role}RouteFailure"] = route_failure_diagnostics(path)
+                    attempt.update(status="evidence-or-infrastructure-error", quality=None, testPassed=None)
+        main_counters = attempt.get("mainRouteFailure", {}).get("counters", attempt.get("mainRoute", {}))
+        main_responses = main_counters.get("http200")
+        attempt["modelBacked"] = main_responses > 0 if type(main_responses) is int else None
+        request_counts = [
+            attempt.get(f"{role}RouteFailure", {}).get("counters", attempt.get(f"{role}Route", {})).get("requests") for role in (("main", "auxiliary") if runtime == "copilot-sdk" else ("main",))
+        ]
+        attempt["upstreamRequests"] = sum(request_counts) if all(type(count) is int for count in request_counts) else None
         if attempt["seconds"] > 1500:
             attempt.update(status="over-cap-invalid", quality=None, testPassed=None)
         write_json(public, attempt)
@@ -945,6 +970,7 @@ def summary(args: argparse.Namespace) -> None:
                     "captured": sum(row["lane"] == lane and row["runtime"] == runtime for row in records.values()),
                     "judged": sum(row["lane"] == lane and row["runtime"] == runtime and row["status"] == "judged" for row in records.values()),
                     "modelBacked": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("modelBacked") is True for row in records.values()),
+                    "modelBackedUnknown": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("modelBacked") is None for row in records.values()),
                     "agentFailed": sum(row["lane"] == lane and row["runtime"] == runtime and row["status"] == "agent-failed" for row in records.values()),
                     "timeouts": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("timeout") is True for row in records.values()),
                     "domainCompleted": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("execution", {}).get("completed") is True for row in records.values()),

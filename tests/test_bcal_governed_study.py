@@ -242,6 +242,54 @@ def test_runtime_effort_proof_requires_package_bound_actual_sdk_and_bridge_evide
             study.verify_runtime_effort_proof()
 
 
+@pytest.mark.parametrize("runtime", ["legacy", "copilot-sdk"])
+def test_effort_guard_failure_preserves_prior_call_accounting_without_compliance(tmp_path, monkeypatch, runtime):
+    import sys
+    from contextlib import contextmanager
+
+    from bcbench.agent.bcal import agent
+
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold")
+    monkeypatch.setenv("BCAL_STUDY_WORK", str(tmp_path))
+    monkeypatch.setenv("BCAL_STUDY_INFERENCE_PYTHON", sys.executable)
+    monkeypatch.setattr(study, "verify_package", lambda _: tmp_path / "bcal.exe")
+    monkeypatch.setattr(agent, "_run_bcal_process", lambda *_args, **_kwargs: None)
+
+    @contextmanager
+    def fake_proxy(work, env, model, wire, role):
+        assert env["BCAL_STUDY_REASONING_EFFORT"] == "none"
+        path = work / f"{role}-{wire}.audit.json"
+        failing = wire == ("responses" if runtime == "copilot-sdk" else "chat-completions")
+        study.write_json(
+            path,
+            {
+                "requests": 3 if failing else 1,
+                "http200": 2 if failing else 1,
+                "ticketsReturned": 1,
+                "ticketsReplayed": 1 if failing else 0,
+                "sessionStable": True,
+                "modelStable": True,
+                "reasoningEffort": "none",
+                "effortVerifiedRequests": 3 if failing else 1,
+                "effortRejectedRequests": int(failing),
+            },
+        )
+        yield "http://unused.invalid", path
+
+    monkeypatch.setattr(study, "proxy", fake_proxy)
+    public = tmp_path / "attempt.json"
+    with pytest.raises(ValueError, match="reasoning effort"):
+        study.run_attempt(study.pairs()[0], runtime, tmp_path / "work", {}, public)
+    result = json.loads(public.read_bytes())
+    assert result["status"] == "evidence-or-infrastructure-error"
+    assert "mainRoute" not in result
+    assert result["mainRouteFailure"]["verified"] is False
+    assert result["mainRouteFailure"]["counters"]["effortRejectedRequests"] == 1
+    assert result["modelBacked"] is True
+    assert result["upstreamRequests"] == (4 if runtime == "copilot-sdk" else 3)
+    assert result["quality"] is result["testPassed"] is None
+
+
 def test_provider_failure_preserves_safe_status_and_parameter_without_raw_error():
     import io
     import urllib.error
@@ -379,6 +427,12 @@ def test_route_receipt_rejects_missing_stickiness_and_private_fields(tmp_path):
     study.write_json(path, value)
     with pytest.raises(ValueError, match="Unexpected"):
         study.route_receipt(path)
+    diagnostic = study.route_failure_diagnostics(path)
+    assert diagnostic["verified"] is False
+    counters = diagnostic["counters"]
+    assert isinstance(counters, dict)
+    assert counters["requests"] == 2
+    assert value["ticket"] not in json.dumps(diagnostic)
 
 
 def test_package_admission_reuses_exact_installed_action_archive(tmp_path, monkeypatch):
