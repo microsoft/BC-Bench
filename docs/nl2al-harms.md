@@ -21,9 +21,11 @@ Install the workspace with `uv sync --all-packages`; optional Azure telemetry ad
 `.env.sample`, and obtain access to the authorized BCal/BC Python feeds and certificate vault.
 Do not commit credentials or redistribute the internal BCal package.
 
-The published runtime for this evaluation is `Microsoft.BusinessCentral.BCal.CLI`
+The historical preflight used `Microsoft.BusinessCentral.BCal.CLI`
 **30.0.46.28048-beta**, source **7c5514f77dc3346194813ec8d6a475f654d685ab**.
 Its nupkg SHA256 is `5a0d0f255ec8b69f6fae6412f7199fddf0b463437e81308986ad107ed1b2dc4d`.
+This is a reproducible run selection, not a required runtime for future runs.
+For this historical package, set `BCAL_FEED_URL` below to the experimental feed URL.
 Keep the whole tool directory. Use your organization's Azure Artifacts credential provider:
 
 ```powershell
@@ -181,7 +183,14 @@ gh workflow run bcal-evaluation.yml --repo microsoft/BC-Bench --ref <reviewed-br
     -f completion-review-model=none -f test-run=true
 ```
 
-Accuracy remains the workflow default and scheduled path. Harms is opt-in and pins the runtime above,
+Both accuracy and harms honor `bcal-feed` (default `official`) and `bcal-version` (empty means
+latest prerelease). For the runtime used by the historical evidence, add
+`-f bcal-feed=experiment -f bcal-version=30.0.46.28048-beta` to the command above.
+The installed executable is passed directly to capture; `protocol.json` records its actual version
+and file hashes, rather than assuming the requested version was resolved. Feed/install failures
+stop setup; runtime failures and delivery/scoring gaps remain explicit failures.
+
+Accuracy remains the workflow default and scheduled path. Harms is opt-in and pins
 Copilot CLI `1.0.82` and objective judge `gpt-5.3-codex`. It resolves the latest supported sandbox
 without restricting the BC major version, then uses that exact build throughout the job.
 `artifact-resolution.json` preserves the URL, version, resolution time and helper version.

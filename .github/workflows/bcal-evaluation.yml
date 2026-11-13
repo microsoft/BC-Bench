@@ -1,5 +1,5 @@
 name: Evaluation with bcal
-run-name: BCal ${{ inputs.evaluation-kind || 'accuracy' }} ${{ inputs.tier || 'gold' }} ${{ inputs.evaluation-kind == 'harms' && 'experiment@30.0.46.28048-beta' || format('{0}@{1}', inputs.bcal-feed || 'official', inputs.bcal-version || 'latest') }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
+run-name: BCal ${{ inputs.evaluation-kind || 'accuracy' }} ${{ inputs.tier || 'gold' }} ${{ inputs.bcal-feed || 'official' }}@${{ inputs.bcal-version || 'latest' }} (${{ inputs.external-model || 'gpt-55-chat' }}${{ inputs.completion-review-model && inputs.completion-review-model != 'none' && format('/review:{0}', inputs.completion-review-model) || '' }}) - ${{ inputs.test-run && 'test' || 'full' }}
 permissions:
   contents: read
   actions: write
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       evaluation-kind:
-        description: "Accuracy, or NL2AL harms with pinned experimental BCal 30.0.46.28048-beta"
+        description: "Accuracy or NL2AL harms"
         required: false
         default: accuracy
         type: choice
@@ -240,25 +240,21 @@ jobs:
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
 
-      - name: Install pinned BCal
+      - name: Install bcal CLI from internal feed
         uses: ./.github/actions/install-bcal
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           package-id: Microsoft.BusinessCentral.BCal.CLI
-          feed: experiment
+          feed: ${{ inputs.bcal-feed || 'official' }}
           official-feed-url: ${{ secrets.BCAL_FEED_URL }}
           experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
-          version: 30.0.46.28048-beta
+          version: ${{ env.BCAL_REQUESTED_VERSION }}
 
       - name: Setup isolated bridge
         shell: pwsh
         run: |
           .\scripts\Setup-BCalBridge.ps1 -PythonFeedUrl 'https://dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/'
-          $version = bcal --version
-          if ($version -ne '30.0.46.28048+7c5514f77dc3346194813ec8d6a475f654d685ab') {
-            throw "Unexpected runtime: $version"
-          }
 
       - name: Setup Node.js for the objective judge
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6

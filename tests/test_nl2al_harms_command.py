@@ -175,7 +175,8 @@ def test_wrapper_passes_and_hashes_private_suite(tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("synthetic", encoding="utf-8")
     suite = _suite(tmp_path)
-    (root / "runtime" / "bcal.ps1").write_text("'synthetic-runtime'\n", encoding="utf-8")
+    runtime = root / "runtime" / "bcal.ps1"
+    runtime.write_text("'31.1.2+selected-runtime'\n", encoding="utf-8")
     output = root / "capture"
     harness = tmp_path / "harness.ps1"
     harness.write_text(
@@ -218,6 +219,8 @@ function Invoke-TestPython {
     invocation = json.loads((output / "invocation.json").read_text(encoding="utf-8-sig"))
     assert invocation[invocation.index("--suite") + 1] == str(suite)
     protocol = json.loads((output / "protocol.json").read_text(encoding="utf-8-sig"))
+    assert protocol["executable"] == str(runtime)
+    assert protocol["runtime_version"] == "31.1.2+selected-runtime"
     hashed_paths = {Path(item["Path"]) for item in protocol["input_hashes"]}
     assert hashed_paths == {suite, root / "dataset.jsonl"}
     assert suite.read_text(encoding="utf-8") == _SUITE

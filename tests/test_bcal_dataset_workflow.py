@@ -1,6 +1,9 @@
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from bcbench.types import DatasetTier
@@ -69,10 +72,11 @@ def test_bcal_completion_review_model_offers_external_models_or_none():
     assert run["env"]["BCAL_COMPLETION_REVIEW_MODEL"] == "${{ inputs.completion-review-model != 'none' && inputs.completion-review-model || '' }}"
 
 
-def test_bcal_feed_selects_official_or_internal_test_feed():
+@pytest.mark.parametrize("job", ["evaluate-with-bcal", "evaluate-harms"])
+def test_bcal_feed_selects_official_or_internal_test_feed(job):
     workflow = _workflow("bcal-evaluation.yml")
     feed = workflow[True]["workflow_dispatch"]["inputs"]["bcal-feed"]
-    install = _step(workflow, "evaluate-with-bcal", "Install bcal CLI from internal feed")
+    install = _step(workflow, job, "Install bcal CLI from internal feed")
 
     assert feed["default"] == "official"
     assert feed["options"] == ["official", "experiment"]
@@ -81,13 +85,15 @@ def test_bcal_feed_selects_official_or_internal_test_feed():
     assert install["with"]["experiment-feed-url"] == "${{ secrets.BCAL_TEST_FEED_URL }}"
 
 
-def test_bcal_installs_selected_package():
+@pytest.mark.parametrize("job", ["evaluate-with-bcal", "evaluate-harms"])
+def test_bcal_installs_selected_package(job):
     workflow = _workflow_text("bcal-evaluation.yml")
-    install = _step(_workflow("bcal-evaluation.yml"), "evaluate-with-bcal", "Install bcal CLI from internal feed")
+    install = _step(_workflow("bcal-evaluation.yml"), job, "Install bcal CLI from internal feed")
     action = yaml.safe_load((WORKFLOWS.parent / "actions" / "install-bcal" / "action.yml").read_text(encoding="utf-8"))
     action_install = _step_named(action["runs"]["steps"], "Install BCal package")
 
-    assert install["uses"] == "$/.github/actions/install-bcal"
+    assert install["uses"] in {"$/.github/actions/install-bcal", "./.github/actions/install-bcal"}
+    assert _workflow("bcal-evaluation.yml")["env"]["BCAL_REQUESTED_VERSION"] == "${{ inputs.bcal-version }}"
     assert install["with"]["version"] == "${{ env.BCAL_REQUESTED_VERSION }}"
     assert "bcal-version-mode" not in workflow
     assert '@("--version", $env:BCAL_REQUESTED_VERSION)' in action_install["run"]
@@ -96,6 +102,27 @@ def test_bcal_installs_selected_package():
     assert 'throw "No feed URL configured' in action_install["run"]
     assert "--add-source" not in action_install["run"]
     assert "${{ inputs." not in action_install["run"]
+
+
+@pytest.mark.parametrize("setup_succeeds", [True, False])
+def test_harms_bridge_setup_accepts_selected_runtime_and_propagates_failure(tmp_path, setup_succeeds):
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("PowerShell is required")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    setup = scripts / "Setup-BCalBridge.ps1"
+    setup.write_text("param($PythonFeedUrl)\n" + ("'ready'\n" if setup_succeeds else "throw 'Synthetic setup failure'\n"), encoding="utf-8")
+    step = _step(_workflow("bcal-evaluation.yml"), "evaluate-harms", "Setup isolated bridge")
+    harness = tmp_path / "setup.ps1"
+    harness.write_text(
+        "$ErrorActionPreference = 'Stop'\nfunction bcal { '31.1.2+selected-runtime' }\n" + step["run"],
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run([pwsh, "-NoProfile", "-File", str(harness)], cwd=tmp_path, capture_output=True, text=True, check=False)
+
+    assert (completed.returncode == 0) is setup_succeeds, completed.stderr
 
 
 def test_experimental_feed_runs_are_published_as_experiments():
