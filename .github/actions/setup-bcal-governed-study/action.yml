@@ -20,9 +20,9 @@ runs:
     - id: package
       shell: pwsh
       run: |
-        if ($env:BCAL_STUDY_PROFILE -notin @('bcal-sdk-policy', 'bcal-full-gold', 'bcal-full-gold-repeat', 'bcal-full-gold-legacy-utf8')) { throw 'Unknown governed study profile.' }
+        if ($env:BCAL_STUDY_PROFILE -notin @('bcal-sdk-policy', 'bcal-full-gold', 'bcal-full-gold-repeat', 'bcal-full-gold-legacy-utf8', 'bcal-full-gold-judge-diagnostics')) { throw 'Unknown governed study profile.' }
         $study = Get-Content "experiments\$env:BCAL_STUDY_PROFILE\study.json" -Raw | ConvertFrom-Json
-        if ($env:BCAL_STUDY_PROFILE -in @('bcal-full-gold-repeat', 'bcal-full-gold-legacy-utf8')) {
+        if ($env:BCAL_STUDY_PROFILE -in @('bcal-full-gold-repeat', 'bcal-full-gold-legacy-utf8', 'bcal-full-gold-judge-diagnostics')) {
           if (!$study.package.version) { throw 'Repeat diagnostic package is not admitted; never install latest implicitly.' }
           .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py runtime-proofs
           if ($LASTEXITCODE -ne 0) { throw 'Actual repeat runtime proofs have not passed.' }

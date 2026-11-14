@@ -61,15 +61,26 @@ def study_manifest() -> dict:
         require(hashlib.sha256(baseline_lf_bytes).hexdigest() == binding["sha256"], "Original full-gold manifest changed.")
         baseline = json.loads(baseline_lf_bytes)
         legacy_only = value.get("studyId") == "bcal-full-gold-legacy-utf8-validation1"
+        judge_comparison = value.get("studyId") == "bcal-full-gold-judge-diagnostics-comparison1"
         require(
             (
                 (legacy_only and value.get("legacyValidationOf") == {"runId": 43494812835, "sourceSha": "de2014bb322d17c0503de1f3785a1bf1efb62151"})
-                or (not legacy_only and value.get("studyId") == "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1")
+                or (
+                    judge_comparison
+                    and value.get("comparisonOf")
+                    == {
+                        "sdkRunId": 43494812835,
+                        "sdkSourceSha": "de2014bb322d17c0503de1f3785a1bf1efb62151",
+                        "legacyRunId": 43573080067,
+                        "legacySourceSha": "841baf4507d3112af80a0b4599074efeb553debd",
+                    }
+                )
+                or (not legacy_only and not judge_comparison and value.get("studyId") == "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1")
             )
             and value.get("repeatOf") == {"runId": 43422730966, "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"}
             and set(value)
             <= {"schemaVersion", "studyId", "baselineStudy", "repeatOf", "relationship", "package", "runtimeEffortProof", "runtimeDiagnosticsProof", "historicalAccounting", "publication"}
-            | ({"legacyValidationOf"} if legacy_only else set()),
+            | ({"legacyValidationOf"} if legacy_only else {"comparisonOf", "judgeDiagnosticsProof"} if judge_comparison else set()),
             "Only the separately approved diagnostics repeat is admitted; selectors and scoring cannot be overridden.",
         )
         require(
@@ -295,6 +306,9 @@ def verify_runtime_effort_proof() -> dict[str, str] | None:
     path = (ROOT / filename).resolve()
     require(path.is_relative_to(ROOT) and digest(path) == checksum, "Runtime effort proof binding differs.")
     proof = json.loads(path.read_bytes())
+    if config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1":
+        verify_proof_sources(proof)
+        require(proof.get("utf8SubprocessVerified") is True, "Fixed bridge output proof is missing.")
     if config["variants"] == ["legacy"]:
         require(
             proof.get("status") == "passed"
@@ -341,7 +355,7 @@ def verify_runtime_diagnostics_proof() -> dict[str, str] | None:
     path = (ROOT / filename).resolve()
     require(path.is_relative_to(ROOT) and digest(path) == checksum, "Runtime diagnostics proof binding differs.")
     proof = json.loads(path.read_bytes())
-    if config["variants"] == ["legacy"]:
+    if config["variants"] == ["legacy"] or config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1":
         verify_proof_sources(proof)
     require(
         proof.get("status") == "passed"
@@ -375,6 +389,28 @@ def verify_runtime_diagnostics_proof() -> dict[str, str] | None:
     return {"file": filename, "sha256": checksum}
 
 
+def verify_judge_diagnostics_proof() -> dict | None:
+    config = study()
+    if config["studyId"] != "bcal-full-gold-judge-diagnostics-comparison1":
+        return None
+    binding = config.get("judgeDiagnosticsProof")
+    require(isinstance(binding, dict) and set(binding) == {"file", "sha256"}, "Judge diagnostic proof is missing.")
+    path = (ROOT / binding["file"]).resolve()
+    require(path.is_relative_to(ROOT) and digest(path) == binding["sha256"], "Judge diagnostic proof binding differs.")
+    proof = json.loads(path.read_bytes())
+    verify_proof_sources(proof)
+    require(
+        proof.get("status") == "passed"
+        and proof.get("providerRequests") == proof.get("networkRequests") == 0
+        and proof.get("actualPinnedScorerVerified") is True
+        and proof.get("realJudgeSubprocessVerified") is True
+        and proof.get("failureBoundariesVerified") == ["http_status", "transport", "timeout", "json_decode", "response_validation", "checklist_incomplete", "command_exit", "process_timeout"]
+        and proof.get("noContentLeakVerified") is True,
+        "Actual judge failure diagnostics have not been verified.",
+    )
+    return binding
+
+
 def preflight(args: argparse.Namespace) -> None:
     receipt = {
         "schemaVersion": "1",
@@ -390,6 +426,7 @@ def preflight(args: argparse.Namespace) -> None:
     try:
         receipt["runtimeDiagnosticsProof"] = verify_runtime_diagnostics_proof()
         receipt["runtimeEffortProof"] = verify_runtime_effort_proof()
+        receipt["judgeDiagnosticsProof"] = verify_judge_diagnostics_proof()
         receipt["package"] = prepare_package(args.work / "package")
         receipt["symbols"] = verify_symbols()
         receipt["pairCount"] = len(pairs())
@@ -518,7 +555,7 @@ def legacy_diagnostic_receipt(path: Path) -> dict:
     if not isinstance(value, dict) or value.get("schemaVersion") != 1 or not isinstance(value.get("events"), list):
         return result
     allowed = {
-        "phase": {"command", "input", "client", "response", "serialization", "output", "request", "headers", "body", "guard"},
+        "phase": {"command", "input", "client", "response", "serialization", "output", "request", "headers", "body", "guard", "authentication", "setup", "scoring", "validation"},
         "outcome": {"started", "failed", "received", "completed", "emitted", "invalid_json", "invalid_object", "missing_choices", "empty_choices", "missing_message", "message_present"},
         "category": {
             "unknown",
@@ -533,6 +570,9 @@ def legacy_diagnostic_receipt(path: Path) -> dict:
             "effort_mismatch",
             "command_io",
             "client_disconnect",
+            "authentication",
+            "scorer_identity",
+            "checklist_incomplete",
         },
     }
     events = []
@@ -540,10 +580,13 @@ def legacy_diagnostic_receipt(path: Path) -> dict:
         if not isinstance(event, dict) or not {"phase", "outcome"} <= event.keys():
             return result
         safe = {key: event[key] if isinstance(event.get(key), str) and event[key] in choices else None for key, choices in allowed.items() if key in event}
-        for key in ("httpStatus", "requestsObserved"):
+        for key in ("httpStatus", "requestsObserved", "retryAfterSeconds"):
             if key in event:
                 number = event[key]
                 safe[key] = number if type(number) is int and (100 <= number <= 599 if key == "httpStatus" else number >= 0) else None
+        if "requestIdSha256" in event:
+            checksum = event["requestIdSha256"]
+            safe["requestIdSha256"] = checksum if isinstance(checksum, str) and re.fullmatch("[0-9a-f]{64}", checksum) else None
         if "observedAtUtc" in event:
             try:
                 timestamp = datetime.fromisoformat(event["observedAtUtc"])
@@ -607,7 +650,9 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
         require(not explicit_none_probe, "Extra explicit-none probes are not authorized for the diagnostic repeat.")
         verify_runtime_diagnostics_proof()
         verify_runtime_effort_proof()
+        verify_judge_diagnostics_proof()
     legacy_only = study()["variants"] == ["legacy"]
+    diagnostic_comparison = config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1"
     receipt = {
         "studyId": config["studyId"],
         "benchCommit": os.environ.get("GITHUB_SHA"),
@@ -622,7 +667,7 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
         receipt.update(semanticAttempts=0, goldAdmission=False, sdkExecution=False, stickyReplayProven=False)
     started = time.monotonic()
     env = {**os.environ, "BCAL_SDK_PROXY_KEY": secrets.token_urlsafe(32)}
-    if legacy_only:
+    if legacy_only or diagnostic_comparison:
         env["BCAL_AGENT_RUNTIME"] = "legacy"
     try:
         routes = (
@@ -642,6 +687,32 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
             with proxy(args.work, env, model, wire, role, **probe_options) as (url, audit):
                 try:
                     for _ in range(count):
+                        if diagnostic_comparison and role == "Judge":
+                            write_json(args.work / "judge-input.json", {"input": "Return OK.", "output": "OK", "expected": {"assertions": [{"text": "The output is OK.", "level": "expected"}]}})
+                            judge_attempt = {}
+                            try:
+                                scores = run_judge(
+                                    [
+                                        os.environ["BCAL_STUDY_JUDGE_PYTHON"],
+                                        str(ROOT / "scripts" / "bcal_study_transport.py"),
+                                        "judge",
+                                        "--input",
+                                        str(args.work / "judge-input.json"),
+                                        "--output",
+                                        str(args.work / "judge-output.json"),
+                                    ],
+                                    args.work,
+                                    {**env, "BCAL_STUDY_CHAT_URL": url},
+                                    judge_attempt,
+                                )
+                                require(
+                                    scores["quality"] == 1 and scores["testPassed"] is True and scores["assertionPass"] == [True],
+                                    "Actual judge admission did not produce the complete known checklist.",
+                                )
+                                route_receipt_row["responseProtocolValid"] = True
+                            finally:
+                                route_receipt_row["judgeDiagnostics"] = judge_attempt.get("judgeDiagnostics")
+                            continue
                         body = {"model": model}
                         function = {
                             "name": "admission_probe",
@@ -667,7 +738,7 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
                                 "maxCompletionTokens": body.get("max_completion_tokens"),
                                 "maxOutputTokens": body.get("max_output_tokens"),
                             }
-                        if legacy_only and role == "HostAgent":
+                        if (legacy_only or diagnostic_comparison) and role == "HostAgent" and wire == "chat-completions":
                             diagnostics = args.work / "admission-bridge-diagnostics"
                             diagnostics.mkdir(exist_ok=True)
                             command_env = {**env, "BCAL_LLM_MODEL": model, "BCAL_STUDY_CHAT_URL": url, "BCAL_STUDY_REASONING_EFFORT": "none", "BCAL_STUDY_BRIDGE_DIAGNOSTICS": str(diagnostics)}
@@ -734,7 +805,7 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
                         route_receipt_row["routeFailure"] = route_failure_diagnostics(audit)
                         raise
                 require(route_receipt_row["requests"] == count and route_receipt_row["http200"] == count, "Routing admission was not exactly the bounded successful calls.")
-                if legacy_only and role == "HostAgent":
+                if (legacy_only or diagnostic_comparison) and role == "HostAgent" and wire == "chat-completions":
                     projected = [legacy_diagnostic_receipt(path) for path in sorted(diagnostics.glob("bridge-*.json"))]
                     require(
                         len(projected) == 2 and all(item.get("valid") is True and item["events"][-1]["outcome"] == "emitted" for item in projected), "Actual legacy admission bridge evidence missing."
@@ -931,6 +1002,59 @@ def authority_projection(row: dict, pair: dict) -> dict:
     }
 
 
+def run_judge(command: list[str], work: Path, env: dict[str, str], attempt: dict) -> dict:
+    from bcbench.agent.bcal.agent import _run_bcal_process
+
+    process = {"completed": False, "exitCode": None, "failureCategory": None, "phase": "command"}
+    failed = True
+    try:
+        with (work / "judge-console.txt").open("w", encoding="utf-8") as console:
+            try:
+                _run_bcal_process(command, timeout=100, stdout=console, env=env)
+            except subprocess.CalledProcessError as error:
+                process.update(exitCode=error.returncode, failureCategory="command_exit")
+                raise
+            except subprocess.TimeoutExpired:
+                process["failureCategory"] = "timeout"
+                raise
+            except OSError:
+                process["failureCategory"] = "command_io"
+                raise
+        process.update(completed=True, exitCode=0)
+        process["phase"] = "response_json"
+        scores = json.loads((work / "judge-output.json").read_bytes())
+        process["phase"] = "validation"
+        require(
+            isinstance(scores, dict)
+            and set(scores) == {"quality", "testPassed", "assertionPass"}
+            and type(scores.get("quality")) in (int, float)
+            and 0 <= scores["quality"] <= 1
+            and type(scores.get("testPassed")) is bool
+            and isinstance(scores.get("assertionPass"), list)
+            and all(type(value) is bool for value in scores["assertionPass"]),
+            "Invalid judge measurements.",
+        )
+        failed = False
+    except (ValueError, OSError):
+        if process["completed"]:
+            process["failureCategory"] = "response_json" if process["phase"] == "response_json" else "response_validation"
+        raise
+    else:
+        return scores
+    finally:
+        if failed and process["failureCategory"] is None:
+            process["failureCategory"] = "unknown"
+        attempt["judgeDiagnostics"] = {
+            "process": process,
+            "client": legacy_diagnostic_receipt(work / "judge-output.diagnostics.json"),
+            "transport": legacy_diagnostic_receipt(work / "Judge-chat-completions.audit.diagnostics.json"),
+        }
+        if failed:
+            attempt["judgeFailed"] = True
+            safe = attempt["judgeDiagnostics"]
+            sys.stderr.write("Judge failed: " + json.dumps(safe, sort_keys=True) + "\n")
+
+
 def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], public: Path) -> dict:
     from bcbench_core.exceptions import AgentError
 
@@ -1082,19 +1206,16 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
                     "--output",
                     str(work / "judge-output.json"),
                 ]
-                with (work / "judge-console.txt").open("w", encoding="utf-8") as console:
-                    _run_bcal_process(command, timeout=100, stdout=console, env=judge_env)
+                try:
+                    scores = run_judge(command, work, judge_env, attempt)
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, ValueError) as error:
+                    if config["studyId"] != "bcal-full-gold-judge-diagnostics-comparison1" or attempt.get("judgeFailed") is not True:
+                        raise
+                    attempt.update(status="judge-failed", errorClass=type(error).__name__)
+                else:
+                    attempt.update(scores)
+                    attempt["status"] = "judged"
                 attempt["judgeRoute"] = route_receipt(audit)
-                scores = json.loads((work / "judge-output.json").read_bytes())
-                require(
-                    set(scores) == {"quality", "testPassed", "assertionPass"}
-                    and type(scores.get("quality")) in (int, float)
-                    and 0 <= scores["quality"] <= 1
-                    and type(scores.get("testPassed")) is bool,
-                    "Invalid judge measurements.",
-                )
-                attempt.update(scores)
-                attempt["status"] = "judged"
         attempt["cleanupVerified"] = True
     except Exception as error:
         attempt.update(status="evidence-or-infrastructure-error", errorClass=type(error).__name__)
@@ -1102,6 +1223,12 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
     finally:
         attempt.setdefault("seconds", time.monotonic() - started)
         attempt["totalIncludingJudgeSeconds"] = time.monotonic() - started
+        if "judgeDiagnostics" not in attempt and (work / "Judge-chat-completions.audit.diagnostics.json").exists():
+            attempt["judgeDiagnostics"] = {
+                "process": None,
+                "client": legacy_diagnostic_receipt(work / "judge-output.diagnostics.json"),
+                "transport": legacy_diagnostic_receipt(work / "Judge-chat-completions.audit.diagnostics.json"),
+            }
         if runtime == "legacy":
             attempt["legacyDiagnostics"] = {
                 "transport": legacy_diagnostic_receipt(work / "HostAgent-chat-completions.audit.diagnostics.json"),
@@ -1134,6 +1261,7 @@ def run_pair(args: argparse.Namespace) -> None:
     config = study()
     verify_runtime_diagnostics_proof()
     verify_runtime_effort_proof()
+    verify_judge_diagnostics_proof()
     pair = pairs()[args.pair]
     started = float(os.environ.get("BCAL_STUDY_JOB_STARTED_UNIX", time.time()))
     env = {**os.environ, "PYTHONPATH": str(ROOT / "src") + os.pathsep + os.environ.get("PYTHONPATH", ""), "LLM_API_ENVIRONMENT": "TEST"}
@@ -1156,8 +1284,14 @@ def run_pair(args: argparse.Namespace) -> None:
             receipt["admitted"].append(runtime)
             write_json(path, receipt)
             result = run_attempt(pair, runtime, args.work / f"pair-{args.pair}" / runtime, env, args.output / f"attempt-{args.pair}-{runtime}.json")
-            require(result["status"] in ("judged", "agent-failed") and result.get("cleanupVerified") is True, "Stop after an invalid/unverified attempt; no retries.")
+            allowed_statuses = ("judged", "agent-failed", "judge-failed") if config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1" else ("judged", "agent-failed")
+            require(result["status"] in allowed_statuses and result.get("cleanupVerified") is True, "Stop after an invalid/unverified attempt; no retries.")
         receipt["status"] = "finished"
+        if config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1":
+            require(
+                all(json.loads((args.output / f"attempt-{args.pair}-{runtime}.json").read_bytes())["status"] != "judge-failed" for runtime in pair["order"]),
+                "Judge failure retained; both authorized runtime slots attempted, no retries.",
+            )
     except Exception as error:
         receipt.update(status="incomplete", errorClass=type(error).__name__)
         raise
@@ -1177,7 +1311,8 @@ def summary(args: argparse.Namespace) -> None:
         require(row["inputsSha256"] == digest(INPUTS / "study.json") and row["studyId"] == config["studyId"], "Mixed study identity.")
         require(all(row[name] == expected[key][name] for name in ("category", "lane", "tier", "instanceId", "repeat")), "Mixed pair identity.")
         records[key] = row
-    scoreable = [row for row in records.values() if row.get("status") in ("judged", "agent-failed") and row.get("firstModelResponse") is True]
+    scoreable_statuses = ("judged",) if config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1" else ("judged", "agent-failed")
+    scoreable = [row for row in records.values() if row.get("status") in scoreable_statuses and row.get("firstModelResponse") is True]
     missing = [{"pair": key[0], "runtime": key[1]} for key in expected if key not in records]
     lanes = sorted({pair["lane"] for pair in expected.values()})
     expected_count = len(expected)
@@ -1206,6 +1341,7 @@ def summary(args: argparse.Namespace) -> None:
                     "modelBacked": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("modelBacked") is True for row in records.values()),
                     "modelBackedUnknown": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("modelBacked") is None for row in records.values()),
                     "agentFailed": sum(row["lane"] == lane and row["runtime"] == runtime and row["status"] == "agent-failed" for row in records.values()),
+                    "judgeFailed": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("judgeFailed") is True for row in records.values()),
                     "timeouts": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("timeout") is True for row in records.values()),
                     "domainCompleted": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("execution", {}).get("completed") is True for row in records.values()),
                     "exported": sum(row["lane"] == lane and row["runtime"] == runtime and row.get("execution", {}).get("exported") is True for row in records.values()),
@@ -1247,6 +1383,22 @@ def summary(args: argparse.Namespace) -> None:
         lines.append(
             f"| {expected[key]['lane']} | {key[0]} | {key[1]} | {row.get('status', 'not-admitted')} | {quality if quality is not None else 'unavailable'} | {row.get('authority', {}).get('deterministicCompliant', 'N/A')} | {row.get('seconds', 'unavailable')} |"
         )
+    judge_failures = [row for row in records.values() if row.get("judgeFailed") is True]
+    if judge_failures:
+        lines += [
+            "",
+            "## Unscored judge failures",
+            "",
+            "Missing scores are unknown, not zero. No retries or rejudging.",
+            "",
+            "| Pair | Runtime | Boundary | Exit | Client failures (category/status) |",
+            "|---|---|---|---|---|",
+        ]
+        for row in judge_failures:
+            diagnostics = row["judgeDiagnostics"]
+            process = diagnostics["process"]
+            failures = [(event.get("phase"), event.get("category"), event.get("httpStatus")) for event in diagnostics["client"].get("events", []) if event.get("outcome") == "failed"]
+            lines.append(f"| {row['index']} | {row['runtime']} | {process.get('phase')} / {process.get('failureCategory')} | {process.get('exitCode')} | {json.dumps(failures)} |")
     lines += ["", *result["limitations"]]
     write_json(args.output / "comparison.json", result)
     (args.output / "comparison.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1264,7 +1416,12 @@ def main() -> None:
         if args.command == "fixtures":
             fixtures(args)
         elif args.command == "runtime-proofs":
-            sys.stdout.write(json.dumps({"runtimeEffortProof": verify_runtime_effort_proof(), "runtimeDiagnosticsProof": verify_runtime_diagnostics_proof()}) + "\n")
+            sys.stdout.write(
+                json.dumps(
+                    {"runtimeEffortProof": verify_runtime_effort_proof(), "runtimeDiagnosticsProof": verify_runtime_diagnostics_proof(), "judgeDiagnosticsProof": verify_judge_diagnostics_proof()}
+                )
+                + "\n"
+            )
         elif args.command == "matrix":
             sys.stdout.write(json.dumps({"include": [{"pair": row["index"]} for row in pairs()]}) + "\n")
         elif args.command == "preflight":

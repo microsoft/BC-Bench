@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.metadata
 import importlib.util
 import json
 import os
 import sys
 import uuid
+from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -20,6 +22,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import httpx2 as httpx
+    from openai.types.chat import ChatCompletion
 
 
 def load_proxy() -> ModuleType:
@@ -54,6 +57,32 @@ def exception_category(error: Exception) -> str:
     return "unknown"
 
 
+def client_failure(error: Exception) -> dict:
+    from openai import APIConnectionError, APIResponseValidationError, APIStatusError, APITimeoutError
+
+    diagnostic = {"category": exception_category(error)}
+    if isinstance(error, APIStatusError):
+        diagnostic.update(category="http_status", httpStatus=error.status_code)
+    elif isinstance(error, APITimeoutError):
+        diagnostic["category"] = "timeout"
+    elif isinstance(error, APIConnectionError):
+        diagnostic["category"] = "transport"
+    elif isinstance(error, APIResponseValidationError):
+        diagnostic["category"] = "response_validation"
+    return diagnostic
+
+
+def diagnostic_recorder(path: Path | None) -> Callable[[dict], None]:
+    events = []
+
+    def record(event: dict) -> None:
+        if path is not None:
+            events.append({"observedAtUtc": datetime.now(UTC).isoformat(), **event})
+            write_json(path, {"schemaVersion": 1, "events": events})
+
+    return record
+
+
 @contextmanager
 def forward_response(client: httpx.Client, request: httpx.Request, proxy_error: type[Exception], record: Callable[[dict], None]) -> Iterator[httpx.Response]:
     import httpx2 as httpx
@@ -62,7 +91,14 @@ def forward_response(client: httpx.Client, request: httpx.Request, proxy_error: 
     try:
         response = client.send(request, stream=True)
         phase = "body"
-        record({"phase": "headers", "outcome": "received", "httpStatus": response.status_code})
+        headers = {"phase": "headers", "outcome": "received", "httpStatus": response.status_code}
+        for name in ("x-request-id", "request-id"):
+            if value := response.headers.get(name):
+                headers["requestIdSha256"] = hashlib.sha256(value.encode("utf-8")).hexdigest()
+                break
+        if (retry_after := response.headers.get("retry-after", "")).isdigit() and len(retry_after) <= 6:
+            headers["retryAfterSeconds"] = int(retry_after)
+        record(headers)
         try:
             yield response
             record({"phase": "body", "outcome": "completed"})
@@ -98,7 +134,7 @@ def serve(args: argparse.Namespace) -> None:
         counts.update(reasoningEffort=args.required_reasoning_effort, effortVerifiedRequests=0, effortRejectedRequests=0)
     diagnostics = {"schemaVersion": 1, "events": []}
     diagnostic_lock = Lock()
-    retain_diagnostics = args.step == "HostAgent" and args.wire_api == "chat-completions" and os.environ.get("BCAL_AGENT_RUNTIME") == "legacy"
+    retain_diagnostics = args.step == "Judge" or (args.step == "HostAgent" and args.wire_api == "chat-completions" and os.environ.get("BCAL_AGENT_RUNTIME") == "legacy")
 
     def record(event: dict) -> None:
         if retain_diagnostics:
@@ -165,7 +201,12 @@ def serve(args: argparse.Namespace) -> None:
 
         @contextmanager
         def forward(route: str, body: dict[str, object]) -> Iterator:
-            request = client.build_request("POST", ENDPOINTS["TEST"] + route, json=body, headers={"Authorization": "Bearer " + token()})
+            try:
+                bearer = token()
+            except Exception:  # noqa: BLE001 - redact authentication details at the public proxy boundary
+                record({"phase": "authentication", "outcome": "failed", "category": "authentication"})
+                raise ProxyError("Governed authentication failed") from None
+            request = client.build_request("POST", ENDPOINTS["TEST"] + route, json=body, headers={"Authorization": "Bearer " + bearer})
             with forward_response(client, request, ProxyError, record) as response:
                 yield response
 
@@ -197,13 +238,7 @@ def bridge_response_shape(response: str) -> str:
 def bridge() -> None:
     directory = os.environ.get("BCAL_STUDY_BRIDGE_DIAGNOSTICS")
     path = Path(directory) / f"bridge-{uuid.uuid4().hex}.json" if directory else None
-    events = []
-
-    def record(event: dict) -> None:
-        if path is not None:
-            events.append({"observedAtUtc": datetime.now(UTC).isoformat(), **event})
-            write_json(path, {"schemaVersion": 1, "events": events})
-
+    record = diagnostic_recorder(path)
     record({"phase": "command", "outcome": "started"})
     try:
         _bridge(record)
@@ -238,19 +273,7 @@ def _bridge(record: Callable[[dict], None]) -> None:
         try:
             response = client.chat.completions.create(**kwargs)
         except Exception as error:
-            from openai import APIConnectionError, APIResponseValidationError, APIStatusError, APITimeoutError
-
-            category = exception_category(error)
-            diagnostic = {"phase": "client", "outcome": "failed", "category": category}
-            if isinstance(error, APIStatusError):
-                diagnostic.update(category="http_status", httpStatus=error.status_code)
-            elif isinstance(error, APITimeoutError):
-                diagnostic["category"] = "timeout"
-            elif isinstance(error, APIConnectionError):
-                diagnostic["category"] = "transport"
-            elif isinstance(error, APIResponseValidationError):
-                diagnostic["category"] = "response_validation"
-            record(diagnostic)
+            record({"phase": "client", "outcome": "failed", **client_failure(error)})
             raise
         try:
             encoded = response.model_dump_json(exclude_none=True)
@@ -268,14 +291,42 @@ def _bridge(record: Callable[[dict], None]) -> None:
 
 
 def judge(args: argparse.Namespace) -> None:
-    import hashlib
+    record = diagnostic_recorder(args.output.with_suffix(".diagnostics.json"))
+    record({"phase": "command", "outcome": "started"})
+    try:
+        _judge(args, record)
+    except Exception as error:
+        record({"phase": "command", "outcome": "failed", **({"category": "command_io"} if isinstance(error, OSError) else client_failure(error))})
+        raise
 
+
+def validate_judge_response(encoded: str, expected: list[dict], record: Callable[[dict], None]) -> None:
+    try:
+        body = json.loads(encoded)
+        content = body["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+    except (ValueError, TypeError, KeyError, IndexError) as error:
+        record({"phase": "validation", "outcome": "failed", "category": "json_decode" if isinstance(error, json.JSONDecodeError) else "response_validation"})
+        raise ValueError("Judge response is not a valid checklist.") from None
+    assertions = parsed.get("assertions") if isinstance(parsed, dict) else None
+    if (
+        not isinstance(assertions, list)
+        or any(not isinstance(item, dict) or not isinstance(item.get("text"), str) or type(item.get("pass")) is not bool for item in assertions)
+        or Counter(item["text"] for item in assertions) != Counter(item["text"] for item in expected)
+    ):
+        record({"phase": "validation", "outcome": "failed", "category": "checklist_incomplete"})
+        raise ValueError("Judge response does not cover the exact complete checklist.")
+
+
+def _judge(args: argparse.Namespace, record: Callable[[dict], None]) -> None:
     from autoevals.oai import LLMClient
     from openai import OpenAI
 
+    record({"phase": "setup", "outcome": "started"})
     source = Path(importlib.metadata.distribution("bc-eval").locate_file("bc_eval/scorers/autoeval/lmchecklist.py"))
     expected_hash = "c563e569520b202e725d46ac58497868fefd8d48662fb8a305c9a397e14c398d"
     if hashlib.sha256(source.read_bytes()).hexdigest() != expected_hash:
+        record({"phase": "setup", "outcome": "failed", "category": "scorer_identity"})
         raise ValueError("Unchanged checklist scorer hash mismatch.")
     os.environ["JUDGE_MODEL"] = "gpt-56-ceres"
     spec = importlib.util.spec_from_file_location("governed_unchanged_checklist", source)
@@ -283,17 +334,39 @@ def judge(args: argparse.Namespace) -> None:
         raise ValueError("Checklist module unavailable.")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    record({"phase": "input", "outcome": "started"})
     job = json.loads(args.input.read_bytes())
     with OpenAI(base_url=os.environ["BCAL_STUDY_CHAT_URL"] + "/v1", api_key=os.environ["BCAL_SDK_PROXY_KEY"], max_retries=0, timeout=90) as client:
-        scorer = module.LmChecklist(client=LLMClient(openai=client, complete=client.chat.completions.create))
+
+        def complete(*args: object, **kwargs: object) -> ChatCompletion:
+            record({"phase": "client", "outcome": "started"})
+            try:
+                response = client.chat.completions.create(*args, **kwargs)
+            except Exception as error:
+                record({"phase": "client", "outcome": "failed", **client_failure(error)})
+                raise
+            encoded = response.model_dump_json(exclude_none=True)
+            record({"phase": "response", "outcome": bridge_response_shape(encoded)})
+            validate_judge_response(encoded, job["expected"]["assertions"], record)
+            return response
+
+        judge_client = LLMClient(openai=client, complete=complete)
+        judge_client.complete = complete
+        scorer = module.LmChecklist(client=judge_client)
+        record({"phase": "scoring", "outcome": "started"})
         scores = scorer.eval(input=job["input"], output=job["output"], expected=job["expected"], metadata={})
+    record({"phase": "validation", "outcome": "started"})
+    if any(score.metadata.get("error") for score in scores):
+        record({"phase": "validation", "outcome": "failed", "category": "response_validation"})
+        raise ValueError("Malformed judge response is not a quality failure.")
     values = {score.name: score.score for score in scores}
     assertions = next(score.metadata["assertions"] for score in scores if score.name == "pass_rate")
     if any(type(assertion.get("pass")) is not bool for assertion in assertions) or len(assertions) != len(job["expected"]["assertions"]):
+        record({"phase": "validation", "outcome": "failed", "category": "checklist_incomplete"})
         raise ValueError("Incomplete checklist results.")
-    if any(score.metadata.get("error") for score in scores):
-        raise ValueError("Malformed judge response is not a quality failure.")
+    record({"phase": "output", "outcome": "started"})
     write_json(args.output, {"quality": values["pass_rate"], "testPassed": values["test_passed"] == 1, "assertionPass": [item["pass"] for item in assertions]})
+    record({"phase": "command", "outcome": "emitted"})
 
 
 def main() -> None:

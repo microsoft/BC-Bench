@@ -199,6 +199,24 @@ once-only dispatch guard and measured accounting are independent of both
 completed paired runs. Existing `sdk-policy-*` artifact names are retained
 for the shared evidence collector; each case receipt admits only legacy.
 
+The separately approved `full-gold-judge-preflight` / `full-gold-judge` phases use
+`bcal-full-gold-judge-diagnostics`: the same frozen 110 gold cases once per
+legacy/SDK runtime, Sol explicit `none`, unchanged Ceres checklist scorer,
+diagnostic package42492 and at most32workers. Same-source admission requires
+two actual legacy bridge calls, two Responses routing calls and one actual
+pinned checklist judge call. No cell retries, replacements or rejudging.
+
+Judge command exit/timeout, client HTTP/transport/timeout and response/checklist
+failures retain allowlisted `judgeDiagnostics` on each attempt and in the
+terminal report. Numeric HTTPstatus, exitcode, bounded numeric Retry-After and
+request-ID SHA256 are retained when available; raw requestIDs, error messages,
+bodies, prompts, source and credentials are excluded. Missing diagnostic evidence
+is explicitly unavailable. Malformed, missing or duplicate checklist answers are
+unscored judge failures, not zero quality. Valid boolean negative answers still
+use the unchanged scorer. Failed judging surfaces as job/report failure after
+both already-authorized runtime slots when cleanup is verified, without retries;
+unsafe cleanup or other invalid evidence still stops the pair.
+
 The separately authorized `full-gold-none-probe` phase only checks explicit
 `none` compatibility: one tool-bearing Sol Chat request, then one direct
 Responses request, stopping on the first failure without retries or a judge.

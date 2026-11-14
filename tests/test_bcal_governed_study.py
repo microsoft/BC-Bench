@@ -1247,9 +1247,18 @@ def test_existing_workflow_is_the_only_dispatch_and_reuses_actions():
     action = yaml.safe_load((ROOT / ".github" / "actions" / "setup-bcal-governed-study" / "action.yml").read_text())
     assert caller["jobs"]["get-entries"]["if"] == "(inputs.validation-phase == '' || inputs.validation-phase == 'ordinary') && !(inputs.llm-preflight-only || false)"
     assert workflow["jobs"]["pairs"]["strategy"]["max-parallel"] == "${{ startsWith(inputs.phase, 'full-gold') && 32 || 4 }}"
-    assert workflow["jobs"]["admit"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy'"
-    assert workflow["jobs"]["pairs"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy'"
-    assert workflow["jobs"]["summarize"]["if"] == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy')"
+    assert (
+        workflow["jobs"]["admit"]["if"]
+        == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge'"
+    )
+    assert (
+        workflow["jobs"]["pairs"]["if"]
+        == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge'"
+    )
+    assert (
+        workflow["jobs"]["summarize"]["if"]
+        == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge')"
+    )
     repeat_admission = next(step for step in workflow["jobs"]["admit"]["steps"] if step.get("id") == "gold")
     assert repeat_admission["env"]["STUDY_PHASE"] == "${{ inputs.phase }}"
     assert '"*$label $($env:STUDY_PHASE)"' in repeat_admission["run"]

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "1",
+  "studyId": "bcal-full-gold-judge-diagnostics-comparison1",
+  "baselineStudy": {
+    "file": "experiments\\bcal-full-gold\\study.json",
+    "sha256": "1e9c638a70aa8a5e45deb3716dae5a48705910ade71f1dca3f6f24c221776f86"
+  },
+  "repeatOf": {
+    "runId": 43422730966,
+    "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"
+  },
+  "comparisonOf": {
+    "sdkRunId": 43494812835,
+    "sdkSourceSha": "de2014bb322d17c0503de1f3785a1bf1efb62151",
+    "legacyRunId": 43573080067,
+    "legacySourceSha": "841baf4507d3112af80a0b4599074efeb553debd"
+  },
+  "relationship": "One newly authorized fresh paired110legacy+110SDK comparison after judge diagnostics. Same frozen selection, Solnone/Ceres/max32 and package42492. No cell retries, replacements or rejudging.",
+  "package": {
+    "id": "Microsoft.BusinessCentral.BCal.CLI",
+    "version": "30.0.46.42492-beta",
+    "productVersion": "30.0.46.42492+8178001108d3147df9e4b367f87536d6f3665479",
+    "sourceCommitSha": "8178001108d3147df9e4b367f87536d6f3665479",
+    "commonBaseSha": "7fafd2d6afdabaf4c8b06a5d8b8712a6c27ee37d",
+    "diagnosticPatchBaseSha": "5f6e2ffbdb2ea8360e9f0f52074413114d7c885a",
+    "diagnosticPatchId": "2c63f10bb934514a073f9d4d046a3ed2c80b8464",
+    "buildId": 3057056,
+    "sha256": "17683f88c9ebed8dbe9570479fa8870a2ce41c5396c50521a107a5716b784bef",
+    "bytes": 306393510,
+    "framework": "net10.0",
+    "files": 460,
+    "sdkPackageVersion": "1.0.29",
+    "sdkRuntimeVersion": "1.0.107",
+    "nativeCatalogSha256": "53cbf24393521600b170c5840c5721292be4953c5b1e194e137489ba5e7ba81b",
+    "indexSha256": "195d0432bc37c235590604273004579eff24b0e076377b1580c4358d0a377efc",
+    "independentSealSha256": "68af169c0d5b8449ce7445d58b8bc19a57ff55288d8aeb183e1bd12a7674cdab"
+  },
+  "runtimeEffortProof": {
+    "file": "experiments\\bcal-full-gold-judge-diagnostics\\runtime-effort-proof.json",
+    "sha256": null
+  },
+  "runtimeDiagnosticsProof": {
+    "file": "experiments\\bcal-full-gold-judge-diagnostics\\runtime-diagnostics-proof.json",
+    "sha256": null
+  },
+  "judgeDiagnosticsProof": {
+    "file": "experiments\\bcal-full-gold-judge-diagnostics\\judge-diagnostics-proof.json",
+    "sha256": null
+  },
+  "historicalAccounting": {
+    "preservedPairedRun": {
+      "runId": 43494812835,
+      "allJobSeconds": 165115,
+      "providerRequests": 2781,
+      "sealSha256": "79256f134568828c0928b2563c461998f07ddeb9093f56fdaffb0cab0f3fd876"
+    },
+    "preservedLegacyRun": {
+      "runId": 43573080067,
+      "allJobSeconds": 92634,
+      "providerRequests": 1179,
+      "sealSha256": "62cea15a561ebd69ea7df176f2f28ae3bedc65984baeeddb8f6be66a4e59d440"
+    },
+    "authorization": "User requests judge failures to bubble up with troubleshooting information and another run for solid comparisons. One fresh110x2paired hosted comparison after offline and same-SHA admission; no numerical aggregate ceiling specified. All new setup/admission/jobs/judges/failures counted separately.",
+    "runtimeBuildAccountingOwner": "40ee7234-ef48-4bf9-9856-012a6fc402cb",
+    "benchRunAccountingOwner": "6cf1943d-bd63-4dd7-9061-58bf218603eb"
+  },
+  "publication": "Safe allowlisted stages/categories/status/counts/times/request-ID hashes only; no raw prompts/AL/responses/messages/exceptions/stacks/secrets/private logs/package or new private sink."
+}
