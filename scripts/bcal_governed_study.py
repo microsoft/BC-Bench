@@ -486,7 +486,20 @@ def legacy_diagnostic_receipt(path: Path) -> dict:
     allowed = {
         "phase": {"command", "input", "client", "response", "serialization", "output", "request", "headers", "body", "guard"},
         "outcome": {"started", "failed", "received", "completed", "emitted", "invalid_json", "invalid_object", "missing_choices", "empty_choices", "missing_message", "message_present"},
-        "category": {"unknown", "timeout", "transport", "json_decode", "body_decode", "http_status", "response_validation", "model_mismatch", "effort_mismatch", "command_io", "client_disconnect"},
+        "category": {
+            "unknown",
+            "timeout",
+            "transport",
+            "json_decode",
+            "body_decode",
+            "unicode_encode",
+            "http_status",
+            "response_validation",
+            "model_mismatch",
+            "effort_mismatch",
+            "command_io",
+            "client_disconnect",
+        },
     }
     events = []
     for event in value["events"]:

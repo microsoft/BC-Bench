@@ -47,6 +47,8 @@ def exception_category(error: Exception) -> str:
         return "transport"
     if isinstance(error, json.JSONDecodeError):
         return "json_decode"
+    if isinstance(error, UnicodeEncodeError):
+        return "unicode_encode"
     if isinstance(error, UnicodeError):
         return "body_decode"
     return "unknown"
@@ -257,9 +259,10 @@ def _bridge(record: Callable[[dict], None]) -> None:
             raise
         record({"phase": "response", "outcome": bridge_response_shape(encoded)})
         try:
-            sys.stdout.write(encoded)
-        except OSError:
-            record({"phase": "output", "outcome": "failed", "category": "command_io"})
+            sys.stdout.buffer.write(encoded.encode("utf-8"))
+            sys.stdout.buffer.flush()
+        except (OSError, UnicodeEncodeError) as error:
+            record({"phase": "output", "outcome": "failed", "category": "command_io" if isinstance(error, OSError) else exception_category(error)})
             raise
         record({"phase": "command", "outcome": "emitted"})
 

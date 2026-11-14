@@ -161,6 +161,15 @@ prompt-use sequence. It does not coerce guessed enum casing or copy the exceptio
 into a duplicate top-level schema. An observed `unknown` enum is distinct from
 missing or unrecognized fields.
 
+The governed command bridge emits and flushes explicit UTF-8 response bytes,
+independent of Python's child stdout encoding, for both delivery and
+completion-assessment requests. Response content and reasoning policy are
+unchanged. Output encoding failures retain the allowlisted `unicode_encode`
+category at the output stage, rather than being mislabeled `body_decode`;
+write/flush failures retain `command_io`. An `emitted` receipt follows a
+successful flush, not merely a buffered write. This fix does not recover
+historical exceptions or authorize another admission or model-backed run.
+
 The user-authorized diagnostics repeat has separate
 `full-gold-repeat-preflight` and `full-gold-repeat` phases. Its
 `bcal-full-gold-repeat` profile inherits the hash-bound original manifest without

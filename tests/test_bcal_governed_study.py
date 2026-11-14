@@ -99,12 +99,12 @@ def test_legacy_bridge_retains_failure_boundary_without_content_or_retries(tmp_p
     monkeypatch.setenv("BCAL_STUDY_CHAT_URL", "https://offline.invalid")
     monkeypatch.setenv("BCAL_SDK_PROXY_KEY", private)
     monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps({"model": "gpt-56-reasoning-sol", "messages": [{"role": "user", "content": private}]}).encode())))
-    stdout = io.StringIO()
-    monkeypatch.setattr(sys, "stdout", stdout)
+    stdout = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=stdout))
     if failure in {"non200", "transport", "json", "validation"}:
         with pytest.raises((openai.OpenAIError, json.JSONDecodeError)):
             transport.bridge()
-        assert stdout.getvalue() == ""
+        assert stdout.getvalue() == b""
     else:
         transport.bridge()
         assert isinstance(json.loads(stdout.getvalue()), dict)
@@ -127,6 +127,154 @@ def test_legacy_bridge_retains_failure_boundary_without_content_or_retries(tmp_p
             == {"empty_choices": "empty_choices", "missing_message": "missing_message", "success": "message_present"}[failure]
         )
         assert events[-1]["outcome"] == "emitted"
+
+
+@pytest.mark.parametrize("encoding", ["ascii", "cp1252"])
+@pytest.mark.parametrize("call_site", ["delivery", "completion_assessment"])
+def test_legacy_bridge_subprocess_emits_exact_utf8_independent_of_child_encoding(tmp_path, encoding, call_site):
+    import os
+    import subprocess
+    import sys
+
+    pytest.importorskip("httpx2")
+    pytest.importorskip("openai")
+    from openai.types.chat import ChatCompletion
+
+    private = "PRIVATE \u6f22\u5b57 \U0001f600"
+    message = {"role": "assistant", "content": private}
+    request = {"model": "gpt-56-reasoning-sol", "messages": [{"role": "user", "content": private}]}
+    if call_site == "delivery":
+        request["tools"] = [{"type": "function", "function": {"name": "offline", "parameters": {"type": "object"}}}]
+        message["tool_calls"] = [{"id": "offline", "type": "function", "function": {"name": "offline", "arguments": json.dumps({"text": private}, ensure_ascii=False)}}]
+    response = {"id": "offline", "object": "chat.completion", "created": 0, "model": request["model"], "choices": [{"index": 0, "finish_reason": "stop", "message": message}]}
+    launcher = """
+import json, os, runpy, socket, sys
+import httpx2 as httpx
+import openai
+assert sys.stdout.encoding == os.environ["TEST_STDOUT_ENCODING"]
+def forbidden(*args, **kwargs):
+    raise AssertionError("Network forbidden")
+socket.socket.connect = socket.socket.connect_ex = socket.getaddrinfo = forbidden
+calls = []
+def respond(request):
+    calls.append(request)
+    assert len(calls) == 1
+    body = json.loads(request.content)
+    assert body["reasoning_effort"] == "none"
+    assert body["max_completion_tokens"] == 16384
+    assert body["messages"][0]["content"] == "PRIVATE \\u6f22\\u5b57 \\U0001f600"
+    assert ("tools" in body) == (os.environ["TEST_CALL_SITE"] == "delivery")
+    return httpx.Response(200, json=json.loads(os.environ["TEST_RESPONSE"]))
+real_client = openai.OpenAI
+openai.OpenAI = lambda **kwargs: real_client(**kwargs, http_client=httpx.Client(transport=httpx.MockTransport(respond)))
+sys.argv = [sys.argv[1], "bridge"]
+runpy.run_path(sys.argv[0], run_name="__main__")
+assert len(calls) == 1
+"""
+    env = {
+        **os.environ,
+        "PYTHONUTF8": "0",
+        "PYTHONIOENCODING": encoding,
+        "TEST_STDOUT_ENCODING": encoding,
+        "TEST_CALL_SITE": call_site,
+        "TEST_RESPONSE": json.dumps(response),
+        "BCAL_LLM_MODEL": request["model"],
+        "BCAL_STUDY_REASONING_EFFORT": "none",
+        "BCAL_STUDY_CHAT_URL": "https://offline.invalid",
+        "BCAL_SDK_PROXY_KEY": "PRIVATE TEST KEY",
+        "BCAL_STUDY_BRIDGE_DIAGNOSTICS": str(tmp_path),
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", launcher, str(ROOT / "scripts" / "bcal_study_transport.py")],
+        input=json.dumps(request, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="strict",
+        env=env,
+        timeout=30,
+        check=True,
+    )
+    assert result.stderr == ""
+    assert result.stdout == ChatCompletion.model_validate(response).model_dump_json(exclude_none=True)
+    assert json.loads(result.stdout)["choices"][0]["message"] == message
+    receipts = list(tmp_path.glob("bridge-*.json"))
+    assert len(receipts) == 1
+    safe = study.legacy_diagnostic_receipt(receipts[0])
+    assert safe["valid"] is True
+    assert [(event["phase"], event["outcome"]) for event in safe["events"]] == [
+        ("command", "started"),
+        ("client", "started"),
+        ("response", "message_present"),
+        ("command", "emitted"),
+    ]
+    assert "PRIVATE" not in json.dumps(safe)
+
+
+@pytest.mark.parametrize("failure", ["encoding", "write", "flush"])
+def test_legacy_bridge_output_failures_preserve_stage_original_error_and_no_content(tmp_path, monkeypatch, failure):
+    import io
+    import sys
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    openai = pytest.importorskip("openai")
+    private = "PRIVATE PROMPT RESPONSE SECRET"
+    content = private + ("\ud800" if failure == "encoding" else "")
+    response = json.dumps({"choices": [{"message": {"role": "assistant", "content": content}}]}, ensure_ascii=False)
+    error = OSError(private)
+
+    class Output(io.BytesIO):
+        def write(self, data):
+            if failure == "write":
+                raise error
+            return super().write(data)
+
+        def flush(self):
+            if failure == "flush":
+                raise error
+            super().flush()
+
+    monkeypatch.setattr(
+        openai, "OpenAI", lambda **_: nullcontext(SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **_: SimpleNamespace(model_dump_json=lambda **_: response)))))
+    )
+    monkeypatch.setenv("BCAL_STUDY_BRIDGE_DIAGNOSTICS", str(tmp_path))
+    monkeypatch.setenv("BCAL_LLM_MODEL", "gpt-56-reasoning-sol")
+    monkeypatch.setenv("BCAL_STUDY_REASONING_EFFORT", "none")
+    monkeypatch.setenv("BCAL_STUDY_CHAT_URL", "https://offline.invalid")
+    monkeypatch.setenv("BCAL_SDK_PROXY_KEY", private)
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps({"model": "gpt-56-reasoning-sol", "messages": []}).encode())))
+    monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=Output()))
+    with pytest.raises(UnicodeEncodeError if failure == "encoding" else OSError) as caught:
+        transport.bridge()
+    if failure != "encoding":
+        assert caught.value is error
+    safe = study.legacy_diagnostic_receipt(next(tmp_path.glob("bridge-*.json")))
+    assert safe["valid"] is True
+    assert {key: safe["events"][-2][key] for key in ("phase", "outcome", "category")} == {
+        "phase": "output",
+        "outcome": "failed",
+        "category": "unicode_encode" if failure == "encoding" else "command_io",
+    }
+    assert safe["events"][-1]["outcome"] == "failed"
+    assert safe["events"][-1]["category"] == ("unicode_encode" if failure == "encoding" else "unknown")
+    assert not any(event["outcome"] == "emitted" for event in safe["events"])
+    assert private not in json.dumps(safe)
+
+
+def test_legacy_bridge_input_decoding_is_not_reclassified_as_output_encoding(tmp_path, monkeypatch):
+    import io
+    import sys
+    from types import SimpleNamespace
+
+    pytest.importorskip("openai")
+    monkeypatch.setenv("BCAL_STUDY_BRIDGE_DIAGNOSTICS", str(tmp_path))
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(b"PRIVATE\xff")))
+    with pytest.raises(UnicodeDecodeError):
+        transport.bridge()
+    safe = study.legacy_diagnostic_receipt(next(tmp_path.glob("bridge-*.json")))
+    assert [(event["phase"], event.get("category")) for event in safe["events"]] == [("command", None), ("input", "body_decode"), ("command", "body_decode")]
+    assert "PRIVATE" not in json.dumps(safe)
 
 
 def test_legacy_diagnostic_receipt_redacts_unknowns_and_does_not_fabricate_missing_evidence(tmp_path):
@@ -489,7 +637,7 @@ def test_sol_bridge_omits_default_effort_and_rejects_unspecified_effort_override
         "tools": [{"type": "function", "function": {"name": "admission_probe", "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}}}],
     }
     monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps(body).encode())))
-    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=io.BytesIO()))
     if effort:
         with pytest.raises(ValueError, match="governed policy"):
             transport.bridge()
@@ -526,7 +674,7 @@ def test_approved_bridge_applies_none_to_command_client_shape_and_rejects_confli
     if incoming is not None:
         body["reasoning_effort"] = incoming
     monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(json.dumps(body).encode())))
-    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=io.BytesIO()))
     if incoming == "high":
         with pytest.raises(ValueError, match="governed policy"):
             transport.bridge()
