@@ -189,6 +189,16 @@ and any of the same 110-by-2 attempts; they do not prove provider/domain success
 The repeat preserves explicit none, Ceres, scoring, sequential pair order and
 maximum 32 pair workers; its measurements are disjoint from the original run.
 
+The separately authorized `full-gold-legacy-preflight` / `full-gold-legacy`
+phases use `bcal-full-gold-legacy-utf8`: the same 110 gold entries, legacy once
+per entry, Sol `none`, Ceres and up to 32 workers. No SDK runtime slot or
+Responses probe is selected. Admission performs two real command-bridge Chat
+requests with sticky replay and one judge request, after exact package/symbol,
+fixed-source UTF-8 and safe diagnostic-producer/consumer proofs pass. Its
+once-only dispatch guard and measured accounting are independent of both
+completed paired runs. Existing `sdk-policy-*` artifact names are retained
+for the shared evidence collector; each case receipt admits only legacy.
+
 The separately authorized `full-gold-none-probe` phase only checks explicit
 `none` compatibility: one tool-bearing Sol Chat request, then one direct
 Responses request, stopping on the first failure without retries or a judge.

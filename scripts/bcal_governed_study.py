@@ -60,11 +60,16 @@ def study_manifest() -> dict:
         baseline_lf_bytes = baseline_path.read_bytes().replace(b"\r\n", b"\n")
         require(hashlib.sha256(baseline_lf_bytes).hexdigest() == binding["sha256"], "Original full-gold manifest changed.")
         baseline = json.loads(baseline_lf_bytes)
+        legacy_only = value.get("studyId") == "bcal-full-gold-legacy-utf8-validation1"
         require(
-            value.get("studyId") == "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1"
+            (
+                (legacy_only and value.get("legacyValidationOf") == {"runId": 43494812835, "sourceSha": "de2014bb322d17c0503de1f3785a1bf1efb62151"})
+                or (not legacy_only and value.get("studyId") == "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1")
+            )
             and value.get("repeatOf") == {"runId": 43422730966, "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"}
             and set(value)
-            <= {"schemaVersion", "studyId", "baselineStudy", "repeatOf", "relationship", "package", "runtimeEffortProof", "runtimeDiagnosticsProof", "historicalAccounting", "publication"},
+            <= {"schemaVersion", "studyId", "baselineStudy", "repeatOf", "relationship", "package", "runtimeEffortProof", "runtimeDiagnosticsProof", "historicalAccounting", "publication"}
+            | ({"legacyValidationOf"} if legacy_only else set()),
             "Only the separately approved diagnostics repeat is admitted; selectors and scoring cannot be overridden.",
         )
         require(
@@ -83,15 +88,17 @@ def study_manifest() -> dict:
         )
         require(isinstance(value.get("runtimeDiagnosticsProof"), dict), "Actual packaged diagnostic producer proof has not been admitted.")
         value = {**baseline, **value}
+        if legacy_only:
+            value.update(cohort="full-gold-legacy-v1", variants=["legacy"])
     return value
 
 
 def study() -> dict:
     value = study_manifest()
-    if value.get("cohort") == "full-gold-paired-v1":
+    if value.get("cohort") in ("full-gold-paired-v1", "full-gold-legacy-v1"):
         require(
             value["repeatCount"] == 1
-            and value["variants"] == ["legacy", "copilot-sdk"]
+            and value["variants"] == (["legacy"] if value["cohort"] == "full-gold-legacy-v1" else ["legacy", "copilot-sdk"])
             and value["caseCount"] == 110
             and value["maxWorkers"] == 32
             and value["inference"]["model"] == "gpt-56-reasoning-sol"
@@ -130,7 +137,7 @@ def study() -> dict:
 def pairs() -> list[dict]:
     result = []
     config = study()
-    full_gold = config.get("cohort") == "full-gold-paired-v1"
+    full_gold = config.get("cohort") in ("full-gold-paired-v1", "full-gold-legacy-v1")
     for dataset in config["datasets"]:
         path = ROOT / dataset["file"]
         if digest(path) != dataset["datasetSha256"]:
@@ -161,6 +168,8 @@ def pairs() -> list[dict]:
                 require(hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest() == selected["entrySha256"], "Authority fixture, seed, steps or assertions changed.")
                 require(all(step["type"] == "user" for step in row["steps"]), "Native planning cannot reinterpret BCAL plan_action continuations.")
             order = ["legacy", "copilot-sdk"] if len(result) % 2 == 0 else ["copilot-sdk", "legacy"]
+            if config["variants"] == ["legacy"]:
+                order = ["legacy"]
             result.append(
                 {
                     "index": len(result),
@@ -273,7 +282,7 @@ def prepare_package(folder: Path) -> dict:
 
 def verify_runtime_effort_proof() -> dict[str, str] | None:
     config = study()
-    if config.get("cohort") != "full-gold-paired-v1":
+    if config.get("cohort") not in ("full-gold-paired-v1", "full-gold-legacy-v1"):
         return None
     binding = config.get("runtimeEffortProof")
     if binding is None:
@@ -286,6 +295,19 @@ def verify_runtime_effort_proof() -> dict[str, str] | None:
     path = (ROOT / filename).resolve()
     require(path.is_relative_to(ROOT) and digest(path) == checksum, "Runtime effort proof binding differs.")
     proof = json.loads(path.read_bytes())
+    if config["variants"] == ["legacy"]:
+        require(
+            proof.get("status") == "passed"
+            and proof.get("packageSha256") == config["package"]["sha256"]
+            and proof.get("packageSourceCommitSha") == config["package"]["sourceCommitSha"]
+            and proof.get("legacyBridgeVerified") is True
+            and proof.get("observedLegacyWireEffort") == config["inference"]["reasoning"]
+            and proof.get("utf8SubprocessVerified") is True
+            and proof.get("providerRequests") == proof.get("networkRequests") == 0,
+            "Actual fixed legacy bridge effort/output proof has not passed.",
+        )
+        verify_proof_sources(proof)
+        return {"file": filename, "sha256": checksum}
     require(
         proof.get("status") == "passed"
         and proof.get("packageSha256") == config["package"]["sha256"]
@@ -299,6 +321,16 @@ def verify_runtime_effort_proof() -> dict[str, str] | None:
     return {"file": filename, "sha256": checksum}
 
 
+def verify_proof_sources(proof: dict) -> None:
+    expected = {"scripts\\bcal_governed_study.py", "scripts\\bcal_study_transport.py", "src\\bcbench\\agent\\bcal\\bc_eval_sdk_proxy.py"}
+    sources = proof.get("sourceHashes")
+    require(isinstance(sources, dict) and set(sources) == expected, "Exact legacy proof source inventory is missing.")
+    for filename, checksum in sources.items():
+        canonical = subprocess.check_output(["git", "show", f"HEAD:{filename.replace(chr(92), '/')}"], cwd=ROOT)
+        require(hashlib.sha256(canonical).hexdigest() == checksum, "Fixed legacy proof source changed.")
+        require((ROOT / filename).read_bytes().replace(b"\r\n", b"\n") == canonical, "Fixed legacy checkout content changed.")
+
+
 def verify_runtime_diagnostics_proof() -> dict[str, str] | None:
     config = study()
     if "repeatOf" not in config:
@@ -309,6 +341,8 @@ def verify_runtime_diagnostics_proof() -> dict[str, str] | None:
     path = (ROOT / filename).resolve()
     require(path.is_relative_to(ROOT) and digest(path) == checksum, "Runtime diagnostics proof binding differs.")
     proof = json.loads(path.read_bytes())
+    if config["variants"] == ["legacy"]:
+        verify_proof_sources(proof)
     require(
         proof.get("status") == "passed"
         and proof.get("packageSha256") == config["package"]["sha256"]
@@ -567,18 +601,20 @@ def provider_failure(error: urllib.error.HTTPError) -> dict:
 
 def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = False) -> None:
     config = study()
-    require(config.get("cohort") == "full-gold-paired-v1", "Routing admission is only configured for full gold.")
+    require(config.get("cohort") in ("full-gold-paired-v1", "full-gold-legacy-v1"), "Routing admission is only configured for full gold.")
+    require(not explicit_none_probe or config["variants"] != ["legacy"], "The legacy-only lane does not admit Responses probes.")
     if "repeatOf" in config:
         require(not explicit_none_probe, "Extra explicit-none probes are not authorized for the diagnostic repeat.")
         verify_runtime_diagnostics_proof()
         verify_runtime_effort_proof()
+    legacy_only = study()["variants"] == ["legacy"]
     receipt = {
         "studyId": config["studyId"],
         "benchCommit": os.environ.get("GITHUB_SHA"),
         "inputsSha256": digest(INPUTS / "study.json"),
         "status": "in-progress",
         "kind": "explicit-none-protocol-probes-not-gold-admission" if explicit_none_probe else "bounded-routing-admission-not-semantic-attempts",
-        "requestLimit": 2 if explicit_none_probe else 5,
+        "requestLimit": 2 if explicit_none_probe else 3 if legacy_only else 5,
         "reasoningEffort": "none" if explicit_none_probe else config["inference"]["reasoning"],
         "routes": [],
     }
@@ -586,6 +622,8 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
         receipt.update(semanticAttempts=0, goldAdmission=False, sdkExecution=False, stickyReplayProven=False)
     started = time.monotonic()
     env = {**os.environ, "BCAL_SDK_PROXY_KEY": secrets.token_urlsafe(32)}
+    if legacy_only:
+        env["BCAL_AGENT_RUNTIME"] = "legacy"
     try:
         routes = (
             (config["inference"]["model"], "chat-completions", "HostAgent", 2),
@@ -594,6 +632,8 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
         )
         if explicit_none_probe:
             routes = tuple((model, wire, role, 1) for model, wire, role, _ in routes[:2])
+        elif legacy_only:
+            routes = (routes[0], routes[2])
         for model, wire, role, count in routes:
             route_receipt_row = {"model": model, "wireApi": wire, "role": role, "requests": 0}
             receipt["routes"].append(route_receipt_row)
@@ -627,17 +667,31 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
                                 "maxCompletionTokens": body.get("max_completion_tokens"),
                                 "maxOutputTokens": body.get("max_output_tokens"),
                             }
-                        request = urllib.request.Request(
-                            url + route,
-                            data=json.dumps(body).encode(),
-                            headers={"Authorization": "Bearer " + env["BCAL_SDK_PROXY_KEY"], "Content-Type": "application/json"},
-                        )
-                        try:
-                            with urllib.request.urlopen(request, timeout=250) as response:
-                                result = json.load(response)
-                        except urllib.error.HTTPError as error:
-                            route_receipt_row["failure"] = provider_failure(error)
-                            raise
+                        if legacy_only and role == "HostAgent":
+                            diagnostics = args.work / "admission-bridge-diagnostics"
+                            diagnostics.mkdir(exist_ok=True)
+                            command_env = {**env, "BCAL_LLM_MODEL": model, "BCAL_STUDY_CHAT_URL": url, "BCAL_STUDY_REASONING_EFFORT": "none", "BCAL_STUDY_BRIDGE_DIAGNOSTICS": str(diagnostics)}
+                            response = subprocess.run(
+                                [os.environ["BCAL_STUDY_INFERENCE_PYTHON"], str(ROOT / "scripts" / "bcal_study_transport.py"), "bridge"],
+                                input=json.dumps(body).encode("utf-8"),
+                                capture_output=True,
+                                check=True,
+                                timeout=250,
+                                env=command_env,
+                            )
+                            result = json.loads(response.stdout.decode("utf-8"))
+                        else:
+                            request = urllib.request.Request(
+                                url + route,
+                                data=json.dumps(body).encode(),
+                                headers={"Authorization": "Bearer " + env["BCAL_SDK_PROXY_KEY"], "Content-Type": "application/json"},
+                            )
+                            try:
+                                with urllib.request.urlopen(request, timeout=250) as response:
+                                    result = json.load(response)
+                            except urllib.error.HTTPError as error:
+                                route_receipt_row["failure"] = provider_failure(error)
+                                raise
                         require(
                             isinstance(result, dict) and (isinstance(result.get("output"), list) if wire == "responses" else isinstance(result.get("choices"), list)),
                             "Provider response protocol differs.",
@@ -680,6 +734,12 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
                         route_receipt_row["routeFailure"] = route_failure_diagnostics(audit)
                         raise
                 require(route_receipt_row["requests"] == count and route_receipt_row["http200"] == count, "Routing admission was not exactly the bounded successful calls.")
+                if legacy_only and role == "HostAgent":
+                    projected = [legacy_diagnostic_receipt(path) for path in sorted(diagnostics.glob("bridge-*.json"))]
+                    require(
+                        len(projected) == 2 and all(item.get("valid") is True and item["events"][-1]["outcome"] == "emitted" for item in projected), "Actual legacy admission bridge evidence missing."
+                    )
+                    route_receipt_row["bridgeInvocations"] = projected
         receipt["status"] = "passed"
     except Exception as error:
         receipt.update(status="failed", errorClass=type(error).__name__)
@@ -877,6 +937,7 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
     from bcbench.agent.bcal.agent import _run_bcal_process
 
     config = study()
+    require(runtime in config["variants"], "Runtime is outside the admitted study.")
     work.mkdir(parents=True)
     attempt = {
         **{key: pair[key] for key in ("index", "category", "lane", "tier", "instanceId", "repeat")},

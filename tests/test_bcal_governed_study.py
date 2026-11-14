@@ -548,6 +548,119 @@ def test_full_gold_summary_keeps_all_unattempted_cells(tmp_path, monkeypatch):
     assert result["lanes"]["ordinary-quality"]["legacy"]["expected"] == 110
 
 
+def test_legacy_only_gold_selects_exact_original_cases_without_sdk_slots(monkeypatch, tmp_path):
+    from argparse import Namespace
+
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold-legacy-utf8")
+    config = study.study()
+    selected = study.pairs()
+    assert config["variants"] == ["legacy"]
+    assert len(selected) == 110
+    assert all(row["order"] == ["legacy"] for row in selected)
+    assert {row["instanceId"] for row in selected} == {row["instanceId"] for row in config["datasets"][0]["selectedEntries"]}
+    with pytest.raises(ValueError, match="incomplete"):
+        study.summary(Namespace(work=tmp_path, output=tmp_path / "summary"))
+    result = json.loads((tmp_path / "summary" / "comparison.json").read_bytes())
+    assert result["expected"] == len(result["missing"]) == 110
+    assert set(result["lanes"]["ordinary-quality"]) == {"legacy"}
+    with pytest.raises(ValueError, match="outside"):
+        study.run_attempt(selected[0], "copilot-sdk", tmp_path / "invalid", {}, tmp_path / "invalid.json")
+    assert not (tmp_path / "invalid").exists()
+
+
+@pytest.mark.parametrize("mutation", ["variants", "datasets", "judge", "legacyValidationOf"])
+def test_legacy_only_gold_rejects_workload_expansion(tmp_path, monkeypatch, mutation):
+    directory = tmp_path / "profile"
+    directory.mkdir()
+    value = json.loads((ROOT / "experiments" / "bcal-full-gold-legacy-utf8" / "study.json").read_bytes())
+    value[mutation] = {}
+    study.write_json(directory / "study.json", value)
+    monkeypatch.setattr(study, "INPUTS", directory)
+    with pytest.raises(ValueError, match="separately approved"):
+        study.study()
+
+
+@pytest.mark.parametrize("mutation", ["inventory", "hash", "content"])
+def test_legacy_proof_requires_exact_git_canonical_sources(tmp_path, monkeypatch, mutation):
+    sources = {"scripts\\bcal_governed_study.py": b"one\n", "scripts\\bcal_study_transport.py": b"two\n", "src\\bcbench\\agent\\bcal\\bc_eval_sdk_proxy.py": b"three\n"}
+    for filename, content in sources.items():
+        path = tmp_path / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content.replace(b"\n", b"\r\n"))
+    proof = {"sourceHashes": {filename: hashlib.sha256(content).hexdigest() for filename, content in sources.items()}}
+    monkeypatch.setattr(study, "ROOT", tmp_path)
+    monkeypatch.setattr(study.subprocess, "check_output", lambda args, **_: sources[args[-1][5:].replace("/", "\\")])
+    study.verify_proof_sources(proof)
+    if mutation == "inventory":
+        proof["sourceHashes"].pop("scripts\\bcal_study_transport.py")
+    elif mutation == "hash":
+        proof["sourceHashes"]["scripts\\bcal_study_transport.py"] = "0" * 64
+    else:
+        (tmp_path / "scripts\\bcal_study_transport.py").write_bytes(b"two \n")
+    with pytest.raises(ValueError, match=r"source|content"):
+        study.verify_proof_sources(proof)
+
+
+@pytest.mark.parametrize("fail_at", [None, 2])
+def test_legacy_only_admission_uses_two_real_command_slots_and_one_judge_without_responses(tmp_path, monkeypatch, fail_at):
+    import io
+    from argparse import Namespace
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(study, "INPUTS", ROOT / "experiments" / "bcal-full-gold-legacy-utf8")
+    monkeypatch.setattr(study, "verify_runtime_diagnostics_proof", dict)
+    monkeypatch.setattr(study, "verify_runtime_effort_proof", dict)
+    monkeypatch.setenv("BCAL_STUDY_INFERENCE_PYTHON", "offline")
+    current, requests = {}, []
+
+    @contextmanager
+    def proxy(_work, env, model, wire, role):
+        assert wire == "chat-completions"
+        assert env["BCAL_AGENT_RUNTIME"] == "legacy"
+        current.update(model=model, role=role, count=0, audit=tmp_path / f"{role}.json")
+        study.write_json(current["audit"], {"requests": 0, "http200": 0, "ticketsReturned": 0, "ticketsReplayed": 0, "sessionStable": True, "modelStable": True})
+        yield "https://offline.invalid", current["audit"]
+
+    def respond(body):
+        requests.append((current["role"], body))
+        current["count"] += 1
+        count = current["count"]
+        failed = len(requests) == fail_at
+        values = {"requests": count, "http200": count - failed, "ticketsReturned": count - failed, "ticketsReplayed": count - 1, "sessionStable": True, "modelStable": True}
+        if current["role"] == "HostAgent":
+            values.update(reasoningEffort="none", effortVerifiedRequests=count, effortRejectedRequests=0)
+            assert body["reasoning_effort"] == "none"
+        study.write_json(current["audit"], values)
+        if failed:
+            raise TimeoutError("offline")
+        return {"choices": [{"finish_reason": "stop", "message": {"content": "OK"}}]}
+
+    def command(args, *, input, env, **kwargs):
+        assert args[-1] == "bridge"
+        assert env["BCAL_STUDY_REASONING_EFFORT"] == "none"
+        body = json.loads(input)
+        result = respond(body)
+        study.write_json(Path(env["BCAL_STUDY_BRIDGE_DIAGNOSTICS"]) / f"bridge-{len(requests)}.json", {"schemaVersion": 1, "events": [{"phase": "command", "outcome": "emitted"}]})
+        return SimpleNamespace(stdout=json.dumps(result).encode())
+
+    monkeypatch.setattr(study, "proxy", proxy)
+    monkeypatch.setattr(study.subprocess, "run", command)
+    monkeypatch.setattr(study.urllib.request, "urlopen", lambda request, **_: io.StringIO(json.dumps(respond(json.loads(request.data)))))
+    if fail_at:
+        with pytest.raises(TimeoutError):
+            study.routing_preflight(Namespace(work=tmp_path, output=tmp_path))
+    else:
+        study.routing_preflight(Namespace(work=tmp_path, output=tmp_path))
+    receipt = json.loads((tmp_path / "routing-preflight.json").read_bytes())
+    assert receipt["requests"] == len(requests) == (fail_at or 3)
+    assert receipt["requestLimit"] == 3
+    assert [role for role, _ in requests] == ["HostAgent", "HostAgent"] + ([] if fail_at else ["Judge"])
+    assert receipt["status"] == ("failed" if fail_at else "passed")
+    if not fail_at:
+        assert len(receipt["routes"][0]["bridgeInvocations"]) == 2
+
+
 @pytest.mark.parametrize("fail_at", [None, 2])
 def test_full_gold_routing_admission_is_bounded_and_preserves_partial_charges(tmp_path, monkeypatch, fail_at):
     import io
@@ -1134,12 +1247,12 @@ def test_existing_workflow_is_the_only_dispatch_and_reuses_actions():
     action = yaml.safe_load((ROOT / ".github" / "actions" / "setup-bcal-governed-study" / "action.yml").read_text())
     assert caller["jobs"]["get-entries"]["if"] == "(inputs.validation-phase == '' || inputs.validation-phase == 'ordinary') && !(inputs.llm-preflight-only || false)"
     assert workflow["jobs"]["pairs"]["strategy"]["max-parallel"] == "${{ startsWith(inputs.phase, 'full-gold') && 32 || 4 }}"
-    assert workflow["jobs"]["admit"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat'"
-    assert workflow["jobs"]["pairs"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat'"
-    assert workflow["jobs"]["summarize"]["if"] == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat')"
+    assert workflow["jobs"]["admit"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy'"
+    assert workflow["jobs"]["pairs"]["if"] == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy'"
+    assert workflow["jobs"]["summarize"]["if"] == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy')"
     repeat_admission = next(step for step in workflow["jobs"]["admit"]["steps"] if step.get("id") == "gold")
     assert repeat_admission["env"]["STUDY_PHASE"] == "${{ inputs.phase }}"
-    assert '"*paired $($env:STUDY_PHASE)"' in repeat_admission["run"]
+    assert '"*$label $($env:STUDY_PHASE)"' in repeat_admission["run"]
     assert "runtime-proofs" in repeat_admission["run"]
     assert "$receipt.runtimeDiagnosticsProof.sha256" in repeat_admission["run"]
     package_step = next(step for step in action["runs"]["steps"] if step.get("id") == "package")
