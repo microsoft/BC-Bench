@@ -35,11 +35,11 @@
   },
   "runtimeEffortProof": {
     "file": "experiments\\bcal-full-gold-legacy-utf8\\runtime-effort-proof.json",
-    "sha256": null
+    "sha256": "275953031b25e1570cb66bcfd4abf7f9ff3f63de295ed2ecc89d48b3e8152584"
   },
   "runtimeDiagnosticsProof": {
     "file": "experiments\\bcal-full-gold-legacy-utf8\\runtime-diagnostics-proof.json",
-    "sha256": null
+    "sha256": "1a2ccbb71b775df16252a29899750e6dc4b42cff0db37f54f5323b0a07184e60"
   },
   "historicalAccounting": {
     "preservedPairedDiagnosticRepeat": {

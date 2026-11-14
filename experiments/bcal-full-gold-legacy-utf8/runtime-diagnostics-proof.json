@@ -1,0 +1,206 @@
+{
+  "schemaVersion": "1",
+  "status": "passed",
+  "benchProofSourceSha": "1118798bcb9a1b721da96cc0e298dbcb6699ce5e",
+  "sourceHashes": {
+    "scripts\\bcal_governed_study.py": "c0ca6fc9e9399e21d136a2f3d2979ab251a4a49130b4ed8863d12473b366ae15",
+    "scripts\\bcal_study_transport.py": "bd047e545e8e75d506883827083e79c2c6ba441c4c6e42666d06a43306ddae0c",
+    "src\\bcbench\\agent\\bcal\\bc_eval_sdk_proxy.py": "e4b5b8c182ed249d94b65b7fb7499973f4db7d8ff47f7462fec8c7628278eace"
+  },
+  "packageSha256": "17683f88c9ebed8dbe9570479fa8870a2ce41c5396c50521a107a5716b784bef",
+  "packageSourceCommitSha": "8178001108d3147df9e4b367f87536d6f3665479",
+  "providerRequests": 0,
+  "networkRequests": 0,
+  "packageProof": {
+    "indexSha256": "195d0432bc37c235590604273004579eff24b0e076377b1580c4358d0a377efc",
+    "sealSha256": "68af169c0d5b8449ce7445d58b8bc19a57ff55288d8aeb183e1bd12a7674cdab",
+    "inventorySha256": "b7025eddd32132bc0c8c057f5c8b1ef78ce1e54e1f4a18d979a59b10616975bb",
+    "producerReceiptSha256": "a5ef39c0719cc718afd8ff1f95f198609b3fb34409ed6626edae6408f24c0dde",
+    "exactFixtureHandoffSealSha256": "00e0e525b7bf1f3157a916938b667a61891959b89577571b182fed36de43629c",
+    "exactPackagedFixtureSha256": "e1faa8d6856762d22921672bce37e3e9d5744d65e88f1709ca366f6020939a8e",
+    "equivalentRepositoryFixtureSha256": "8a5da3004199e682990a69ba59b364911bb667e0509a14d13f2e1f4e441b7ad8",
+    "nativeProductionHandlerReceiptSha256": "6bfafca0dbca7bcd2bc3d0e6f6cda5cfa41c44305671c4b17704758e7a5a65e9",
+    "independentlyVerifiedSealedFiles": 24,
+    "archiveAndStageFilesVerified": 460,
+    "unchangedRuntimeTreeFilesVerified": 225,
+    "unchangedSdkAssemblyVerified": true,
+    "admittedFramework": "net10.0",
+    "binarySha256": "f85d7eaa5ceae93c3ed240a2adf2771f14c5ef265f77ce1254de6078f6ae8767",
+    "assemblySha256": "035415a08fd2ec65c12e5f1a22ad6ca0c743cbb5d38a9b0252666a98ff686559"
+  },
+  "commandClientInvoked": true,
+  "invocationCollectorInvoked": true,
+  "consumerProjectionVerified": true,
+  "consumerSourceSha256": "c0ca6fc9e9399e21d136a2f3d2979ab251a4a49130b4ed8863d12473b366ae15",
+  "observedModelInterruptions": [
+    {
+      "sequence": 2,
+      "turn": 3,
+      "iteration": 4,
+      "succeeded": false,
+      "type": "model_interrupted",
+      "operationSha256": "b4af39d5b65a14849e885a9d65f0efe4f4e689989689c28c16cfcb3a6e78db5a",
+      "callIdSha256": "82a9efcc058d781942c27401bcea406587d509c8b6931345e9e1cbf4df3f0ecd",
+      "compositionIdSha256": "7845c58c2913d5cb9e89cc3074afb8a61ea37d7ac9d58a8df157b9a08af26867",
+      "statusSha256": "d512d96ea31ab0b9bb9b66da70c4d675f7db657518f4b6c0cc6d5823e6da5509",
+      "scenarioStepIdSha256": "79f353795df7bd0019cd12f545dd54329dd28c4099d85273f0b29c2c546c17f6",
+      "operation": "delivery",
+      "status": "interrupted",
+      "interruptionReason": "failed",
+      "promptUseSequence": 1,
+      "modelFailure": {
+        "stage": "command_start",
+        "exceptionCategory": "process",
+        "exitCode": null
+      }
+    },
+    {
+      "sequence": 2,
+      "turn": 3,
+      "iteration": 4,
+      "succeeded": false,
+      "type": "model_interrupted",
+      "operationSha256": "b4af39d5b65a14849e885a9d65f0efe4f4e689989689c28c16cfcb3a6e78db5a",
+      "callIdSha256": "82a9efcc058d781942c27401bcea406587d509c8b6931345e9e1cbf4df3f0ecd",
+      "compositionIdSha256": "7845c58c2913d5cb9e89cc3074afb8a61ea37d7ac9d58a8df157b9a08af26867",
+      "statusSha256": "d512d96ea31ab0b9bb9b66da70c4d675f7db657518f4b6c0cc6d5823e6da5509",
+      "scenarioStepIdSha256": "79f353795df7bd0019cd12f545dd54329dd28c4099d85273f0b29c2c546c17f6",
+      "operation": "delivery",
+      "status": "interrupted",
+      "interruptionReason": "failed",
+      "promptUseSequence": 1,
+      "modelFailure": {
+        "stage": "command_exit",
+        "exceptionCategory": "invalid_operation",
+        "exitCode": 7
+      }
+    },
+    {
+      "sequence": 2,
+      "turn": 3,
+      "iteration": 4,
+      "succeeded": false,
+      "type": "model_interrupted",
+      "operationSha256": "b4af39d5b65a14849e885a9d65f0efe4f4e689989689c28c16cfcb3a6e78db5a",
+      "callIdSha256": "82a9efcc058d781942c27401bcea406587d509c8b6931345e9e1cbf4df3f0ecd",
+      "compositionIdSha256": "7845c58c2913d5cb9e89cc3074afb8a61ea37d7ac9d58a8df157b9a08af26867",
+      "statusSha256": "d512d96ea31ab0b9bb9b66da70c4d675f7db657518f4b6c0cc6d5823e6da5509",
+      "scenarioStepIdSha256": "79f353795df7bd0019cd12f545dd54329dd28c4099d85273f0b29c2c546c17f6",
+      "operation": "delivery",
+      "status": "interrupted",
+      "interruptionReason": "failed",
+      "promptUseSequence": 1,
+      "modelFailure": {
+        "stage": "response_json",
+        "exceptionCategory": "json",
+        "exitCode": 0
+      }
+    },
+    {
+      "sequence": 2,
+      "turn": 3,
+      "iteration": 4,
+      "succeeded": false,
+      "type": "model_interrupted",
+      "operationSha256": "b4af39d5b65a14849e885a9d65f0efe4f4e689989689c28c16cfcb3a6e78db5a",
+      "callIdSha256": "82a9efcc058d781942c27401bcea406587d509c8b6931345e9e1cbf4df3f0ecd",
+      "compositionIdSha256": "7845c58c2913d5cb9e89cc3074afb8a61ea37d7ac9d58a8df157b9a08af26867",
+      "statusSha256": "d512d96ea31ab0b9bb9b66da70c4d675f7db657518f4b6c0cc6d5823e6da5509",
+      "scenarioStepIdSha256": "79f353795df7bd0019cd12f545dd54329dd28c4099d85273f0b29c2c546c17f6",
+      "operation": "delivery",
+      "status": "interrupted",
+      "interruptionReason": "failed",
+      "promptUseSequence": 1,
+      "modelFailure": {
+        "stage": "response_choices",
+        "exceptionCategory": "invalid_operation",
+        "exitCode": 0
+      }
+    },
+    {
+      "sequence": 2,
+      "turn": 3,
+      "iteration": 4,
+      "succeeded": false,
+      "type": "model_interrupted",
+      "operationSha256": "b4af39d5b65a14849e885a9d65f0efe4f4e689989689c28c16cfcb3a6e78db5a",
+      "callIdSha256": "82a9efcc058d781942c27401bcea406587d509c8b6931345e9e1cbf4df3f0ecd",
+      "compositionIdSha256": "7845c58c2913d5cb9e89cc3074afb8a61ea37d7ac9d58a8df157b9a08af26867",
+      "statusSha256": "d512d96ea31ab0b9bb9b66da70c4d675f7db657518f4b6c0cc6d5823e6da5509",
+      "scenarioStepIdSha256": "79f353795df7bd0019cd12f545dd54329dd28c4099d85273f0b29c2c546c17f6",
+      "operation": "delivery",
+      "status": "interrupted",
+      "interruptionReason": "failed",
+      "promptUseSequence": 1,
+      "modelFailure": {
+        "stage": "response_choices",
+        "exceptionCategory": "argument",
+        "exitCode": 0
+      }
+    },
+    {
+      "sequence": 2,
+      "turn": 3,
+      "iteration": 4,
+      "succeeded": false,
+      "type": "model_interrupted",
+      "operationSha256": "b4af39d5b65a14849e885a9d65f0efe4f4e689989689c28c16cfcb3a6e78db5a",
+      "callIdSha256": "82a9efcc058d781942c27401bcea406587d509c8b6931345e9e1cbf4df3f0ecd",
+      "compositionIdSha256": "7845c58c2913d5cb9e89cc3074afb8a61ea37d7ac9d58a8df157b9a08af26867",
+      "statusSha256": "d512d96ea31ab0b9bb9b66da70c4d675f7db657518f4b6c0cc6d5823e6da5509",
+      "scenarioStepIdSha256": "79f353795df7bd0019cd12f545dd54329dd28c4099d85273f0b29c2c546c17f6",
+      "operation": "delivery",
+      "status": "interrupted",
+      "interruptionReason": "failed",
+      "promptUseSequence": 1,
+      "modelFailure": {
+        "stage": "response_message",
+        "exceptionCategory": "invalid_operation",
+        "exitCode": 0
+      }
+    },
+    {
+      "sequence": 2,
+      "turn": 3,
+      "iteration": 4,
+      "succeeded": false,
+      "type": "model_interrupted",
+      "operationSha256": "b4af39d5b65a14849e885a9d65f0efe4f4e689989689c28c16cfcb3a6e78db5a",
+      "callIdSha256": "82a9efcc058d781942c27401bcea406587d509c8b6931345e9e1cbf4df3f0ecd",
+      "compositionIdSha256": "7845c58c2913d5cb9e89cc3074afb8a61ea37d7ac9d58a8df157b9a08af26867",
+      "statusSha256": "d512d96ea31ab0b9bb9b66da70c4d675f7db657518f4b6c0cc6d5823e6da5509",
+      "scenarioStepIdSha256": "79f353795df7bd0019cd12f545dd54329dd28c4099d85273f0b29c2c546c17f6",
+      "operation": "delivery",
+      "status": "interrupted",
+      "interruptionReason": "failed",
+      "promptUseSequence": 1,
+      "modelFailure": {
+        "stage": "response_json",
+        "exceptionCategory": "invalid_operation",
+        "exitCode": 0
+      }
+    },
+    {
+      "sequence": 2,
+      "turn": 3,
+      "iteration": 4,
+      "succeeded": false,
+      "type": "model_interrupted",
+      "operationSha256": "b4af39d5b65a14849e885a9d65f0efe4f4e689989689c28c16cfcb3a6e78db5a",
+      "callIdSha256": "82a9efcc058d781942c27401bcea406587d509c8b6931345e9e1cbf4df3f0ecd",
+      "compositionIdSha256": "7845c58c2913d5cb9e89cc3074afb8a61ea37d7ac9d58a8df157b9a08af26867",
+      "statusSha256": "d512d96ea31ab0b9bb9b66da70c4d675f7db657518f4b6c0cc6d5823e6da5509",
+      "scenarioStepIdSha256": "79f353795df7bd0019cd12f545dd54329dd28c4099d85273f0b29c2c546c17f6",
+      "operation": "delivery",
+      "status": "interrupted",
+      "interruptionReason": "canceled",
+      "promptUseSequence": 1,
+      "modelFailure": {
+        "stage": "command_io",
+        "exceptionCategory": "canceled",
+        "exitCode": null
+      }
+    }
+  ],
+  "scope": "Reverified immutable actual packaged producer receipt and all460archive/stage files, freshly projected through the exact fixed Bench source. Original producer was executed by runtime owner; not rerun here. Eight failure events, command_io pre-cancellation only; no historical-root-cause claim."
+}

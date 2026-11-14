@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1",
+  "status": "passed",
+  "benchProofSourceSha": "1118798bcb9a1b721da96cc0e298dbcb6699ce5e",
+  "sourceHashes": {
+    "scripts\\bcal_governed_study.py": "c0ca6fc9e9399e21d136a2f3d2979ab251a4a49130b4ed8863d12473b366ae15",
+    "scripts\\bcal_study_transport.py": "bd047e545e8e75d506883827083e79c2c6ba441c4c6e42666d06a43306ddae0c",
+    "src\\bcbench\\agent\\bcal\\bc_eval_sdk_proxy.py": "e4b5b8c182ed249d94b65b7fb7499973f4db7d8ff47f7462fec8c7628278eace"
+  },
+  "packageSha256": "17683f88c9ebed8dbe9570479fa8870a2ce41c5396c50521a107a5716b784bef",
+  "packageSourceCommitSha": "8178001108d3147df9e4b367f87536d6f3665479",
+  "providerRequests": 0,
+  "networkRequests": 0,
+  "legacyBridgeVerified": true,
+  "observedLegacyWireEffort": "none",
+  "utf8SubprocessVerified": true,
+  "observedChildEncodings": [
+    "ascii",
+    "cp1252"
+  ],
+  "observedCallSites": [
+    "delivery",
+    "completion_assessment"
+  ],
+  "actualBridgeSubprocessCases": 4,
+  "strictParentUtf8DecodeAndExactOpenAiSerialization": true,
+  "outputFailureClassificationVerified": true,
+  "safeDiagnosticsAndEffortGuardVerified": true,
+  "offlineTests": {
+    "passed": 91,
+    "failed": 0,
+    "skipped": 0,
+    "junitSha256": "1e6c37bf4db2f76a157480c7d42d32ab142dfd29b7e5ff93e87b6255a9f44424",
+    "testsSourceSha256": "6855d54a68705222b252feb5cb8d316417ad736291c739f9d6cd2d3059d704db"
+  },
+  "buildSetupAccounting": {
+    "buildId": 3057056,
+    "queueTime": "2026-11-13T18:33:12.195175Z",
+    "startTime": "2026-11-13T18:33:22.1784961Z",
+    "finishTime": "2026-11-13T19:14:43.4564131Z",
+    "queueWaitSeconds": 9.9833211,
+    "buildWallSeconds": 2481.277917,
+    "queueToTerminalSeconds": 2491.2612381,
+    "allJobCount": 3,
+    "allJobs": [
+      {
+        "name": "SDL Sources Analysis (self)",
+        "state": "completed",
+        "result": "succeeded",
+        "startTime": "2026-11-13T18:33:49.1333333Z",
+        "finishTime": "2026-11-13T18:37:41.1033333Z",
+        "elapsedSeconds": 231.97
+      },
+      {
+        "name": "\ud83d\udd12 Agentless Tag",
+        "state": "completed",
+        "result": "succeeded",
+        "startTime": "2026-11-13T18:33:21.98Z",
+        "finishTime": "2026-11-13T18:33:22.45Z",
+        "elapsedSeconds": 0.47
+      },
+      {
+        "name": "Build & Submit",
+        "state": "completed",
+        "result": "succeeded",
+        "startTime": "2026-11-13T18:33:56.3366667Z",
+        "finishTime": "2026-11-13T19:14:30.6333333Z",
+        "elapsedSeconds": 2434.2966666
+      }
+    ],
+    "sumJobElapsedSeconds": 2666.7366666000003,
+    "accounting": "Distinct non-additive setup metrics; overlapping job durations are not elapsed wall time. Not model usage/cost."
+  },
+  "scope": "Actual Python bridge subprocess and actual OpenAI serializer against mocked HTTP, with socket/DNS forbidden in all four encoding cases; separately exercised existing serve effort/sticky guard. No native SDK or Responses probe. Not a model/domain success proof. Hosted admission additionally requires two real legacy command bridge receipts and one unchanged judge route."
+}
