@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1",
+  "status": "passed",
+  "benchProofSourceSha": "ae68f83569dff56394f4c137a45a6b5915f38481",
+  "sourceHashes": {
+    "scripts\\bcal_governed_study.py": "532c3d20fab37f8006136a63e1145a46f6da4520d60285fefa2f51c7340f28c2",
+    "scripts\\bcal_study_transport.py": "891a7f874f6c4a0208ad367d3b089f2938b71fb8671de6854cfbfd1c001faf9c",
+    "src\\bcbench\\agent\\bcal\\bc_eval_sdk_proxy.py": "e4b5b8c182ed249d94b65b7fb7499973f4db7d8ff47f7462fec8c7628278eace"
+  },
+  "packageSha256": "17683f88c9ebed8dbe9570479fa8870a2ce41c5396c50521a107a5716b784bef",
+  "packageSourceCommitSha": "8178001108d3147df9e4b367f87536d6f3665479",
+  "providerRequests": 0,
+  "networkRequests": 0,
+  "actualPinnedScorerVerified": true,
+  "pinnedScorerSha256": "c563e569520b202e725d46ac58497868fefd8d48662fb8a305c9a397e14c398d",
+  "realJudgeSubprocessVerified": true,
+  "noContentLeakVerified": true,
+  "failureBoundariesVerified": [
+    "http_status",
+    "transport",
+    "timeout",
+    "json_decode",
+    "response_validation",
+    "checklist_incomplete",
+    "command_exit",
+    "process_timeout"
+  ],
+  "executedFailureTests": {
+    "http_status": "test_actual_pinned_judge_subprocess_retains_safe_failure_boundaries[http_status]",
+    "transport": "test_actual_pinned_judge_subprocess_retains_safe_failure_boundaries[transport]",
+    "timeout": "test_actual_pinned_judge_subprocess_retains_safe_failure_boundaries[timeout]",
+    "json_decode": "test_actual_pinned_judge_subprocess_retains_safe_failure_boundaries[json_decode]",
+    "response_validation": "test_actual_pinned_judge_subprocess_retains_safe_failure_boundaries[response_validation]",
+    "checklist_incomplete": "test_actual_pinned_judge_subprocess_retains_safe_failure_boundaries[checklist_incomplete]",
+    "command_exit": "test_real_parent_subprocess_failure_retains_exit_and_timeout[command_exit]",
+    "process_timeout": "test_real_parent_subprocess_failure_retains_exit_and_timeout[process_timeout]"
+  },
+  "actualPinnedJudgeSubprocessCases": 9,
+  "realParentSubprocessFailureCases": 2,
+  "offlineTests": {
+    "passed": 116,
+    "failed": 0,
+    "skipped": 0,
+    "junitSha256": "7d8b5959fafc34d713d01a40b1f307e05f1006e074ec25483622e0daa4e8dead",
+    "sourceHashes": {
+      "tests/test_bcal_governed_study.py": "269199b22a57135eaf38c8b2453484cd63b2675928d735051e68fb6941e170f0",
+      "tests/test_bcal_judge_diagnostics.py": "48236554615f57da837d80419b1827499f7d187122035f938e805ec13a74f9aa"
+    },
+    "scope": "Actual pinned scorer/OpenAI client and real judge subprocess against mocked HTTP, socket/DNS forbidden, no provider calls. Existing pinned dependencies restored in an isolated Python3.13 offline environment with only bc-eval Requires-Python install check overridden; hosted toolchain unchanged and separately admitted."
+  },
+  "validNegativeChecklistScoringPreserved": true,
+  "incompleteOrDuplicateChecklistUnscored": true,
+  "noAutomaticRetries": true,
+  "scope": "Real pinned scorer callback and OpenAI serializer, mocked HTTP and forbidden socket/DNS; safe HTTP/client/response/output diagnostics and actual process exit/timeout propagation. Missing checklist results rejected before scorer padding; valid true/false answers preserve original scoring. No raw synthetic data in projected receipts/public stderr. No hosted/provider success claim."
+}

@@ -37,15 +37,15 @@
   },
   "runtimeEffortProof": {
     "file": "experiments\\bcal-full-gold-judge-diagnostics\\runtime-effort-proof.json",
-    "sha256": null
+    "sha256": "aa184e70f9ce80fdb555ceb7f5525e8fec1b80a826817516dd9b2eba9288e67c"
   },
   "runtimeDiagnosticsProof": {
     "file": "experiments\\bcal-full-gold-judge-diagnostics\\runtime-diagnostics-proof.json",
-    "sha256": null
+    "sha256": "4a0abee8604b60fdc6d7eb67692e48c5981b99433a73e55f75370904f1e65eaa"
   },
   "judgeDiagnosticsProof": {
     "file": "experiments\\bcal-full-gold-judge-diagnostics\\judge-diagnostics-proof.json",
-    "sha256": null
+    "sha256": "32b6c65dd2203b2d7ca1b2e9da86487b4d9ba15508b0fe33a8070569e37f8907"
   },
   "historicalAccounting": {
     "preservedPairedRun": {
