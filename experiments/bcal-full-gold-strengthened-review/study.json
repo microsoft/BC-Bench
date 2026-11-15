@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "1",
+  "studyId": "bcal-full-gold-strengthened-review-double1",
+  "baselineStudy": {
+    "file": "experiments\\bcal-full-gold\\study.json",
+    "sha256": "1e9c638a70aa8a5e45deb3716dae5a48705910ade71f1dca3f6f24c221776f86"
+  },
+  "repeatOf": {
+    "runId": 43422730966,
+    "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"
+  },
+  "reviewValidationOf": {
+    "runId": 43594914041,
+    "sourceSha": "69831c644e2151eadcd0c2fa20e02e6addf63fc0"
+  },
+  "repetitions": [
+    1,
+    2
+  ],
+  "semanticExecutionCount": 440,
+  "diagnosticSubcriteriaCalls": 0,
+  "relationship": "User-approved two paired110x2repetitions with strengthened completion review; normal scoring, no retries/replacements/rejudging/subcriteria calls. Sequentialmax32workers.",
+  "package": {
+    "id": "Microsoft.BusinessCentral.BCal.CLI",
+    "version": "30.0.46.49019-beta",
+    "productVersion": "30.0.46.49019+52f3f7f5dd2d26c83f2778d28ace9d47364b481b",
+    "sourceCommitSha": "52f3f7f5dd2d26c83f2778d28ace9d47364b481b",
+    "buildId": 3063583,
+    "sha256": "58690e69bb6969a350c24c098d2493e9a38ab3e86b2c6cff0ee6f1d88b09bb32",
+    "bytes": 306400663,
+    "framework": "net10.0",
+    "files": 460,
+    "sdkPackageVersion": "1.0.29",
+    "sdkRuntimeVersion": "1.0.107",
+    "nativeCatalogSha256": "53cbf24393521600b170c5840c5721292be4953c5b1e194e137489ba5e7ba81b",
+    "indexSha256": "184c69e8e77ffb8f19097a2ec2e022202a2700541a4cd070a2248d3892daa2e1",
+    "independentSealSha256": "adc7d64c392f0a56bd6e19df777dcc3c760ffe50c141bf8f77a4f41f75287a18"
+  },
+  "historicalAccounting": {
+    "preservedComparison": {
+      "runId": 43594914041,
+      "allJobSeconds": 160977,
+      "providerRequests": 3039,
+      "sealSha256": "a47e6e67640767e9e04d34fce6580d46882c032564789a97a676b8ed19175737"
+    },
+    "authorization": "Exactlytwo full paired repetitions110x2each=440semantic executions with new review, normal scoring only. One bounded same-source5-call admission. No numerical aggregate ceiling supplied. No corrective automatic retries.",
+    "runtimeBuildAccountingOwner": "40ee7234-ef48-4bf9-9856-012a6fc402cb",
+    "benchRunAccountingOwner": "6cf1943d-bd63-4dd7-9061-58bf218603eb"
+  },
+  "publication": "Sanitized hashes/numeric/enums only; no raw source/prompts/responses/reasoning/private package/secrets.",
+  "runtimeEffortProof": {
+    "file": "experiments\\bcal-full-gold-strengthened-review\\runtime-effort-proof.json",
+    "sha256": "4c3ca69b8ddfc553df26f4bce2c367f51ad18047287e6c6fa76662d5c209ad0c"
+  },
+  "runtimeDiagnosticsProof": {
+    "file": "experiments\\bcal-full-gold-strengthened-review\\runtime-diagnostics-proof.json",
+    "sha256": "44b7b771fcf86f89a2ef982aa7512e6f2409b517fe998da846967d6257816ec9"
+  },
+  "judgeDiagnosticsProof": {
+    "file": "experiments\\bcal-full-gold-strengthened-review\\judge-diagnostics-proof.json",
+    "sha256": "1f6901560dc03eae83e6a7c823a9effee5077dfb5cbf47e2ff6868f3268df2a1"
+  },
+  "reviewPackageProof": {
+    "file": "experiments\\bcal-full-gold-strengthened-review\\review-package-proof.json",
+    "sha256": "fab62cb0a3602af3ba203de3398c7315fc2e25c21b0b76fd81b6cdd621e0e0d6"
+  }
+}

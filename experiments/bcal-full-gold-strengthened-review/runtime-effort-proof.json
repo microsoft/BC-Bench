@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1",
+  "status": "passed",
+  "benchProofSourceSha": "0e5620ad47fb6a9b65747dd6c2f1f7e65f1aff19",
+  "sourceHashes": {
+    "scripts\\bcal_governed_study.py": "42ab458bacda75a772c79ed03be5da80aa03760c83e84f6ac75c468449afd902",
+    "scripts\\bcal_study_transport.py": "891a7f874f6c4a0208ad367d3b089f2938b71fb8671de6854cfbfd1c001faf9c",
+    "src\\bcbench\\agent\\bcal\\bc_eval_sdk_proxy.py": "e4b5b8c182ed249d94b65b7fb7499973f4db7d8ff47f7462fec8c7628278eace"
+  },
+  "packageSha256": "58690e69bb6969a350c24c098d2493e9a38ab3e86b2c6cff0ee6f1d88b09bb32",
+  "packageSourceCommitSha": "52f3f7f5dd2d26c83f2778d28ace9d47364b481b",
+  "providerRequests": 0,
+  "networkRequests": 0,
+  "packageProof": {
+    "indexSha256": "184c69e8e77ffb8f19097a2ec2e022202a2700541a4cd070a2248d3892daa2e1",
+    "sealSha256": "adc7d64c392f0a56bd6e19df777dcc3c760ffe50c141bf8f77a4f41f75287a18",
+    "inventorySha256": "6154679db00cce88c51e20ecb5a7e80f4845b42531b51728c170228561bcaf02",
+    "reviewProducerSha256": "5f6030280b2bb6e6d4bbde708f7fc1d3b86273be32bfa02c20fead4bd9c1da86",
+    "nativeEffortProducerSha256": "c1c3b42d5435792be391c9ca5de71ecf7f92e190636ff988d3393b808a6f88e0",
+    "diagnosticProducerSha256": "34cefbc35dd476e9ec4476c029f37d6257cb6a14a79e127509139430dcdcfa25",
+    "archiveAndStageFilesVerified": 460,
+    "referencedArtifactsVerified": 32,
+    "binarySha256": "f8f5be5dca814bfda7eb451e42281a6f71695ef89685035f89a225ed1dbf7879",
+    "assemblySha256": "9bf23b4e5d0c71bc7866bdcef8c021a5ce2b84a0c8d6d52cef2353f8869f155b"
+  },
+  "offlineTests": {
+    "passed": 159,
+    "failed": 0,
+    "skipped": 0,
+    "junitSha256": "782acb575f5d8edac0b09ffdac2542e2f99c13d0646bb6de3f98742d6ee2a00e"
+  },
+  "requestedSdkEffort": "none",
+  "observedSdkWireEffort": "none",
+  "nativeSdkInvoked": true,
+  "mismatchRejectedBeforeProvider": true,
+  "legacyBridgeVerified": true,
+  "utf8SubprocessVerified": true,
+  "observedLegacyWireEffort": "none"
+}
