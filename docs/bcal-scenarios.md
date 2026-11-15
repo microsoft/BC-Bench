@@ -217,6 +217,33 @@ use the unchanged scorer. Failed judging surfaces as job/report failure after
 both already-authorized runtime slots when cleanup is verified, without retries;
 unsafe cleanup or other invalid evidence still stops the pair.
 
+The separately approved `full-gold-review-preflight`, `full-gold-review-1` and
+`full-gold-review-2` phases prepare two repetitions of the same 110-by-2 gold
+selection with a new package containing stronger completion review. They use
+one immutable `bcal-full-gold-strengthened-review` profile and one successful
+same-source admission, normal Ceres scoring only, Sol explicit `none` and the
+same 350 symbols. No diagnostic-subcriteria calls are selected. The two named
+repetitions admit exactly 440 semantic executions in total, not replacements.
+The second repetition reverses runtime order within each case; repeat identity
+is retained in every attempt and summary.
+
+Both phases share workflow concurrency and at most32semantic workers; the
+second is admitted only after the first finishes successfully at the same
+source. Failed admission or repetition is retained, never automatically
+retried or replaced. Setup requires the actual new package's source-bound
+review-prompt proof, preserved native/catalog and explicit-none fidelity,
+packaged command-failure evidence, UTF-8 bridge proof and normal-judge
+diagnostics. Historical package42492 cannot satisfy this new review gate.
+Package publication/proofs are owned separately from Bench admission and job
+accounting. Installing this workflow support does not admit an unpublished
+package or missing proof.
+
+Final reports separate each repetition and mutually judged case pairs.
+Repeated observations of the same110cases are dependent: pooled440execution
+counts are not440independent tasks. Missing scores remain unknown. Neither a
+single successful repetition nor pooled descriptive averages establish
+superiority or noninferiority.
+
 ### Diagnostic subcriteria, separate from official judging
 
 `scripts\bcal_judge_subcriteria.py` is an explicitly invoked diagnostic evaluator.

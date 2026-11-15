@@ -24,6 +24,11 @@ ROOT = Path(__file__).resolve().parents[1]
 INPUTS = ROOT / "experiments" / os.environ.get("BCAL_STUDY_PROFILE", "bcal-sdk-policy")
 MODEL_FAILURE_STAGES = frozenset({"unknown", "command_start", "command_io", "command_exit", "response_json", "response_choices", "response_message"})
 MODEL_FAILURE_CATEGORIES = frozenset({"unknown", "canceled", "json", "process", "io", "invalid_operation", "argument"})
+REVIEW_DOUBLE_STUDY = "bcal-full-gold-strengthened-review-double1"
+
+
+def safe_judging(config: dict) -> bool:
+    return config["studyId"] in {"bcal-full-gold-judge-diagnostics-comparison1", REVIEW_DOUBLE_STUDY}
 
 
 def symbols_manifest() -> Path:
@@ -62,6 +67,7 @@ def study_manifest() -> dict:
         baseline = json.loads(baseline_lf_bytes)
         legacy_only = value.get("studyId") == "bcal-full-gold-legacy-utf8-validation1"
         judge_comparison = value.get("studyId") == "bcal-full-gold-judge-diagnostics-comparison1"
+        review_double = value.get("studyId") == REVIEW_DOUBLE_STUDY
         require(
             (
                 (legacy_only and value.get("legacyValidationOf") == {"runId": 43494812835, "sourceSha": "de2014bb322d17c0503de1f3785a1bf1efb62151"})
@@ -76,11 +82,26 @@ def study_manifest() -> dict:
                     }
                 )
                 or (not legacy_only and not judge_comparison and value.get("studyId") == "bcal-full-gold-sol-paired-legacy-diagnostics-repeat1")
+                or (
+                    review_double
+                    and value.get("reviewValidationOf") == {"runId": 43594914041, "sourceSha": "69831c644e2151eadcd0c2fa20e02e6addf63fc0"}
+                    and value.get("repetitions") == [1, 2]
+                    and value.get("semanticExecutionCount") == 440
+                    and value.get("diagnosticSubcriteriaCalls") == 0
+                )
             )
             and value.get("repeatOf") == {"runId": 43422730966, "sourceSha": "be848023dea5412fd1f23cba4a5995b84270059f"}
             and set(value)
             <= {"schemaVersion", "studyId", "baselineStudy", "repeatOf", "relationship", "package", "runtimeEffortProof", "runtimeDiagnosticsProof", "historicalAccounting", "publication"}
-            | ({"legacyValidationOf"} if legacy_only else {"comparisonOf", "judgeDiagnosticsProof"} if judge_comparison else set()),
+            | (
+                {"legacyValidationOf"}
+                if legacy_only
+                else {"comparisonOf", "judgeDiagnosticsProof"}
+                if judge_comparison
+                else {"reviewValidationOf", "repetitions", "semanticExecutionCount", "diagnosticSubcriteriaCalls", "judgeDiagnosticsProof", "reviewPackageProof"}
+                if review_double
+                else set()
+            ),
             "Only the separately approved diagnostics repeat is admitted; selectors and scoring cannot be overridden.",
         )
         require(
@@ -98,6 +119,13 @@ def study_manifest() -> dict:
             "The diagnostic repeat must preserve the original native/catalog contract.",
         )
         require(isinstance(value.get("runtimeDiagnosticsProof"), dict), "Actual packaged diagnostic producer proof has not been admitted.")
+        if review_double:
+            require(
+                value["package"]["sha256"] != "17683f88c9ebed8dbe9570479fa8870a2ce41c5396c50521a107a5716b784bef"
+                and value["package"]["sourceCommitSha"] != "8178001108d3147df9e4b367f87536d6f3665479"
+                and isinstance(value.get("reviewPackageProof"), dict),
+                "The new strengthened-review package and proof must be admitted; historical package42492 cannot be reused.",
+            )
         value = {**baseline, **value}
         if legacy_only:
             value.update(cohort="full-gold-legacy-v1", variants=["legacy"])
@@ -148,6 +176,11 @@ def study() -> dict:
 def pairs() -> list[dict]:
     result = []
     config = study()
+    repetition = 1
+    if config["studyId"] == REVIEW_DOUBLE_STUDY:
+        raw_repetition = os.environ.get("BCAL_STUDY_REPETITION", "1")
+        require(raw_repetition in ("1", "2"), "Only the two separately identified repetitions are authorized.")
+        repetition = int(raw_repetition)
     full_gold = config.get("cohort") in ("full-gold-paired-v1", "full-gold-legacy-v1")
     for dataset in config["datasets"]:
         path = ROOT / dataset["file"]
@@ -179,6 +212,8 @@ def pairs() -> list[dict]:
                 require(hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest() == selected["entrySha256"], "Authority fixture, seed, steps or assertions changed.")
                 require(all(step["type"] == "user" for step in row["steps"]), "Native planning cannot reinterpret BCAL plan_action continuations.")
             order = ["legacy", "copilot-sdk"] if len(result) % 2 == 0 else ["copilot-sdk", "legacy"]
+            if repetition == 2:
+                order.reverse()
             if config["variants"] == ["legacy"]:
                 order = ["legacy"]
             result.append(
@@ -188,7 +223,7 @@ def pairs() -> list[dict]:
                     "lane": dataset["lane"],
                     "tier": dataset["tier"],
                     "instanceId": row["instance_id"],
-                    "repeat": 1,
+                    "repeat": repetition,
                     "order": order,
                     "sdkToolCatalogSha256": selected["sdkToolCatalogSha256"] if dataset["lane"] == "authority" else study()["package"]["nativeCatalogSha256"],
                 }
@@ -306,9 +341,10 @@ def verify_runtime_effort_proof() -> dict[str, str] | None:
     path = (ROOT / filename).resolve()
     require(path.is_relative_to(ROOT) and digest(path) == checksum, "Runtime effort proof binding differs.")
     proof = json.loads(path.read_bytes())
-    if config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1":
+    if safe_judging(config):
         verify_proof_sources(proof)
         require(proof.get("utf8SubprocessVerified") is True, "Fixed bridge output proof is missing.")
+        require(proof.get("providerRequests") == proof.get("networkRequests") == 0, "Runtime effort proof must be offline.")
     if config["variants"] == ["legacy"]:
         require(
             proof.get("status") == "passed"
@@ -355,7 +391,7 @@ def verify_runtime_diagnostics_proof() -> dict[str, str] | None:
     path = (ROOT / filename).resolve()
     require(path.is_relative_to(ROOT) and digest(path) == checksum, "Runtime diagnostics proof binding differs.")
     proof = json.loads(path.read_bytes())
-    if config["variants"] == ["legacy"] or config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1":
+    if config["variants"] == ["legacy"] or safe_judging(config):
         verify_proof_sources(proof)
     require(
         proof.get("status") == "passed"
@@ -391,7 +427,7 @@ def verify_runtime_diagnostics_proof() -> dict[str, str] | None:
 
 def verify_judge_diagnostics_proof() -> dict | None:
     config = study()
-    if config["studyId"] != "bcal-full-gold-judge-diagnostics-comparison1":
+    if not safe_judging(config):
         return None
     binding = config.get("judgeDiagnosticsProof")
     require(isinstance(binding, dict) and set(binding) == {"file", "sha256"}, "Judge diagnostic proof is missing.")
@@ -407,6 +443,33 @@ def verify_judge_diagnostics_proof() -> dict | None:
         and proof.get("failureBoundariesVerified") == ["http_status", "transport", "timeout", "json_decode", "response_validation", "checklist_incomplete", "command_exit", "process_timeout"]
         and proof.get("noContentLeakVerified") is True,
         "Actual judge failure diagnostics have not been verified.",
+    )
+    return binding
+
+
+def verify_review_package_proof() -> dict | None:
+    config = study()
+    if config["studyId"] != REVIEW_DOUBLE_STUDY:
+        return None
+    binding = config["reviewPackageProof"]
+    require(isinstance(binding, dict) and set(binding) == {"file", "sha256"}, "Review package proof binding is missing.")
+    path = (ROOT / binding["file"]).resolve()
+    require(path.is_relative_to(ROOT) and digest(path) == binding["sha256"], "Review package proof binding differs.")
+    proof = json.loads(path.read_bytes())
+    verify_proof_sources(proof)
+    require(
+        proof.get("status") == "passed"
+        and proof.get("packageSha256") == config["package"]["sha256"]
+        and proof.get("packageSourceCommitSha") == config["package"]["sourceCommitSha"]
+        and proof.get("actualPackagedPromptsVerified") is True
+        and proof.get("legacyAcceptanceReviewVerified") is True
+        and proof.get("nativeSelfReviewVerified") is True
+        and proof.get("toolAuthorityPreserved") is True
+        and proof.get("providerRequests") == proof.get("networkRequests") == 0
+        and isinstance(proof.get("promptHashes"), dict)
+        and set(proof["promptHashes"]) == {"legacyAcceptance", "nativeSelfReview"}
+        and all(isinstance(value, str) and re.fullmatch("[0-9a-f]{64}", value) for value in proof["promptHashes"].values()),
+        "Actual new packaged strengthened review and preserved authority have not been verified.",
     )
     return binding
 
@@ -427,6 +490,7 @@ def preflight(args: argparse.Namespace) -> None:
         receipt["runtimeDiagnosticsProof"] = verify_runtime_diagnostics_proof()
         receipt["runtimeEffortProof"] = verify_runtime_effort_proof()
         receipt["judgeDiagnosticsProof"] = verify_judge_diagnostics_proof()
+        receipt["reviewPackageProof"] = verify_review_package_proof()
         receipt["package"] = prepare_package(args.work / "package")
         receipt["symbols"] = verify_symbols()
         receipt["pairCount"] = len(pairs())
@@ -651,8 +715,9 @@ def routing_preflight(args: argparse.Namespace, *, explicit_none_probe: bool = F
         verify_runtime_diagnostics_proof()
         verify_runtime_effort_proof()
         verify_judge_diagnostics_proof()
+        verify_review_package_proof()
     legacy_only = study()["variants"] == ["legacy"]
-    diagnostic_comparison = config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1"
+    diagnostic_comparison = safe_judging(config)
     receipt = {
         "studyId": config["studyId"],
         "benchCommit": os.environ.get("GITHUB_SHA"),
@@ -1209,7 +1274,7 @@ def run_attempt(pair: dict, runtime: str, work: Path, env: dict[str, str], publi
                 try:
                     scores = run_judge(command, work, judge_env, attempt)
                 except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, ValueError) as error:
-                    if config["studyId"] != "bcal-full-gold-judge-diagnostics-comparison1" or attempt.get("judgeFailed") is not True:
+                    if not safe_judging(config) or attempt.get("judgeFailed") is not True:
                         raise
                     attempt.update(status="judge-failed", errorClass=type(error).__name__)
                 else:
@@ -1262,6 +1327,7 @@ def run_pair(args: argparse.Namespace) -> None:
     verify_runtime_diagnostics_proof()
     verify_runtime_effort_proof()
     verify_judge_diagnostics_proof()
+    verify_review_package_proof()
     pair = pairs()[args.pair]
     started = float(os.environ.get("BCAL_STUDY_JOB_STARTED_UNIX", time.time()))
     env = {**os.environ, "PYTHONPATH": str(ROOT / "src") + os.pathsep + os.environ.get("PYTHONPATH", ""), "LLM_API_ENVIRONMENT": "TEST"}
@@ -1284,10 +1350,10 @@ def run_pair(args: argparse.Namespace) -> None:
             receipt["admitted"].append(runtime)
             write_json(path, receipt)
             result = run_attempt(pair, runtime, args.work / f"pair-{args.pair}" / runtime, env, args.output / f"attempt-{args.pair}-{runtime}.json")
-            allowed_statuses = ("judged", "agent-failed", "judge-failed") if config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1" else ("judged", "agent-failed")
+            allowed_statuses = ("judged", "agent-failed", "judge-failed") if safe_judging(config) else ("judged", "agent-failed")
             require(result["status"] in allowed_statuses and result.get("cleanupVerified") is True, "Stop after an invalid/unverified attempt; no retries.")
         receipt["status"] = "finished"
-        if config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1":
+        if safe_judging(config):
             require(
                 all(json.loads((args.output / f"attempt-{args.pair}-{runtime}.json").read_bytes())["status"] != "judge-failed" for runtime in pair["order"]),
                 "Judge failure retained; both authorized runtime slots attempted, no retries.",
@@ -1311,7 +1377,7 @@ def summary(args: argparse.Namespace) -> None:
         require(row["inputsSha256"] == digest(INPUTS / "study.json") and row["studyId"] == config["studyId"], "Mixed study identity.")
         require(all(row[name] == expected[key][name] for name in ("category", "lane", "tier", "instanceId", "repeat")), "Mixed pair identity.")
         records[key] = row
-    scoreable_statuses = ("judged",) if config["studyId"] == "bcal-full-gold-judge-diagnostics-comparison1" else ("judged", "agent-failed")
+    scoreable_statuses = ("judged",) if safe_judging(config) else ("judged", "agent-failed")
     scoreable = [row for row in records.values() if row.get("status") in scoreable_statuses and row.get("firstModelResponse") is True]
     missing = [{"pair": key[0], "runtime": key[1]} for key in expected if key not in records]
     lanes = sorted({pair["lane"] for pair in expected.values()})
@@ -1326,6 +1392,7 @@ def summary(args: argparse.Namespace) -> None:
         "package": config["package"],
         "symbolsManifestSha256": config["symbolsManifestSha256"],
         "kind": "descriptive-policy-comparison-not-noninferiority",
+        "repetition": pairs()[0]["repeat"],
         "expected": expected_count,
         "captured": len(records),
         "scoreable": len(scoreable),
@@ -1418,7 +1485,12 @@ def main() -> None:
         elif args.command == "runtime-proofs":
             sys.stdout.write(
                 json.dumps(
-                    {"runtimeEffortProof": verify_runtime_effort_proof(), "runtimeDiagnosticsProof": verify_runtime_diagnostics_proof(), "judgeDiagnosticsProof": verify_judge_diagnostics_proof()}
+                    {
+                        "runtimeEffortProof": verify_runtime_effort_proof(),
+                        "runtimeDiagnosticsProof": verify_runtime_diagnostics_proof(),
+                        "judgeDiagnosticsProof": verify_judge_diagnostics_proof(),
+                        "reviewPackageProof": verify_review_package_proof(),
+                    }
                 )
                 + "\n"
             )

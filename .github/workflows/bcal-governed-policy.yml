@@ -13,7 +13,7 @@ permissions:
   actions: read
   id-token: write
 concurrency:
-  group: ${{ startsWith(inputs.phase, 'full-gold-judge') && 'bcal-full-gold-judge-diagnostics-comparison1' || startsWith(inputs.phase, 'full-gold-legacy') && 'bcal-full-gold-legacy-utf8-validation1' || startsWith(inputs.phase, 'full-gold-repeat') && 'bcal-full-gold-legacy-diagnostics-repeat1' || startsWith(inputs.phase, 'full-gold') && 'bcal-full-gold-sol-paired-20261113' || 'bcal-stacked-sdk-smoke-20261112' }}
+  group: ${{ startsWith(inputs.phase, 'full-gold-review') && 'bcal-full-gold-strengthened-review-double1' || startsWith(inputs.phase, 'full-gold-judge') && 'bcal-full-gold-judge-diagnostics-comparison1' || startsWith(inputs.phase, 'full-gold-legacy') && 'bcal-full-gold-legacy-utf8-validation1' || startsWith(inputs.phase, 'full-gold-repeat') && 'bcal-full-gold-legacy-diagnostics-repeat1' || startsWith(inputs.phase, 'full-gold') && 'bcal-full-gold-sol-paired-20261113' || 'bcal-stacked-sdk-smoke-20261112' }}
   cancel-in-progress: false
 env:
   BCAL_STUDY_WORK: C:\bgs
@@ -22,10 +22,11 @@ env:
   LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
   LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
   LLM_API_ENVIRONMENT: TEST
-  BCAL_STUDY_PROFILE: ${{ startsWith(inputs.phase, 'full-gold-judge') && 'bcal-full-gold-judge-diagnostics' || startsWith(inputs.phase, 'full-gold-legacy') && 'bcal-full-gold-legacy-utf8' || startsWith(inputs.phase, 'full-gold-repeat') && 'bcal-full-gold-repeat' || startsWith(inputs.phase, 'full-gold') && 'bcal-full-gold' || 'bcal-sdk-policy' }}
+  BCAL_STUDY_PROFILE: ${{ startsWith(inputs.phase, 'full-gold-review') && 'bcal-full-gold-strengthened-review' || startsWith(inputs.phase, 'full-gold-judge') && 'bcal-full-gold-judge-diagnostics' || startsWith(inputs.phase, 'full-gold-legacy') && 'bcal-full-gold-legacy-utf8' || startsWith(inputs.phase, 'full-gold-repeat') && 'bcal-full-gold-repeat' || startsWith(inputs.phase, 'full-gold') && 'bcal-full-gold' || 'bcal-sdk-policy' }}
+  BCAL_STUDY_REPETITION: ${{ inputs.phase == 'full-gold-review-2' && '2' || '1' }}
 jobs:
   preflight:
-    if: inputs.phase == 'preflight' || inputs.phase == 'full-gold-preflight' || inputs.phase == 'full-gold-repeat-preflight' || inputs.phase == 'full-gold-legacy-preflight' || inputs.phase == 'full-gold-judge-preflight' || inputs.phase == 'full-gold-none-probe'
+    if: inputs.phase == 'preflight' || inputs.phase == 'full-gold-preflight' || inputs.phase == 'full-gold-repeat-preflight' || inputs.phase == 'full-gold-legacy-preflight' || inputs.phase == 'full-gold-judge-preflight' || inputs.phase == 'full-gold-none-probe' || inputs.phase == 'full-gold-review-preflight'
     runs-on: windows-latest
     timeout-minutes: ${{ startsWith(inputs.phase, 'full-gold') && 25 || 10 }}
     environment:
@@ -47,7 +48,7 @@ jobs:
           official-feed-url: ${{ secrets.BCAL_FEED_URL }}
           experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
       - name: Admit exact Sol chat, Responses and unchanged judge routes
-        if: inputs.phase == 'full-gold-preflight' || inputs.phase == 'full-gold-repeat-preflight' || inputs.phase == 'full-gold-judge-preflight'
+        if: inputs.phase == 'full-gold-preflight' || inputs.phase == 'full-gold-repeat-preflight' || inputs.phase == 'full-gold-judge-preflight' || inputs.phase == 'full-gold-review-preflight'
         shell: pwsh
         run: .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py routing-preflight --work $env:BCAL_STUDY_WORK --output study-sanitized
       - name: Admit two actual legacy bridge requests and one unchanged judge request
@@ -72,7 +73,7 @@ jobs:
         run: |
           if (Test-Path -LiteralPath 'C:\bgs\llm-api-cert.pfx') { Remove-Item -LiteralPath 'C:\bgs\llm-api-cert.pfx' -Force }
   admit:
-    if: inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge'
+    if: inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge' || inputs.phase == 'full-gold-review-1' || inputs.phase == 'full-gold-review-2'
     runs-on: windows-latest
     timeout-minutes: 5
     outputs:
@@ -124,9 +125,9 @@ jobs:
           @{studyId=$study.studyId;benchCommit=$env:GITHUB_SHA;preflightRunId=$env:PREFLIGHT_RUN_ID;priorLocalBudget=$budget;measuredPreflightSeconds=$preflightSeconds;reservedStudySeconds=$reserved;rerunsAllowed=$false} | ConvertTo-Json -Depth 20 | Set-Content study-sanitized\admission.json
           'matrix={"include":[{"pair":0},{"pair":1},{"pair":2},{"pair":3},{"pair":4},{"pair":5},{"pair":6},{"pair":7}]}' >> $env:GITHUB_OUTPUT
       - uses: ./.github/actions/setup-python-uv
-        if: inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge'
+        if: inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge' || inputs.phase == 'full-gold-review-1' || inputs.phase == 'full-gold-review-2'
       - name: Verify immutable full-gold admission and reject duplicate workloads
-        if: inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge'
+        if: inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge' || inputs.phase == 'full-gold-review-1' || inputs.phase == 'full-gold-review-2'
         id: gold
         shell: pwsh
         env:
@@ -140,14 +141,24 @@ jobs:
           $preflight = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:PREFLIGHT_RUN_ID" | ConvertFrom-Json
           $legacyOnly = $env:STUDY_PHASE -eq 'full-gold-legacy'
           $judgeComparison = $env:STUDY_PHASE -eq 'full-gold-judge'
+          $reviewDouble = $env:STUDY_PHASE -in @('full-gold-review-1', 'full-gold-review-2')
+          if ($reviewDouble) { $judgeComparison = $true }
           $label = if ($legacyOnly) { 'legacy-only' } else { 'paired' }
           $expectedPreflight = "*$label $($env:STUDY_PHASE)-preflight"
+          if ($reviewDouble) { $expectedPreflight = '*paired full-gold-review-preflight' }
           if ($preflight.conclusion -ne 'success' -or $preflight.run_attempt -ne 1 -or $preflight.head_sha -ne $env:GITHUB_SHA -or $preflight.display_title -notlike $expectedPreflight) { throw 'Full-gold admission state/source/mode differs.' }
           $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
           $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
           if ($runs.total_count -gt 100) { throw 'Duplicate inventory is incomplete.' }
           $expectedDispatch = "*$label $($env:STUDY_PHASE)"
           if (@($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title -like $expectedDispatch }).Count) { throw 'This separately identified full-gold workload already has a dispatch; no retries/replacements.' }
+          if ($reviewDouble) {
+            $reviewRuns = @($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title -match 'paired full-gold-review-[12]$' })
+            if ($env:STUDY_PHASE -eq 'full-gold-review-1' -and $reviewRuns.Count) { throw 'The double study already started; no replacement or reverse order.' }
+            if ($env:STUDY_PHASE -eq 'full-gold-review-2') {
+              if ($reviewRuns.Count -ne 1 -or $reviewRuns[0].display_title -notlike '*paired full-gold-review-1' -or $reviewRuns[0].head_sha -ne $env:GITHUB_SHA -or $reviewRuns[0].run_attempt -ne 1 -or $reviewRuns[0].status -ne 'completed' -or $reviewRuns[0].conclusion -ne 'success') { throw 'Repetition1 must finish successfully at the exact source before repetition2; no corrective rerun.' }
+            }
+          }
           gh run download $env:PREFLIGHT_RUN_ID --repo $env:GITHUB_REPOSITORY --name sdk-policy-preflight --dir preflight-receipt
           $receipt = Get-Content preflight-receipt\preflight.json -Raw | ConvertFrom-Json
           $routing = Get-Content preflight-receipt\routing-preflight.json -Raw | ConvertFrom-Json
@@ -155,7 +166,7 @@ jobs:
           $study = Get-Content $studyPath -Raw | ConvertFrom-Json
           $hash = (Get-FileHash $studyPath -Algorithm SHA256).Hash.ToLowerInvariant()
           $expectedReasoning = $study.inference.reasoning
-          if ($env:STUDY_PHASE -in @('full-gold-repeat', 'full-gold-legacy', 'full-gold-judge')) {
+          if ($env:STUDY_PHASE -in @('full-gold-repeat', 'full-gold-legacy', 'full-gold-judge', 'full-gold-review-1', 'full-gold-review-2')) {
             .\.venv\Scripts\python.exe .\scripts\bcal_governed_study.py runtime-proofs
             if ($LASTEXITCODE -ne 0 -or !$study.runtimeDiagnosticsProof -or $receipt.runtimeDiagnosticsProof.sha256 -ne $study.runtimeDiagnosticsProof.sha256) { throw 'Actual producer/consumer diagnostic admission differs.' }
             $expectedReasoning = (Get-Content $study.baselineStudy.file -Raw | ConvertFrom-Json).inference.reasoning
@@ -165,13 +176,19 @@ jobs:
               $previous = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$($study.legacyValidationOf.runId)" | ConvertFrom-Json
               if ($previous.status -ne 'completed' -or $previous.run_attempt -ne 1 -or $previous.head_sha -ne $study.legacyValidationOf.sourceSha) { throw 'Previous paired diagnostic repeat identity differs.' }
             }
-            if ($judgeComparison) {
+            if ($judgeComparison -and !$reviewDouble) {
               if (!$study.judgeDiagnosticsProof -or $receipt.judgeDiagnosticsProof.sha256 -ne $study.judgeDiagnosticsProof.sha256) { throw 'Judge diagnostics proof admission differs.' }
               foreach ($kind in @('sdk', 'legacy')) {
                 $runId = $study.comparisonOf."$($kind)RunId"
                 $sourceSha = $study.comparisonOf."$($kind)SourceSha"
                 $previous = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$runId" | ConvertFrom-Json
                 if ($previous.status -ne 'completed' -or $previous.run_attempt -ne 1 -or $previous.head_sha -ne $sourceSha) { throw 'Preserved comparison run identity differs.' }
+              }
+              if ($reviewDouble) {
+                if (!$study.reviewPackageProof -or $receipt.reviewPackageProof.sha256 -ne $study.reviewPackageProof.sha256 -or !$study.judgeDiagnosticsProof -or $receipt.judgeDiagnosticsProof.sha256 -ne $study.judgeDiagnosticsProof.sha256) { throw 'Strengthened review/judge package proofs differ.' }
+                $previous = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$($study.reviewValidationOf.runId)" | ConvertFrom-Json
+                if ($previous.status -ne 'completed' -or $previous.run_attempt -ne 1 -or $previous.head_sha -ne $study.reviewValidationOf.sourceSha) { throw 'Prior fully judged comparison identity differs.' }
+                if ($study.repetitions.Count -ne 2 -or $study.repetitions[0] -ne 1 -or $study.repetitions[1] -ne 2 -or $study.semanticExecutionCount -ne 440 -or $study.diagnosticSubcriteriaCalls -ne 0) { throw 'Only two normal-scored paired repetitions are authorized.' }
               }
             }
           }
@@ -206,7 +223,7 @@ jobs:
           "matrix=$matrix" >> $env:GITHUB_OUTPUT
           New-Item -ItemType Directory study-sanitized -Force | Out-Null
           $semanticAttempts = if ($legacyOnly) { 110 } else { 220 }
-          @{studyId=$study.studyId;benchCommit=$env:GITHUB_SHA;inputsSha256=$hash;preflightRunId=$env:PREFLIGHT_RUN_ID;expectedPairs=110;expectedSemanticAttempts=$semanticAttempts;maxPairWorkers=32;legacyOnly=$legacyOnly;authorization=$study.historicalAccounting.authorization;rerunsAllowed=$false} | ConvertTo-Json -Depth 20 | Set-Content study-sanitized\admission.json
+          @{studyId=$study.studyId;benchCommit=$env:GITHUB_SHA;inputsSha256=$hash;preflightRunId=$env:PREFLIGHT_RUN_ID;expectedPairs=110;expectedSemanticAttempts=$semanticAttempts;maxPairWorkers=32;legacyOnly=$legacyOnly;repetition=$env:BCAL_STUDY_REPETITION;authorization=$study.historicalAccounting.authorization;rerunsAllowed=$false} | ConvertTo-Json -Depth 20 | Set-Content study-sanitized\admission.json
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -216,7 +233,7 @@ jobs:
           if-no-files-found: warn
   pairs:
     needs: admit
-    if: inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge'
+    if: inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge' || inputs.phase == 'full-gold-review-1' || inputs.phase == 'full-gold-review-2'
     name: ${{ inputs.phase == 'full-gold-legacy' && format('Legacy gold case ({0})', matrix.pair) || format('pairs ({0})', matrix.pair) }}
     runs-on: windows-latest
     timeout-minutes: ${{ startsWith(inputs.phase, 'full-gold') && 75 || 56 }}
@@ -260,7 +277,7 @@ jobs:
           if (Test-Path -LiteralPath 'C:\bgs\llm-api-cert.pfx') { Remove-Item -LiteralPath 'C:\bgs\llm-api-cert.pfx' -Force }
   summarize:
     needs: [admit, pairs]
-    if: always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge')
+    if: always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge' || inputs.phase == 'full-gold-review-1' || inputs.phase == 'full-gold-review-2')
     runs-on: windows-latest
     timeout-minutes: 6
     steps:

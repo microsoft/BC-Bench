@@ -1249,15 +1249,15 @@ def test_existing_workflow_is_the_only_dispatch_and_reuses_actions():
     assert workflow["jobs"]["pairs"]["strategy"]["max-parallel"] == "${{ startsWith(inputs.phase, 'full-gold') && 32 || 4 }}"
     assert (
         workflow["jobs"]["admit"]["if"]
-        == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge'"
+        == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge' || inputs.phase == 'full-gold-review-1' || inputs.phase == 'full-gold-review-2'"
     )
     assert (
         workflow["jobs"]["pairs"]["if"]
-        == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge'"
+        == "inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge' || inputs.phase == 'full-gold-review-1' || inputs.phase == 'full-gold-review-2'"
     )
     assert (
         workflow["jobs"]["summarize"]["if"]
-        == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge')"
+        == "always() && (inputs.phase == 'smoke' || inputs.phase == 'full-gold' || inputs.phase == 'full-gold-repeat' || inputs.phase == 'full-gold-legacy' || inputs.phase == 'full-gold-judge' || inputs.phase == 'full-gold-review-1' || inputs.phase == 'full-gold-review-2')"
     )
     repeat_admission = next(step for step in workflow["jobs"]["admit"]["steps"] if step.get("id") == "gold")
     assert repeat_admission["env"]["STUDY_PHASE"] == "${{ inputs.phase }}"
