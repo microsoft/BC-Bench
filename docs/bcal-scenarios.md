@@ -217,6 +217,68 @@ use the unchanged scorer. Failed judging surfaces as job/report failure after
 both already-authorized runtime slots when cleanup is verified, without retries;
 unsafe cleanup or other invalid evidence still stops the pair.
 
+### Diagnostic subcriteria, separate from official judging
+
+`scripts\bcal_judge_subcriteria.py` is an explicitly invoked diagnostic evaluator.
+It never runs automatically in an evaluation, admission, or hosted workflow.
+It requires a previously successful official `judge-output.json` and the matching
+private `judge-input.json`; their bytes and SHA256 bindings remain unchanged.
+The canonical parent checklist, pinned scorer, official judge request, scores,
+and historical artifacts are not edited. A diagnostic invocation is **one
+additional Ceres request**, requiring separate inference authorization and route
+accounting; adding subquestions to the official request would otherwise change
+that evaluation's prompt. No diagnostic inference is implied by installing this
+support.
+
+`experiments\bcal-judge-subcriteria\criteria.json` provides explicitly authored
+decompositions for the six legacy shortfall cases and two SDK-lower contrasts.
+Use `--instance-id` to select a case; exact input-text and parent-assertion hashes
+must match. It contains 29 diagnostic subcriteria under nine canonical parents.
+These are analysis aids, not a new official workload or a claim that the
+decomposition independently proves complete semantic equivalence to its parent.
+For another task, `--subcriteria` may instead supply a single specification with
+`schemaVersion: 1` and `parents`; each parent has `assertionPosition1`,
+`assertionSha256`, and at least two unique `{id, text}` subcriteria.
+
+An authorized caller can invoke:
+
+```powershell
+python scripts\bcal_judge_subcriteria.py `
+  --input <private-judge-input.json> `
+  --official-output <official-judge-output.json> `
+  --subcriteria experiments\bcal-judge-subcriteria\criteria.json `
+  --instance-id nl2al__expanded-sales-eligible-variant-picker-1 `
+  --output <new-diagnostic-only.json>
+```
+
+The result contains parent-verdict provenance and separate `pass`/`fail`
+subverdicts, never a replacement `quality`, `testPassed`, or parent verdict.
+Subcriteria disagreements do not alter the official score. Missing, duplicate,
+nonboolean or malformed judge results retain `status: failed`, all subverdicts
+`unavailable`, and allowlisted judge diagnostics; the command fails explicitly.
+HTTP/transport/timeout failures reuse existing no-retry judge handling. Private
+temporary judge input/output and raw rationale are removed after projection.
+Malformed input specifications fail before any request.
+
+Optional `--source-references` plus `--source-root` accept private caller-supplied
+evidence shaped as `{"schemaVersion":1,"criteria":[{"id":"criterion-id",
+"references":[{"path":"relative.al","sourceSha256":"<SHA256>",
+"startLine":1,"endLine":2}]}]}`. Only actual files inside the supplied source root
+with matching byte hashes and valid UTF-8 line ranges qualify; path escapes,
+stale hashes, duplicate references and unknown fields fail explicitly. Retained
+references contain only source hashes and line numbers, never paths, AL snippets
+or rationale. Verification establishes **content and range only**, not the
+correctness or relevance of a model/reviewer citation. References are checked
+again before publication.
+
+The current product review changes export no structured requirement-to-source
+registry. Consequently, references are explicitly `available: false` unless an
+owning caller independently supplies actual exported source and references.
+Prompt/composition hashes and completion events are not fabricated source
+citations or semantic proof. The caller must associate the supplied official
+score file with its private input and retain their recorded hashes; this utility
+does not reconstruct a missing original judge response or generated source.
+
 The separately authorized `full-gold-none-probe` phase only checks explicit
 `none` compatibility: one tool-bearing Sol Chat request, then one direct
 Responses request, stopping on the first failure without retries or a judge.

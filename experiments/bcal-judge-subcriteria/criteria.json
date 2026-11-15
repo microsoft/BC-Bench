@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "instanceId": "nl2al__collected-vendor-maintained-categories-1",
+      "inputSha256": "20739c64941a80f38978a8d71b4dc1c060822a9a481832d1b0f9a6e14dcb6bac",
+      "parents": [{
+        "assertionPosition1": 7,
+        "assertionSha256": "58d607e3a6f08d1c6a42c821f7a12a868cb2546b80417310be440e6f16674adc",
+        "subcriteria": [
+          {"id": "initialization-completion", "text": "Category initialization persistently distinguishes first use from subsequent openings."},
+          {"id": "reopen-no-duplicates", "text": "Reopening the category lookup does not duplicate initialized default records."},
+          {"id": "deleted-default-not-resurrected", "text": "Reopening the category lookup does not recreate an initialized default category that a user deleted."}
+        ]
+      }]
+    },
+    {
+      "instanceId": "nl2al__collected-van-mileage-maintenance-1",
+      "inputSha256": "3b95f17c1d2b3985d2bdca3ffed0aa74e8c0a7d01c184f33b1b3216561e4f826",
+      "parents": [{
+        "assertionPosition1": 5,
+        "assertionSha256": "9133a55c34dc37f0fec8e6c1f28e69e437a0cad715f313ec3c0c6322474cd226",
+        "subcriteria": [
+          {"id": "earlier-reading-bound", "text": "A mileage reading cannot be lower than an earlier reading for the same asset."},
+          {"id": "later-reading-bound", "text": "A mileage reading cannot be higher than a later reading for the same asset."},
+          {"id": "same-day-entry-order", "text": "Mileage comparisons order same-day readings by Entry No."},
+          {"id": "edit-order-validation", "text": "Edits to mileage entries enforce the same earlier and later reading bounds and same-day entry ordering."}
+        ]
+      }]
+    },
+    {
+      "instanceId": "nl2al__collected-product-sample-followup-1",
+      "inputSha256": "e6d9a2aa92359a8e66942ff0d76dae386d275159208e95acb9851bdfb916b7e5",
+      "parents": [{
+        "assertionPosition1": 7,
+        "assertionSha256": "f57ee7455e5f43c7a140545965b2c6a233e51fd0b711603b96d27a2d0d4b734c",
+        "subcriteria": [
+          {"id": "conversion-validated-action-only", "text": "Converted status is set only by the Link Sales Order action after its required order/contact/date validation succeeds."},
+          {"id": "order-snapshot-validated-action-only", "text": "The selected order number and date snapshot are set only through the validated Link Sales Order action."},
+          {"id": "conversion-evidence-read-only", "text": "Converted status and order number/date snapshot fields are read-only to ordinary manual edits."}
+        ]
+      }]
+    },
+    {
+      "instanceId": "nl2al__read-only-compliance-register-permission-set-1",
+      "inputSha256": "d3e3daf384017ce804c9644710008a952e00132d229544c815ab1cdf87b9bdc0",
+      "parents": [{
+        "assertionPosition1": 4,
+        "assertionSha256": "d6625045ef4fb8cf51e414b15adfeac29c5c1f8faeebf451fc4f6a230445bc2f",
+        "subcriteria": [
+          {"id": "list-displays-three-fields", "text": "The Compliance Register list page displays Code, Description and Review Date."},
+          {"id": "page-insertion-disabled", "text": "The Compliance Register list page disables insertion."},
+          {"id": "page-modification-disabled", "text": "The Compliance Register list page disables modification."},
+          {"id": "page-deletion-disabled", "text": "The Compliance Register list page disables deletion."}
+        ]
+      }]
+    },
+    {
+      "instanceId": "nl2al__expanded-sales-eligible-variant-picker-1",
+      "inputSha256": "fc701e279ea82157d9cdf19191324a8101fc1940e3cec145586fc95ef1e4e29a",
+      "parents": [
+        {
+          "assertionPosition1": 6,
+          "assertionSha256": "4d8bb944656ca873047d99a49acf3b5aae46a68cf956e5c9dd4455bd11e8104b",
+          "subcriteria": [
+            {"id": "insert-complete-eligibility", "text": "Normal trigger-running inserts enforce the complete variant eligibility rule: nonblank variants belong to the selected item, Blocked and Sales Blocked are false, and Purchasing Blocked does not affect eligibility."},
+            {"id": "modify-complete-eligibility", "text": "Normal trigger-running modifications enforce the same complete variant eligibility rule as the picker and field validation."}
+          ]
+        },
+        {
+          "assertionPosition1": 7,
+          "assertionSha256": "38917dab6e70b66e4a565faff6ae876b9c9fad5ace952813afc443adabdbe091",
+          "subcriteria": [
+            {"id": "missing-item-message", "text": "Opening the variant picker without an item selected gives a select-item message."},
+            {"id": "missing-item-no-unfiltered-picker", "text": "Opening the variant picker without an item selected does not open an unfiltered variant lookup."},
+            {"id": "blank-variant-valid", "text": "Blank Variant Code remains a valid selection even when the selected item has variants."}
+          ]
+        }
+      ]
+    },
+    {
+      "instanceId": "nl2al__expanded-atomic-json-request-parser-1",
+      "inputSha256": "6e93ac853562423e71889374a475ee4c4f93bed6fa8700ccf40b33d01e5d3ede",
+      "parents": [{
+        "assertionPosition1": 6,
+        "assertionSha256": "14c0adb978ed9f01ed6cea1532d6af012cd6ef2aa305379532756d15e5d850b2",
+        "subcriteria": [
+          {"id": "integral-range-accepted", "text": "Numeric JSON copies values whose mathematical value is an integer anywhere in 1 through 10 inclusive are accepted."},
+          {"id": "numeric-string-rejected", "text": "Numeric strings are rejected as copies values."},
+          {"id": "boolean-rejected", "text": "Boolean copies values are rejected."},
+          {"id": "fraction-rejected", "text": "Fractional numeric copies values are rejected."},
+          {"id": "out-of-range-rejected", "text": "Numeric copies values outside 1 through 10 inclusive are rejected."}
+        ]
+      }]
+    },
+    {
+      "instanceId": "nl2al__hazardous-item-styleexpr-list-2",
+      "inputSha256": "a69744964671f62bc3351dcb083361b9e28e373ac2ed2500518f2305d0b5ed20",
+      "parents": [{
+        "assertionPosition1": 4,
+        "assertionSha256": "540f4cf02e3b15f8ded5fb7a11ef61a21f9679126beeae2bc94387a397dad181",
+        "subcriteria": [
+          {"id": "hazardous-attention-style", "text": "Hazardous items are emphasized on Item List using a standard attention or unfavorable style."},
+          {"id": "style-identifying-control", "text": "The hazardous-item emphasis is applied to an identifying Item List control."}
+        ]
+      }]
+    },
+    {
+      "instanceId": "nl2al__collected-overdue-collection-review-1",
+      "inputSha256": "dea56e3109aa8853027f2d5b6c20f6aa5bdfebffa1cb69543a021f11be670e11",
+      "parents": [{
+        "assertionPosition1": 7,
+        "assertionSha256": "cf0d7e5994c4f89a4c8822d55700aebeb937e9368d732977a005c04873d82611",
+        "subcriteria": [
+          {"id": "critical-priority-first", "text": "Collection Review sorting places Critical before Follow Up."},
+          {"id": "overdue-amount-descending", "text": "Within the same Collection Review priority, overdue LCY amount is sorted descending."},
+          {"id": "customer-number-tie-breaker", "text": "For equal priority and overdue LCY amount, Collection Review sorts Customer No. ascending."}
+        ]
+      }]
+    }
+  ]
+}
