@@ -1,0 +1,116 @@
+name: Once-only BCAL medium coding smoke
+on:
+  workflow_call:
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: bcal-reasoning-coding-smoke-20261116
+  cancel-in-progress: false
+jobs:
+  coding:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    environment:
+      name: ado-read
+      deployment: false
+    env:
+      LLM_API_ENVIRONMENT: TEST
+      LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
+      LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+      LLM_API_CERTIFICATE_FILE: C:\bcal-reasoning-coding-smoke.pfx
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Reject reruns and previously executed coding smoke dispatches
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'No corrective rerun is authorized.' }
+          $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $runs.total_count -gt 100) { throw 'Once-only inventory unavailable.' }
+          $previous = @($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith(' / reasoning-coding-smoke') })
+          if ($previous.Count -ne 0) { throw 'A coding-smoke workflow already exists; no replacement is authorized.' }
+          "CODING_WORK=$env:RUNNER_TEMP\bcal-reasoning-coding-private" >> $env:GITHUB_ENV
+      - uses: ./.github/actions/setup-python-uv
+      - uses: ./.github/actions/install-bcal
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          package-id: Microsoft.BusinessCentral.BCal.CLI
+          feed: experiment
+          version: 30.0.46.49019-beta
+          official-feed-url: ${{ secrets.BCAL_FEED_URL }}
+          experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
+      - name: Prepare pinned inference dependencies and exact package helper
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          uv venv .coding-venv --python .\.venv\Scripts\python.exe --system-site-packages
+          uv pip install --python .\.coding-venv\Scripts\python.exe --no-deps -r .\experiments\bcal-sdk-policy\inference-requirements.txt
+          $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          if (-not $token) { throw 'Package token unavailable.' }
+          Write-Output "::add-mask::$token"
+          uv pip install --no-cache --python .\.coding-venv\Scripts\python.exe --no-deps bc-eval==0.6.1 --index "https://anything:$token@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          $root = "$HOME\.dotnet\tools\.store\microsoft.businesscentral.bcal.cli\30.0.46.49019-beta"
+          $cache = "$HOME\.nuget\packages\microsoft.businesscentral.bcal.cli\30.0.46.49019-beta"
+          $discovery = & .\.coding-venv\Scripts\python.exe -c "import sys,json; from pathlib import Path; sys.path.insert(0,'scripts'); from bcal_reasoning_compatibility import discover_package; p,a=discover_package(Path(sys.argv[1]),Path(sys.argv[2])); print(json.dumps({'package':str(p),'archive':str(a)}))" $root $cache
+          $located = $discovery | ConvertFrom-Json
+          $package = $located.package
+          dotnet build .\tools\reasoning-compatibility\NativeProbe.csproj --nologo -v:q "-p:PackageRoot=$package" -o "$env:RUNNER_TEMP\coding-native-admission"
+          "CODING_PACKAGE=$package" >> $env:GITHUB_ENV
+          "CODING_ARCHIVE=$($located.archive)" >> $env:GITHUB_ENV
+          "BCAL_OFFLINE_PACKAGE_ROOT=$package" >> $env:GITHUB_ENV
+          "BCAL_OFFLINE_PACKAGE_ARCHIVE=$($located.archive)" >> $env:GITHUB_ENV
+      - name: Verify offline options, pre-send budgets and loopback guards
+        shell: pwsh
+        run: |
+          & .\.coding-venv\Scripts\python.exe -m pytest tests\test_bcal_reasoning_coding.py tests\test_bcal_reasoning_compatibility.py tests\test_bcal_reasoning_smoke.py --noconftest -q --override-ini="addopts=" -k "not real_pinned_scorer"
+          if ($LASTEXITCODE -ne 0) { throw 'Current hosted toolchain failed offline admission tests.' }
+      - name: Download exact frozen local symbol archives without inference
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease | Out-Null
+          Import-Module BcContainerHelper -Force -DisableNameChecking
+          $url = Get-BCArtifactUrl -type Sandbox -version '28.0.46665.57479' -country w1 -select Latest
+          if (-not $url -or ([uri]$url).Segments[-2].Trim('/') -ne '28.0.46665.57479') { throw 'Exact frozen symbol artifact unavailable.' }
+          Download-Artifacts -artifactUrl $url -includePlatform *> "$env:RUNNER_TEMP\coding-symbol-download.log"
+      - name: Admit current exact package and three offline native medium requests
+        shell: pwsh
+        run: |
+          & .\.coding-venv\Scripts\python.exe .\scripts\bcal_reasoning_smoke.py admit --package $env:CODING_PACKAGE --archive $env:CODING_ARCHIVE --helper "$env:RUNNER_TEMP\coding-native-admission\NativeProbe.dll" --symbol-cache C:\bcartifacts.cache\sandbox --work $env:CODING_WORK --output coding-smoke-sanitized
+          if ($LASTEXITCODE -ne 0) { throw 'No-provider admission failed; no coding request admitted.' }
+      - name: Fetch runner-local inference certificate after offline admission
+        shell: pwsh
+        env:
+          CERT_VAULT: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CERT_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+        run: |
+          $b64 = az keyvault secret show --vault-name $env:CERT_VAULT --name $env:CERT_NAME --query value -o tsv
+          if (-not $b64) { throw 'Inference certificate unavailable.' }
+          Write-Output "::add-mask::$b64"
+          [IO.File]::WriteAllBytes($env:LLM_API_CERTIFICATE_FILE, [Convert]::FromBase64String($b64))
+      - name: Execute three sequential actual coding arms at thirty provider sends each
+        shell: pwsh
+        run: |
+          & .\.coding-venv\Scripts\python.exe .\scripts\bcal_reasoning_smoke.py execute --package $env:CODING_PACKAGE --archive $env:CODING_ARCHIVE --helper "$env:RUNNER_TEMP\coding-native-admission\NativeProbe.dll" --symbol-cache C:\bcartifacts.cache\sandbox --work $env:CODING_WORK --output coding-smoke-sanitized
+          if ($LASTEXITCODE -ne 0) { throw 'Coding smoke stopped; no corrective rerun or replacement.' }
+      - name: Retain sanitized coding receipts only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: reasoning-coding-smoke-sanitized
+          path: coding-smoke-sanitized\*.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Remove runner-local inference certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath $env:LLM_API_CERTIFICATE_FILE) { Remove-Item -LiteralPath $env:LLM_API_CERTIFICATE_FILE -Force }

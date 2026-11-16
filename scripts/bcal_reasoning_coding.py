@@ -20,7 +20,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Protocol
 
-from bcal_reasoning_compatibility import CLIENT_SHA, MODELS, PACKAGE_SHA, effort, load_module, verify_package, write_json
+from bcal_reasoning_compatibility import CLIENT_SHA, MODELS, PACKAGE_SHA, effort, load_module, safe_response, verify_package, write_json
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 if TYPE_CHECKING:
@@ -143,6 +143,34 @@ class ProviderBudget:
                 self.stopped = True
             write_json(self.path, self.snapshot())
             return response
+
+
+class ObservedResponse:
+    def __init__(self, response: httpx.Response, budget: ProviderBudget, stream: bool) -> None:
+        self.response, self.budget, self.stream = response, budget, stream
+        self.status_code, self.headers = response.status_code, response.headers
+        self.completed = False
+
+    def iter_bytes(self) -> Iterator[bytes]:
+        data = bytearray()
+        try:
+            for chunk in self.response.iter_bytes():
+                if len(data) + len(chunk) > 16 * 1024 * 1024:
+                    self.budget.reject("Provider response exceeded bounded observation size.")
+                data.extend(chunk)
+                yield chunk
+            observed = safe_response(self.status_code, bytes(data), self.stream and self.status_code == 200)
+            self.budget.events[-1]["response"] = observed
+            self.completed = True
+            if not observed["responseSuccess"]:
+                self.budget.stopped = True
+            write_json(self.budget.path, self.budget.snapshot())
+        except Exception:
+            self.budget.fail()
+            raise
+
+    def close(self) -> None:
+        self.response.close()
 
 
 class JudgeRequestError(RuntimeError):
@@ -332,11 +360,16 @@ def provider_route(policy: CodingPolicy | None, budget: ProviderBudget, key: str
     ):
 
         @contextmanager
-        def forward(route: str, body: dict) -> Iterator[httpx.Response]:
+        def forward(route: str, body: dict) -> Iterator[ObservedResponse]:
             try:
                 request = client.build_request("POST", ENDPOINTS["TEST"] + route, json=body, headers={"Authorization": "Bearer " + token()})
                 with budget.lock, client.stream(request.method, request.url, headers=request.headers, content=request.content) as response:
-                    yield response
+                    observed = ObservedResponse(response, budget, bool(body.get("stream")))
+                    try:
+                        yield observed
+                    finally:
+                        if not observed.completed:
+                            budget.fail()
             except Exception:  # noqa: BLE001 - stop and redact authentication, upstream and partial-stream failures
                 budget.fail()
                 raise proxy.ProxyError("Opt-in provider transport failed; run stopped.") from None
@@ -377,6 +410,34 @@ def validate_scenario(path: Path) -> bytes:
     return data
 
 
+def transcript_summary(path: Path) -> dict:
+    if not path.is_file():
+        return {"available": False}
+    try:
+        body = json.loads(path.read_bytes())
+    except (OSError, ValueError):
+        return {"available": False, "readOutcome": "invalid"}
+    if not isinstance(body, dict):
+        return {"available": False, "readOutcome": "invalid"}
+    identity = body.get("runtimeIdentity")
+    evidence = body.get("agentRuntimeEvidence")
+    exported = body.get("export")
+    return {
+        "available": True,
+        "completed": body.get("completed") is True,
+        "failurePresent": body.get("failure") is not None,
+        "runtimeIdentityAvailable": isinstance(identity, dict),
+        "runtimeModel": identity.get("mainModel") if isinstance(identity, dict) and identity.get("mainModel") in MODELS else None,
+        "runtimeAppliedEffort": identity.get("reasoningEffort") if isinstance(identity, dict) and identity.get("reasoningEffort") in (None, "none", "medium") else None,
+        "turns": [{key: turn[key] for key in ("modelRequests", "compileCoversLatestChange", "domainCompleted") if type(turn.get(key)) in (bool, int)} for turn in evidence if isinstance(turn, dict)]
+        if isinstance(evidence, list)
+        else [],
+        "exportAttempted": isinstance(exported, dict) and exported.get("attempted") is True,
+        "exportSucceeded": isinstance(exported, dict) and exported.get("success") is True,
+        "transcriptSha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
 def run_coding(args: argparse.Namespace) -> None:
     from bcal_governed_study import verify_owned_cleanup
     from bcbench_core.agent.experiment import ExperimentConfiguration
@@ -398,6 +459,8 @@ def run_coding(args: argparse.Namespace) -> None:
     frozen_scenario.write_bytes(scenario_bytes)
     receipt = {
         "status": "prepared",
+        "benchCommit": os.environ.get("GITHUB_SHA"),
+        "pythonVersion": sys.version.split()[0],
         "packageSha256": PACKAGE_SHA,
         "packageSource": PACKAGE_SOURCE,
         "verifiedRuntimeFiles": verified,
@@ -423,6 +486,8 @@ def run_coding(args: argparse.Namespace) -> None:
             previous = os.environ.get("BCAL_REASONING_LOCAL_KEY")
             os.environ["BCAL_REASONING_LOCAL_KEY"] = key
             arm = {**policy.receipt(), "status": "started"}
+            started = datetime.now(UTC)
+            arm["startedAtUtc"] = started.isoformat()
             receipt["arms"].append(arm)
             write_json(args.output / "receipt.json", receipt)
             try:
@@ -466,6 +531,10 @@ def run_coding(args: argparse.Namespace) -> None:
                     auxiliaryInvocations=0,
                     systemPromptSha256=identity.get("systemPromptSha256"),
                     toolCatalogSha256=identity.get("toolCatalogSha256"),
+                    completed=True,
+                    freshCompiled=True,
+                    exportedAlFiles=len(list((private / "exports").rglob("*.al"))),
+                    exportSourceHashes=[hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted((private / "exports").rglob("*.al"))],
                 )
             finally:
                 arm.setdefault("auxiliaryInvocations", len(list((private / "auxiliary").iterdir())))
@@ -473,6 +542,12 @@ def run_coding(args: argparse.Namespace) -> None:
                 arm.setdefault("observedWireEfforts", [event["wireEffort"] for event in budget.events if event["model"] == policy.model and event["role"] == "main"])
                 if arm["status"] == "started":
                     arm["status"] = "failed"
+                arm["finishedAtUtc"] = datetime.now(UTC).isoformat()
+                arm["elapsedSeconds"] = (datetime.now(UTC) - started).total_seconds()
+                observations = [event.get("response") for event in budget.events if event["model"] == policy.model and event["role"] == "main"]
+                arm["responseObservations"] = observations
+                arm["cost"] = None
+                arm["terminalEvidence"] = transcript_summary(private / "result.json")
                 if previous is None:
                     os.environ.pop("BCAL_REASONING_LOCAL_KEY", None)
                 else:

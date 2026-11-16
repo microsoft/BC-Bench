@@ -442,3 +442,38 @@ runtime/source identity, unchanged completion verification, compilation covering
 the latest source change, AL export, clean HTTP evidence, and zero auxiliary
 invocations. A smoke success is not a quality comparison or proof of the best
 reasoning setting.
+
+The separately authorized `reasoning-coding-smoke` workflow phase runs the
+same new synthetic ClampPriority codeunit task once on each of the three exact
+models, sequentially, with explicit medium. `scripts\bcal_reasoning_smoke.py`
+pins one 30-provider-attempt child configuration per model: 90 total, with
+independent immutable ledgers and no cell retry, replacement, gold case or
+judge. The global bound follows from exactly three once-only child admissions
+and their innermost 30-send caps; it is not a token/spend bound. A failed model
+does not authorize retrying it; a different preapproved model can still run
+after cleanup and accounting verification.
+
+Offline admission checks all 224 exact runtime files, the real packaged CLI
+version, three actual packaged native-medium request shapes, and one full
+`bcal.exe` first request to a loopback-only HTTP400 fixture using the normal
+production prompt/tools. None of these admission requests reaches a provider.
+The live phase is gated on current same-source admission and runner/hash checks.
+Rerun attempts and any replacement executed workflow are rejected.
+
+This synthetic local-only task uses an explicit five-archive dependency closure
+from the frozen `28.0.46665.57479` cache (System, Application, Base Application,
+System Application, Business Foundation), not the historical 350-file study
+input. Each selected archive's bytes, nested app manifests, platform version
+and transitive dependency versions are checked; exact paths/hashes are in the
+admission receipt. A local exploratory 350-file admission timed out before any
+provider request; that is pre-model infrastructure evidence, not a model result
+or an established symbol-loading latency diagnosis.
+
+No server argument or connection settings are supplied, so this exact package's
+local-cache CLI path has no publish target or publish tool. Normal local AL
+authoring, latest-source compilation and export remain required. Bounded
+response observation retains usage and reasoning-token availability when
+exposed, never response bodies or reasoning text. `matrix.json`, admission
+proofs and the copied per-model receipts/ledgers are the sanitized workflow
+outputs; the private work directory is never uploaded. Three tiny executions
+can establish this coding path works, not which model or effort is best.

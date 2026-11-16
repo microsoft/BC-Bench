@@ -117,6 +117,31 @@ def test_identical_request_retry_is_not_new_coding_turn(tmp_path):
     assert budget.snapshot()["attempts"] == 1
 
 
+def test_stream_observation_retains_usage_and_reasoning_availability_not_content(tmp_path):
+    httpx = pytest.importorskip("httpx2")
+    budget = coding.ProviderBudget(tmp_path / "attempts.json", 30)
+    budget.send("main", {"model": MODELS[0]}, lambda: SimpleNamespace(status_code=200))
+    payload = {
+        "type": "response.completed",
+        "response": {
+            "model": "safe-model",
+            "status": "completed",
+            "output": [{"type": "message", "content": "PRIVATE"}],
+            "usage": {"input_tokens": 10, "output_tokens": 4, "output_tokens_details": {"reasoning_tokens": 2}},
+        },
+    }
+    data = ("data: " + json.dumps(payload) + "\n\ndata: [DONE]\n").encode()
+    observed = coding.ObservedResponse(httpx.Response(200, content=data), budget, True)
+    assert b"".join(observed.iter_bytes()) == data
+    result = budget.events[0]["response"]
+    assert observed.completed
+    assert not budget.stopped
+    assert result["usage"] == {"input_tokens": 10, "output_tokens": 4}
+    assert result["reasoningTokensAvailable"]
+    assert result["reasoningTokens"] == 2
+    assert "PRIVATE" not in budget.path.read_text()
+
+
 @pytest.mark.parametrize("failure", ["429", "redirect", "wire", "model", "duplicate"])
 def test_actual_loopback_handler_and_innermost_boundary_fail_closed(tmp_path, monkeypatch, failure):
     httpx = pytest.importorskip("httpx2")
