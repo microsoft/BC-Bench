@@ -92,6 +92,41 @@ def test_smoke_stops_remaining_models_on_untrustworthy_accounting(tmp_path, monk
     assert json.loads((tmp_path / "safe" / "matrix.json").read_bytes())["status"] == "infrastructure-failed"
 
 
+def test_sol_diagnostic_executes_only_one_frozen_arm_with_total_thirty_cap(tmp_path, monkeypatch):
+    from bcbench.agent.bcal import agent
+
+    (tmp_path / "work").mkdir()
+    (tmp_path / "safe").mkdir()
+    monkeypatch.setattr(smoke, "validate_admission", lambda _: {})
+    calls = []
+
+    def run(command, **kwargs):
+        private = Path(command[command.index("--output") + 1])
+        assert private.name == smoke.MODELS[0] + ".execution"
+        private.mkdir()
+        calls.append(command)
+        (private / "receipt.json").write_text('{"status":"failed"}')
+        (private / "provider-attempts.json").write_text(
+            json.dumps(
+                {
+                    "limit": 30,
+                    "attempts": 1,
+                    "events": [{"model": smoke.MODELS[0], "role": "main"}],
+                }
+            )
+        )
+        raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(agent, "_run_bcal_process", run)
+    args = Namespace(work=tmp_path / "work", output=tmp_path / "safe", package=tmp_path, archive=tmp_path / "package.nupkg")
+    smoke.execute(args, (smoke.MODELS[0],))
+    matrix = json.loads((args.output / "matrix.json").read_bytes())
+    assert len(calls) == len(matrix["models"]) == 1
+    assert matrix["totalProviderAttemptCap"] == 30
+    assert matrix["providerAttempts"] == 1
+    assert matrix["status"] == "completed-with-failures"
+
+
 def test_materializes_only_exact_frozen_symbol_bytes(tmp_path, monkeypatch):
     root = tmp_path / "repo"
     manifest_path = root / "experiments" / "bcal-sdk-policy" / "symbols.json"

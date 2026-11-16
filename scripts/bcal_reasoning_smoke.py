@@ -270,12 +270,14 @@ def validate_admission(args: argparse.Namespace) -> dict:
     return value
 
 
-def execute(args: argparse.Namespace) -> None:
+def execute(args: argparse.Namespace, models: tuple[str, ...] = MODELS) -> None:
     from bcal_governed_study import verify_owned_cleanup
 
     from bcbench.agent.bcal.agent import _run_bcal_process
 
     admission = validate_admission(args)
+    require(models in (MODELS, (MODELS[0],)), "Only the frozen three-model smoke or separately authorized Sol diagnostic is supported.")
+    total_cap = 30 * len(models)
     # This marker is exclusive and is never removed, even if execution fails.
     with (args.output / "execution-once.json").open("x", encoding="utf-8") as file:
         json.dump({"runId": os.environ.get("GITHUB_RUN_ID"), "sourceSha": os.environ.get("GITHUB_SHA"), "startedAtUtc": datetime.now(UTC).isoformat()}, file)
@@ -285,14 +287,14 @@ def execute(args: argparse.Namespace) -> None:
         "models": [],
         "providerAttempts": 0,
         "perModelProviderAttemptCap": 30,
-        "totalProviderAttemptCap": 90,
+        "totalProviderAttemptCap": total_cap,
         "judgeCalls": 0,
         "cost": None,
     }
     write_json(args.output / "matrix.json", matrix)
     try:
-        for model in MODELS:
-            require(matrix["providerAttempts"] <= 60, "Full remaining per-model reservation is unavailable.")
+        for model in models:
+            require(matrix["providerAttempts"] <= total_cap - 30, "Full remaining per-model reservation is unavailable.")
             private = args.work / f"{model}.execution"
             command = [
                 sys.executable,
@@ -332,7 +334,7 @@ def execute(args: argparse.Namespace) -> None:
                 "Actual per-model attempt accounting differs.",
             )
             matrix["providerAttempts"] += ledger["attempts"]
-            require(matrix["providerAttempts"] <= 90, "Total attempt cap was violated.")
+            require(matrix["providerAttempts"] <= total_cap, "Total attempt cap was violated.")
             shutil.copyfile(receipt_path, args.output / f"{model}.receipt.json")
             shutil.copyfile(ledger_path, args.output / f"{model}.attempts.json")
             matrix["models"].append(
@@ -357,12 +359,12 @@ def execute(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=("admit", "execute"))
+    parser.add_argument("phase", choices=("admit", "execute", "execute-sol"))
     for name in ("package", "archive", "helper", "symbol-cache", "work", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
     args = parser.parse_args()
     try:
-        {"admit": admit, "execute": execute}[args.phase](args)
+        {"admit": admit, "execute": execute, "execute-sol": lambda value: execute(value, (MODELS[0],))}[args.phase](args)
     except Exception as error:  # noqa: BLE001 - no private provider/package details in public logs
         sys.stderr.write(f"Once-only coding smoke stopped: {type(error).__name__}\n")
         raise SystemExit(1) from None

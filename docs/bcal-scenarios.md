@@ -460,6 +460,16 @@ production prompt/tools. None of these admission requests reaches a provider.
 The live phase is gated on current same-source admission and runner/hash checks.
 Rerun attempts and any replacement executed workflow are rejected.
 
+The separately authorized `reasoning-sol-smoke` phase admits only one Sol arm
+of that same synthetic task, explicit medium, 30 actual provider sends total,
+no auxiliary inference or judge, and no retry/replacement. It preserves the
+completed three-model experiment rather than correcting its recorded result.
+Its terminal diagnostics retain only known failure codes, closed runtime
+terminal states and numeric/boolean counters. Exact whole-message comparisons
+against fixed source constants produce message-signature categories, not
+authenticated root-cause attribution; dynamic or wrapped messages remain
+`unknown`. Raw error text is never published.
+
 This synthetic local-only task uses an explicit five-archive dependency closure
 from the frozen `28.0.46665.57479` cache (System, Application, Base Application,
 System Application, Business Foundation), not the historical 350-file study

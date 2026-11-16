@@ -142,6 +142,65 @@ def test_stream_observation_retains_usage_and_reasoning_availability_not_content
     assert "PRIVATE" not in budget.path.read_text()
 
 
+@pytest.mark.parametrize("known", [True, False])
+def test_terminal_diagnostics_allowlist_state_and_counters_without_raw_failure(tmp_path, known):
+    path = tmp_path / "result.json"
+    path.write_text(
+        json.dumps(
+            {
+                "failure": {"code": "turn_failed" if known else "PRIVATE_CODE", "message": "PRIVATE_CREDENTIAL_PROMPT"},
+                "agentRuntimeEvidence": [
+                    {
+                        "terminalState": "protocol-error" if known else "PRIVATE_STATE",
+                        "modelRequests": 1,
+                        "toolCalls": 0,
+                        "responseIterations": 1,
+                        "domainCompleted": False,
+                        "mutationSucceeded": False,
+                        "reasoningTokens": 101,
+                        "inputTokens": "PRIVATE",
+                        "outputTokens": -1,
+                        "unknownField": "PRIVATE",
+                    }
+                ],
+            }
+        )
+    )
+    summary = coding.transcript_summary(path)
+    assert summary["failureCode"] == ("turn_failed" if known else "unknown")
+    assert summary["turns"] == [
+        {
+            "terminalState": "protocol-error" if known else "unknown",
+            "modelRequests": 1,
+            "toolCalls": 0,
+            "responseIterations": 1,
+            "domainCompleted": False,
+            "mutationSucceeded": False,
+            "reasoningTokens": 101,
+        }
+    ]
+    assert "PRIVATE" not in json.dumps(summary)
+
+
+@pytest.mark.parametrize("suffix", ["", " PRIVATE", "\n"])
+def test_failure_signature_requires_exact_full_source_constant(tmp_path, suffix):
+    path = tmp_path / "result.json"
+    path.write_text(
+        json.dumps(
+            {
+                "failure": {
+                    "code": "turn_failed",
+                    "message": "Native planning tool arguments were absent." + suffix,
+                }
+            }
+        )
+    )
+    summary = coding.transcript_summary(path)
+    assert summary["failureMessageSignature"] == ("missing_native_args" if not suffix else "unknown")
+    assert "Native planning" not in json.dumps(summary)
+    assert "PRIVATE" not in json.dumps(summary)
+
+
 @pytest.mark.parametrize("failure", ["429", "redirect", "wire", "model", "duplicate"])
 def test_actual_loopback_handler_and_innermost_boundary_fail_closed(tmp_path, monkeypatch, failure):
     httpx = pytest.importorskip("httpx2")

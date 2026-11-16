@@ -32,6 +32,26 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_SOURCE = "52f3f7f5dd2d26c83f2778d28ace9d47364b481b"
 SCORER_SHA = "c563e569520b202e725d46ac58497868fefd8d48662fb8a305c9a397e14c398d"
+TERMINAL_STATES = frozenset(
+    ("not-started", "running", "completed", "error", "aborted", "deadline-exceeded", "input-required", "protocol-error", "incomplete", "budget-exceeded", "model-options-mismatch")
+)
+FAILURE_CODES = frozenset(("turn_failed", "sdk_deadline_exceeded", "scenario_canceled"))
+FAILURE_SIGNATURES = {
+    "Provider/runtime violated single-call planning dispatch.": "planning_dispatch_guard",
+    "Dependent native tool-call order is not guaranteed for a multi-call response.": "planning_dispatch_callback",
+    "Provider/runtime violated single-call BCAL dispatch.": "bcal_dispatch_guard",
+    "Dependent tool-call order is not guaranteed for a multi-call response.": "bcal_dispatch_callback",
+    "SDK callback arrived after the fence or overlapped workspace access.": "callback_fence_guard",
+    "BCAL callback admission closed or occupied.": "callback_admission",
+    "Copilot SDK did not confirm delivery of successful BCAL tool results.": "pending_delivery_at_idle",
+    "SDK reported an aborted turn.": "aborted_idle",
+    "SDK became idle without domain-valid completion.": "no_domain_completion_at_idle",
+    "Native planning tool arguments were absent.": "missing_native_args",
+    "SDK request arrived while BCAL callbacks are active or fenced.": "request_callback_fence",
+    "SDK upstream model-request budget exhausted.": "request_budget",
+    "SDK token usage must be a finite, nonnegative integer.": "invalid_token_usage",
+    "SDK cost usage must be finite and nonnegative.": "invalid_cost_usage",
+}
 
 
 class CodingPolicy(BaseModel):
@@ -422,16 +442,46 @@ def transcript_summary(path: Path) -> dict:
     identity = body.get("runtimeIdentity")
     evidence = body.get("agentRuntimeEvidence")
     exported = body.get("export")
+    failure = body.get("failure")
+    failure_code = failure.get("code") if isinstance(failure, dict) else None
+    turns = []
+    for turn in evidence if isinstance(evidence, list) else []:
+        if not isinstance(turn, dict):
+            continue
+        safe = {
+            key: value
+            for key, value in turn.items()
+            if key
+            in {
+                "modelRequests",
+                "responseIterations",
+                "toolCalls",
+                "usageEvents",
+                "inputTokens",
+                "outputTokens",
+                "reasoningTokens",
+                "cachedInputTokens",
+                "domainCompleted",
+                "mutationSucceeded",
+                "compileSucceeded",
+                "hasUncompiledMutation",
+                "compileCoversLatestChange",
+            }
+            and (type(value) is bool or (type(value) is int and value >= 0))
+        }
+        terminal = turn.get("terminalState")
+        safe["terminalState"] = terminal if isinstance(terminal, str) and terminal in TERMINAL_STATES else "unknown"
+        turns.append(safe)
     return {
         "available": True,
         "completed": body.get("completed") is True,
         "failurePresent": body.get("failure") is not None,
+        "failureCode": failure_code if isinstance(failure_code, str) and failure_code in FAILURE_CODES else "unknown" if failure is not None else None,
+        "failureMessageSignature": FAILURE_SIGNATURES.get(failure.get("message"), "unknown") if isinstance(failure, dict) and isinstance(failure.get("message"), str) else None,
         "runtimeIdentityAvailable": isinstance(identity, dict),
         "runtimeModel": identity.get("mainModel") if isinstance(identity, dict) and identity.get("mainModel") in MODELS else None,
         "runtimeAppliedEffort": identity.get("reasoningEffort") if isinstance(identity, dict) and identity.get("reasoningEffort") in (None, "none", "medium") else None,
-        "turns": [{key: turn[key] for key in ("modelRequests", "compileCoversLatestChange", "domainCompleted") if type(turn.get(key)) in (bool, int)} for turn in evidence if isinstance(turn, dict)]
-        if isinstance(evidence, list)
-        else [],
+        "turns": turns,
         "exportAttempted": isinstance(exported, dict) and exported.get("attempted") is True,
         "exportSucceeded": isinstance(exported, dict) and exported.get("success") is True,
         "transcriptSha256": hashlib.sha256(path.read_bytes()).hexdigest(),

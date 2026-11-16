@@ -1,6 +1,10 @@
 name: Once-only BCAL medium coding smoke
 on:
   workflow_call:
+    inputs:
+      sol-diagnostic:
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -26,12 +30,21 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          SOL_DIAGNOSTIC: ${{ inputs.sol-diagnostic }}
         run: |
           $ErrorActionPreference = 'Stop'
           if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'No corrective rerun is authorized.' }
           $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
           $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $runs.total_count -gt 100) { throw 'Once-only inventory unavailable.' }
+          if ($env:SOL_DIAGNOSTIC -eq 'true') {
+            $diagnostics = @($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith(' / reasoning-sol-smoke') })
+            if ($diagnostics.Count -ne 0) { throw 'The single Sol diagnostic authorization has already been used.' }
+            $baseline = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/43863315835" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $baseline.head_sha -ne '0839dcebfe91d5c742586e16d1843efa938cca46' -or
+                $baseline.status -ne 'completed' -or $baseline.conclusion -ne 'success' -or $baseline.run_attempt -ne 1) { throw 'Preserved three-model experiment identity changed.' }
+            "CODING_EXECUTION_PHASE=execute-sol" >> $env:GITHUB_ENV
+          } else {
           $previous = @($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith(' / reasoning-coding-smoke') })
           if ($previous.Count -ne 1 -or $previous[0].id -ne 43860521534 -or
               $previous[0].head_sha -ne '38ab3306042e9403eef8b5bd9e5fea6fb1af4694' -or
@@ -48,6 +61,8 @@ jobs:
           }
           $failure = @($steps | Where-Object { $_.name -eq 'Verify offline options, pre-send budgets and loopback guards' })
           if ($failure.Count -ne 1 -or $failure[0].conclusion -ne 'failure') { throw 'Prior setup-failure evidence no longer matches.' }
+          "CODING_EXECUTION_PHASE=execute" >> $env:GITHUB_ENV
+          }
           "CODING_WORK=$env:RUNNER_TEMP\bcal-reasoning-coding-private" >> $env:GITHUB_ENV
       - uses: ./.github/actions/setup-python-uv
       - uses: ./.github/actions/install-bcal
@@ -116,7 +131,7 @@ jobs:
       - name: Execute three sequential actual coding arms at thirty provider sends each
         shell: pwsh
         run: |
-          & .\.coding-venv\Scripts\python.exe .\scripts\bcal_reasoning_smoke.py execute --package $env:CODING_PACKAGE --archive $env:CODING_ARCHIVE --helper "$env:RUNNER_TEMP\coding-native-admission\NativeProbe.dll" --symbol-cache C:\bcartifacts.cache\sandbox --work $env:CODING_WORK --output coding-smoke-sanitized
+          & .\.coding-venv\Scripts\python.exe .\scripts\bcal_reasoning_smoke.py $env:CODING_EXECUTION_PHASE --package $env:CODING_PACKAGE --archive $env:CODING_ARCHIVE --helper "$env:RUNNER_TEMP\coding-native-admission\NativeProbe.dll" --symbol-cache C:\bcartifacts.cache\sandbox --work $env:CODING_WORK --output coding-smoke-sanitized
           if ($LASTEXITCODE -ne 0) { throw 'Coding smoke stopped; no corrective rerun or replacement.' }
       - name: Retain sanitized coding receipts only
         if: always()
