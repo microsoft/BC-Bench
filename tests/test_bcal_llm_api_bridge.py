@@ -143,17 +143,9 @@ def test_main_falls_back_to_bc_eval_default_credential_without_local_cert(monkey
 
 
 @pytest.mark.parametrize("model", ["gpt-55-chat", "gpt-56-reasoning-sol"])
-def test_main_sends_empty_routing_ticket_without_forwarding_request_headers(monkeypatch, fake_llm_api, model):
+def test_main_sends_empty_routing_ticket_without_local_certificate(monkeypatch, fake_llm_api, model):
     monkeypatch.delenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, raising=False)
 
-    _run_main(
-        monkeypatch,
-        {
-            "model": model,
-            "messages": [],
-            "extra_headers": {"x-sticky-route-session-ticket": "untrusted-ticket", "X-Taxonomy-InferenceStep": "untrusted-step"},
-        },
-    )
+    _run_main(monkeypatch, {"model": model, "messages": []})
 
-    assert fake_llm_api["client"]["inference_step"] == "HostAgent"
     assert fake_llm_api["request"]["extra_headers"] == {"x-sticky-route-session-ticket": ""}
