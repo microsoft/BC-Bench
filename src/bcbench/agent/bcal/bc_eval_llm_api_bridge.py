@@ -33,7 +33,8 @@ class _RawResponse(Protocol):
     def headers(self) -> Mapping[str, str]:
         raise NotImplementedError
 
-    def parse(self) -> object: ...
+    def parse(self) -> object:
+        raise NotImplementedError
 
 
 class _RawCompletions(Protocol):
