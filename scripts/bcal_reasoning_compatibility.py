@@ -271,25 +271,30 @@ def native_probe(package: Path, helper: Path, model: str, policy: str, url: str,
     return json.loads(output.read_bytes())
 
 
-def run(args: argparse.Namespace) -> None:
-    args.output.mkdir(parents=True, exist_ok=True)
-    if (args.output / "admission.json").exists():
-        raise AdmissionError("This diagnostic output is immutable; no rerun/replacement.")
-    if hashlib.sha256(args.archive.read_bytes()).hexdigest() != PACKAGE_SHA:
+def verify_package(package: Path, archive_path: Path) -> int:
+    if hashlib.sha256(archive_path.read_bytes()).hexdigest() != PACKAGE_SHA:
         raise AdmissionError("Package hash differs.")
     verified = 0
-    with zipfile.ZipFile(args.archive) as archive:
+    with zipfile.ZipFile(archive_path) as archive:
         for item in archive.infolist():
             prefix = "tools/net10.0/any/"
             if item.filename.startswith(prefix) and not item.is_dir():
                 relative = Path(item.filename[len(prefix) :])
                 if relative.is_absolute() or ".." in relative.parts:
                     raise AdmissionError("Invalid archive path.")
-                if hashlib.sha256(archive.read(item)).digest() != hashlib.sha256((args.package / relative).read_bytes()).digest():
+                if hashlib.sha256(archive.read(item)).digest() != hashlib.sha256((package / relative).read_bytes()).digest():
                     raise AdmissionError("Actual packaged runtime file differs from pinned archive.")
                 verified += 1
     if verified != 224:
         raise AdmissionError("Exact runtime inventory differs.")
+    return verified
+
+
+def run(args: argparse.Namespace) -> None:
+    args.output.mkdir(parents=True, exist_ok=True)
+    if (args.output / "admission.json").exists():
+        raise AdmissionError("This diagnostic output is immutable; no rerun/replacement.")
+    verified = verify_package(args.package, args.archive)
     import importlib.metadata
 
     client_source = Path(importlib.metadata.distribution("bc-eval").locate_file("bc_eval/llm/llm_api.py"))

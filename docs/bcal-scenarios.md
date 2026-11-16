@@ -370,3 +370,75 @@ completeness, and exception classifications may be uploaded to this public
 repository. Raw AL, prompts, transcripts, error text, package bytes, certificates,
 and routing tickets remain runner-ephemeral. Detailed failures cannot be recovered
 or rejudged from publication alone after teardown.
+
+## Opt-in reasoning-enabled coding
+
+`scripts\bcal_reasoning_coding.py coding` is a separate opt-in entry point for
+actual packaged `bcal.exe` coding, not the synthetic compatibility probe. It does
+not generalize the closed governed-study allowlists, change defaults, or admit a
+gold run. It pins package `30.0.46.49019-beta`, source
+`52f3f7f5dd2d26c83f2778d28ace9d47364b481b`, and verifies the retained archive
+hash and all 224 runtime payload files before execution.
+
+Supply a JSON configuration with `policies` (one entry per selected model),
+`max_provider_attempts` (shared across all entries), `timeout_seconds` (per coding
+process), and `page` (local symbol context). Each policy requires an exact `model`
+(`gpt-56-reasoning-sol`, `gpt-56-ceres`, or `gpt-55-chat`),
+`reasoning_effort` (`none`, `medium`, or `unset`), and `auxiliary: "forbid"`.
+Unknown fields, aliases, null effort, and unadmitted effort values fail locally.
+There is no inferred best-model setting or automatic fallback.
+
+The runner uses SDK-native/copilot planning, the production BCAL prompt and
+tools, a supplied local symbol directory, and a single-user-step scenario. It
+does not inject a synthetic SDK configuration. `unset` genuinely omits the SDK
+CLI option and clears inherited overrides; this pinned native runtime is
+expected to generate explicit wire `medium`, **not wire omission**. Every
+outbound request must match the selected model and expected wire effort.
+BCAL's own explicit-effort equality and completion guards remain unchanged.
+
+Run preparation offline first (use a new output directory for each invocation):
+
+```powershell
+uv run python scripts\bcal_reasoning_coding.py coding `
+  --config <coding-policy.json> --package <exact-net10-tools-directory> `
+  --archive <exact-49019.nupkg> --symbols <local-symbol-directory> `
+  --scenario <single-user-step.json> --output <new-private-output-directory>
+```
+
+Only an independently authorized smoke adds `--execute`. Execution needs the
+pinned bc-eval inference dependencies and existing TEST certificate routing;
+installing this entry point is not provider-call authorization. No workflow
+dispatch is implied. The package must contain `bcal.exe`; this entry point is
+Windows-only. No BC connection or inherited BCAL settings/provider credentials
+are passed to the coding subprocess.
+
+Auxiliary Chat is explicitly **forbidden**, not silently routed to the main
+model. Its configured external command records an invocation and fails without
+sending HTTP; any invocation invalidates the run even if BCAL later completes.
+Reachable coding paths that need it require separate policy design/admission.
+Native self-review does not itself imply an auxiliary acceptance reviewer.
+
+Actual provider sends are reserved durably before the non-retrying innermost
+HTTP transport. HTTP errors (including 429), transport/stream failures, repeated
+identical requests, and policy violations stop further admission. The shared
+cap counts every send, not turns or successful replies. This is a request cap,
+not a provider-token or monetary ceiling. The SDK request-count option is an
+additional guard, not the HTTP accounting source.
+
+The ordinary pinned checklist scorer helper `score_checklist` adds a
+single-attempt callback boundary that converts failures to a non-retriable,
+sanitized exception and validates the complete checklist before scoring. This
+contains the independent `autoevals.oai.run_cached_request` RateLimitError loop;
+OpenAI `max_retries=0` alone does not. Its judge contract remains Ceres/Chat with
+true omitted effort. Coding smoke deliberately performs **no judge scoring**.
+Historical study/scoring entry points are unchanged: future gold integration
+must use the bounded route and scorer together under a separately admitted
+workload.
+
+Only `receipt.json` and `provider-attempts.json` are sanitized publication
+artifacts. The `private` and per-model directories contain raw inputs, console
+logs, transcripts and generated AL and must not be uploaded. Successful coding requires native
+runtime/source identity, unchanged completion verification, compilation covering
+the latest source change, AL export, clean HTTP evidence, and zero auxiliary
+invocations. A smoke success is not a quality comparison or proof of the best
+reasoning setting.
