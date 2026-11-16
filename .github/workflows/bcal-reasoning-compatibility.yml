@@ -19,7 +19,7 @@ jobs:
       LLM_API_ENVIRONMENT: TEST
       LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
       LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
-      LLM_API_CERTIFICATE_FILE: ${{ runner.temp }}\reasoning-compatibility.pfx
+      LLM_API_CERTIFICATE_FILE: C:\bcal-reasoning-compatibility.pfx
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Reject corrective reruns and duplicate dispatches
