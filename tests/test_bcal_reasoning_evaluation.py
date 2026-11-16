@@ -1,5 +1,7 @@
 import importlib
 import json
+import os
+import shutil
 import subprocess
 import sys
 from argparse import Namespace
@@ -9,6 +11,7 @@ from threading import Event, Lock
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 evaluation = importlib.import_module("bcal_reasoning_evaluation")
@@ -194,7 +197,11 @@ def test_frozen_gold_orchestration_admits_each_cell_once_and_streams_bounded_jud
     assert "PRIVATE" not in json.dumps(summary)
 
 
-def test_judge429_remains_null_and_preserves_attempts_without_rejudging(tmp_path, monkeypatch):
+@pytest.mark.parametrize("unknown_error", [False, True])
+def test_judge429_remains_null_and_preserves_attempts_without_rejudging(tmp_path, monkeypatch, unknown_error):
+    class PrivateExceptionNameError(Exception):
+        pass
+
     study = evaluation.StudyBudget.create(tmp_path / "study.db", [f"cell-{i}" for i in range(330)], "binding")
     study.admit("cell-0", "binding")
     job = tmp_path / "job.json"
@@ -206,7 +213,7 @@ def test_judge429_remains_null_and_preserves_attempts_without_rejudging(tmp_path
     @contextmanager
     def route(policy, budget, key):
         budget.send("judge", {"model": "gpt-56-ceres"}, lambda: SimpleNamespace(status_code=429))
-        raise evaluation.AdmissionError("Synthetic judge failure")
+        raise PrivateExceptionNameError("PRIVATE") if unknown_error else evaluation.AdmissionError("Synthetic judge failure")
         yield  # pragma: no cover
 
     monkeypatch.setattr(evaluation, "provider_route", route)
@@ -217,3 +224,66 @@ def test_judge429_remains_null_and_preserves_attempts_without_rejudging(tmp_path
     assert receipt["quality"] is None
     assert receipt["testPassed"] is None
     assert receipt["judgeAccounting"]["attempts"] == study.snapshot()["judgeAttempts"] == 1
+    assert receipt["judgeFailureCategory"] == ("unknown" if unknown_error else "admission_or_accounting")
+    assert "PrivateExceptionNameError" not in json.dumps(receipt)
+    assert "PRIVATE" not in json.dumps(receipt)
+
+
+@pytest.mark.parametrize(
+    "case", ["smoke", "gold", "rerun", "duplicate-smoke", "duplicate-gold", "wrong-source", "failed-smoke", "wrong-smoke-mode", "missing-smoke", "inventory-overflow", "wrong-package"]
+)
+def test_actual_once_only_powershell_gate_rejects_reuse_and_unadmitted_smoke(tmp_path, case):
+    profile = tmp_path / "experiments" / "bcal-reasoning-gold" / "package.json"
+    profile.parent.mkdir(parents=True)
+    profile.write_text(json.dumps({"source": "bad" if case == "wrong-package" else "cc3f023be09b313cb0568bbaaad6131404152e3c", "version": "30.0.46.99999-beta"}))
+    gold = case in ("gold", "duplicate-gold", "wrong-source", "failed-smoke", "wrong-smoke-mode", "missing-smoke")
+    phase = "reasoning-medium-gold" if gold else "reasoning-new-sol-smoke"
+    runs = {"total_count": 101 if case == "inventory-overflow" else 1, "workflow_runs": [{"id": 222, "display_title": f"BCal / {phase}"}]}
+    if case.startswith("duplicate-"):
+        runs["workflow_runs"].append({"id": 221, "display_title": f"BCal / {phase}"})
+    else:
+        runs["workflow_runs"].append({"id": 220, "display_title": "BCal / reasoning-sol-smoke"})
+    smoke = {
+        "run_attempt": 1,
+        "status": "completed",
+        "conclusion": "failure" if case == "failed-smoke" else "success",
+        "head_sha": "bad" if case == "wrong-source" else "bench",
+        "display_title": "BCal / " + ("reasoning-sol-smoke" if case == "wrong-smoke-mode" else "reasoning-new-sol-smoke"),
+    }
+    workflow = yaml.safe_load((evaluation.ROOT / ".github" / "workflows" / "bcal-reasoning-medium-gold.yml").read_bytes())
+    step = next(step for step in workflow["jobs"]["evaluate"]["steps"] if step.get("id") == "pin")
+    script = tmp_path / "gate.ps1"
+    script.write_text(
+        """
+function gh {
+    if ($args[0] -eq 'api') {
+        if ($args[1] -like '*/actions/runs/12345') { $env:OFFLINE_SMOKE_JSON }
+        else { $env:OFFLINE_RUNS_JSON }
+    } elseif ($args[0] -eq 'run' -and $args[1] -eq 'download') {
+        Set-Content -LiteralPath 'offline-download-marker' -Value 'mock-only'
+    } else { throw 'Unexpected external command in offline fixture.' }
+}
+"""
+        + step["run"]
+    )
+    env = {
+        **os.environ,
+        "GITHUB_SHA": "bench",
+        "GITHUB_RUN_ID": "222",
+        "GITHUB_RUN_ATTEMPT": "2" if case == "rerun" else "1",
+        "GITHUB_REF_NAME": "offline",
+        "GITHUB_REPOSITORY": "synthetic/repo",
+        "GITHUB_ENV": str(tmp_path / "env.txt"),
+        "GITHUB_OUTPUT": str(tmp_path / "output.txt"),
+        "RUNNER_TEMP": str(tmp_path),
+        "GOLD": str(gold).lower(),
+        "SMOKE_RUN_ID": "" if case == "missing-smoke" else "12345",
+        "OFFLINE_SMOKE_JSON": json.dumps(smoke),
+        "OFFLINE_RUNS_JSON": json.dumps(runs),
+    }
+    result = subprocess.run([shutil.which("pwsh") or "pwsh", "-NoProfile", "-NonInteractive", "-File", str(script)], env=env, cwd=tmp_path, capture_output=True, timeout=30, check=False)
+    admitted = case in ("smoke", "gold")
+    assert (result.returncode == 0) is admitted
+    assert (tmp_path / "offline-download-marker").exists() is (case == "gold")
+    if admitted:
+        assert f"EVALUATION_PHASE={'gold' if gold else 'smoke'}" in (tmp_path / "env.txt").read_text()

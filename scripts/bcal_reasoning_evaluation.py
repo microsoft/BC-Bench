@@ -22,6 +22,7 @@ from bcal_reasoning_coding import (
     AdmissionError,
     CodingPolicy,
     CodingRun,
+    JudgeRequestError,
     ProviderBudget,
     coding_command,
     process_environment,
@@ -49,6 +50,18 @@ def sha(path: Path) -> str:
 def require(value: object, message: str) -> None:
     if not value:
         raise AdmissionError(message)
+
+
+def failure_category(error: Exception) -> str:
+    if isinstance(error, AdmissionError):
+        return "admission_or_accounting"
+    if isinstance(error, JudgeRequestError):
+        return "judge_request"
+    if isinstance(error, OSError):
+        return "io"
+    if isinstance(error, (KeyError, TypeError, ValueError)):
+        return "evidence_shape"
+    return "unknown"
 
 
 def frozen_entries() -> list[dict]:
@@ -319,7 +332,7 @@ def run_code(args: argparse.Namespace) -> None:
     except AgentError:
         receipt.update(status="infrastructure-failed", failureCategory="completion_evidence", quality=None, testPassed=None)
     except Exception as error:  # noqa: BLE001 - only safe categories cross the private process boundary
-        receipt.update(status="infrastructure-failed", failureCategory=type(error).__name__, quality=None, testPassed=None)
+        receipt.update(status="infrastructure-failed", failureCategory=failure_category(error), quality=None, testPassed=None)
         budget.fail()
     finally:
         try:
@@ -356,7 +369,7 @@ def run_judge(args: argparse.Namespace) -> None:
         receipt.update(status="scored", **scores)
     except Exception as error:  # noqa: BLE001 - infrastructure must remain unscored and expose no raw model data
         budget.fail()
-        receipt.update(status="judge-infrastructure-failed", quality=None, testPassed=None, judgeFailureCategory=type(error).__name__)
+        receipt.update(status="judge-infrastructure-failed", quality=None, testPassed=None, judgeFailureCategory=failure_category(error))
     finally:
         receipt["judgeDiagnostics"] = events
         receipt["judgeAccounting"] = budget.snapshot()
@@ -500,7 +513,7 @@ def main() -> None:
         else:
             {"code": run_code, "judge": run_judge}[args.phase](args)
     except Exception as error:  # noqa: BLE001 - no prompts, credentials, source or provider text in public logs
-        sys.stderr.write(f"Opt-in reasoning evaluation stopped: {type(error).__name__}\n")
+        sys.stderr.write(f"Opt-in reasoning evaluation stopped: {failure_category(error)}\n")
         raise SystemExit(1) from None
 
 
