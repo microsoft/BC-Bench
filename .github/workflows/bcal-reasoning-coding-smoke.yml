@@ -50,12 +50,15 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          uv venv .coding-venv --python .\.venv\Scripts\python.exe --system-site-packages
+          uv venv .coding-venv --python .\.venv\Scripts\python.exe
+          uv export --frozen --group dev --no-hashes --output-file .coding-runtime-requirements.txt *> "$env:RUNNER_TEMP\coding-export.log"
+          uv pip install --python .\.coding-venv\Scripts\python.exe --no-deps -r .coding-runtime-requirements.txt
           uv pip install --python .\.coding-venv\Scripts\python.exe --no-deps -r .\experiments\bcal-sdk-policy\inference-requirements.txt
           $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           if (-not $token) { throw 'Package token unavailable.' }
           Write-Output "::add-mask::$token"
           uv pip install --no-cache --python .\.coding-venv\Scripts\python.exe --no-deps bc-eval==0.6.1 --index "https://anything:$token@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          & .\.coding-venv\Scripts\python.exe -c "import pytest,azure.identity,bc_eval.llm.llm_api,httpx2; from bcbench.agent.bcal.agent import BCalBackendConfig; print('Isolated coding environment imports admitted.')"
           $root = "$HOME\.dotnet\tools\.store\microsoft.businesscentral.bcal.cli\30.0.46.49019-beta"
           $cache = "$HOME\.nuget\packages\microsoft.businesscentral.bcal.cli\30.0.46.49019-beta"
           $discovery = & .\.coding-venv\Scripts\python.exe -c "import sys,json; from pathlib import Path; sys.path.insert(0,'scripts'); from bcal_reasoning_compatibility import discover_package; p,a=discover_package(Path(sys.argv[1]),Path(sys.argv[2])); print(json.dumps({'package':str(p),'archive':str(a)}))" $root $cache
