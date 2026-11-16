@@ -495,6 +495,10 @@ actual-package reset/control delivery proofs block admission; source-built
 evidence is not a substitute. Historical 49019 helpers, results and defaults
 remain unchanged. The new native request helper is a separate exact-identity
 copy, and all three models must generate explicit medium offline.
+Final owner index/seal hashes and every referenced proof are checked offline
+before producing the sanitized `owner-proof-admission.json`; live admission
+binds its hash and exact package/SDK/eleven-case ownership/parity facts. Original
+local artifact paths and proof bodies are not copied into that receipt.
 
 The new Sol phase permits one execution of the same synthetic task, at most
 30 actual provider HTTP attempts, no auxiliary inference or judge. Only a

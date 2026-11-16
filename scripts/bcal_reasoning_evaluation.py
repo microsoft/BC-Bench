@@ -33,7 +33,7 @@ from bcal_reasoning_coding import (
     write_json,
 )
 from bcal_reasoning_compatibility import CLIENT_SHA
-from bcal_reasoning_package import PROFILE, ROOT, load_pin
+from bcal_reasoning_package import OWNER_ADMISSION, PROFILE, ROOT, load_pin, owner_admission, validate_tool_proof
 from bcal_reasoning_smoke import SYMBOL_MANIFEST_SHA, TASK, materialize_symbols
 
 SELECTOR = ROOT / "experiments" / "bcal-full-gold" / "study.json"
@@ -88,6 +88,7 @@ def binding() -> dict:
     return {
         "benchCommit": os.environ["GITHUB_SHA"],
         "packageProfileSha256": sha(PROFILE),
+        "ownerProofAdmissionSha256": sha(OWNER_ADMISSION),
         "runnerSha256": sha(Path(__file__)),
         "transportSha256": sha(ROOT / "scripts" / "bcal_reasoning_coding.py"),
         "budgetSha256": sha(ROOT / "scripts" / "bcal_reasoning_budget.py"),
@@ -132,26 +133,6 @@ def prepare_symbols(cache: Path, target: Path, gold: bool) -> list[dict]:
     return manifest["files"]
 
 
-def validate_tool_proof(path: Path, pin: dict, tool: str) -> None:
-    proof = json.loads(path.read_bytes())
-    identity = proof["identity"]
-    require(
-        identity["kind"] == "exact-governed-package"
-        and identity["version"] == pin["version"]
-        and identity["source"] == pin["source"]
-        and identity["archiveSha256"] == pin["archive_sha256"]
-        and identity["verifiedRuntimeFiles"] == pin["runtime_files"]
-        and proof["forcedTool"] == tool
-        and proof["providerAttempts"] == 0
-        and proof["offlineRequests"] == 2
-        and proof["secondRequestContainsToolResult"] is True
-        and proof["packagePayloadUnchanged"] is True
-        and proof["auxiliaryInvocations"] == 0
-        and proof["terminalEvidence"]["failureMessageSignature"] != "callback_fence_guard",
-        "Actual package reset/control proof is not admitted.",
-    )
-
-
 def verify_toolchain(gold: bool) -> dict:
     distribution = importlib.metadata.distribution("bc-eval")
     client = Path(distribution.locate_file("bc_eval/llm/llm_api.py"))
@@ -175,11 +156,17 @@ def admit(args: argparse.Namespace) -> None:
     gold = args.phase == "admit-gold"
     toolchain = verify_toolchain(gold)
     pin = load_pin()
+    owner = owner_admission(pin)
     pin.verify(args.package, args.archive)
+    require(owner["packageArchiveBytes"] == args.archive.stat().st_size, "Owner proof archive size differs.")
     args.work.mkdir(parents=True, exist_ok=False)
     args.output.mkdir(parents=True, exist_ok=False)
     validate_tool_proof(args.reset_proof, pin.model_dump(), "start_new_work")
     validate_tool_proof(args.control_proof, pin.model_dump(), "list_files")
+    require(
+        owner["proofs"]["loopbackReset"]["sha256"] == sha(args.reset_proof) and owner["proofs"]["loopbackControl"]["sha256"] == sha(args.control_proof),
+        "Final owner seal binds different reset/control receipts.",
+    )
     verify_auxiliary_command(process_environment())
     proofs = []
     for model in MODELS:
@@ -223,6 +210,7 @@ def admit(args: argparse.Namespace) -> None:
             "binding": value,
             "bindingId": binding_id(value),
             "package": pin.model_dump(),
+            "ownerProofs": owner,
             "symbols": symbols,
             "gold": gold,
             "nativeProofs": proofs,
@@ -240,6 +228,7 @@ def verify_admission(args: argparse.Namespace, gold: bool) -> dict:
     value = json.loads((args.output / "admission.json").read_bytes())
     require(value["status"] == "admitted" and value["gold"] is gold and value["binding"] == binding() and value["bindingId"] == binding_id(binding()), "Current source admission differs.")
     require(value["package"] == load_pin().model_dump(), "Admitted package changed.")
+    require(value["ownerProofs"] == owner_admission(load_pin()), "Final owner proof admission changed.")
     require(value["toolchain"] == verify_toolchain(gold), "Admitted provider/judge toolchain changed.")
     load_pin().verify(args.package, args.archive)
     verify_symbols(args.work / "symbols", value["symbols"])
