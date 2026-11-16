@@ -201,17 +201,27 @@ def test_failure_signature_requires_exact_full_source_constant(tmp_path, suffix)
     assert "PRIVATE" not in json.dumps(summary)
 
 
-@pytest.mark.parametrize("failure", ["429", "redirect", "wire", "model", "duplicate"])
-def test_actual_loopback_handler_and_innermost_boundary_fail_closed(tmp_path, monkeypatch, failure):
+@pytest.mark.parametrize(("failure", "shared"), [(failure, shared) for failure in ("429", "redirect", "wire", "model", "duplicate") for shared in (False, True)] + [("aggregate", True)])
+def test_actual_loopback_handler_and_innermost_boundary_fail_closed(tmp_path, monkeypatch, failure, shared):
+    from bcal_reasoning_budget import StudyBudget
+
     httpx = pytest.importorskip("httpx2")
     identity = pytest.importorskip("azure.identity")
     llm_api = pytest.importorskip("bc_eval.llm.llm_api")
     policy = coding.CodingPolicy(model=MODELS[0], reasoning_effort="medium", auxiliary="forbid")
-    budget = coding.ProviderBudget(tmp_path / "attempts.json", 10)
+    study = StudyBudget.create(tmp_path / "study.db", [f"cell-{i}" for i in range(330)], "binding") if shared else None
+    if study:
+        study.admit("cell-0", "binding")
+        if failure == "aggregate":
+            for _ in range(64):
+                study.reserve("cell-0", "main")
+    budget = coding.ProviderBudget(tmp_path / "attempts.json", 10, (lambda role: study.reserve("cell-0", role)) if study else None)
     sent = []
 
     def respond(request):
         assert json.loads(budget.path.read_bytes())["attempts"] == len(sent) + 1
+        if study:
+            assert study.snapshot()["codingAttempts"] == len(sent) + 1
         assert request.headers["authorization"] == "Bearer PRIVATE"
         sent.append(True)
         return httpx.Response(429 if failure == "429" else 302 if failure == "redirect" else 200, json={"status": "completed", "output": []})
@@ -243,9 +253,11 @@ def test_actual_loopback_handler_and_innermost_boundary_fail_closed(tmp_path, mo
         body["model"] = MODELS[1]
     with coding.provider_route(policy, budget, "local") as url:
         status = post(url, body)
-        assert status == {"429": 429, "redirect": 302, "wire": 502, "model": 400, "duplicate": 200}[failure]
+        assert status == {"429": 429, "redirect": 302, "wire": 502, "model": 400, "duplicate": 200, "aggregate": 502}[failure]
         assert post(url, {**body, "reasoning": {"effort": "medium"}}) in (400, 502)
-    assert len(sent) == budget.snapshot()["attempts"] == (0 if failure in ("wire", "model") else 1)
+    assert len(sent) == budget.snapshot()["attempts"] == (0 if failure in ("wire", "model", "aggregate") else 1)
+    if study:
+        assert study.snapshot()["codingAttempts"] == (64 if failure == "aggregate" else len(sent))
     assert budget.stopped
     assert "PRIVATE" not in budget.path.read_text()
 

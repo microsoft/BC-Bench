@@ -95,7 +95,7 @@ class CodingRun(BaseModel):
     max_provider_attempts: int = Field(strict=True, gt=0)
     timeout_seconds: int = Field(strict=True, gt=30)
     page: int = Field(strict=True, gt=0)
-    audience: Literal["Technical"] = "Technical"
+    audience: Literal["Business", "Technical", "Both"] = "Technical"
 
 
 class AdmissionError(RuntimeError):
@@ -107,10 +107,11 @@ class HasStatus(Protocol):
 
 
 class ProviderBudget:
-    def __init__(self, path: Path, limit: int) -> None:
+    def __init__(self, path: Path, limit: int, reserve: Callable[[str], int] | None = None) -> None:
         if type(limit) is not int or limit <= 0:
             raise ValueError("An explicit positive provider-attempt ceiling is required.")
         self.path, self.limit = path, limit
+        self.reserve = reserve
         self.events: list[dict] = []
         self.seen: set[str] = set()
         self.stopped = False
@@ -140,6 +141,13 @@ class ProviderBudget:
         with self.lock:
             if self.stopped or fingerprint in self.seen or len(self.events) >= self.limit:
                 self.reject("Provider budget exhausted, stopped, or identical request retry blocked.")
+            study_attempt = None
+            if self.reserve is not None:
+                try:
+                    study_attempt = self.reserve(role)
+                except Exception:
+                    self.fail()
+                    raise
             self.seen.add(fingerprint)
             event = {
                 "attempt": len(self.events) + 1,
@@ -151,6 +159,8 @@ class ProviderBudget:
                 "outcome": "reserved",
             }
             self.events.append(event)
+            if study_attempt is not None:
+                event["studyAttempt"] = study_attempt
             write_json(self.path, self.snapshot())
             try:
                 response = operation()

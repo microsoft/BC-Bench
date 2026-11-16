@@ -1,0 +1,148 @@
+name: Once-only new-package BCAL reasoning evaluation
+on:
+  workflow_call:
+    inputs:
+      gold:
+        type: boolean
+        default: false
+      smoke-run-id:
+        type: string
+        default: ""
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: bcal-new-package-reasoning-medium-20261116
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    runs-on: windows-latest
+    timeout-minutes: 360
+    environment:
+      name: ado-read
+      deployment: false
+    env:
+      LLM_API_ENVIRONMENT: TEST
+      LLM_API_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
+      LLM_API_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+      LLM_API_CERTIFICATE_FILE: C:\bcal-reasoning-medium.pfx
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Reject corrective reruns and previously dispatched workloads
+        id: pin
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GOLD: ${{ inputs.gold }}
+          SMOKE_RUN_ID: ${{ inputs.smoke-run-id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'No corrective rerun or replacement is authorized.' }
+          $pin = Get-Content experiments\bcal-reasoning-gold\package.json -Raw | ConvertFrom-Json
+          if ($pin.source -ne 'cc3f023be09b313cb0568bbaaad6131404152e3c') { throw 'Only the sole authorized callback-reset package is admitted.' }
+          $phase = if ($env:GOLD -eq 'true') { 'reasoning-medium-gold' } else { 'reasoning-new-sol-smoke' }
+          $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
+          if ($runs.total_count -gt 100) { throw 'Once-only inventory is incomplete.' }
+          $previous = @($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith(" / $phase") })
+          if ($previous.Count) { throw 'This one-time workload already has a dispatch; preserve it.' }
+          if ($env:GOLD -eq 'true') {
+            if ($env:SMOKE_RUN_ID -notmatch '^\d+$') { throw 'Exact successful new-package Sol smoke is required.' }
+            $smoke = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SMOKE_RUN_ID" | ConvertFrom-Json
+            if ($smoke.run_attempt -ne 1 -or $smoke.status -ne 'completed' -or $smoke.conclusion -ne 'success' -or
+                $smoke.head_sha -ne $env:GITHUB_SHA -or -not $smoke.display_title.EndsWith(' / reasoning-new-sol-smoke')) { throw 'New-package smoke state/source differs.' }
+            gh run download $env:SMOKE_RUN_ID --repo $env:GITHUB_REPOSITORY --name reasoning-new-sol-smoke-sanitized --dir smoke-sanitized
+            "EVALUATION_PHASE=gold" >> $env:GITHUB_ENV
+          } else {
+            "EVALUATION_PHASE=smoke" >> $env:GITHUB_ENV
+          }
+          "version=$($pin.version)" >> $env:GITHUB_OUTPUT
+          "EVALUATION_VERSION=$($pin.version)" >> $env:GITHUB_ENV
+          "EVALUATION_WORK=$env:RUNNER_TEMP\bcal-reasoning-medium-private" >> $env:GITHUB_ENV
+      - uses: ./.github/actions/setup-python-uv
+      - uses: ./.github/actions/install-bcal
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          package-id: Microsoft.BusinessCentral.BCal.CLI
+          feed: experiment
+          version: ${{ steps.pin.outputs.version }}
+          official-feed-url: ${{ secrets.BCAL_FEED_URL }}
+          experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
+      - name: Prepare isolated pinned inference and contained ordinary judge
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          uv venv .reasoning-venv --python .\.venv\Scripts\python.exe
+          uv export --frozen --group dev --no-hashes --output-file .reasoning-runtime-requirements.txt *> "$env:RUNNER_TEMP\reasoning-export.log"
+          uv pip install --python .\.reasoning-venv\Scripts\python.exe --no-deps -r .reasoning-runtime-requirements.txt
+          uv pip install --python .\.reasoning-venv\Scripts\python.exe --no-deps -r experiments\bcal-sdk-policy\judge-requirements.txt
+          $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          if (-not $token) { throw 'Package token unavailable.' }
+          Write-Output "::add-mask::$token"
+          uv pip install --no-cache --python .\.reasoning-venv\Scripts\python.exe --no-deps bc-eval==0.6.1 --index "https://anything:$token@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          $root = "$HOME\.dotnet\tools\.store\microsoft.businesscentral.bcal.cli\$env:EVALUATION_VERSION"
+          $cache = "$HOME\.nuget\packages\microsoft.businesscentral.bcal.cli\$env:EVALUATION_VERSION"
+          $found = & .\.reasoning-venv\Scripts\python.exe -c "import sys,json; from pathlib import Path; sys.path.insert(0,'scripts'); from bcal_reasoning_package import load_pin; p,a=load_pin().discover(Path(sys.argv[1]),Path(sys.argv[2])); print(json.dumps({'package':str(p),'archive':str(a)}))" $root $cache
+          $located = $found | ConvertFrom-Json
+          $package = $located.package
+          dotnet build tools\reasoning-medium-native\NativeProbe.csproj --nologo -v:q "-p:PackageRoot=$package" -o "$env:RUNNER_TEMP\reasoning-medium-native"
+          "EVALUATION_PACKAGE=$package" >> $env:GITHUB_ENV
+          "EVALUATION_ARCHIVE=$($located.archive)" >> $env:GITHUB_ENV
+      - name: Require offline budget, wire, compile-export and contained judge regressions
+        shell: pwsh
+        run: |
+          & .\.reasoning-venv\Scripts\python.exe -m pytest tests\test_bcal_reasoning_compatibility.py tests\test_bcal_reasoning_coding.py tests\test_bcal_reasoning_smoke.py tests\test_bcal_reasoning_budget.py tests\test_bcal_reasoning_package.py tests\test_bcal_reasoning_evaluation.py --noconftest -q --override-ini="addopts=" -k "not actual_package_offline_preparation"
+          if ($LASTEXITCODE -ne 0) { throw 'Offline regression gate failed; no inference admitted.' }
+      - name: Download exact frozen symbol archives without inference
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease | Out-Null
+          Import-Module BcContainerHelper -Force -DisableNameChecking
+          $url = Get-BCArtifactUrl -type Sandbox -version '28.0.46665.57479' -country w1 -select Latest
+          if (-not $url -or ([uri]$url).Segments[-2].Trim('/') -ne '28.0.46665.57479') { throw 'Frozen symbols unavailable.' }
+          Download-Artifacts -artifactUrl $url -includePlatform *> "$env:RUNNER_TEMP\reasoning-symbol-download.log"
+      - name: Admit exact new package and actual native medium for all three models
+        shell: pwsh
+        run: |
+          & .\.reasoning-venv\Scripts\python.exe scripts\bcal_reasoning_evaluation.py "admit-$env:EVALUATION_PHASE" --package $env:EVALUATION_PACKAGE --archive $env:EVALUATION_ARCHIVE --helper "$env:RUNNER_TEMP\reasoning-medium-native\NativeProbe.dll" --symbol-cache C:\bcartifacts.cache\sandbox --work $env:EVALUATION_WORK --output reasoning-sanitized --reset-proof experiments\bcal-reasoning-gold\reset-proof.json --control-proof experiments\bcal-reasoning-gold\control-proof.json --smoke-receipt smoke-sanitized\000-gpt-56-reasoning-sol.json
+          if ($LASTEXITCODE -ne 0) { throw 'Package/wire/proof admission failed; no inference admitted.' }
+      - name: Fetch runner-local inference certificate only after admission
+        shell: pwsh
+        env:
+          CERT_VAULT: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CERT_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+        run: |
+          $b64 = az keyvault secret show --vault-name $env:CERT_VAULT --name $env:CERT_NAME --query value -o tsv
+          if (-not $b64) { throw 'Inference certificate unavailable.' }
+          Write-Output "::add-mask::$b64"
+          [IO.File]::WriteAllBytes($env:LLM_API_CERTIFICATE_FILE, [Convert]::FromBase64String($b64))
+      - name: Execute the single authorized workload without retries or replacements
+        shell: pwsh
+        run: |
+          & .\.reasoning-venv\Scripts\python.exe scripts\bcal_reasoning_evaluation.py $env:EVALUATION_PHASE --package $env:EVALUATION_PACKAGE --archive $env:EVALUATION_ARCHIVE --helper "$env:RUNNER_TEMP\reasoning-medium-native\NativeProbe.dll" --symbol-cache C:\bcartifacts.cache\sandbox --work $env:EVALUATION_WORK --output reasoning-sanitized --reset-proof experiments\bcal-reasoning-gold\reset-proof.json --control-proof experiments\bcal-reasoning-gold\control-proof.json --smoke-receipt smoke-sanitized\000-gpt-56-reasoning-sol.json
+          if ($LASTEXITCODE -ne 0) { throw 'Workload stopped; no corrective rerun or replacement.' }
+          if ($env:EVALUATION_PHASE -eq 'smoke') {
+            $smoke = Get-Content reasoning-sanitized\000-gpt-56-reasoning-sol.json -Raw | ConvertFrom-Json
+            if ($smoke.status -ne 'completed' -or $smoke.freshCompiled -ne $true -or $smoke.exported -ne $true) { throw 'Sol coding smoke failed; gold remains blocked.' }
+          }
+      - name: Retain sanitized receipts only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ${{ inputs.gold && 'reasoning-medium-gold-sanitized' || 'reasoning-new-sol-smoke-sanitized' }}
+          path: |
+            reasoning-sanitized\*.json
+            reasoning-sanitized\study.db*
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Remove runner-local inference certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath $env:LLM_API_CERTIFICATE_FILE) { Remove-Item -LiteralPath $env:LLM_API_CERTIFICATE_FILE -Force }

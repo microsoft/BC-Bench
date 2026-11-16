@@ -487,3 +487,31 @@ exposed, never response bodies or reasoning text. `matrix.json`, admission
 proofs and the copied per-model receipts/ledgers are the sanitized workflow
 outputs; the private work directory is never uploaded. Three tiny executions
 can establish this coding path works, not which model or effort is best.
+
+The separately gated `reasoning-new-sol-smoke` and `reasoning-medium-gold`
+phases use only the new callback-reset package identified by the opt-in
+`experiments\bcal-reasoning-gold\package.json`. Missing package identity or
+actual-package reset/control delivery proofs block admission; source-built
+evidence is not a substitute. Historical 49019 helpers, results and defaults
+remain unchanged. The new native request helper is a separate exact-identity
+copy, and all three models must generate explicit medium offline.
+
+The new Sol phase permits one execution of the same synthetic task, at most
+30 actual provider HTTP attempts, no auxiliary inference or judge. Only a
+same-source successful fresh compile/export receipt admits the one gold
+repetition: the frozen 110 NL2AL cases, all 350 exact symbol archives, and
+three models on that same package, with explicit medium. Ordinary Ceres
+judging retains true omitted effort. Four coding workers and two judge
+workers run concurrently; the logical SDK limits remain 64 requests and
+1200 seconds per gold cell.
+
+Each gold cell has an independent 64-coding/1-judge actual HTTP ceiling,
+including failed responses and internal sends. A shared transactional SQLite
+ledger enforces once-only cell admission, 21,120 coding plus 330 judge
+reservations and 21,450 combined; failures do not reset it. Reservations
+precede outbound sends and may conservatively exceed completed HTTP attempts
+if interrupted before dispatch. Sanitized pre-send journals and the safe
+SQLite ledger are retained even when a child cannot write a terminal receipt.
+No retry, rejudging, replacement or additional repetition is authorized.
+Provider, identity, accounting and judge failures remain unscored rather than
+being silently converted to model quality failures.
