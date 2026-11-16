@@ -74,6 +74,20 @@ class AdmissionError(Exception):
     pass
 
 
+def discover_package(installed_root: Path, cache_root: Path) -> tuple[Path, Path]:
+    binaries = [path for path in installed_root.rglob("bcal.dll") if path.parent.name == "any" and path.parent.parent.name == "net10.0"]
+    archive_name = "microsoft.businesscentral.bcal.cli.30.0.46.49019-beta.nupkg"
+    archives = list(installed_root.rglob(archive_name))
+    cached = cache_root / archive_name
+    if cached.is_file() and cached not in archives:
+        archives.append(cached)
+    if len(binaries) != 1 or not archives:
+        raise AdmissionError("Exact installed binary or retained archive unavailable.")
+    if any(hashlib.sha256(path.read_bytes()).hexdigest() != PACKAGE_SHA for path in archives):
+        raise AdmissionError("Retained archive differs from exact authorized package.")
+    return binaries[0].parent, archives[0]
+
+
 class AttemptBudget:
     def __init__(self, path: Path, limit: int = 24) -> None:
         if not 1 <= limit <= 24:

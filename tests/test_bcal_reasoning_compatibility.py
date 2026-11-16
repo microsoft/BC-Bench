@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -9,6 +10,34 @@ import pytest
 spec = importlib.util.spec_from_file_location("compatibility", Path(__file__).parents[1] / "scripts" / "bcal_reasoning_compatibility.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+
+
+@pytest.mark.parametrize("location", ["installed", "cache"])
+def test_discovers_exact_archive_in_both_installer_locations(tmp_path, monkeypatch, location):
+    root = tmp_path / "installed"
+    binary = root / "tools" / "net10.0" / "any" / "bcal.dll"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"synthetic binary")
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    folder = root if location == "installed" else cache
+    archive = folder / "microsoft.businesscentral.bcal.cli.30.0.46.49019-beta.nupkg"
+    archive.write_bytes(b"synthetic exact archive")
+    monkeypatch.setattr(module, "PACKAGE_SHA", hashlib.sha256(archive.read_bytes()).hexdigest())
+    assert module.discover_package(root, cache) == (binary.parent, archive)
+
+
+@pytest.mark.parametrize("failure", ["wrong_archive", "missing_archive", "missing_binary"])
+def test_package_discovery_fails_closed(tmp_path, failure):
+    root = tmp_path / "installed"
+    binary = root / "tools" / "net10.0" / "any" / "bcal.dll"
+    binary.parent.mkdir(parents=True)
+    if failure != "missing_binary":
+        binary.write_bytes(b"synthetic binary")
+    if failure != "missing_archive":
+        (root / "microsoft.businesscentral.bcal.cli.30.0.46.49019-beta.nupkg").write_bytes(b"wrong archive")
+    with pytest.raises(module.AdmissionError):
+        module.discover_package(root, tmp_path / "cache")
 
 
 def test_effort_distinguishes_omission_none_and_null():

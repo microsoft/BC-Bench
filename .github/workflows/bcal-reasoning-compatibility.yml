@@ -55,13 +55,14 @@ jobs:
           Write-Output "::add-mask::$token"
           uv pip install --no-cache --python .\.compatibility-venv\Scripts\python.exe --no-deps bc-eval==0.6.1 --index "https://anything:$token@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
           $root = "$HOME\.dotnet\tools\.store\microsoft.businesscentral.bcal.cli\30.0.46.49019-beta"
-          $binary = @(Get-ChildItem $root -Filter bcal.dll -Recurse -File | Where-Object FullName -Match '\\net10\.0\\any\\bcal\.dll$')
-          $archive = @(Get-ChildItem $root -Filter '*.nupkg' -Recurse -File)
-          if ($binary.Count -ne 1 -or $archive.Count -ne 1) { throw 'Exact package files unavailable.' }
-          $package = $binary[0].Directory.FullName
+          $cache = "$HOME\.nuget\packages\microsoft.businesscentral.bcal.cli\30.0.46.49019-beta"
+          $discovery = & .\.compatibility-venv\Scripts\python.exe -c "import sys,json; from pathlib import Path; sys.path.insert(0,'scripts'); from bcal_reasoning_compatibility import discover_package; p,a=discover_package(Path(sys.argv[1]),Path(sys.argv[2])); print(json.dumps({'package':str(p),'archive':str(a)}))" $root $cache
+          if ($LASTEXITCODE -ne 0) { throw 'Exact package discovery/hash verification failed.' }
+          $located = $discovery | ConvertFrom-Json
+          $package = $located.package
           dotnet build .\tools\reasoning-compatibility\NativeProbe.csproj --nologo -v:q "-p:PackageRoot=$package" -o "$env:RUNNER_TEMP\native-probe"
           "COMPAT_PACKAGE=$package" >> $env:GITHUB_ENV
-          "COMPAT_ARCHIVE=$($archive[0].FullName)" >> $env:GITHUB_ENV
+          "COMPAT_ARCHIVE=$($located.archive)" >> $env:GITHUB_ENV
       - name: Verify offline budget tests before credentials or inference
         shell: pwsh
         run: |
