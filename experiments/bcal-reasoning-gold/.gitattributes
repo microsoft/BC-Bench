@@ -1,0 +1,3 @@
+reset-proof.json -text -eol
+control-proof.json -text -eol
+owner-proof-admission.json -text -eol

@@ -28,6 +28,46 @@ def test_frozen_gold_selection_is_exactly_110_cases_and_330_unique_cells():
     assert len({evaluation.cell_id(index, model) for index in range(110) for model in evaluation.MODELS}) == 330
 
 
+@pytest.mark.parametrize("wrong_wire", [False, True])
+def test_offline_native_medium_aggregate_uses_only_exact_three_models_and_offline_handler(tmp_path, monkeypatch, wrong_wire):
+    import bcal_reasoning_compatibility
+
+    p = pin()
+    monkeypatch.setattr(package.PackagePin, "verify", lambda *args: 224)
+    helper = tmp_path / "NativeProbe.dll"
+    helper.write_bytes(b"synthetic-helper")
+    calls = []
+
+    def native(root, actual_helper, model, effort, url, output, key):
+        assert actual_helper == helper
+        assert effort == "medium"
+        assert url == key == "offline"
+        calls.append(model)
+        value = {
+            "outcome": "response_received",
+            "boundaryRequests": 1,
+            "boundaryBlocked": 0,
+            "appliedEffort": "medium",
+            "wire": {"model": model, "reasoning": {"effort": "none" if wrong_wire else "medium"}},
+        }
+        output.write_text(json.dumps(value))
+        return value
+
+    monkeypatch.setattr(bcal_reasoning_compatibility, "native_probe", native)
+    if wrong_wire:
+        with pytest.raises(evaluation.AdmissionError):
+            evaluation.native_medium_proofs(tmp_path, tmp_path / "archive", helper, tmp_path, p)
+        assert calls == [evaluation.MODELS[0]]
+        assert not (tmp_path / "native-medium-offline-proof.json").exists()
+    else:
+        proof = evaluation.native_medium_proofs(tmp_path, tmp_path / "archive", helper, tmp_path, p)
+        assert calls == list(evaluation.MODELS)
+        assert proof["models"] == list(evaluation.MODELS)
+        assert proof["package"] == p.model_dump()
+        assert proof["providerAttempts"] == 0
+        assert len(proof["proofs"]) == 3
+
+
 @pytest.mark.parametrize("damage", ["wrong-package", "not-delivered", "auxiliary", "callback-fence"])
 def test_package_control_gate_rejects_mismatched_or_failed_proof(tmp_path, damage):
     p = pin().model_dump()
@@ -63,6 +103,7 @@ def test_new_package_coding_uses_actual_cli_and_keeps_infrastructure_unscored(tm
 
     p = pin()
     monkeypatch.setattr(evaluation, "load_pin", lambda: p)
+    monkeypatch.setattr(evaluation, "owner_admission", lambda *args: None)
     monkeypatch.setattr(package.PackagePin, "verify", lambda *args: 224)
     monkeypatch.setattr(bcal_governed_study, "verify_owned_cleanup", lambda *args: None)
     monkeypatch.setattr(agent, "_require_completed", lambda *args, **kwargs: None)
@@ -139,7 +180,8 @@ def test_single_execution_marker_cannot_be_replaced(tmp_path, monkeypatch):
     assert (output / "execution-once.json").read_text() == '{"source":"preserved"}'
 
 
-def test_frozen_gold_orchestration_admits_each_cell_once_and_streams_bounded_judging(tmp_path, monkeypatch):
+@pytest.mark.parametrize("controller_failure", [None, TimeoutError, evaluation.AdmissionError])
+def test_frozen_gold_orchestration_admits_each_cell_once_and_streams_bounded_judging(tmp_path, monkeypatch, controller_failure):
     from bcbench.agent.bcal import agent
 
     output = tmp_path / "safe"
@@ -175,7 +217,7 @@ def test_frozen_gold_orchestration_admits_each_cell_once_and_streams_bounded_jud
         path = Path(options["--receipt"])
         if phase == "code":
             path.write_text('{"status":"completed","runtimeCleanupVerified":true,"providerAttempts":1,"quality":null}')
-            if code_count == 5:
+            if code_count == 5 and not controller_failure:
                 assert judge_started.wait(5), "Judges were delayed until coding shards completed."
         else:
             judge_started.set()
@@ -185,13 +227,27 @@ def test_frozen_gold_orchestration_admits_each_cell_once_and_streams_bounded_jud
 
     monkeypatch.setattr(agent, "_run_bcal_process", run)
     args = Namespace(work=work, output=output, package=package_root, archive=tmp_path / "archive")
-    evaluation.execute(args, True)
+    if controller_failure:
+
+        def expired(*args, **kwargs):
+            raise controller_failure("Offline controller-stop fixture")
+
+        monkeypatch.setattr(evaluation, "as_completed", expired)
+        with pytest.raises(controller_failure):
+            evaluation.execute(args, True)
+    else:
+        evaluation.execute(args, True)
     summary = json.loads((output / "summary.json").read_bytes())
     assert len(summary["cells"]) == 330
-    assert {row["status"] for row in summary["cells"]} == {"scored"}
-    assert len(calls["code"]) == len(calls["judge"]) == summary["accounting"]["admittedCells"] == 330
-    assert summary["accounting"]["codingAttempts"] == summary["accounting"]["judgeAttempts"] == 330
-    assert summary["accounting"]["attempts"] == 660
+    if controller_failure:
+        assert summary["accounting"]["stopped"]
+        assert (output / "study.db").is_file()
+        assert summary["accounting"]["attempts"] <= 660
+    else:
+        assert {row["status"] for row in summary["cells"]} == {"scored"}
+        assert len(calls["code"]) == len(calls["judge"]) == summary["accounting"]["admittedCells"] == 330
+        assert summary["accounting"]["codingAttempts"] == summary["accounting"]["judgeAttempts"] == 330
+        assert summary["accounting"]["attempts"] == 660
     assert summary["repetitions"] == 1
     assert summary["retries"] == 0
     assert "PRIVATE" not in json.dumps(summary)
@@ -202,6 +258,8 @@ def test_judge429_remains_null_and_preserves_attempts_without_rejudging(tmp_path
     class PrivateExceptionNameError(Exception):
         pass
 
+    monkeypatch.setattr(evaluation, "load_pin", pin)
+    monkeypatch.setattr(evaluation, "owner_admission", lambda *args: None)
     study = evaluation.StudyBudget.create(tmp_path / "study.db", [f"cell-{i}" for i in range(330)], "binding")
     study.admit("cell-0", "binding")
     job = tmp_path / "job.json"
@@ -227,6 +285,19 @@ def test_judge429_remains_null_and_preserves_attempts_without_rejudging(tmp_path
     assert receipt["judgeFailureCategory"] == ("unknown" if unknown_error else "admission_or_accounting")
     assert "PrivateExceptionNameError" not in json.dumps(receipt)
     assert "PRIVATE" not in json.dumps(receipt)
+
+
+@pytest.mark.parametrize("phase", ["code", "judge"])
+def test_internal_live_workers_cannot_skip_final_owner_seal(tmp_path, monkeypatch, phase):
+    monkeypatch.setattr(evaluation, "load_pin", pin)
+
+    def unsealed(*args):
+        raise evaluation.AdmissionError("No final seal")
+
+    monkeypatch.setattr(evaluation, "owner_admission", unsealed)
+    monkeypatch.setattr(evaluation, "provider_route", lambda *args: pytest.fail("Inference reached before final owner seal"))
+    with pytest.raises(evaluation.AdmissionError):
+        {"code": evaluation.run_code, "judge": evaluation.run_judge}[phase](Namespace(package=tmp_path))
 
 
 @pytest.mark.parametrize(

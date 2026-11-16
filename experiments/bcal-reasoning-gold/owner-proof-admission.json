@@ -1,0 +1,89 @@
+{
+  "status": "verified-offline-package-proofs",
+  "package": {
+    "version": "30.0.46.59225-beta",
+    "source": "cc3f023be09b313cb0568bbaaad6131404152e3c",
+    "archive_sha256": "a3d3a91d8f390eab2d86bdb8f63181c28f9de1d39e78fe0f6b903a6cff425b1b",
+    "runtime_files": 224,
+    "sdk_package": "1.0.29",
+    "sdk_runtime": "1.0.107"
+  },
+  "facts": {
+    "schemaVersion": "1.0",
+    "readiness": "offline-package-proofs-complete",
+    "sourceCommitSha": "cc3f023be09b313cb0568bbaaad6131404152e3c",
+    "branch": "esben-kristoffersen-bcal-copilot-sdk",
+    "resetPatchBaseSha": "9d1dc08c4f9757b6a74dfe9474cfa442bbf2ff3f",
+    "resetPatchId": "55e3384e594759bc9a6a0b3fb6092f0d2c4b6ae5",
+    "package.id": "Microsoft.BusinessCentral.BCal.CLI",
+    "package.version": "30.0.46.59225-beta",
+    "package.feed": "DynamicsSMBTest",
+    "package.buildId": 3073789,
+    "package.buildResult": "completed/succeeded",
+    "package.productVersion": "30.0.46.59225+cc3f023be09b313cb0568bbaaad6131404152e3c",
+    "package.sha256": "a3d3a91d8f390eab2d86bdb8f63181c28f9de1d39e78fe0f6b903a6cff425b1b",
+    "package.admittedFramework": "net10.0",
+    "package.runtimeFileCount": 224,
+    "reviewPackageProof.defaultRuntime": "legacy",
+    "reviewPackageProof.promptParity49019": true,
+    "runtimeEffortProof.nativeEffortCatalogParity49019": true,
+    "runtimeDiagnosticsProof.correlatedFailures": 8,
+    "runtimeDiagnosticsProof.successfulCases": 1,
+    "nativeResetOwnershipProof.caseCount": 11,
+    "nativeResetOwnershipProof.allPassed": true,
+    "nativeLoopbackProof.secondRequestContainsToolResultBoth": true,
+    "nativeLoopbackProof.packagePayloadUnchangedBoth": true,
+    "nativeMediumProof.models": [
+      "gpt-56-reasoning-sol",
+      "gpt-56-ceres",
+      "gpt-55-chat"
+    ],
+    "nativeMediumProof.allThreeExplicitMediumVerified": true,
+    "sdk.packageVersion": "1.0.29",
+    "sdk.nativeVersion": "1.0.107",
+    "sdk.sdkAndNativePayloadParity49019": true,
+    "providerRequestsHere": 0,
+    "semanticSmokeDispatchedHere": false,
+    "duplicateOrReplacementBuildsQueued": 0,
+    "newTerminalStates": [],
+    "newWholeTerminalSignatures": []
+  },
+  "indexSha256": "61b1d0b83a52fae1fa3c8d3b48d1e52b880298df5934df6cb5779b7b65c0bf5b",
+  "sealSha256": "a148895371c54eeaecdec31141703f5fec04d43ea634cdb9b3cd9355c7332023",
+  "packageArchiveBytes": 306406037,
+  "proofs": {
+    "inventory": {
+      "sha256": "a07ce318452bde7a8990e5d9b5c280db652127fc7d83e9cb673846da3b2b8dab",
+      "bytes": 100118
+    },
+    "reviewProof": {
+      "sha256": "d7e15046ed697ad7af0901a0a13e7adc921037c169cf101734991e06e0c0ad9d",
+      "bytes": 4582
+    },
+    "effortProof": {
+      "sha256": "327d5b540024b7d7ebc20a9e83634556bfe69d542c917963ffb816608ad7da16",
+      "bytes": 4138
+    },
+    "diagnosticsProof": {
+      "sha256": "f30fcc413cd45f30a5a29bb79fca573181435249d35b44b8596ff37afb3e1ab7",
+      "bytes": 7881
+    },
+    "ownershipProof": {
+      "sha256": "478351ee83d0a0dacbadcfc4aa33f9d846db3e2e8739c58ba799db8707de18cf",
+      "bytes": 3269
+    },
+    "loopbackReset": {
+      "sha256": "30fe026f109e4f2c914642c25d3b024460e1d157eea43d7a590fc5891a412758",
+      "bytes": 1539
+    },
+    "loopbackControl": {
+      "sha256": "a04b6cf3abb67c968593b88c08a9ba2d55d09229b513f2b158b85646a616dd5a",
+      "bytes": 1535
+    },
+    "nativeMedium": {
+      "sha256": "ca8179b717babbe8aa0f181d09037ed2379814fb9946d84aa7ba66be7bb15c0d",
+      "bytes": 948
+    }
+  },
+  "artifactReferencesVerified": 50
+}

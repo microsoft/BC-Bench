@@ -1,0 +1,8 @@
+{
+  "version": "30.0.46.59225-beta",
+  "source": "cc3f023be09b313cb0568bbaaad6131404152e3c",
+  "archive_sha256": "a3d3a91d8f390eab2d86bdb8f63181c28f9de1d39e78fe0f6b903a6cff425b1b",
+  "runtime_files": 224,
+  "sdk_package": "1.0.29",
+  "sdk_runtime": "1.0.107"
+}

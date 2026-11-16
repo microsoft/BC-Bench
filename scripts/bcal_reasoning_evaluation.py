@@ -33,7 +33,7 @@ from bcal_reasoning_coding import (
     write_json,
 )
 from bcal_reasoning_compatibility import CLIENT_SHA
-from bcal_reasoning_package import OWNER_ADMISSION, PROFILE, ROOT, load_pin, owner_admission, validate_tool_proof
+from bcal_reasoning_package import OWNER_ADMISSION, PROFILE, ROOT, PackagePin, load_pin, owner_admission, validate_tool_proof
 from bcal_reasoning_smoke import SYMBOL_MANIFEST_SHA, TASK, materialize_symbols
 
 SELECTOR = ROOT / "experiments" / "bcal-full-gold" / "study.json"
@@ -106,6 +106,7 @@ def binding() -> dict:
         "totalHttp": 21450,
         "semanticWorkers": SEMANTIC_WORKERS,
         "judgeWorkers": JUDGE_WORKERS,
+        "hostedControllerSeconds": 18000,
     }
 
 
@@ -150,9 +151,31 @@ def verify_toolchain(gold: bool) -> dict:
     return {**result, "scorerSha256": sha(scorer), "retryOwnerSha256": sha(retry_owner)}
 
 
-def admit(args: argparse.Namespace) -> None:
+def native_medium_proofs(package: Path, archive: Path, helper: Path, output: Path, pin: PackagePin) -> dict:
     from bcal_reasoning_compatibility import native_probe
 
+    pin.verify(package, archive)
+    proofs = []
+    for model in MODELS:
+        path = output / f"native-{model}.json"
+        proof = native_probe(package, helper, model, "medium", "offline", path, "offline")
+        require(
+            proof.get("outcome") == "response_received"
+            and proof.get("boundaryRequests") == 1
+            and proof.get("boundaryBlocked") == 0
+            and proof.get("appliedEffort") == "medium"
+            and proof.get("wire", {}).get("model") == model
+            and proof.get("wire", {}).get("reasoning", {}).get("effort") == "medium",
+            "Actual packaged native medium request generation failed.",
+        )
+        proofs.append({"model": model, "sha256": sha(path)})
+    pin.verify(package, archive)
+    value = {"status": "verified", "package": pin.model_dump(), "providerAttempts": 0, "models": list(MODELS), "proofs": proofs, "helperSha256": sha(helper)}
+    write_json(output / "native-medium-offline-proof.json", value)
+    return value
+
+
+def admit(args: argparse.Namespace) -> None:
     gold = args.phase == "admit-gold"
     toolchain = verify_toolchain(gold)
     pin = load_pin()
@@ -168,20 +191,7 @@ def admit(args: argparse.Namespace) -> None:
         "Final owner seal binds different reset/control receipts.",
     )
     verify_auxiliary_command(process_environment())
-    proofs = []
-    for model in MODELS:
-        output = args.output / f"native-{model}.json"
-        proof = native_probe(args.package, args.helper, model, "medium", "offline", output, "offline")
-        require(
-            proof.get("outcome") == "response_received"
-            and proof.get("boundaryRequests") == 1
-            and proof.get("boundaryBlocked") == 0
-            and proof.get("appliedEffort") == "medium"
-            and proof.get("wire", {}).get("model") == model
-            and proof.get("wire", {}).get("reasoning", {}).get("effort") == "medium",
-            "Actual packaged native medium request generation failed.",
-        )
-        proofs.append({"model": model, "sha256": sha(output)})
+    native = native_medium_proofs(args.package, args.archive, args.helper, args.output, pin)
     symbols = prepare_symbols(args.symbol_cache, args.work / "symbols", gold)
     value = binding()
     if gold:
@@ -213,7 +223,7 @@ def admit(args: argparse.Namespace) -> None:
             "ownerProofs": owner,
             "symbols": symbols,
             "gold": gold,
-            "nativeProofs": proofs,
+            "nativeProofs": native["proofs"],
             "toolchain": toolchain,
             "helperSha256": sha(args.helper),
             "resetProofSha256": sha(args.reset_proof),
@@ -250,6 +260,7 @@ def run_code(args: argparse.Namespace) -> None:
     from bcbench.agent.bcal.agent import _read_transcript, _require_completed, _result_metrics, _run_bcal_process
 
     pin = load_pin()
+    owner_admission(pin)
     pin.verify(args.package, args.archive)
     job = json.loads(args.job.read_bytes())
     gold = job["gold"]
@@ -345,6 +356,7 @@ def run_code(args: argparse.Namespace) -> None:
 def run_judge(args: argparse.Namespace) -> None:
     from openai import OpenAI
 
+    owner_admission(load_pin())
     job = json.loads(args.job.read_bytes())
     aggregate = StudyBudget(args.study_budget)
     budget = ProviderBudget(args.receipt.with_suffix(".judge-attempts.json"), 1, lambda role: aggregate.reserve(job["cell"], role))
@@ -373,6 +385,8 @@ def execute(args: argparse.Namespace, gold: bool) -> None:
     from bcbench.agent.bcal.agent import _run_bcal_process
 
     admission = verify_admission(args, gold)
+    deadline = float(os.environ.get("EVALUATION_DEADLINE_UNIX", time.time() + 18000)) if gold else None
+    require(deadline is None or deadline > time.time(), "Hosted controller window expired before execution.")
     with (args.output / "execution-once.json").open("x", encoding="utf-8") as file:
         json.dump({"source": os.environ["GITHUB_SHA"], "runId": os.environ["GITHUB_RUN_ID"]}, file)
     entries = frozen_entries() if gold else [{"nl_prompt": TASK, "page": 22, "audience": "Technical", "expected": [], "metadata": {"area": "smoke"}, "instance_id": "synthetic-clamp-priority"}]
@@ -451,6 +465,10 @@ def execute(args: argparse.Namespace, gold: bool) -> None:
         receipt = json.loads(receipt_path.read_bytes())
         if receipt["status"] != "completed":
             return
+        if aggregate.snapshot()["stopped"]:
+            receipt.update(status="judge-not-admitted", quality=None, testPassed=None, judgeFailureCategory="study_stopped")
+            write_json(receipt_path, receipt)
+            return
         try:
             with (args.work / cell / "judge-console.txt").open("w", encoding="utf-8") as console:
                 _run_bcal_process(command("judge", cell, job, args.package), timeout=100, stdout=console, env=dict(os.environ))
@@ -463,10 +481,15 @@ def execute(args: argparse.Namespace, gold: bool) -> None:
         with ThreadPoolExecutor(max_workers=JUDGE_WORKERS) as judge_pool, ThreadPoolExecutor(max_workers=len(package_roots)) as coding_pool:
             pending = [coding_pool.submit(code_shard, worker, judge_pool) for worker in range(len(package_roots))]
             judgments = []
-            for future in as_completed(pending):
-                judgments.extend(future.result())
-            for future in judgments:
-                future.result()
+            try:
+                for future in as_completed(pending, timeout=max(0, deadline - time.time()) if deadline else None):
+                    judgments.extend(future.result())
+                for future in as_completed(judgments, timeout=max(0, deadline - time.time()) if deadline else None):
+                    future.result()
+            except Exception:
+                if aggregate:
+                    aggregate.stop()
+                raise
     finally:
         rows = []
         for cell, entry, model in cells:
@@ -488,14 +511,17 @@ def execute(args: argparse.Namespace, gold: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=("admit-smoke", "smoke", "admit-gold", "gold", "code", "judge"))
+    parser.add_argument("phase", choices=("native-medium-proof", "admit-smoke", "smoke", "admit-gold", "gold", "code", "judge"))
     for name in ("package", "archive"):
         parser.add_argument("--" + name, type=Path, required=True)
     for name in ("work", "output", "symbol-cache", "helper", "reset-proof", "control-proof", "smoke-receipt", "symbols", "job", "private", "receipt", "study-budget"):
         parser.add_argument("--" + name, type=Path)
     args = parser.parse_args()
     try:
-        if args.phase.startswith("admit-"):
+        if args.phase == "native-medium-proof":
+            args.output.mkdir(parents=True, exist_ok=False)
+            native_medium_proofs(args.package, args.archive, args.helper, args.output, load_pin())
+        elif args.phase.startswith("admit-"):
             admit(args)
         elif args.phase in ("smoke", "gold"):
             execute(args, args.phase == "gold")

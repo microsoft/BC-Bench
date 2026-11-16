@@ -1,0 +1,48 @@
+{
+  "identity": {
+    "kind": "exact-governed-package",
+    "version": "30.0.46.59225-beta",
+    "source": "cc3f023be09b313cb0568bbaaad6131404152e3c",
+    "archiveSha256": "a3d3a91d8f390eab2d86bdb8f63181c28f9de1d39e78fe0f6b903a6cff425b1b",
+    "verifiedRuntimeFiles": 224,
+    "reportedVersion": "30.0.46.59225+cc3f023be09b313cb0568bbaaad6131404152e3c"
+  },
+  "providerAttempts": 0,
+  "offlineRequests": 2,
+  "forcedTool": "start_new_work",
+  "forcedDispatchIsNotModelChoice": true,
+  "streaming": true,
+  "secondRequestContainsToolResult": true,
+  "processExit": 1,
+  "terminalEvidence": {
+    "available": true,
+    "completed": false,
+    "failurePresent": true,
+    "failureCode": "turn_failed",
+    "failureMessageSignature": "unknown",
+    "runtimeIdentityAvailable": true,
+    "runtimeModel": "gpt-56-reasoning-sol",
+    "runtimeAppliedEffort": "medium",
+    "turns": [
+      {
+        "domainCompleted": false,
+        "mutationSucceeded": false,
+        "compileSucceeded": false,
+        "hasUncompiledMutation": false,
+        "modelRequests": 2,
+        "responseIterations": 2,
+        "toolCalls": 1,
+        "usageEvents": 1,
+        "inputTokens": 1,
+        "outputTokens": 1,
+        "reasoningTokens": 0,
+        "terminalState": "error"
+      }
+    ],
+    "exportAttempted": false,
+    "exportSucceeded": false,
+    "transcriptSha256": "83a1753dba427c3289f6d5d5b2d5832793e716ddf0b59c8b2810121f74f6f970"
+  },
+  "auxiliaryInvocations": 0,
+  "packagePayloadUnchanged": true
+}

@@ -61,6 +61,7 @@ jobs:
           "version=$($pin.version)" >> $env:GITHUB_OUTPUT
           "EVALUATION_VERSION=$($pin.version)" >> $env:GITHUB_ENV
           "EVALUATION_WORK=$env:RUNNER_TEMP\bcal-reasoning-medium-private" >> $env:GITHUB_ENV
+          "EVALUATION_DEADLINE_UNIX=$([DateTimeOffset]::UtcNow.AddMinutes(300).ToUnixTimeSeconds())" >> $env:GITHUB_ENV
       - uses: ./.github/actions/setup-python-uv
       - uses: ./.github/actions/install-bcal
         with:

@@ -499,6 +499,8 @@ Final owner index/seal hashes and every referenced proof are checked offline
 before producing the sanitized `owner-proof-admission.json`; live admission
 binds its hash and exact package/SDK/eleven-case ownership/parity facts. Original
 local artifact paths and proof bodies are not copied into that receipt.
+Sealed receipt files retain their exact newline bytes through Git checkout;
+their owner-bound hashes are never recomputed after text normalization.
 
 The new Sol phase permits one execution of the same synthetic task, at most
 30 actual provider HTTP attempts, no auxiliary inference or judge. Only a
@@ -508,6 +510,11 @@ three models on that same package, with explicit medium. Ordinary Ceres
 judging retains true omitted effort. Four coding workers and two judge
 workers run concurrently; the logical SDK limits remain 64 requests and
 1200 seconds per gold cell.
+The hosted controller stops new sends after its five-hour job window, then
+drains already running bounded children before the six-hour runner cutoff so
+partial accounting can be retained. Configured per-cell SDK/process ceilings
+remain unchanged; a global infrastructure stop leaves interrupted cells
+unscored and never authorizes a rerun.
 
 Each gold cell has an independent 64-coding/1-judge actual HTTP ceiling,
 including failed responses and internal sends. A shared transactional SQLite
