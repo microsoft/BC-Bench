@@ -99,6 +99,8 @@ def main() -> int:
         "model": model,
         "messages": messages,
         "max_completion_tokens": request.get("max_completion_tokens", 16384),
+        # bc-eval creates a new session per request; LLM API requires an empty ticket when none is cached.
+        "extra_headers": {"x-sticky-route-session-ticket": ""},
     }
     if request.get("tools"):
         kwargs["tools"] = request["tools"]
