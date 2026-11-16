@@ -33,7 +33,21 @@ jobs:
           $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $runs.total_count -gt 100) { throw 'Once-only inventory unavailable.' }
           $previous = @($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith(' / reasoning-coding-smoke') })
-          if ($previous.Count -ne 0) { throw 'A coding-smoke workflow already exists; no replacement is authorized.' }
+          if ($previous.Count -ne 1 -or $previous[0].id -ne 43860521534 -or
+              $previous[0].head_sha -ne '38ab3306042e9403eef8b5bd9e5fea6fb1af4694' -or
+              $previous[0].status -ne 'completed' -or $previous[0].conclusion -ne 'failure' -or
+              $previous[0].run_attempt -ne 1) { throw 'Only the authorized zero-provider-attempt setup failure may precede this replacement.' }
+          $failedJobs = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/43860521534/jobs?per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $failedJobs.total_count -gt 100) { throw 'Failed-run evidence unavailable.' }
+          $codingJobs = @($failedJobs.jobs | Where-Object { $_.name -eq 'reasoning-coding-smoke / coding' })
+          if ($codingJobs.Count -ne 1) { throw 'Failed-run coding job evidence unavailable.' }
+          $steps = $codingJobs[0].steps
+          foreach ($name in @('Fetch runner-local inference certificate after offline admission', 'Execute three sequential actual coding arms at thirty provider sends each')) {
+            $step = @($steps | Where-Object { $_.name -eq $name })
+            if ($step.Count -ne 1 -or $step[0].conclusion -ne 'skipped') { throw 'Prior zero-provider-attempt evidence no longer matches.' }
+          }
+          $failure = @($steps | Where-Object { $_.name -eq 'Verify offline options, pre-send budgets and loopback guards' })
+          if ($failure.Count -ne 1 -or $failure[0].conclusion -ne 'failure') { throw 'Prior setup-failure evidence no longer matches.' }
           "CODING_WORK=$env:RUNNER_TEMP\bcal-reasoning-coding-private" >> $env:GITHUB_ENV
       - uses: ./.github/actions/setup-python-uv
       - uses: ./.github/actions/install-bcal
