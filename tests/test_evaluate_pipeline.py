@@ -15,6 +15,7 @@ from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.results.base import RESULT_FILE_SUFFIX, BaseEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results.bugfix import BugFixResult
 from bcbench.types import AgentConfig, EvaluationCategory, EvaluationContext, HarnessName
 from tests.conftest import StubHarness, create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_ext_implement_entry, create_nl2al_entry
 
@@ -36,15 +37,14 @@ class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
         self.setup_called = True
 
     @override
-    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> None:
+    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> AgentResult:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
-        result = harness.run(context.agent_request())
-        context.metrics, context.experiment = result.metrics, result.experiment
+        return super().run_agent(context, harness)
 
     @override
-    def evaluate(self, context: EvaluationContext[E]) -> None:
+    def evaluate(self, context: EvaluationContext[E], agent_result: AgentResult) -> None:
         self.evaluate_called = True
         if self.raise_in_evaluate is not None:
             raise self.raise_in_evaluate
@@ -73,13 +73,42 @@ class TestExecuteHappyPath:
         assert pipeline.run_agent_called
         assert pipeline.evaluate_called
 
+    def test_passes_complete_agent_result_to_evaluation(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        agent_result = AgentResult(
+            response="agent answer",
+            metrics=AgentMetrics(execution_time=1.0),
+            experiment=ExperimentConfiguration(custom_instructions=True),
+            transcript={"trace": []},
+        )
+        pipeline = _StubPipeline[BugFixEntry]()
+
+        def check_agent_result(context, returned_result):
+            assert context is ctx
+            assert returned_result is agent_result
+            assert returned_result.response == "agent answer"
+            assert not hasattr(context, "agent_result")
+            pipeline.save_result(context, BugFixResult.create_success(context, returned_result, "patch"))
+
+        with patch.object(pipeline, "evaluate") as evaluate:
+            evaluate.side_effect = check_agent_result
+            pipeline.execute(ctx, StubHarness(agent_result))
+
+        evaluate.assert_called_once_with(ctx, agent_result)
+        assert not hasattr(ctx, "agent_result")
+        restored = _read_only_result(ctx)
+        assert restored.output == "patch"
+        assert restored.metrics == agent_result.metrics
+        assert restored.experiment == agent_result.experiment
+        assert restored.transcript == agent_result.transcript
+
 
 class TestExecuteAgentTimeout:
     def test_persists_timeout_result_and_skips_evaluate(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
         timeout_metrics = AgentMetrics(execution_time=600.0)
         timeout_config = ExperimentConfiguration(custom_instructions=True)
-        pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config))
+        pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config, transcript={"trace": []}))
 
         pipeline.execute(ctx, _noop_harness())
 
@@ -89,6 +118,8 @@ class TestExecuteAgentTimeout:
         assert result.error_message == "Agent timed out"
         assert result.metrics == timeout_metrics
         assert result.experiment == timeout_config
+        assert result.transcript == {"trace": []}
+        assert not hasattr(ctx, "agent_result")
 
     def test_persists_category_specific_timeout_result(self, tmp_path):
         entry = create_nl2al_entry()
@@ -107,32 +138,46 @@ class TestExecuteAgentTimeout:
 
 
 class TestRunAgentTranscript:
-    def test_copies_transcript_from_result(self, tmp_path):
+    def test_returns_result_without_mutating_context(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
+        original_context = vars(ctx).copy()
         harness = StubHarness[BugFixEntry](AgentResult(transcript={"trace": []}))
 
-        EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
+        result = EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
 
-        assert ctx.transcript == {"trace": []}
+        assert result is harness.result
+        assert vars(ctx) == original_context
+        assert not hasattr(ctx, "agent_result")
 
-    def test_copies_transcript_from_agent_error(self, tmp_path):
+    def test_propagates_agent_error_with_transcript(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
         harness = MagicMock(spec=StubHarness)
-        harness.run.side_effect = AgentError("agent failed", transcript={"trace": []})
+        error = AgentError("agent failed", transcript={"trace": []})
+        harness.run.side_effect = error
+        pipeline = _StubPipeline[BugFixEntry]()
 
-        with pytest.raises(AgentError, match="agent failed"):
-            EvaluationPipeline.run_agent(_StubPipeline[BugFixEntry](), ctx, harness)
+        with pytest.raises(AgentError, match="agent failed") as raised:
+            pipeline.execute(ctx, harness)
 
-        assert ctx.transcript == {"trace": []}
+        assert raised.value is error
+        assert raised.value.transcript == {"trace": []}
+        assert not hasattr(ctx, "agent_result")
+        assert not pipeline.evaluate_called
+        assert not list(ctx.result_dir.glob(f"*{RESULT_FILE_SUFFIX}"))
 
 
 class TestExecuteEvaluateError:
-    def test_unexpected_exceptions_still_propagate(self, tmp_path):
+    @pytest.mark.parametrize("stage", ["run_agent", "evaluate"])
+    def test_unexpected_exceptions_still_propagate(self, tmp_path, stage):
         ctx = create_evaluation_context(tmp_path)
-        pipeline = _StubPipeline[BugFixEntry](raise_in_evaluate=RuntimeError("infra blew up"))
+        error = RuntimeError("infra blew up")
+        pipeline = _StubPipeline[BugFixEntry](**{f"raise_in_{stage}": error})
 
-        with pytest.raises(RuntimeError, match="infra blew up"):
+        with pytest.raises(RuntimeError, match="infra blew up") as raised:
             pipeline.execute(ctx, _noop_harness())
+
+        assert raised.value is error
+        assert not hasattr(ctx, "agent_result")
 
 
 def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
@@ -161,7 +206,7 @@ def test_al_evaluation_pipelines_pass_recommended_diff_exclusions(tmp_path, cate
         patch(f"{module}.stage_and_get_diff", side_effect=RuntimeError("stop before evaluation")) as stage_diff,
         pytest.raises(RuntimeError, match="stop before evaluation"),
     ):
-        pipeline.evaluate(ctx)
+        pipeline.evaluate(ctx, AgentResult())
 
     stage_diff.assert_called_once_with(ctx.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
 
@@ -173,16 +218,25 @@ class TestMockPipelineCoversAllCategories:
         entry = _entry_for_category(category)
         ctx = create_evaluation_context(tmp_path, entry=entry, category=category)
         pipeline = MockEvaluationPipeline()
+        agent_result = AgentResult(
+            metrics=AgentMetrics(execution_time=1.0),
+            experiment=ExperimentConfiguration(custom_instructions=True),
+            transcript={"trace": ["agent output"]},
+        )
 
         # Force each scenario deterministically so every branch is exercised, not just a random one.
         for pick in (lambda seq: seq[0], lambda seq: seq[-1]):
             with patch("bcbench.commands.evaluate.random.choice", pick):
-                pipeline.evaluate(ctx)
+                pipeline.evaluate(ctx, agent_result)
 
         result_file = ctx.result_dir / f"{entry.instance_id}{RESULT_FILE_SUFFIX}"
         results = [BaseEvaluationResult.from_json(json.loads(line)) for line in result_file.read_text(encoding="utf-8").splitlines()]
         assert {r.category for r in results} == {category}
         assert all(r.instance_id == entry.instance_id for r in results)
+        assert all(r.metrics == agent_result.metrics for r in results)
+        assert all(r.experiment == agent_result.experiment for r in results)
+        assert all(r.transcript == agent_result.transcript for r in results)
+        assert not hasattr(ctx, "agent_result")
 
 
 @pytest.mark.parametrize(

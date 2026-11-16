@@ -1,6 +1,7 @@
 """Tests for NL2ALPipeline.evaluate() — empty-diff handling is nl2al-specific."""
 
 import pytest
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.exceptions import EmptyDiffError
 
 from bcbench.evaluate.nl2al import NL2ALPipeline
@@ -34,7 +35,7 @@ class TestNL2ALEvaluateEmptyDiff:
         ctx = _nl2al_context(tmp_path)
         monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", _throw(EmptyDiffError()))
 
-        NL2ALPipeline().evaluate(ctx)
+        NL2ALPipeline().evaluate(ctx, AgentResult())
 
         result = _read_only_result(ctx)
         assert result.output == ""
@@ -49,7 +50,7 @@ class TestNL2ALEvaluateEmptyDiff:
         ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
         monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", _throw(EmptyDiffError()))
 
-        NL2ALPipeline().evaluate(ctx)
+        NL2ALPipeline().evaluate(ctx, AgentResult())
 
         result = _read_only_result(ctx)
         assert result.output == ""
@@ -60,7 +61,7 @@ class TestNL2ALEvaluateEmptyDiff:
         ctx = _nl2al_context(tmp_path)
         monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", lambda _repo_path, *, exclude: "diff --git a/x.al b/x.al\n+pageextension")
 
-        NL2ALPipeline().evaluate(ctx)
+        NL2ALPipeline().evaluate(ctx, AgentResult())
 
         result = _read_only_result(ctx)
         assert result.error_message is None
@@ -71,7 +72,7 @@ class TestNL2ALEvaluateEmptyDiff:
         monkeypatch.setattr("bcbench.evaluate.nl2al.stage_and_get_diff", _throw(RuntimeError("infra blew up")))
 
         with pytest.raises(RuntimeError, match="infra blew up"):
-            NL2ALPipeline().evaluate(ctx)
+            NL2ALPipeline().evaluate(ctx, AgentResult())
 
 
 class TestNL2ALRunAgentSingleAttempt:

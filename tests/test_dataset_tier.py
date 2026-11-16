@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from bcbench_core.agent.harness import AgentResult
 from typer.testing import CliRunner
 
 from bcbench.cli import app
@@ -50,7 +51,7 @@ def test_result_records_context_tier_and_legacy_results_default_to_gold(tmp_path
     context = create_evaluation_context(tmp_path, entry=entry, category=NL2AL)
     context.tier = DatasetTier.CHALLENGE
 
-    payload = JudgeBasedEvaluationResult.create_raw(context, output="codeunit 50100 X {}").model_dump(mode="json")
+    payload = JudgeBasedEvaluationResult.create_raw(context, AgentResult(), output="codeunit 50100 X {}").model_dump(mode="json")
 
     assert BaseEvaluationResult.from_json(payload).tier is DatasetTier.CHALLENGE
     del payload["tier"]
@@ -61,7 +62,7 @@ def _raw_result(tmp_path, tier: DatasetTier, index: int = 0) -> BaseEvaluationRe
     entry = NL2ALEntry.load(NL2AL.dataset_path(tier))[index]
     context = create_evaluation_context(tmp_path, entry=entry, category=NL2AL)
     context.tier = tier
-    return JudgeBasedEvaluationResult.create_raw(context, output="codeunit 50100 X {}")
+    return JudgeBasedEvaluationResult.create_raw(context, AgentResult(), output="codeunit 50100 X {}")
 
 
 def test_bceval_export_loads_entries_from_the_run_tier_and_exports_entry_metadata(tmp_path):

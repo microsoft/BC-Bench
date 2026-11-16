@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from typing import NamedTuple, Self, override
 
 import numpy as np
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.scoring import f1_score, f_beta_score, precision_recall
 from pydantic import Field
 from rich.console import Group, RenderableType
@@ -183,6 +184,7 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
     def create[E: BaseDatasetEntry](
         cls,
         context: EvaluationContext[E],
+        agent_result: AgentResult,
         output: str,
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
@@ -199,7 +201,7 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
         )
 
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             output=output,
             expected_comments=expected_comments,
             generated_comments=generated_comments,
@@ -221,12 +223,13 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
     def create_invalid[E: BaseDatasetEntry](
         cls,
         context: EvaluationContext[E],
+        agent_result: AgentResult,
         output: str,
         expected_comments: list[ReviewComment],
     ) -> Self:
         """Result for output that could not be parsed into a review — scored zero."""
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             output=output,
             expected_comments=expected_comments,
             valid_review_output=False,

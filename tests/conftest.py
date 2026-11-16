@@ -19,7 +19,8 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from bcbench_core.dataset import TestEntry
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry
+from bcbench.categories.ext_request_advisor import ExtRequestAdvisorEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
@@ -238,13 +239,14 @@ def create_codereview_result(
         agent=AgentIdentity[HarnessName](harness=agent_name, version="1.0.0", model=model),
         category=EvaluationCategory.CODE_REVIEW,
     )
-    context.metrics = metrics
+    agent_result = AgentResult(metrics=metrics)
 
     generated_comments = parse_review_output(output)
     if generated_comments is None:
-        return CodeReviewResult.create_invalid(context, output, expected_comments)
+        return CodeReviewResult.create_invalid(context, agent_result, output, expected_comments)
     return CodeReviewResult.create(
         context,
+        agent_result,
         output=output,
         expected_comments=expected_comments,
         generated_comments=generated_comments,

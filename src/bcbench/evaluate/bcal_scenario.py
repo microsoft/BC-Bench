@@ -8,11 +8,13 @@ import zipfile
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.artifacts import ALPACKAGES_DIRNAME, copy_symbol_apps
 from bcbench_core.filesystem import remove_tree
 
 from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult
 from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.operations import bootstrap_app_json
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationContext
@@ -238,7 +240,7 @@ def _archive_workspace(entry: BCalScenarioEntry, app_folder: Path, result_dir: P
                 archive.write(path, path.relative_to(app_folder))
 
 
-class BCalScenarioPipeline(evaluate_base.EvaluationPipeline[BCalScenarioEntry]):
+class BCalScenarioPipeline(EvaluationPipeline[BCalScenarioEntry]):
     @override
     def setup_workspace(self, entry: BCalScenarioEntry, repo_path: Path) -> None:
         if repo_path.exists():
@@ -258,11 +260,11 @@ class BCalScenarioPipeline(evaluate_base.EvaluationPipeline[BCalScenarioEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def evaluate(self, context: EvaluationContext[BCalScenarioEntry]) -> None:
-        if context.transcript is None:
+    def evaluate(self, context: EvaluationContext[BCalScenarioEntry], agent_result: AgentResult) -> None:
+        if agent_result.transcript is None:
             raise ValueError("BCal scenario harness did not provide a transcript")
 
-        scenario_result = BCalScenarioRunResult.model_validate(context.transcript)
+        scenario_result = BCalScenarioRunResult.model_validate(agent_result.transcript)
         trace = evaluate_trace(context.entry, scenario_result)
         app_folder = context.repo_path / SCENARIO_EXPORT_DIR
         package_cache = context.repo_path / SCENARIO_SYMBOL_DIR / ALPACKAGES_DIRNAME
@@ -279,6 +281,7 @@ class BCalScenarioPipeline(evaluate_base.EvaluationPipeline[BCalScenarioEntry]):
         error_message = scenario_result.failure.message if scenario_result.failure else None
         result = BCalScenarioEvaluationResult.create(
             context,
+            agent_result,
             output=output,
             scenario_completed=scenario_result.completed,
             independent_build=build,

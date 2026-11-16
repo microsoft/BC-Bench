@@ -1,4 +1,5 @@
 import pytest
+from bcbench_core.agent.harness import AgentResult
 from pydantic import ValidationError
 
 from bcbench.config import get_config
@@ -14,7 +15,7 @@ from tests.conftest import create_codereview_result, create_dataset_entry, creat
 
 class TestEvaluationResultFactories:
     def test_create_success_result_fills_all_fields_correctly(self, sample_evaluation_context):
-        result = BugFixResult.create_success(sample_evaluation_context, "test_patch")
+        result = BugFixResult.create_success(sample_evaluation_context, AgentResult(), "test_patch")
 
         assert result.instance_id == sample_evaluation_context.entry.instance_id
         assert result.project == "Shopify"
@@ -26,7 +27,7 @@ class TestEvaluationResultFactories:
 
     def test_create_build_failure_result_fills_all_fields_correctly(self, sample_evaluation_context):
         error_msg = "Build failed: src/app"
-        result = BugFixResult.create_build_failure(sample_evaluation_context, "test_patch", error_msg)
+        result = BugFixResult.create_build_failure(sample_evaluation_context, AgentResult(), "test_patch", error_msg)
 
         assert result.instance_id == sample_evaluation_context.entry.instance_id
         assert result.project == "Shopify"
@@ -37,7 +38,7 @@ class TestEvaluationResultFactories:
         assert result.error_message == error_msg
 
     def test_create_test_failure_result_fills_all_fields_correctly(self, sample_evaluation_context):
-        result = BugFixResult.create_test_failure(sample_evaluation_context, "test_patch")
+        result = BugFixResult.create_test_failure(sample_evaluation_context, AgentResult(), "test_patch")
 
         assert result.instance_id == sample_evaluation_context.entry.instance_id
         assert result.project == "Shopify"
@@ -59,7 +60,7 @@ class TestEvaluationResultFactories:
             model="different-model",
         )
 
-        result = BugFixResult.create_success(context, "test_patch")
+        result = BugFixResult.create_success(context, AgentResult(), "test_patch")
 
         assert result.instance_id == "microsoftInternal__NAV-456"
         assert result.project == "BaseApp"
@@ -68,18 +69,18 @@ class TestEvaluationResultFactories:
 
     def test_build_failure_with_patch_application_error_message(self, sample_evaluation_context):
         error_msg = "Failed to apply custom_fix.patch"
-        result = BugFixResult.create_build_failure(sample_evaluation_context, "test_patch", error_msg)
+        result = BugFixResult.create_build_failure(sample_evaluation_context, AgentResult(), "test_patch", error_msg)
 
         assert result.error_message == error_msg
 
     def test_build_failure_with_different_project_path(self, sample_evaluation_context):
         error_msg = "Build failed: src/components/module1"
-        result = BugFixResult.create_build_failure(sample_evaluation_context, "test_patch", error_msg)
+        result = BugFixResult.create_build_failure(sample_evaluation_context, AgentResult(), "test_patch", error_msg)
 
         assert result.error_message == error_msg
 
     def test_test_generation_pre_patch_failure_sets_category_state(self, sample_evaluation_context):
-        result = TestGenerationResult.create_pre_patch_failure(sample_evaluation_context, "test_patch", "Passed pre-patch")
+        result = TestGenerationResult.create_pre_patch_failure(sample_evaluation_context, AgentResult(), "test_patch", "Passed pre-patch")
 
         assert result.resolved is False
         assert result.build is True
@@ -88,7 +89,7 @@ class TestEvaluationResultFactories:
         assert result.error_message == "Passed pre-patch"
 
     def test_test_generation_post_patch_failure_sets_category_state(self, sample_evaluation_context):
-        result = TestGenerationResult.create_post_patch_failure(sample_evaluation_context, "test_patch", "Failed post-patch")
+        result = TestGenerationResult.create_post_patch_failure(sample_evaluation_context, AgentResult(), "test_patch", "Failed post-patch")
 
         assert result.resolved is False
         assert result.build is True
@@ -100,7 +101,7 @@ class TestEvaluationResultFactories:
         config = get_config().judge
         context = create_evaluation_context(tmp_path, category=EvaluationCategory.NL2AL)
 
-        lm_checklist_result = JudgeBasedEvaluationResult.create_raw(context, "output")
+        lm_checklist_result = JudgeBasedEvaluationResult.create_raw(context, AgentResult(), "output")
         code_review_result = create_codereview_result()
         summary = EvaluationResultSummary.from_results([code_review_result], "run")
         aggregate = LeaderboardAggregate.from_runs([summary])

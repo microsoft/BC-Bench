@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from bcbench_core.agent.harness import AgentRequest
+from bcbench_core.agent.harness import AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.exceptions import AgentError
 from pydantic import ValidationError
@@ -257,10 +257,11 @@ def test_structured_result_exposes_deterministic_metrics(tmp_path: Path):
         agent_name=HarnessName.BCAL,
         category=EvaluationCategory.BCAL_SCENARIO,
     )
-    context.metrics = AgentMetrics(execution_time=1, prompt_tokens=10, completion_tokens=20, turn_count=1, tool_usage={"write_file": 1})
+    agent_result = AgentResult(metrics=AgentMetrics(execution_time=1, prompt_tokens=10, completion_tokens=20, turn_count=1, tool_usage={"write_file": 1}))
 
     result = BCalScenarioEvaluationResult.create(
         context,
+        agent_result,
         output="packet",
         scenario_completed=True,
         independent_build=IndependentBuildResult(status="not_attempted", message="No compiler"),

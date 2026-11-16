@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.exceptions import EmptyDiffError
 from bcbench_core.git import stage_and_get_diff
 
@@ -35,14 +36,14 @@ class ExtRequestImplementPipeline(EvaluationPipeline[ExtRequestImplementEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def evaluate(self, context: EvaluationContext[ExtRequestImplementEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[ExtRequestImplementEntry], agent_result: AgentResult) -> None:
         try:
             generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
         except EmptyDiffError:
-            result = JudgeBasedEvaluationResult.create_empty_output(context)
+            result = JudgeBasedEvaluationResult.create_empty_output(context, agent_result)
             logger.warning(f"Agent produced no changes for {context.entry.instance_id}")
         else:
-            result = JudgeBasedEvaluationResult.create_raw(context, output=generated_patch)
+            result = JudgeBasedEvaluationResult.create_raw(context, agent_result, output=generated_patch)
             logger.info(f"Saved raw extensibility-request-implement result for {context.entry.instance_id} (scoring pending)")
 
         self.save_result(context, result)

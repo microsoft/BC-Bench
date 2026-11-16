@@ -9,6 +9,7 @@ import click
 import pytest
 import typer
 from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.exceptions import AgentError
 from typer.main import get_command
 from typer.testing import CliRunner
 
@@ -17,6 +18,7 @@ from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtim
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.evaluate.nl2al import NL2ALPipeline
 from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
@@ -151,6 +153,34 @@ def _option_names(command: click.Command) -> set[str]:
     return {option for parameter in command.params if isinstance(parameter, click.Option) for option in (*parameter.opts, *parameter.secondary_opts)}
 
 
+def test_evaluate_bcal_preserves_failure_transcript(tmp_path):
+    entry = create_nl2al_entry()
+    error = AgentError("agent failed", transcript={"trace": ["failure evidence"]})
+
+    with (
+        patch.object(EvaluationCategory, "dataset_path", return_value=tmp_path / "nl2al.jsonl"),
+        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock) as entry_class,
+        patch.object(NL2ALPipeline, "execute", side_effect=error),
+        patch("bcbench.agent.bcal.agent.get_bcal_version", return_value="18.0.1.2-beta"),
+    ):
+        entry_class.return_value.load.return_value = [entry]
+        with pytest.raises(typer.Exit) as raised:
+            evaluate_commands.evaluate_bcal(
+                entry_id=entry.instance_id,
+                repo_path=tmp_path / "repo",
+                output_dir=tmp_path / "results",
+                run_id="bcal-run",
+                llm_command="python bridge.py",
+                llm_model=None,
+            )
+
+    assert raised.value.__cause__ is error
+    result_file = tmp_path / "results" / "bcal-run" / f"{entry.instance_id}.jsonl"
+    payload = json.loads(result_file.read_text(encoding="utf-8"))
+    assert payload["error_message"] == "agent failed"
+    assert payload["transcript"] == error.transcript
+
+
 @pytest.mark.parametrize("command_group", ["run", "evaluate"])
 def test_bcal_commands_only_expose_external_command_options(command_group):
     root = get_command(app)
@@ -183,6 +213,7 @@ def agent_command_category(tmp_path):
     return entry, SimpleNamespace(
         dataset_path=lambda _tier=None: tmp_path / "dataset.jsonl",
         entry_class=EntryClass,
+        definition=None,
         pipeline=lambda _agent_config: Pipeline(),
         requires_container=False,
     )

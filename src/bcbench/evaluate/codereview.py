@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.git import apply_patch, fetch_commit_if_missing
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
@@ -54,7 +55,7 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def evaluate(self, context: EvaluationContext[CodeReviewEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[CodeReviewEntry], agent_result: AgentResult) -> None:
         review_output_file: Path = context.repo_path / REVIEW_OUTPUT_FILE
 
         if not review_output_file.exists():
@@ -66,7 +67,7 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
 
         if generated_comments is None:
             logger.warning(f"Invalid review output for {context.entry.instance_id}")
-            result = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
+            result = CodeReviewResult.create_invalid(context, agent_result, output, context.entry.expected_comments)
         else:
             expected_candidates = candidate_comment_pairs(context.entry.expected_comments, generated_comments)
             ignored_candidates = candidate_comment_pairs(context.entry.ignored_comments, generated_comments)
@@ -77,6 +78,7 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             )
             result = CodeReviewResult.create(
                 context,
+                agent_result,
                 output=output,
                 expected_comments=context.entry.expected_comments,
                 generated_comments=generated_comments,

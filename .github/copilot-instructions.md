@@ -38,7 +38,7 @@ A category defines the kind of development task being evaluated, including its i
 
 Preserve one-way dependency flow from orchestration toward lower-level abstractions. Keep domain and result models independent of runtime code. CLI commands are composition roots: they construct concrete agent harnesses (`bcbench_core.agent.harness.AgentHarness`) and inject them into evaluation pipelines; pipelines must not select agent implementations.
 
-`bcbench.types` is the central category registry. Extend `EvaluationCategory` for category-owned mappings such as datasets, pipelines, results, and scoring behavior instead of duplicating those decisions elsewhere. Keep imports following the existing direction and avoid circular dependencies.
+`bcbench.types` is the central category registry. Extend `EvaluationCategory` for category-owned mappings such as datasets, pipelines, results, and scoring behavior instead of duplicating those decisions elsewhere; for categories migrated to `bcbench.categories`, those mappings live in their `CategoryDefinition`. Keep imports following the existing direction and avoid circular dependencies.
 
 Logging setup lives in bcbench-core (`bcbench_core.logs.setup_logging`) so applications reuse it rather than copy it; the CLI calls it once, and modules only use `logging.getLogger(__name__)`.
 

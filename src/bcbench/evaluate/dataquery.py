@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.filesystem import clear_directory
 
 from bcbench.dataset import DataQueryEntry
@@ -104,7 +105,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def evaluate(self, context: EvaluationContext[DataQueryEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[DataQueryEntry], agent_result: AgentResult) -> None:
         query_file = context.repo_path / GENERATED_QUERY_FILE
         # query.al is only an inspection artifact now; scoring is on the data the agent retrieved.
         generated_query = query_file.read_text(encoding="utf-8").strip() if query_file.exists() else ""
@@ -121,7 +122,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
             # measured benchmark outcome (build=False), not a hidden harness error, so we record it and
             # keep CI green rather than failing the job.
             logger.warning(f"Agent produced no {ANSWER_FILE} for {context.entry.instance_id}")
-            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output=generated_query, error_message=f"No {ANSWER_FILE} produced"))
+            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, agent_result, output=generated_query, error_message=f"No {ANSWER_FILE} produced"))
             return
 
         try:
@@ -129,12 +130,12 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         except (ValueError, TypeError) as e:
             # Malformed answer.json is likewise the agent's failure, recorded as build=False.
             logger.warning(f"Unusable {ANSWER_FILE} for {context.entry.instance_id}: {e}")
-            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output=generated_query, error_message=str(e)))
+            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, agent_result, output=generated_query, error_message=str(e)))
             return
 
         resolved = result_sets_match(agent_rows, gold_rows, context.entry.ordered)
         error_message = None if resolved else f"Result set mismatch: answer {len(agent_rows)} rows vs gold {len(gold_rows)} rows"
-        result = ExecutionBasedEvaluationResult.create_result(context, output=generated_query, build=True, resolved=resolved, error_message=error_message)
+        result = ExecutionBasedEvaluationResult.create_result(context, agent_result, output=generated_query, build=True, resolved=resolved, error_message=error_message)
         logger.info(f"{context.entry.instance_id}: build=True resolved={resolved}")
         self.save_result(context, result)
 

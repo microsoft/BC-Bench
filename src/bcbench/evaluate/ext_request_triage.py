@@ -12,6 +12,8 @@ import logging
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import AgentResult
+
 from bcbench.dataset import ExtRequestTriageEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.operations import setup_repo_prebuild
@@ -38,15 +40,15 @@ class ExtRequestTriagePipeline(EvaluationPipeline[ExtRequestTriageEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     @override
-    def evaluate(self, context: EvaluationContext[ExtRequestTriageEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[ExtRequestTriageEntry], agent_result: AgentResult) -> None:
         result_path = context.repo_path / TRIAGE_RESULT_FILE
         raw = result_path.read_text(encoding="utf-8").strip() if result_path.exists() else ""
 
         if not raw:
-            result = JudgeBasedEvaluationResult.create_empty_output(context)
+            result = JudgeBasedEvaluationResult.create_empty_output(context, agent_result)
             logger.warning(f"Agent produced no {TRIAGE_RESULT_FILE} for {context.entry.instance_id}")
         else:
-            result = JudgeBasedEvaluationResult.create_raw(context, output=raw)
+            result = JudgeBasedEvaluationResult.create_raw(context, agent_result, output=raw)
             logger.info(f"Saved raw extensibility-request-triage result for {context.entry.instance_id} (scoring pending)")
 
         self.save_result(context, result)

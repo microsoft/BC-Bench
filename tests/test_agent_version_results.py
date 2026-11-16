@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.exceptions import AgentTimeoutError
 
 from bcbench.commands.result import _rebuild_aggregates, result_update
@@ -17,7 +18,7 @@ from tests.conftest import StubHarness, create_bugfix_result, create_codereview_
 
 @pytest.mark.parametrize("version", ["1.2.3", "a" * 40, None])
 def test_agent_version_round_trips_through_results_and_summaries(tmp_path: Path, version: str | None) -> None:
-    result = BugFixResult.create_success(create_evaluation_context(tmp_path), "patch").model_copy(update={"agent_version": version})
+    result = BugFixResult.create_success(create_evaluation_context(tmp_path), AgentResult(), "patch").model_copy(update={"agent_version": version})
     result.save(tmp_path, "result.jsonl")
     restored = BaseEvaluationResult.from_json(json.loads((tmp_path / "result.jsonl").read_text()))
     summary = EvaluationResultSummary.from_results([restored], "run")

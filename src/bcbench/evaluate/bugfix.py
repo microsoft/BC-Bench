@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import override
 
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.bc import build_and_publish_projects
 from bcbench_core.exceptions import BuildError, TestExecutionError
 from bcbench_core.git import apply_patch, clean_project_paths, stage_and_get_diff
@@ -42,7 +43,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
         set_runtime_version(context.repo_path, context.entry.project_paths)
 
     @override
-    def evaluate(self, context: EvaluationContext[BugFixEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[BugFixEntry], agent_result: AgentResult) -> None:
         container = context.get_container()
         test_projects, _app_projects = categorize_projects(context.entry.project_paths)
 
@@ -62,15 +63,15 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
             )
             run_tests(context.entry.fail_to_pass, context.entry.pass_to_pass, container)
 
-            result = BugFixResult.create_success(context, generated_patch)
+            result = BugFixResult.create_success(context, agent_result, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
 
         except BuildError as e:
-            result = BugFixResult.create_build_failure(context, generated_patch, str(e))
+            result = BugFixResult.create_build_failure(context, agent_result, generated_patch, str(e))
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
         except TestExecutionError as e:
-            result = BugFixResult.create_test_failure(context, generated_patch, error_message="Test failed\n" + str(e))
+            result = BugFixResult.create_test_failure(context, agent_result, generated_patch, error_message="Test failed\n" + str(e))
             logger.exception(f"Tests failed during evaluation of {context.entry.instance_id}")
 
         finally:

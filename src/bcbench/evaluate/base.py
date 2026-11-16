@@ -45,17 +45,12 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         """
         raise NotImplementedError
 
-    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> None:
+    def run_agent(self, context: EvaluationContext[E], harness: AgentHarness[E, HarnessName]) -> AgentResult:
         with github_log_group(f"{context.agent.harness} -- Entry: {context.entry.instance_id}"):
-            try:
-                result: AgentResult = harness.run(context.agent_request())
-            except AgentError as e:
-                context.transcript = e.transcript
-                raise
-            context.metrics, context.experiment, context.transcript = result.metrics, result.experiment, result.transcript
+            return harness.run(context.agent_request())
 
     @abstractmethod
-    def evaluate(self, context: EvaluationContext[E]) -> None:
+    def evaluate(self, context: EvaluationContext[E], agent_result: AgentResult) -> None:
         """Evaluate results: e.g. apply patches, build, run tests.
 
         Implementation should raise category-specific exceptions on failure.
@@ -85,19 +80,22 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         self.setup(context)
 
         try:
-            self.run_agent(context, harness)
+            agent_result = self.run_agent(context, harness)
         except AgentTimeoutError as e:
-            context.metrics = e.metrics
-            context.experiment = e.config
-            result = context.category.result_class.create_agent_timeout_failure(context)
+            agent_result = AgentResult(metrics=e.metrics, experiment=e.config, transcript=e.transcript)
+            logger.info(f"Agent metrics: {agent_result.metrics}")
+            logger.info(f"Experiment configuration: {agent_result.experiment}")
+            result = context.category.result_class.create_agent_timeout_failure(context, agent_result)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
             return
-        finally:
-            logger.info(f"Agent metrics: {context.metrics}")
-            logger.info(f"Experiment configuration: {context.experiment}")
+        except AgentError:
+            logger.exception("Agent execution failed")
+            raise
 
-        self.evaluate(context)
+        logger.info(f"Agent metrics: {agent_result.metrics}")
+        logger.info(f"Experiment configuration: {agent_result.experiment}")
+        self.evaluate(context, agent_result)
 
     def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal, Self, override
 
+from bcbench_core.agent.harness import AgentResult
 from pydantic import BaseModel, ConfigDict
 
 from bcbench.dataset import BaseDatasetEntry
@@ -38,9 +39,9 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
 
     @classmethod
     @override
-    def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E]) -> Self:
+    def create_agent_timeout_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult) -> Self:
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             timeout=True,
             error_message="Agent timed out",
             independent_build=IndependentBuildResult(status="not_attempted", message="Agent timed out before evaluation"),
@@ -48,9 +49,9 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         )
 
     @classmethod
-    def create_harness_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], error_message: str) -> Self:
+    def create_harness_failure[E: BaseDatasetEntry](cls, context: EvaluationContext[E], agent_result: AgentResult, error_message: str) -> Self:
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             error_message=error_message,
             independent_build=IndependentBuildResult(status="not_attempted", message="Harness failed before evaluation"),
             trace_assertions=[],
@@ -61,6 +62,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
     def create[E: BaseDatasetEntry](
         cls,
         context: EvaluationContext[E],
+        agent_result: AgentResult,
         *,
         output: str,
         scenario_completed: bool,
@@ -70,7 +72,7 @@ class BCalScenarioEvaluationResult(JudgeScoredEvaluationResult):
         error_message: str | None = None,
     ) -> Self:
         return cls(
-            **cls._base_fields(context),
+            **cls._base_fields(context, agent_result),
             output=output,
             error_message=error_message,
             scenario_completed=scenario_completed,

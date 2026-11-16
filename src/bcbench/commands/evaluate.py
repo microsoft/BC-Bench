@@ -7,6 +7,7 @@ import typer
 from bcbench_core.agent.experiment import ExperimentConfiguration
 from bcbench_core.agent.harness import AgentHarness, AgentIdentity, AgentRequest, AgentResult
 from bcbench_core.agent.metrics import AgentMetrics
+from bcbench_core.evaluation import evaluate_task
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
 
@@ -34,7 +35,9 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BCalScenarioEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate import CodeReviewPipeline
+from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
+from bcbench.github_actions import github_log_group
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import (
     BaseEvaluationResult,
@@ -45,6 +48,7 @@ from bcbench.results import (
     JudgeBasedEvaluationResult,
     TraceAssertionResult,
 )
+from bcbench.results.base import RESULT_FILE_SUFFIX
 from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
 
 logger = logging.getLogger(__name__)
@@ -109,8 +113,13 @@ def evaluate_copilot(
         tier=tier,
     )
 
-    pipeline = category.pipeline(agent_config)
-    pipeline.execute(context, harness)
+    if (definition := category.definition) is None:
+        # Transitional: remove once every category is migrated
+        category.pipeline(agent_config).execute(context, harness)
+    else:
+        with github_log_group(f"{context.agent.harness} -- Entry: {entry_id}"):
+            result: BaseEvaluationResult = evaluate_task(definition.make(agent_config), context, harness, context.agent_request(), on_timeout=definition.timeout_result)
+        result.save(run_dir, f"{entry_id}{RESULT_FILE_SUFFIX}")
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -172,8 +181,13 @@ def evaluate_claude_code(
         tier=tier,
     )
 
-    pipeline = category.pipeline(agent_config)
-    pipeline.execute(context, harness)
+    if (definition := category.definition) is None:
+        # Transitional: remove once every category is migrated
+        category.pipeline(agent_config).execute(context, harness)
+    else:
+        with github_log_group(f"{context.agent.harness} -- Entry: {entry_id}"):
+            result: BaseEvaluationResult = evaluate_task(definition.make(agent_config), context, harness, context.agent_request(), on_timeout=definition.timeout_result)
+        result.save(run_dir, f"{entry_id}{RESULT_FILE_SUFFIX}")
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -270,9 +284,9 @@ def evaluate_bcal(
         pipeline.execute(context, harness)
     except AgentError as exc:
         result = (
-            BCalScenarioEvaluationResult.create_harness_failure(context, str(exc))
+            BCalScenarioEvaluationResult.create_harness_failure(context, AgentResult(transcript=exc.transcript), str(exc))
             if isinstance(entry, BCalScenarioEntry)
-            else JudgeBasedEvaluationResult.create_failure(context, output="", error_message=str(exc))
+            else JudgeBasedEvaluationResult.create_failure(context, AgentResult(transcript=exc.transcript), output="", error_message=str(exc))
         )
         pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
@@ -349,7 +363,7 @@ class MockHarness(AgentHarness[BaseDatasetEntry, HarnessName]):
         return AgentResult()
 
 
-class MockEvaluationPipeline(evaluate_base.EvaluationPipeline[BaseDatasetEntry]):
+class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
     """Mock pipeline for testing evaluation infrastructure.
 
     This pipeline simulates agent execution without requiring actual BC container setup.
@@ -365,7 +379,7 @@ class MockEvaluationPipeline(evaluate_base.EvaluationPipeline[BaseDatasetEntry])
         logger.info("Mock pipeline: Skipping setup")
 
     @override
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarness[BaseDatasetEntry, HarnessName]) -> None:
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], harness: AgentHarness[BaseDatasetEntry, HarnessName]) -> AgentResult:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 
@@ -378,7 +392,7 @@ class MockEvaluationPipeline(evaluate_base.EvaluationPipeline[BaseDatasetEntry])
             None,
             AgentMetrics(prompt_tokens=500, completion_tokens=100, tool_usage={"bash": 3, "view": 2, "edit": 1, "search": 5}),
         ]
-        context.metrics = random.choice(metrics_scenarios)
+        metrics: AgentMetrics | None = random.choice(metrics_scenarios)
 
         # Randomize experiment configuration to test different scenarios
         experiment_config_scenarios: list[ExperimentConfiguration | None] = [
@@ -390,13 +404,14 @@ class MockEvaluationPipeline(evaluate_base.EvaluationPipeline[BaseDatasetEntry])
             ExperimentConfiguration(custom_agent="custom-agent-v1"),
             ExperimentConfiguration(plugins=["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99"]),
         ]
-        context.experiment = random.choice(experiment_config_scenarios)
+        experiment: ExperimentConfiguration | None = random.choice(experiment_config_scenarios)
 
-        logger.info(f"Using agent metrics: {context.metrics}")
-        logger.info(f"Using experiment configuration: {context.experiment}")
+        logger.info(f"Using agent metrics: {metrics}")
+        logger.info(f"Using experiment configuration: {experiment}")
+        return AgentResult(metrics=metrics, experiment=experiment)
 
     @override
-    def evaluate(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[BaseDatasetEntry], agent_result: AgentResult) -> None:
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
@@ -424,20 +439,21 @@ class MockEvaluationPipeline(evaluate_base.EvaluationPipeline[BaseDatasetEntry])
         result: BaseEvaluationResult
         match scenario:
             case "success":
-                result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
+                result = ExecutionBasedEvaluationResult.create_success(context, agent_result, "MOCK_PATCH_CONTENT")
             case "build-fail":
-                result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
+                result = ExecutionBasedEvaluationResult.create_build_failure(context, agent_result, "MOCK_PATCH_CONTENT", "Mock build failure")
             case "invalid":
-                result = CodeReviewResult.create_invalid(context, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
+                result = CodeReviewResult.create_invalid(context, agent_result, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
             case "valid":
-                result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[], matched_pairs=[], ignored_comments=[], ignored_matched_pairs=[])
+                result = CodeReviewResult.create(context, agent_result, output="[]", expected_comments=[], generated_comments=[], matched_pairs=[], ignored_comments=[], ignored_matched_pairs=[])
             case "raw":
-                result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
+                result = JudgeBasedEvaluationResult.create_raw(context, agent_result, output="MOCK_PATCH_CONTENT")
             case "empty":
-                result = JudgeBasedEvaluationResult.create_empty_output(context)
+                result = JudgeBasedEvaluationResult.create_empty_output(context, agent_result)
             case "bcal-success":
                 result = BCalScenarioEvaluationResult.create(
                     context,
+                    agent_result,
                     output="MOCK_BCAL_SCENARIO_OUTPUT",
                     scenario_completed=True,
                     independent_build=IndependentBuildResult(status="not_attempted", message="Mock evaluation"),
@@ -445,7 +461,7 @@ class MockEvaluationPipeline(evaluate_base.EvaluationPipeline[BaseDatasetEntry])
                     runtime_status=None,
                 )
             case "bcal-fail":
-                result = BCalScenarioEvaluationResult.create_harness_failure(context, "Mock BCal harness failure")
+                result = BCalScenarioEvaluationResult.create_harness_failure(context, agent_result, "Mock BCal harness failure")
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

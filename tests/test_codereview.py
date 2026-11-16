@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from bcbench_core.agent.harness import AgentResult
 from bcbench_core.exceptions import AgentError
 
 from bcbench.config import get_config
@@ -260,6 +261,7 @@ class TestCodeReviewResult:
 
         result = CodeReviewResult.create(
             context,
+            AgentResult(),
             output=generated.model_dump_json(),
             expected_comments=entry.expected_comments,
             generated_comments=[generated],
@@ -989,7 +991,7 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with pytest.raises(RuntimeError, match="No review generated"):
-            pipeline.evaluate(context)
+            pipeline.evaluate(context, AgentResult())
 
     @pytest.mark.parametrize(
         ("expected_line", "line_end", "wrong_line", "correct_line", "issue", "unrelated"),
@@ -1014,7 +1016,7 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge:
-            pipeline.evaluate(context)
+            pipeline.evaluate(context, AgentResult())
 
         result = BaseEvaluationResult.from_json(json.loads(next(context.result_dir.glob("*.jsonl")).read_text(encoding="utf-8")))
         assert isinstance(result, CodeReviewResult)
@@ -1050,7 +1052,7 @@ class TestCodeReviewPipeline:
             patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge,
             patch.object(pipeline, "save_result") as save,
         ):
-            pipeline.evaluate(context)
+            pipeline.evaluate(context, AgentResult())
 
         judge.assert_called_once()
         pairs = judge.call_args.args[0]
@@ -1082,7 +1084,7 @@ class TestCodeReviewPipeline:
             patch("bcbench.evaluate.codereview_judge.invoke_copilot", return_value=(None, '[{"pair":1,"match":true}]')) as invoke,
             patch.object(pipeline, "save_result") as save,
         ):
-            pipeline.evaluate(context)
+            pipeline.evaluate(context, AgentResult())
 
         assert invoke.call_count == int(bool((expected_count + ignored_count) * generated_count))
         result = save.call_args.args[1]
@@ -1104,10 +1106,10 @@ class TestCodeReviewPipeline:
         ):
             if judge_output == "not json":
                 with pytest.raises(LLMJudgeError):
-                    pipeline.evaluate(context)
+                    pipeline.evaluate(context, AgentResult())
                 save.assert_not_called()
             else:
-                pipeline.evaluate(context)
+                pipeline.evaluate(context, AgentResult())
                 result = save.call_args.args[1]
                 assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (0, 2, 1)
         invoke.assert_called_once()
@@ -1124,7 +1126,7 @@ class TestCodeReviewPipeline:
             patch.object(pipeline, "save_result") as save,
             pytest.raises(LLMJudgeError, match="Judge unavailable"),
         ):
-            pipeline.evaluate(context)
+            pipeline.evaluate(context, AgentResult())
 
         invoke.assert_called_once()
         save.assert_not_called()
