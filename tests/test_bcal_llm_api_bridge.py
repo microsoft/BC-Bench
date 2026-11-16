@@ -129,6 +129,7 @@ def test_main_passes_local_certificate_credential_to_llm_api_client(monkeypatch,
         "messages": [{"role": "user", "content": "hi"}],
         "max_completion_tokens": 16384,
         "tools": tools,
+        "extra_headers": {"x-sticky-route-session-ticket": ""},
     }
 
 
@@ -139,3 +140,20 @@ def test_main_falls_back_to_bc_eval_default_credential_without_local_cert(monkey
 
     assert fake_llm_api["client"]["credential"] is None
     assert fake_llm_api["request"]["reasoning_effort"] == "low"
+
+
+@pytest.mark.parametrize("model", ["gpt-55-chat", "gpt-56-reasoning-sol"])
+def test_main_sends_empty_routing_ticket_without_forwarding_request_headers(monkeypatch, fake_llm_api, model):
+    monkeypatch.delenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, raising=False)
+
+    _run_main(
+        monkeypatch,
+        {
+            "model": model,
+            "messages": [],
+            "extra_headers": {"x-sticky-route-session-ticket": "untrusted-ticket", "X-Taxonomy-InferenceStep": "untrusted-step"},
+        },
+    )
+
+    assert fake_llm_api["client"]["inference_step"] == "HostAgent"
+    assert fake_llm_api["request"]["extra_headers"] == {"x-sticky-route-session-ticket": ""}

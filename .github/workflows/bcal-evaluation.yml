@@ -117,8 +117,8 @@ jobs:
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
 
-          # Match the bridge runtime to BC-Bench so BCal can safely inherit its Python environment.
-          uv venv .bcal-llm-api-venv --python .\.venv\Scripts\python.exe
+          # bc-eval 0.6.1 requires Python <3.13; the standalone bridge does not import BC-Bench.
+          uv venv .bcal-llm-api-venv --python 3.12
 
           # Same transient ADO feed flakiness as the bcal install above; retry the package pull.
           for ($attempt = 1; $attempt -le 3; $attempt++) {

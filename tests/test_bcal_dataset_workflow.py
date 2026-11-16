@@ -51,6 +51,14 @@ def test_bcal_downloads_symbols_from_the_selected_tier():
     assert '-Category nl2al -Tier "$env:TIER"' in step["run"]
 
 
+def test_bcal_bridge_uses_python_supported_by_pinned_bc_eval():
+    step = _step(_workflow("bcal-evaluation.yml"), "evaluate-with-bcal", "Build bc-eval LLM API bridge venv")
+
+    assert "bc-eval==0.6.1" in step["run"]
+    assert "uv venv .bcal-llm-api-venv --python 3.12" in step["run"]
+    assert r"--python .\.venv\Scripts\python.exe" not in step["run"]
+
+
 def test_bcal_run_identity_includes_tier_and_package_selection():
     workflow = _workflow("bcal-evaluation.yml")
 
