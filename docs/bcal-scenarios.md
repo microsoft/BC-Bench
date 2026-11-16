@@ -30,7 +30,7 @@ The separately authorized `reasoning-compatibility` workflow phase is not a gold
 
 The legacy lane invokes the production Python bridge with a diagnostic loopback client; the native lane uses the packaged SDK generator and unchanged production request handler with synthetic session configuration. Neither claims full task execution, production prompt/catalog parity, judge scoring, or reasoning quality. Native requested omission may generate wire `medium`; receipts distinguish requested, applied, and actual wire effort.
 
-Admission verifies the exact archive and installed runtime files, runs native offline captures, and enforces a shared pre-send ceiling of 24 provider HTTP attempts plus one attempt per cell. HTTP errors and transport failures consume the budget; redirects, corrective reruns, replacements, and provider retries are not admitted. Only sanitized status, shape, effort, identity, and numeric usage receipts are retained. Historical governed-study allowlists and production equality guards remain unchanged.
+Admission verifies the exact archive and installed runtime files, runs native offline captures, and enforces a shared pre-send ceiling of 24 provider HTTP attempts plus one attempt per cell. HTTP errors and transport failures consume the budget; redirects, automatic replacements/reruns, and provider retries are not admitted. The one separately authorized setup-failure replacement is hard-pinned to the previous run's source and skipped certificate/inference steps, proving its zero provider attempts. Only sanitized status, shape, effort, identity, and numeric usage receipts are retained. Historical governed-study allowlists and production equality guards remain unchanged.
 
 ## Authority/provenance experiment
 
