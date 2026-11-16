@@ -34,7 +34,6 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BCalScenarioEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate import CodeReviewPipeline
-from bcbench.evaluate import base as evaluate_base
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.paths import SHARED_CONFIG_FILE
 from bcbench.results import (

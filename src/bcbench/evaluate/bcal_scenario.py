@@ -13,7 +13,6 @@ from bcbench_core.filesystem import remove_tree
 
 from bcbench.agent.bcal.scenario import SCENARIO_EXPORT_DIR, SCENARIO_SYMBOL_DIR, BCalScenarioRunResult
 from bcbench.dataset import BCalScenarioEntry, BCalTraceAssertion
-from bcbench.evaluate import base as evaluate_base
 from bcbench.operations import bootstrap_app_json
 from bcbench.results import BCalScenarioEvaluationResult, IndependentBuildResult, TraceAssertionResult
 from bcbench.types import EvaluationContext
