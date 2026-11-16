@@ -28,6 +28,7 @@ on:
           - full-gold-review-preflight
           - full-gold-review-1
           - full-gold-review-2
+          - reasoning-compatibility
       preflight-run-id:
         description: "Exact successful same-SHA admission run for the selected governed workload"
         required: false
@@ -106,6 +107,15 @@ env:
   BCAL_REQUESTED_VERSION: ${{ inputs.bcal-version }}
 
 jobs:
+  reasoning-compatibility:
+    if: inputs.validation-phase == 'reasoning-compatibility'
+    uses: ./.github/workflows/bcal-reasoning-compatibility.yml
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    secrets: inherit
+
   governed-validation:
     if: inputs.validation-phase == 'preflight' || inputs.validation-phase == 'smoke' || startsWith(inputs.validation-phase, 'full-gold')
     uses: ./.github/workflows/bcal-governed-policy.yml

@@ -24,6 +24,14 @@ Evaluation combines:
 
 The pilot entries span an inventory-risk feature, an integration-choice interaction, and an explicit plan-first lifecycle.
 
+## Isolated reasoning compatibility diagnostic
+
+The separately authorized `reasoning-compatibility` workflow phase is not a gold evaluation or a default-policy change. It pins BCAL `30.0.46.49019-beta` and probes `gpt-56-reasoning-sol`, `gpt-56-ceres`, and `gpt-55-chat` with explicit `none`, explicit `medium`, and omitted effort. All eighteen cells use synthetic prompts and one harmless echo tool.
+
+The legacy lane invokes the production Python bridge with a diagnostic loopback client; the native lane uses the packaged SDK generator and unchanged production request handler with synthetic session configuration. Neither claims full task execution, production prompt/catalog parity, judge scoring, or reasoning quality. Native requested omission may generate wire `medium`; receipts distinguish requested, applied, and actual wire effort.
+
+Admission verifies the exact archive and installed runtime files, runs native offline captures, and enforces a shared pre-send ceiling of 24 provider HTTP attempts plus one attempt per cell. HTTP errors and transport failures consume the budget; redirects, corrective reruns, replacements, and provider retries are not admitted. Only sanitized status, shape, effort, identity, and numeric usage receipts are retained. Historical governed-study allowlists and production equality guards remain unchanged.
+
 ## Authority/provenance experiment
 
 The `authority-contract` scenarios are a separate deterministic lane for the first narrow system-prompt experiment. They cover:
