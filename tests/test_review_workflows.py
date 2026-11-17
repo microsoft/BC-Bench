@@ -30,6 +30,18 @@ def test_copilot_workflow_routes_code_review_through_copilot() -> None:
     assert 'agent: "GitHub Copilot CLI"' in workflow
 
 
+def test_copilot_workflow_forces_mai_code_2_for_evaluation_summary_and_requeue() -> None:
+    text = _workflow("copilot-evaluation.yml")
+    workflow = yaml.safe_load(text)
+    jobs = workflow["jobs"]
+    evaluate = next(step for step in jobs["evaluate-with-copilot-cli"]["steps"] if "bcbench evaluate copilot" in step.get("run", ""))
+
+    assert '--model "mai-code-2"' in evaluate["run"]
+    assert jobs["summarize-results"]["with"]["model"] == "mai-code-2"
+    assert json.loads(jobs["requeue"]["with"]["workflow-inputs"])["model"] == "mai-code-2"
+    assert "inputs.model" not in text
+
+
 def test_claude_workflow_routes_code_review_through_claude() -> None:
     workflow = _workflow("claude-evaluation.yml")
 
@@ -128,7 +140,7 @@ def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.82" in action
+    assert "@github/copilot@1.0.113" in action
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:

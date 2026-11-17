@@ -36,7 +36,7 @@ runs:
       shell: pwsh
 
     - name: Install GitHub Copilot CLI
-      run: npm install -g @github/copilot@1.0.82
+      run: npm install -g @github/copilot@1.0.113
       shell: pwsh
 
     - name: Checkout BC-ALAgents

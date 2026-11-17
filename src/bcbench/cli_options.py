@@ -126,6 +126,7 @@ CopilotModelName = Literal[
     "gpt-5.6-luna",
     "gpt-5.3-codex",
     "mai-code-1.1-flash",
+    "mai-code-2",
     "gemini-3.7-flash",
 ]
 
