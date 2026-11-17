@@ -78,14 +78,6 @@ A harness-version experiment is a configuration experiment that changes a pin in
 
 BC PR Review additionally exposes the engine revision as a workflow input for one-off comparisons — see [Code Review](docs/code-review.md) for that harness's specifics.
 
-### BCAL models
-
-The **Evaluation with bcal** workflow supports `gpt-6-luna` through its `external-model` input. The same alias is available for `completion-review-model` to evaluate completion review separately. The defaults remain `gpt-55-chat` for generation and `none` for a separate review model.
-
-For local runs, pass `--llm-model gpt-6-luna` to `bcbench run bcal` or `bcbench evaluate bcal`, or set `BCAL_LLM_MODEL=gpt-6-luna`. Configure `BCAL_LLM_COMMAND` and the LLM API credentials as described in [`.env.sample`](.env.sample).
-
-Luna uses the M365 LLM API's Responses endpoint with `medium` reasoning. Chat Completions does not support Luna's combination of tools and reasoning. The bridge translates BCAL's Chat Completions protocol and returns the Responses output as opaque provider context so compatible BCAL versions can carry encrypted reasoning across tool calls. Requests use `store=false` and `reasoning.context=current_turn`; existing models keep their Chat Completions behavior.
-
 ### Encouraging plugin usage
 
 Loading a plugin makes its capabilities **available** — it does not guarantee the agent **uses** them. What it takes depends on what the plugin contributes:
