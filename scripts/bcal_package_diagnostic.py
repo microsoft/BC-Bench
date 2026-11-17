@@ -6,6 +6,8 @@ import argparse
 import hashlib
 import json
 import stat
+import subprocess
+import sys
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -14,9 +16,75 @@ from typing import Literal
 from bcal_nonpackage_diagnostic import DiagnosticFile, RuntimeIdentity, sha
 from bcal_nonpackage_diagnostic import run as run_startup
 from bcal_reasoning_coding import AdmissionError, write_json
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 PREFIX = "tools/net10.0/any/"
+DRIVER_STAGES = frozenset(
+    (
+        "package_identity",
+        "package_archive",
+        "network_admission",
+        "runtime_identity",
+        "symbol_identity",
+        "worker_copy",
+        "worker_identity",
+        "workspace_scaffold",
+        "listener_start",
+        "coding_command",
+        "cli_process",
+        "runtime_cleanup",
+        "runtime_identity_after",
+        "transcript_decode",
+        "execution_policy",
+        "summary_write",
+        "package_archive_after",
+    )
+)
+DRIVER_CATEGORIES = frozenset(("admission", "validation", "json", "io", "process_exit", "process_timeout", "missing_field", "argument", "type", "name", "unknown"))
+
+
+class DiagnosticJournal:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.body: dict = {"status": "running", "stage": "package_identity"}
+        with path.open("x", encoding="utf-8") as stream:
+            json.dump(self.body, stream)
+
+    def capture(self, error: BaseException) -> None:
+        if "failureStage" not in self.body:
+            category = next(
+                (
+                    name
+                    for kind, name in (
+                        (AdmissionError, "admission"),
+                        (ValidationError, "validation"),
+                        (json.JSONDecodeError, "json"),
+                        (OSError, "io"),
+                        (subprocess.CalledProcessError, "process_exit"),
+                        (subprocess.TimeoutExpired, "process_timeout"),
+                        (KeyError, "missing_field"),
+                        (TypeError, "type"),
+                        (NameError, "name"),
+                        (ValueError, "argument"),
+                    )
+                    if isinstance(error, kind)
+                ),
+                "unknown",
+            )
+            self.body.update(status="failed", failureStage=self.body["stage"], exceptionCategory=category)
+            write_json(self.path, self.body)
+
+    def stage(self, value: str) -> None:
+        if value not in DRIVER_STAGES:
+            raise AdmissionError("Unknown diagnostic driver stage.")
+        if (error := sys.exception()) is not None:
+            self.capture(error)
+        self.body["stage"] = value
+        write_json(self.path, self.body)
+
+    def complete(self) -> None:
+        self.body["status"] = "completed"
+        write_json(self.path, self.body)
 
 
 class DiagnosticPackageIdentity(RuntimeIdentity):
@@ -149,14 +217,22 @@ def run(args: argparse.Namespace) -> None:
     admission = args.output.parent / "diagnostic-package-admission.json"
     if args.output.exists() or admission.exists():
         raise AdmissionError("Diagnostic package execution cannot reuse prior evidence.")
-    identity = load_identity(args.identity, args.identity_sha256)
-    proof = identity.verify_archive(args.archive)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    write_json(admission, {"status": "exact-diagnostic-package-verified", "identitySha256": args.identity_sha256, **proof})
+    journal = DiagnosticJournal(args.output.parent / "diagnostic-driver-stage.json")
     try:
-        run_startup(args, admitted_identity=identity)
-    finally:
-        identity.verify_archive(args.archive)
+        identity = load_identity(args.identity, args.identity_sha256)
+        journal.stage("package_archive")
+        proof = identity.verify_archive(args.archive)
+        write_json(admission, {"status": "exact-diagnostic-package-verified", "identitySha256": args.identity_sha256, **proof})
+        try:
+            run_startup(args, admitted_identity=identity, observe_stage=journal.stage)
+        finally:
+            journal.stage("package_archive_after")
+            identity.verify_archive(args.archive)
+        journal.complete()
+    except Exception as error:
+        journal.capture(error)
+        raise
 
 
 def main() -> None:

@@ -14,15 +14,30 @@ PWSH = shutil.which("pwsh")
 
 @pytest.mark.skipif(PWSH is None, reason="Actual hosted admission requires PowerShell.")
 @pytest.mark.parametrize(
-    "damage", ["none", "same-package-projection", "unchanged-projection", "missing-id", "path", "id-hash", "same-package", "hypothesis", "not-ready", "identity-bytes", "prior-dispatch", "rerun"]
+    "damage",
+    [
+        "none",
+        "same-package-projection",
+        "same-package-recovery",
+        "unchanged-projection",
+        "missing-id",
+        "path",
+        "id-hash",
+        "same-package",
+        "hypothesis",
+        "not-ready",
+        "identity-bytes",
+        "prior-dispatch",
+        "rerun",
+    ],
 )
 def test_actual_workflow_admits_only_fresh_ready_identity_once(tmp_path, damage):
     source = "e" * 40
     archive = "a" * 64
     attempt = "build-123-" + archive[:12]
-    projection = damage in ("same-package-projection", "unchanged-projection")
+    projection = damage in ("same-package-projection", "same-package-recovery", "unchanged-projection")
     if projection:
-        attempt += "-projection1"
+        attempt += "-recovery1" if damage == "same-package-recovery" else "-projection1"
     profile = tmp_path / "experiments" / "bcal-startup-diagnostic" / "attempts" / attempt
     profile.mkdir(parents=True)
 
@@ -60,6 +75,10 @@ def test_actual_workflow_admits_only_fresh_ready_identity_once(tmp_path, damage)
     if projection:
         proof["diagnosticRevision"] = admission["diagnosticRevision"] = "startup-failure-projection-v1"
         proof["priorDiagnosticRevision"] = "startup-failure-projection-v1" if damage == "unchanged-projection" else "native-failure-only"
+        if damage == "same-package-recovery":
+            proof["diagnosticRevision"] = admission["diagnosticRevision"] = "startup-failure-projection-v2-recovery"
+            proof["priorDiagnosticRevision"] = "startup-failure-projection-v1"
+            proof["priorRunId"] = "44065963616"
         admission["ownerProofSha256"] = save("owner-proof-admission.json", proof)
     save("admission.json", admission)
     if damage == "identity-bytes":
@@ -88,10 +107,56 @@ def test_actual_workflow_admits_only_fresh_ready_identity_once(tmp_path, damage)
         "GITHUB_OUTPUT": str(tmp_path / "outputs.txt"),
     }
     result = subprocess.run([PWSH, "-NoProfile", "-File", str(script)], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
-    if damage in ("none", "same-package-projection"):
+    if damage in ("none", "same-package-projection", "same-package-recovery"):
         assert result.returncode == 0, result.stderr
         assert "version=30.0.46.99999-beta" in (tmp_path / "outputs.txt").read_text()
         assert attempt in (tmp_path / "outputs.txt").read_text()
     else:
         assert result.returncode != 0
         assert not (tmp_path / "outputs.txt").exists()
+
+
+@pytest.mark.skipif(PWSH is None, reason="Actual hosted cleanup requires PowerShell.")
+@pytest.mark.parametrize("dns_fails", [False, True])
+def test_actual_finally_restores_host_and_emits_evidence_despite_fixture_failure(tmp_path, dns_fails):
+    wrapper = (ROOT / "scripts" / "Run-BCalStartupFixture.ps1").read_text()
+    final = wrapper.rsplit("} finally {", 1)[1].rsplit("}", 1)[0]
+    script = tmp_path / "cleanup.ps1"
+    setup = r"""
+$ErrorActionPreference = 'Stop'
+$script:removed = $false
+$script:cacheCleared = $false
+function Get-NetFirewallRule { if (-not $script:removed) { [pscustomobject]@{Name='synthetic'} } }
+function Remove-NetFirewallRule { $script:removed = $true }
+function Get-CimInstance { }
+function Stop-Process { throw 'No real process may be stopped by this test.' }
+function Get-DnsClientServerAddress { [pscustomobject]@{InterfaceIndex=1;AddressFamily=2;ServerAddresses=@('synthetic')} }
+function Clear-DnsClientCache { $script:cacheCleared = $true }
+function Resolve-DnsName { if ($env:SYNTHETIC_DNS_FAILS -eq 'true') { throw 'Synthetic DNS failure' }; 'synthetic' }
+function Test-ConsoleEmitter {
+    if (-not $script:removed -or -not $script:cacheCleared) { throw 'Console emitted before restoration.' }
+    Write-Output 'BCAL_SAFE_DIAGNOSTIC synthetic-after-restoration'
+}
+$PSCmdlet = [pscustomobject]@{ParameterSetName='DiagnosticPackage'}
+$Python = 'Test-ConsoleEmitter'
+$Work = Join-Path $env:RUNNER_TEMP 'owned'
+$Output = Join-Path $env:RUNNER_TEMP 'safe'
+$group = 'synthetic-owned-group'
+$proof = @{status='outbound-denial-active'}
+$dnsBefore = @(Get-DnsClientServerAddress | Sort-Object InterfaceIndex, AddressFamily | Select-Object InterfaceIndex, AddressFamily, ServerAddresses) | ConvertTo-Json -Depth 5 -Compress
+try { throw 'Synthetic fixture failure' } finally {
+"""
+    script.write_text(setup + final + "\n}\n", encoding="utf-8")
+    result = subprocess.run(
+        [PWSH, "-NoProfile", "-File", str(script)],
+        env={**os.environ, "RUNNER_TEMP": str(tmp_path), "SYNTHETIC_DNS_FAILS": str(dns_fails).lower()},
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "BCAL_SAFE_DIAGNOSTIC synthetic-after-restoration" in result.stdout
+    cleanup = json.loads((tmp_path / "startup-network-cleanup.json").read_bytes())
+    assert cleanup["denialRulesRemoved"] is cleanup["runtimeProcessCleanupVerified"] is cleanup["dnsConfigurationUnchanged"] is cleanup["dnsCacheCleared"] is True
+    assert cleanup["dnsProbeSucceeded"] is not dns_fails

@@ -604,3 +604,11 @@ fields. Its source is explicitly `scenario_failure_message`; only fixed session
 ownership/construction phrases and one `(os error N)` integer from0through65535
 are projected. Unknown or absent details are omitted. Raw messages, paths,
 UUIDs and SDK error data never leave the private transcript.
+
+The separate `-recovery1` attempt adds closed driver-stage journaling and
+schema-validated `BCAL_SAFE_DIAGNOSTIC` console evidence after cleanup, so artifact
+service failure cannot erase the diagnostic boundary. Restoration verifies
+owned firewall/process removal, unchanged DNS configuration and cache clearing
+before a DNS control probe and artifact upload. Missing old cleanup receipts
+remain unknown; a terminal GitHub-hosted job is lifecycle evidence, not proof
+that each old rule was removed.

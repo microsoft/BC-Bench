@@ -105,9 +105,10 @@ def test_new_package_driver_requires_external_identity_and_rechecks_archive(tmp_
     args = Namespace(identity=manifest, identity_sha256=diagnostic.sha(manifest), archive=archive, runtime=runtime, output=tmp_path / "safe" / "execution")
     calls = []
 
-    def run_startup(values, *, admitted_identity):
+    def run_startup(values, *, admitted_identity, observe_stage):
         assert values is args
         assert admitted_identity == identity
+        observe_stage("cli_process")
         calls.append(admitted_identity.kind)
         archive.write_bytes(b"changed-during-run")
 
@@ -121,6 +122,21 @@ def test_new_package_driver_requires_external_identity_and_rechecks_archive(tmp_
     manifest.write_text(manifest.read_text() + " ")
     with pytest.raises(diagnostic.AdmissionError):
         diagnostic.load_identity(manifest, args.identity_sha256)
+
+
+def test_driver_journal_preserves_failure_before_finally_without_raw_details(tmp_path):
+    journal = diagnostic.DiagnosticJournal(tmp_path / "stage.json")
+    journal.stage("cli_process")
+    try:
+        try:
+            raise TypeError("PRIVATE_PATH PRIVATE_MESSAGE")
+        finally:
+            journal.stage("runtime_cleanup")
+    except TypeError as error:
+        journal.capture(error)
+    safe = json.loads(journal.path.read_bytes())
+    assert safe == {"status": "failed", "stage": "runtime_cleanup", "failureStage": "cli_process", "exceptionCategory": "type"}
+    assert "PRIVATE" not in journal.path.read_text()
 
 
 @pytest.mark.parametrize("damage", ["none", "hash", "source", "build", "parity", "runtime-count"])

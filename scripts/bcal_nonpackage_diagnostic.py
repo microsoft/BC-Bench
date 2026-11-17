@@ -11,6 +11,7 @@ import re
 import secrets
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path, PureWindowsPath
 from typing import Literal
 
@@ -198,13 +199,18 @@ def diagnostic_transcript(path: Path) -> dict:
     return summary
 
 
-def run(args: argparse.Namespace, *, admitted_identity: RuntimeIdentity | None = None) -> None:
+def run(args: argparse.Namespace, *, admitted_identity: RuntimeIdentity | None = None, observe_stage: Callable[[str], None] | None = None) -> None:
     from bcal_governed_study import verify_owned_cleanup
     from bcal_reasoning_coding import ProviderBudget
     from bcbench_core.git import commit_changes, init_repo
 
     from bcbench.agent.bcal.agent import _run_bcal_process
 
+    def stage(value: str) -> None:
+        if observe_stage is not None:
+            observe_stage(value)
+
+    stage("network_admission")
     denial = verify_denial(args.network_proof)
     if any(name.startswith("LLM_API_") or name in {"OPENAI_API_KEY", "AZURE_CLIENT_SECRET"} for name in os.environ):
         raise AdmissionError("Startup diagnosis forbids inherited provider credentials.")
@@ -213,12 +219,17 @@ def run(args: argparse.Namespace, *, admitted_identity: RuntimeIdentity | None =
     write_json(args.output / "execution-once.json", {"identitySha256": args.identity_sha256, "kind": identity.kind, "providerAuthorized": False})
     args.work.mkdir(exist_ok=False)
     with loopback_only() as network:
+        stage("runtime_identity")
         before = identity.verify(args.runtime)
+        stage("symbol_identity")
         verify_symbol_closure(args.symbols)
         runtime = args.work / "worker-0" / "runtime"
+        stage("worker_copy")
         shutil.copytree(args.runtime, runtime)
+        stage("worker_identity")
         if identity.verify(runtime) != before:
             raise AdmissionError("Copied diagnostic runtime identity differs.")
+        stage("workspace_scaffold")
         private = args.work / "000-gpt-56-reasoning-sol"
         (private / "auxiliary").mkdir(parents=True)
         exports = private / "workspace" / "smoke" / "src"
@@ -235,10 +246,13 @@ def run(args: argparse.Namespace, *, admitted_identity: RuntimeIdentity | None =
         os.environ["BCAL_REASONING_LOCAL_KEY"] = key
         process = {"outcome": "not_started", "exitCode": None, "exceptionCategory": None}
         try:
+            stage("listener_start")
             with offline_route(policy, budget, key) as url:
+                stage("coding_command")
                 command, _ = coding_command(runtime, args.symbols, scenario, private, policy, config, url)
                 command = [value if not value.startswith("--exportfolder=") else f"--exportfolder={exports}" for value in command]
                 with (private / "console.txt").open("w", encoding="utf-8") as console:
+                    stage("cli_process")
                     try:
                         result = _run_bcal_process(command, timeout=420, stdout=console, env={**process_environment(), "BCAL_REASONING_LOCAL_KEY": key})
                         process.update(outcome="completed", exitCode=result.returncode)
@@ -247,17 +261,21 @@ def run(args: argparse.Namespace, *, admitted_identity: RuntimeIdentity | None =
                     except subprocess.TimeoutExpired:
                         process.update(outcome="timed_out", exceptionCategory="process_timeout")
         finally:
+            stage("runtime_cleanup")
             if previous is None:
                 os.environ.pop("BCAL_REASONING_LOCAL_KEY", None)
             else:
                 os.environ["BCAL_REASONING_LOCAL_KEY"] = previous
             verify_owned_cleanup(runtime / "bcal.exe")
             write_json(args.output / "process-evidence.json", process)
+            stage("runtime_identity_after")
             if identity.verify(runtime) != before or identity.verify(args.runtime) != before:
                 raise AdmissionError("Diagnostic runtime changed during execution.")
+        stage("transcript_decode")
         transcript = diagnostic_transcript(private / "result.json")
         raw = json.loads((private / "result.json").read_bytes())
         runtime_identity = raw.get("runtimeIdentity", {})
+        stage("execution_policy")
         if (
             raw.get("executionIdentity", {}).get("sourceCommitSha") != identity.source_commit
             or runtime_identity.get("mainModel") != policy.model
@@ -269,6 +287,7 @@ def run(args: argparse.Namespace, *, admitted_identity: RuntimeIdentity | None =
             or network["blockedExternalConnects"]
         ):
             raise AdmissionError("Diagnostic execution identity or zero-provider boundary differs.")
+    stage("summary_write")
     write_json(
         args.output / ("nonpackage-startup-summary.json" if identity.kind == "source-built-nonpackage" else "package-startup-summary.json"),
         {

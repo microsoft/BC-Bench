@@ -24,6 +24,8 @@ $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.Wind
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Administrator firewall control is required.' }
 $group = "BCal-Startup-ZeroProvider-$env:GITHUB_RUN_ID"
 if (@(Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue).Count) { throw 'A prior fixture denial exists; do not rerun.' }
+if (@(Get-NetFirewallRule -ErrorAction Stop | Where-Object { $_.Group -like 'BCal-Startup-ZeroProvider-*' }).Count) { throw 'Fresh runner has prior owned denial rules.' }
+$dnsBefore = @(Get-DnsClientServerAddress | Sort-Object InterfaceIndex, AddressFamily | Select-Object InterfaceIndex, AddressFamily, ServerAddresses) | ConvertTo-Json -Depth 5 -Compress
 $ranges = @('0.0.0.0-126.255.255.255', '128.0.0.0-255.255.255.255', '::', '::2-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
 $proofPath = Join-Path $env:RUNNER_TEMP 'startup-network-denial.json'
 $proof = [ordered]@{ status = 'not-admitted'; allPrograms = $false; allProtocols = $false; ipv4NonLoopbackDenied = $false; ipv6NonLoopbackDenied = $false; profilesEnabled = $false; externalTcpProbeBlocked = $false; loopbackTcpProbeAllowed = $false; rulesVerified = 0 }
@@ -87,8 +89,29 @@ try {
         $proof.failureStage = $stage
         $proof | ConvertTo-Json | Set-Content -LiteralPath $proofPath
     }
-    Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-    $removed = @(Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue).Count -eq 0
-    @{ denialRulesRemoved = $removed; providerCredentialsFetched = $false } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'startup-network-cleanup.json')
-    if (-not $removed) { throw 'Temporary firewall cleanup failed.' }
+    $cleanup = [ordered]@{ denialRulesRemoved = $false; providerCredentialsFetched = $false; dnsConfigurationUnchanged = $false; dnsCacheCleared = $false; dnsProbeSucceeded = $false; runtimeProcessCleanupVerified = $false }
+    try {
+        Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction Stop
+        $cleanup.denialRulesRemoved = @(Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue).Count -eq 0
+        $ownedRoot = [IO.Path]::GetFullPath($Work).TrimEnd('\') + '\'
+        $owned = @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($ownedRoot, [StringComparison]::OrdinalIgnoreCase) })
+        foreach ($process in $owned) { Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop }
+        $cleanup.runtimeProcessCleanupVerified = @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($ownedRoot, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0
+        if ($cleanup.denialRulesRemoved) {
+            $dnsAfter = @(Get-DnsClientServerAddress | Sort-Object InterfaceIndex, AddressFamily | Select-Object InterfaceIndex, AddressFamily, ServerAddresses) | ConvertTo-Json -Depth 5 -Compress
+            $cleanup.dnsConfigurationUnchanged = $dnsBefore -eq $dnsAfter
+            Clear-DnsClientCache -ErrorAction Stop
+            $cleanup.dnsCacheCleared = $true
+            $cleanup.dnsProbeSucceeded = @(Resolve-DnsName github.com -DnsOnly -ErrorAction Stop).Count -gt 0
+        }
+    } catch { $cleanup.failureCategory = 'host_cleanup' }
+    $cleanupPath = Join-Path $env:RUNNER_TEMP 'startup-network-cleanup.json'
+    $cleanup | ConvertTo-Json | Set-Content -LiteralPath $cleanupPath
+    if ($PSCmdlet.ParameterSetName -eq 'DiagnosticPackage') {
+        try { & $Python scripts\bcal_diagnostic_console.py --output $Output --cleanup $cleanupPath }
+        catch { Write-Output 'BCAL_SAFE_DIAGNOSTIC {"status":"console_emitter_failed","evidenceSource":"post_cleanup_console"}' }
+    }
+    if (-not $cleanup.denialRulesRemoved -or -not $cleanup.runtimeProcessCleanupVerified -or -not $cleanup.dnsConfigurationUnchanged -or -not $cleanup.dnsCacheCleared -or -not $cleanup.dnsProbeSucceeded) {
+        throw 'Temporary firewall/runtime/DNS cleanup failed; inspect closed console receipt.'
+    }
 }
