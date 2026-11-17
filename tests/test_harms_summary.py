@@ -2,16 +2,19 @@ import json
 
 import pytest
 from pydantic import ValidationError
-from requests import Request, Response
 from typer.testing import CliRunner
 
 from bcbench.commands.harms import harms_app
-from bcbench.harms_service import ServiceEvidence
 from bcbench.harms_summary import PublicSummary, write_summary
 from tests.test_harms import capture, case, write_jsonl
 from tests.test_harms import config as capture_config
 
 config = capture_config
+
+
+@pytest.fixture(autouse=True)
+def sdk_version(monkeypatch):
+    monkeypatch.setattr("bcbench.harms_summary.version", lambda _: "1.18.2")
 
 
 def test_protocol_failure_preserves_complete_native_judgments_without_inventing_missing(tmp_path, config):
@@ -31,7 +34,10 @@ def test_protocol_failure_preserves_complete_native_judgments_without_inventing_
     assert all((row.passed, row.failed, row.missing, row.errors) == (1, 0, 0, 0) for row in summary.rows)
 
 
-def test_summary_retains_native_failures_missing_denominators_and_excludes_content(tmp_path, config):
+@pytest.mark.parametrize("snapshot", [False, True])
+def test_summary_retains_native_failures_missing_denominators_and_excludes_content(tmp_path, config, snapshot):
+    if snapshot:
+        config = config.model_copy(update={"bcal_feed": "snapshot", "bcal_package_version": None})
     values = [case(execution_id=str(index), channel=str(index)) for index in range(3)]
     captures = [capture(values[0]), capture(values[1])]
     write_jsonl(tmp_path / "cases.jsonl", [value.model_dump() for value in values])
@@ -58,6 +64,10 @@ def test_summary_retains_native_failures_missing_denominators_and_excludes_conte
         text = path.read_text(encoding="utf-8")
         assert all(secret not in text for secret in (values[0].trial.prompt, captures[0].response, "private-reason", "execution_id"))
     assert "33.33%" in (destination / "summary.md").read_text(encoding="utf-8")
+    if snapshot:
+        assert "unpackaged snapshot" in (destination / "summary.md").read_text(encoding="utf-8")
+        with pytest.raises(ValidationError, match="package version"):
+            PublicSummary.model_validate({**summary.model_dump(), "bcal_package_version": "1.2.3"})
 
 
 def test_delivery_failure_cannot_be_a_pass_even_if_sdk_returns_pass(tmp_path, config):
@@ -89,37 +99,3 @@ def test_publisher_rejects_unallowlisted_fields_without_echoing_content(tmp_path
     assert not (tmp_path / "public").exists()
     with pytest.raises(ValidationError):
         PublicSummary.model_validate({"model": "bad\n::warning::private-sentinel"})
-
-
-@pytest.mark.parametrize("failure", [None, "missing_score", "missing_passed", "boolean_score", "result_error", "invalid_json"])
-def test_service_evidence_rejects_absent_judgments_but_accepts_native_adverse_result(tmp_path, failure):
-    request = Request(
-        "POST",
-        "https://example.test/sync_evals:run",
-        json={
-            "data_source": {"source": {"content": {"item": {"response": "private-response"}}}},
-            "testing_criteria": [{"name": "self_harm"}],
-        },
-    ).prepare()
-    payload = {
-        "status": "failed",
-        "results": [{"name": "self_harm", "status": "completed", "passed": False, "score": 5}],
-    }
-    if failure == "missing_score":
-        del payload["results"][0]["score"]
-    elif failure == "missing_passed":
-        del payload["results"][0]["passed"]
-    elif failure == "boolean_score":
-        payload["results"][0]["score"] = False
-    elif failure == "result_error":
-        payload["results"][0]["error"] = "private-error"
-    response = Response()
-    response.status_code = 200
-    response._content = b"invalid" if failure == "invalid_json" else json.dumps(payload).encode()
-    directory = tmp_path / "service"
-    directory.mkdir()
-    evidence = ServiceEvidence(directory)
-    evidence.record(None, request, response)
-    assert evidence.confirms("private-response", "self_harm") is (failure is None)
-    assert not evidence.confirms("different response", "self_harm")
-    assert (directory / "000000.response").read_bytes() == response.content

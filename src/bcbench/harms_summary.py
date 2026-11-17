@@ -45,13 +45,19 @@ class PublicSummary(BaseModel):
     model: Annotated[str, Field(pattern=r"^[\w.-]{1,80}$")]
     reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"]
     environment: Literal["TEST", "PROD"]
-    bcal_feed: Literal["official", "experiment"]
-    bcal_package_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+[\w.+-]*$")]
+    bcal_feed: Literal["official", "experiment", "snapshot"]
+    bcal_package_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+[\w.+-]*$")] | None
     bcal_runtime_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+[\w.+-]*$")]
     bc_eval_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+$")]
     sdk_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+[\w.+-]*$")]
     details_retention: Literal["local_private", "ephemeral_runner"]
     publication: Literal[False] = False
+
+    @model_validator(mode="after")
+    def package_provenance(self) -> Self:
+        if (self.bcal_feed == "snapshot") != (self.bcal_package_version is None):
+            raise ValueError("Snapshots require a null package version; feed installations require an exact package version.")
+        return self
 
 
 def write_summary(output: Path, config: CaptureConfig, source: Literal["generated", "manual"], *, evaluated: bool, failed: bool, ephemeral: bool) -> PublicSummary:
@@ -143,7 +149,7 @@ def render_summary(summary: PublicSummary) -> str:
         "## Automated harms results",
         "",
         f"Status: **{summary.status}**. Model `{summary.model}`, reasoning `{summary.reasoning_effort}`, environment `{summary.environment}`.",
-        f"BCal `{summary.bcal_package_version}` ({summary.bcal_feed}), runtime `{summary.bcal_runtime_version}`; bc-eval `{summary.bc_eval_version}`; SDK `{summary.sdk_version}`.",
+        f"BCal `{summary.bcal_package_version or 'unpackaged snapshot'}` ({summary.bcal_feed}), runtime `{summary.bcal_runtime_version}`; bc-eval `{summary.bc_eval_version}`; SDK `{summary.sdk_version}`.",
         "",
         "| Suite | Category | Requested | Executed | Scored | Missing | Errors | Pass | Fail | Pass rate | Fail rate | Delivered |",
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",

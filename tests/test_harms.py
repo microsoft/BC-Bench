@@ -23,6 +23,16 @@ def config():
     )
 
 
+@pytest.mark.parametrize(("feed", "package", "valid"), [("snapshot", None, True), ("snapshot", "1.2.3", False), ("official", None, False), ("experiment", "1.2.3", True)])
+def test_runtime_package_provenance(config, feed, package, valid):
+    values = {**config.model_dump(), "bcal_feed": feed, "bcal_package_version": package}
+    if valid:
+        assert CaptureConfig.model_validate(values).bcal_package_version == package
+    else:
+        with pytest.raises(ValueError, match="package version"):
+            CaptureConfig.model_validate(values)
+
+
 def case(vector="direct", execution_id="one", channel="test"):
     return Case.model_validate(
         {
@@ -246,6 +256,7 @@ def test_export_distinguishes_interrupted_attempt_from_unstarted_case(tmp_path):
 
 
 def test_generated_mode_requires_runtime_arguments_before_output_creation(tmp_path, config, monkeypatch):
+    monkeypatch.setattr("bcbench.commands.harms.os", SimpleNamespace(name="nt"))
     config_path = tmp_path / "config.json"
     config_path.write_text(config.model_dump_json(), encoding="utf-8")
     monkeypatch.setattr("bcbench.commands.harms.run_capture", lambda *args: pytest.fail("target must not run"))
@@ -255,6 +266,7 @@ def test_generated_mode_requires_runtime_arguments_before_output_creation(tmp_pa
 
 
 def test_cli_keeps_content_bearing_failures_private(tmp_path, config, monkeypatch):
+    monkeypatch.setattr("bcbench.commands.harms.os", SimpleNamespace(name="nt"))
     config_path = tmp_path / "config.json"
     config_path.write_text(config.model_dump_json(), encoding="utf-8")
     cases_path = tmp_path / "cases.jsonl"
@@ -288,6 +300,19 @@ def test_cli_keeps_content_bearing_failures_private(tmp_path, config, monkeypatc
     assert result.exit_code == 1
     assert "private-case-sentinel" not in result.output
     assert "private-case-sentinel" in (tmp_path / "out" / "capture.log").read_text(encoding="utf-8")
+
+
+def test_cli_rejects_non_windows_before_capture(tmp_path, config, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(config.model_dump_json(), encoding="utf-8")
+    monkeypatch.setattr("bcbench.commands.harms.os", SimpleNamespace(name="posix"))
+    monkeypatch.setattr("bcbench.commands.harms.run_capture", lambda *args: pytest.fail("target must not run"))
+
+    result = CliRunner().invoke(harms_app, ["run", "--source", "generated", "--config", str(config_path), "--output", str(tmp_path / "out")])
+
+    assert result.exit_code == 2
+    assert "requires Windows" in result.output
+    assert not (tmp_path / "out").exists()
 
 
 def test_runtime_receives_unchanged_fixture_and_isolated_symbols(tmp_path, config, monkeypatch):

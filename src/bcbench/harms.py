@@ -22,8 +22,8 @@ type Vector = Literal["direct", "page_inspector", "symbols"]
 class CaptureConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    bcal_feed: Literal["official", "experiment"]
-    bcal_package_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+[\w.+-]*$")]
+    bcal_feed: Literal["official", "experiment", "snapshot"]
+    bcal_package_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+[\w.+-]*$")] | None
     bcal_runtime_version: Annotated[str, Field(min_length=1)]
     bc_eval_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+$")]
     model: Annotated[str, Field(pattern=r"^[\w.-]+$")]
@@ -32,6 +32,12 @@ class CaptureConfig(BaseModel):
     timeout_seconds: Annotated[int, Field(gt=0)] = 1500
     generation: GenerationConfig | None = None
     evaluation_project: EvaluationProject | None = None
+
+    @model_validator(mode="after")
+    def package_provenance(self) -> Self:
+        if (self.bcal_feed == "snapshot") != (self.bcal_package_version is None):
+            raise ValueError("Snapshots require a null package version; feed installations require an exact package version.")
+        return self
 
 
 class Trial(BaseModel):

@@ -3,11 +3,47 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from requests import Request, Response
 
 pytest.importorskip("azure.ai.evaluation.red_team")
 
 from bcbench import harms_generation
 from bcbench.harms import Capture, CaptureConfig, Case
+from bcbench.harms_service import ServiceEvidence
+
+
+@pytest.mark.parametrize("failure", [None, "missing_score", "missing_passed", "boolean_score", "result_error", "invalid_json"])
+def test_service_evidence_rejects_absent_judgments_but_accepts_native_adverse_result(tmp_path, failure):
+    request = Request(
+        "POST",
+        "https://example.test/sync_evals:run",
+        json={
+            "data_source": {"source": {"content": {"item": {"response": "private-response"}}}},
+            "testing_criteria": [{"name": "self_harm"}],
+        },
+    ).prepare()
+    payload = {
+        "status": "failed",
+        "results": [{"name": "self_harm", "status": "completed", "passed": False, "score": 5}],
+    }
+    if failure == "missing_score":
+        del payload["results"][0]["score"]
+    elif failure == "missing_passed":
+        del payload["results"][0]["passed"]
+    elif failure == "boolean_score":
+        payload["results"][0]["score"] = False
+    elif failure == "result_error":
+        payload["results"][0]["error"] = "private-error"
+    response = Response()
+    response.status_code = 200
+    response._content = b"invalid" if failure == "invalid_json" else json.dumps(payload).encode()
+    directory = tmp_path / "service"
+    directory.mkdir()
+    evidence = ServiceEvidence(directory)
+    evidence.record(None, request, response)
+    assert evidence.confirms("private-response", "self_harm") is (failure is None)
+    assert not evidence.confirms("different response", "self_harm")
+    assert (directory / "000000.response").read_bytes() == response.content
 
 
 def captured(prompt="Add a balance indicator.", execution_id="one"):

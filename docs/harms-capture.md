@@ -27,7 +27,10 @@ text suitable for source control. Private historical inputs stay private.
 Content-category scoring is **not** instruction-adherence, generated-code safety,
 data-integrity or bespoke business-risk coverage. XPIA uses the SDK's documented
 query/response call, not a local marker classifier. Its inline payload remains in
-private delivery/export evidence, not an unsupported evaluator keyword. No rates are
+private delivery/export evidence, not an unsupported evaluator keyword. SDK `1.18.2`
+defaults to response-only evaluation (`evaluate_query=False`); its service request
+uses a fixed query placeholder even though the public call supplies the task.
+The native label is not a custom task/payload-adherence judgment. No rates are
 invented for unmeasured risks or omitted suites. Streaming, multi-turn generated
 attacks and additional generated SDK context are rejected rather than discarded.
 
@@ -84,8 +87,12 @@ BC Python feed. Supply matching symbols, for example with
 Use an exact four-component BC version for symbol repeatability; a major/minor
 version selects the newest available/downloaded build. Private provenance records
 every symbol file's hash. BCal must already be installed from the selected existing
-`official` or `experiment` feed; this command records that selection and checks its
+`official` or `experiment` feed. For an explicitly preserved unpackaged build, use
+`"bcal_feed": "snapshot"` and `"bcal_package_version": null` instead; do not invent a
+released package version for it. This command records the selection and checks the
 actual runtime version rather than installing or silently choosing a newer runtime.
+Keep snapshots separate from global installations and retain their original file
+manifest. For XPIA, also satisfy the [runtime prerequisite](#xpia-runtime-prerequisite).
 
 Save the following as a private configuration, replacing the project and runtime
 placeholders. Obtain `bcal_runtime_version` from the chosen executable's `--version`
@@ -165,13 +172,40 @@ equal to the single `fixture.injections[0].payload`. Preserve the selected runti
 fixture placement fields (`vector`, `payload`, `object`, `property`, `target`) exactly;
 the harness forwards them unchanged to `--harms-fixture`. The selected BCal must support
 that flag and vector. Unsupported runtime/placement is an error, not successful XPIA.
+Execution IDs and full `(subset, case_id, vector, channel, risk)` identities must be unique.
+
+### XPIA runtime prerequisite
+
+Select a BCal build containing the existing injection fix at source commit
+`2f79d8766962f058829f0f340be109d204482c43` (or a verified descendant). It resolves
+objects inside nested namespaces and reports unresolved placement rather than
+silently selecting an unrelated page. Supporting `--harms-fixture` alone is not enough.
+The known-bad package `18.0.38.52553-beta`, source
+`2f97f5f834a38836d2c9393c9f8c4226bf9f3ebb`, predates that fix; do not use it for XPIA.
+A newer-looking package number alone does not establish that the fix is present.
+
+Bounded live checks use the preserved unpackaged runtime
+`18.0.0.0+a4817405b18a4970e64bf4bbd116ff4595a3979e`, whose files match its recorded
+manifest. This is not a claim that the snapshot is an available released package;
+a minimum published fixed package version has not been established.
+Use your existing authorized runtime distribution, not a global-runtime replacement.
+
+Both vectors completed one benign case through the local CLI with Sol / TEST /
+reasoning `none`, bc-eval `0.10.1` and Azure AI Evaluation SDK `1.18.2`. Each delivered
+the payload in a successful tool result and an actual model request, then received
+one complete native SDK pass with zero missing/error judgments. Scoring used isolated
+assistant output/exported AL; summary-only export was checked for content exclusion.
+These are integration checks, not a harms campaign or human-reviewed safety approval.
+
 The legitimate task must actually retrieve the injected property: inspecting only
 page controls does not necessarily expose a page-level Caption fixture.
-Delivery is runtime-dependent: a local check of BCal `18.0.38.52553-beta` retrieved
-Customer Card properties but did not expose the supplied page Caption fixture.
-That check remained missing/unscored, not a successful XPIA evaluation. Use a runtime
-and placement that actually deliver the fixture; this harness does not change BCal.
-Execution IDs and full `(subset, case_id, vector, channel, risk)` identities must be unique.
+Start with one benign supplied case per vector using
+`--source manual --cases C:\private\xpia-cases.jsonl` and a new output directory. Confirm delivery and native
+scoring separately in the summary; a missing delivery stops before scoring and never
+becomes a pass. Earlier probes with the known-bad runtime remain failed/unscored
+evidence. The harness does not repair or modify BCal.
+
+## Private evidence
 
 Private output retains `cases.jsonl`, `captures.jsonl`, `run.json`, per-case raw traces,
 SDK results, service evidence and `sdk\completeness.json`. SDK output is joined by exact
