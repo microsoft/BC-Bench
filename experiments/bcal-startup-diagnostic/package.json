@@ -1,0 +1,3443 @@
+{
+  "kind": "exact-diagnostic-package",
+  "source_commit": "7f36211148cd5a09cdf121d58677052fd803da39",
+  "product_version": "30.0.46.62891+7f36211148cd5a09cdf121d58677052fd803da39",
+  "sdk_version": "1.0.29",
+  "native_version": "1.0.107",
+  "sdk_path": "GitHub.Copilot.SDK.dll",
+  "native_path": [
+    "runtimes/win-x64/native/copilot.exe"
+  ],
+  "native_library_path": "runtimes\\win-x64\\native\\copilot_runtime.dll",
+  "files": [
+    {
+      "path": "DotnetToolSettings.xml",
+      "sha256": "333065f78904a2871a25f0d53cfcde7dc5aa03f142af9c7c889f863a9f06abfc",
+      "bytes": 183
+    },
+    {
+      "path": "System.ClientModel.dll",
+      "sha256": "db26ba55aa35083a9ff53f0ae44401e65d514c2c9837fd46f629e3292cfff77c",
+      "bytes": 111128
+    },
+    {
+      "path": "it/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "995a868345367e1c68011617d8b8ac85decf2dd15fb85ea92a28205e2c6a5fba",
+      "bytes": 468240
+    },
+    {
+      "path": "runtimes/win/lib/net7.0/System.Security.Cryptography.Pkcs.dll",
+      "sha256": "0b28b5b39bc058e44911e7e81b7b16cbff73c4f9c4145d14d139670d5e98858b",
+      "bytes": 313976
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/copilotRequestHandler.d.ts",
+      "sha256": "ea9ab3ceb9fe6c44d53bd002174351836f0b2a05ce8384f3fa69df2cd2a74c23",
+      "bytes": 3815
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/rem-agent.agent.yaml",
+      "sha256": "895ac0f7d0ce5cd006501eed7f1abfd38405ba93c30d16be9c7205bed6f335bf",
+      "bytes": 968
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/skills/activate/SKILL.md",
+      "sha256": "265ef8a2282c9fca2395863f58246e5872630f952f17107112820de547d8f209",
+      "bytes": 1851
+    },
+    {
+      "path": "Azure.Core.dll",
+      "sha256": "b74cdb738903bb6abe8269105c0ae4e71269f10dd7367b1fd562f573d0ebcfaf",
+      "bytes": 426552
+    },
+    {
+      "path": "Microsoft.Extensions.AI.Abstractions.dll",
+      "sha256": "a3216886dec2b2528b2d7212c438d21c3d6de2061b500bd2ea505a41f896f8d3",
+      "bytes": 679224
+    },
+    {
+      "path": "System.CommandLine.dll",
+      "sha256": "424b7763b60a1c99b77a8c74645b96beee5064e14469e35986df00173d3ad9e1",
+      "bytes": 151584
+    },
+    {
+      "path": "it/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "9489584f3d6ec723bfd2adf1a0d1bdc9bafcadab857fa7c48d18157e223a5541",
+      "bytes": 50440
+    },
+    {
+      "path": "runtimes/win/lib/netstandard2.0/System.Security.Cryptography.ProtectedData.dll",
+      "sha256": "7f2b633eed63bf20d558a25ed9686d2f1ef6c6e3fef5c0b19c2c1258d90acabd",
+      "bytes": 32912
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/entra.d.ts",
+      "sha256": "8fccf69444884b83aa5f82b1846603c1395c26efee19a3235129b1a03e5a82ee",
+      "bytes": 233
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/research.agent.yaml",
+      "sha256": "bee7e95a758e894d81292797914ca55f6a14dc4da9bf79ee2635339941263ffa",
+      "bytes": 5613
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/skills/browser-use/BROWSER-RUN.md",
+      "sha256": "e04aeeffff6b4ae906a590fc6fb1a8fabe5ca742abe48600d3477ddaf8f66306",
+      "bytes": 29238
+    },
+    {
+      "path": "Azure.Identity.dll",
+      "sha256": "183dfcdc51fb4675d80c12a795d8e9d6bf7687f2f639451b938adc6f0e382652",
+      "bytes": 348704
+    },
+    {
+      "path": "Microsoft.Extensions.Caching.Abstractions.dll",
+      "sha256": "fa03dd765799a7fcc8d56f01b070316aa8ad54373386d0de64d70e67d7aec0a6",
+      "bytes": 38192
+    },
+    {
+      "path": "System.ComponentModel.Composition.dll",
+      "sha256": "9b3a0a227630edfb80088c37bf21ea0a825685467052fd52e454f73694668830",
+      "bytes": 268872
+    },
+    {
+      "path": "it/System.CommandLine.resources.dll",
+      "sha256": "452a542a0c16f225ae769562916df2f882eeaf3ef246dc81dfd4305026f42239",
+      "bytes": 19016
+    },
+    {
+      "path": "runtimes/win-arm64/native/libonigwrap.dll",
+      "sha256": "0f09da4817e359853d240a82be512589c925299d991e8dcd3fcd29aceed931fd",
+      "bytes": 501760
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/extension.d.ts",
+      "sha256": "e5dfbec88215c809e25fba8e6790c06e99afd011cb6bfd12cd3467e2f78cc8e4",
+      "bytes": 3548
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/rubber-duck.agent.yaml",
+      "sha256": "eb624f30ef69f8cfd18e7f3f14bcca63e13d1a0d3e05af006372b8d537bbd15d",
+      "bytes": 4820
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/skills/browser-use/SKILL.md",
+      "sha256": "80c5bfd6536739f870899017409488b0d508700d624b058d4a91f5a8045bea88",
+      "bytes": 7393
+    },
+    {
+      "path": "bcal.deps.json",
+      "sha256": "7636c3050de8b3c0c19ef96dc88bfac9ad7eec85bdd780abef6b36a830c21c03",
+      "bytes": 53108
+    },
+    {
+      "path": "Microsoft.Extensions.Configuration.Abstractions.dll",
+      "sha256": "722430c2456c43709a390c3e411f39d1fd32ccb7c820b39d1997e2573cf0a581",
+      "bytes": 28944
+    },
+    {
+      "path": "System.Composition.AttributedModel.dll",
+      "sha256": "859b950e10aa1dc10efe626b6ea1efb8dd5b1c742ae12fa20a2a6b055c9c995b",
+      "bytes": 17992
+    },
+    {
+      "path": "ja/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "866eabb5f0f51df82de1a2be933c542df60617d033f463e7010719bdc6f55fa7",
+      "bytes": 515376
+    },
+    {
+      "path": "runtimes/win-x64/native/.copilot-runtime-assets",
+      "sha256": "38f83ce806084053ea0a1b2f79e0596513106833911b6bfd83b2874aee141d8c",
+      "bytes": 6692
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/extension.js",
+      "sha256": "b41fd57683f4b4ee145598a17644099e8cf72a74040b75fe6d459c4f3d199925",
+      "bytes": 793468
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/security-review.agent.yaml",
+      "sha256": "3dd23e78e7efd6afc66d42636e4d4f9c6b4e185f71de05edc88fd8fbe9ddb981",
+      "bytes": 14924
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/skills/deactivate/SKILL.md",
+      "sha256": "6ac1f67894285ae73d481f799cd28d6214e54d45f67cfda330343e687f2e7a6e",
+      "bytes": 1134
+    },
+    {
+      "path": "bcal.dll",
+      "sha256": "e63c6a42188bb5daff0f8b02e577ce3328eb05bea277f401a6b918b37aa709fa",
+      "bytes": 343552
+    },
+    {
+      "path": "Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+      "sha256": "6674a200ae49ee36af214cfaef4a511674d0a17828482e0f3eb5f1c21c241c75",
+      "bytes": 65832
+    },
+    {
+      "path": "System.Composition.Convention.dll",
+      "sha256": "bff7abe3763f31fafc1ad73b9db9156f69fa9a74dd1a594cb09f98db59cd73f2",
+      "bytes": 50760
+    },
+    {
+      "path": "ja/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "9b0bea97965c04ce925e92a5b8575b866c75b185a89741185f4b24f72182a0bb",
+      "bytes": 54040
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-runtime.exe",
+      "sha256": "776e6a9c6365c7c5d60f4e6f692a5e16f9562a7add3347fe591342d62c5c4149",
+      "bytes": 770848
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/ffiRuntimeHost.d.ts",
+      "sha256": "f078a716555bd04b889e4555e9f228af30d71e73e33609a072f7b30c1d80c883",
+      "bytes": 1834
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/task.agent.yaml",
+      "sha256": "f631baa82c0422b6d0768c34e6de019526c295e2f7e8bf52143561c16a0dd831",
+      "bytes": 2131
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/skills/doctor/SKILL.md",
+      "sha256": "8c60899d232e0e199ef0b654344e120f6305a3448eb875194af0229b5e6640cc",
+      "bytes": 2972
+    },
+    {
+      "path": "bcal.exe",
+      "sha256": "e7571a771f94a039491a7773f10ca484d3eee113ed3f6ea05f779cb350c0fbf6",
+      "bytes": 162304
+    },
+    {
+      "path": "Microsoft.Extensions.DependencyInjection.dll",
+      "sha256": "7e9994e99cadf56f82a32653b5146549f0adcd33b373935520568aa3ce6d527c",
+      "bytes": 72784
+    },
+    {
+      "path": "System.Composition.Hosting.dll",
+      "sha256": "c833d76a46d00d80e4a59c63b7d25a610fbfe35435b6eb56cd887d8492f83839",
+      "bytes": 52808
+    },
+    {
+      "path": "ja/System.CommandLine.resources.dll",
+      "sha256": "0e3911aef82d94e0f623da91af05d7330b3a0c180cea0cadcb45ad3bf8ebe4f6",
+      "bytes": 19016
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot.exe",
+      "sha256": "776e6a9c6365c7c5d60f4e6f692a5e16f9562a7add3347fe591342d62c5c4149",
+      "bytes": 770848
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/host.d.ts",
+      "sha256": "ec0fc34652c09dc5ca793c706dc49c5b7089ed904220e7d0ea32aec8377d305c",
+      "bytes": 7150
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/cloud-session-search.yaml",
+      "sha256": "b38aeccb64267cc0c9d5ee87ced2a538421a98e7e781af549bfd89c239a90802",
+      "bytes": 1845
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/computer-use/.release-target",
+      "sha256": "47865cb70f3801831acc971cb8fa442c22587d52136e7eb50e44d430d60e152f",
+      "bytes": 10
+    },
+    {
+      "path": "bcal.runtimeconfig.json",
+      "sha256": "c230a317a54dd960bcbeb5f347f52e18dc665a26f7efda2159fced9a5ac7e097",
+      "bytes": 342
+    },
+    {
+      "path": "Microsoft.Extensions.Diagnostics.Abstractions.dll",
+      "sha256": "f307f2b10163e42593822dd768b530516eb8f7ba24fda3576d18b49a8f0f05f5",
+      "bytes": 31496
+    },
+    {
+      "path": "System.Composition.Runtime.dll",
+      "sha256": "ad84b243cd9e7af8efe7743559e9a772869ca70ba17cff08fcfcf12b205d8111",
+      "bytes": 23112
+    },
+    {
+      "path": "ko/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "f8b995c988ddee33a02e41fe4658d63aef32f380678aef70a5164143a25c1ee4",
+      "bytes": 473392
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot_runtime.dll",
+      "sha256": "5c817c3f315da691e31a3a2acbd7ab9a8ae4cea0aebb456999ccfa0ed1dade92",
+      "bytes": 140210976
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/index.d.ts",
+      "sha256": "ebd3161fa6983c639efdd67e40fefea4ce23c3de3a0ed2e6b6aeab9e71179319",
+      "bytes": 7051
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/github-context-memory.yaml",
+      "sha256": "57f7830cd8960810870247047829183bdc76715c4981fe91b9fe9cb8d94fafdf",
+      "bytes": 4133
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/computer-use/computer-use-mcp.exe",
+      "sha256": "bd788084bee151d3c70580c73b7efa135c36a7f17c398de03f6c529ec74c0140",
+      "bytes": 3125536
+    },
+    {
+      "path": "DocumentFormat.OpenXml.dll",
+      "sha256": "2266c64e221f596881e692ac93400651f37796c4e2b07c6a050fd4fab0d92851",
+      "bytes": 6328296
+    },
+    {
+      "path": "Microsoft.Extensions.FileProviders.Abstractions.dll",
+      "sha256": "345e29f6887414124b18f67de668c16ff77e20fb195bbba4234e09a2bb1f9f22",
+      "bytes": 23816
+    },
+    {
+      "path": "System.Composition.TypedParts.dll",
+      "sha256": "d382343f09c413bfd39ddcc83c2ee96cf8a7ee80000deaeb27383b9f1610d941",
+      "bytes": 58952
+    },
+    {
+      "path": "ko/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "2c799493e0a5032ed0e643a550d149dc324210da3a69337a68ae6460f56bb2e1",
+      "bytes": 50464
+    },
+    {
+      "path": "runtimes/win-x64/native/dpapi.node",
+      "sha256": "c04d7bc4857f97fbd26fd925d576672703283f45a6862e3baa52fdb5d527e74d",
+      "bytes": 154400
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/index.js",
+      "sha256": "9e1eb47e08ca7fae1b56c5a5470a3a48d067c2a4e88271422fe3ad0a2554c913",
+      "bytes": 798628
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/github-context.yaml",
+      "sha256": "e61a5fd50f94a6af496be8bb30f03ee3a7106417d854177c2e8bb7dbe6fa6f03",
+      "bytes": 2236
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/computer-use/CopilotComputerUse.exe",
+      "sha256": "1e08639b8b9c078696382e7953ad9c60be7a9a9f434d4ec84d3c16d9015632f2",
+      "bytes": 3359520
+    },
+    {
+      "path": "DocumentFormat.OpenXml.Framework.dll",
+      "sha256": "e35980f07a5031fd8746606dd77517c832f58571ae24c3b9eddae59f9533d5df",
+      "bytes": 469104
+    },
+    {
+      "path": "Microsoft.Extensions.Hosting.Abstractions.dll",
+      "sha256": "ddb12c9ee77c9ad262f2202808010b727016077d701ddeb4d93cceaea709646d",
+      "bytes": 54584
+    },
+    {
+      "path": "System.IO.Packaging.dll",
+      "sha256": "12ddc8bff279fad856551a74894dc52b80fa437d5d2b32722e70ae6899217b7c",
+      "bytes": 142136
+    },
+    {
+      "path": "ko/System.CommandLine.resources.dll",
+      "sha256": "accd66cc48343a7ec08543ea9a68c3b3296867e6a4ecb347eb24b2cdc76c39d4",
+      "bytes": 18976
+    },
+    {
+      "path": "runtimes/win-x64/native/libonigwrap.dll",
+      "sha256": "435c563677fe6fab2cbd8d6a437ef72d9a8fc62db1f720ec30b38fd316834d28",
+      "bytes": 541184
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/installationConfirmation.d.ts",
+      "sha256": "e3671b1c2ad3a030d381408c416f912ea3221ca5195003fa6a967d119490245b",
+      "bytes": 1382
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/session-search.yaml",
+      "sha256": "9c8238ec858b874ce0123288dfb15efeb139cff3b7bbf0dd556263a7985b3692",
+      "bytes": 1925
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/computer-use/mcp.json",
+      "sha256": "e4312d9f55ea9027d415759d7bead87031da73a8f46b4fe374c6f5c5c10e7b87",
+      "bytes": 240
+    },
+    {
+      "path": "GitHub.Copilot.SDK.dll",
+      "sha256": "f788257d2b1d8f158a85ce1940d2f757495e6e9c40406973f9ae16d7d12b7f1f",
+      "bytes": 20550144
+    },
+    {
+      "path": "Microsoft.Extensions.Logging.Abstractions.dll",
+      "sha256": "1e28c2090e866ef94bf05c57a7ec934604ab1b69dc080e9af52d18284d6368ed",
+      "bytes": 66896
+    },
+    {
+      "path": "System.Memory.Data.dll",
+      "sha256": "8817d16a629710c78b3757f220b74878283c56fe7d9a866ece0eaef0be0a2bf1",
+      "bytes": 28264
+    },
+    {
+      "path": "pl/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "bfd0ba4491a1e072f243b4599d0b9fe1f189ecbef4aae6b0aa4c6306079717df",
+      "bytes": 474416
+    },
+    {
+      "path": "runtimes/win-x64/native/msal-node-runtime.node",
+      "sha256": "28951ba4bd334306d5fe7914ea37d8973cdbe34e8523503bd48f1af0c1523267",
+      "bytes": 360736
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/jsonrpcTypes.d.ts",
+      "sha256": "172bbd8f0133e4bb59084dad5952d9b97476b8668f29fd7c67b964be7e063740",
+      "bytes": 690
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/subconscious-agent.yaml",
+      "sha256": "16565318ef91a04db8e22cd86cea72df62762dad1a9d748a35def1ea64aca009",
+      "bytes": 2654
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/computer-use/plugin.json",
+      "sha256": "6de76c9301852083de69abda240b47f5cbfe14c8f34afe497a512dc519e59053",
+      "bytes": 185
+    },
+    {
+      "path": "Microsoft.ApplicationInsights.dll",
+      "sha256": "f2143331f1df700838ce093643220cc62f95eb070eec3db0acb1c679f514e89d",
+      "bytes": 343144
+    },
+    {
+      "path": "Microsoft.Extensions.Options.dll",
+      "sha256": "b0a7ca186efe6c6e52779d5f0b5698fd8cf3d81eaee9333a44312f59e6a432eb",
+      "bytes": 65800
+    },
+    {
+      "path": "System.Security.Cryptography.Pkcs.dll",
+      "sha256": "c4275c68639e5cf7593b8939e076e943ae9e6c176280f3436c2953a292ac432f",
+      "bytes": 261256
+    },
+    {
+      "path": "pl/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "a6d855a49e7b867ff1837b5b24d037a67a7bc9723a569ebdea85f0c73c8146e2",
+      "bytes": 50488
+    },
+    {
+      "path": "runtimes/win-x64/native/msalruntime.dll",
+      "sha256": "5d5eaa6a6d8bd75d65321caba29fa8ebe2b90fd5b081bde7e9b10193f3cbcaff",
+      "bytes": 3187320
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/runtimeArtifacts.d.ts",
+      "sha256": "1d78a2fd37b65e793e553db9a8323a6727b77e7ffbd6b61c462e778794dd76e2",
+      "bytes": 1248
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/test-sidekick-context-changed.yaml",
+      "sha256": "f25d7907a28a8bbcec1e108ba26ced25b505b892d172bc67608b22c11c4b4b4c",
+      "bytes": 1029
+    },
+    {
+      "path": "runtimes/win-x64/native/preloads/extension_bootstrap.mjs",
+      "sha256": "ef4efcd8c1d35c0ebe0900ecd5c9edbb22f0b7494e9aede63e3ba69b3836edfd",
+      "bytes": 3192
+    },
+    {
+      "path": "Microsoft.AspNetCore.Cryptography.Internal.dll",
+      "sha256": "199c29163f7eceebd9878771213c89bfe8690b7d5d1ee0f4490606fa9ac03c13",
+      "bytes": 41344
+    },
+    {
+      "path": "Microsoft.Extensions.Primitives.dll",
+      "sha256": "36785e9195be2ddbd3eca11a94bbd6b3f4ac0efc27fb84dbf042fed8e16e5568",
+      "bytes": 45360
+    },
+    {
+      "path": "System.Security.Cryptography.ProtectedData.dll",
+      "sha256": "80566f0839ece5946e66bf9f00d723e59e371ba1341a18e00c7c7a7c49298e1d",
+      "bytes": 25232
+    },
+    {
+      "path": "pl/System.CommandLine.resources.dll",
+      "sha256": "f6fd1271f64c4600cd705cd4742cf191547181fe0625c5fc83a3ba3102815a69",
+      "bytes": 18976
+    },
+    {
+      "path": "runtimes/win-x64/native/OneAuthInterop.dll",
+      "sha256": "dcbee4cc1c1a91fc59319f95392cc79cb1840131af6eb13da3da677ac0a242cf",
+      "bytes": 6089848
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/schema.d.ts",
+      "sha256": "40223fad10dd2896a4e257dd761e06c62f3711d6bd40ef880e67386478982eba",
+      "bytes": 349
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/test-sidekick-persistent.yaml",
+      "sha256": "dcfdfdc4b135e71b7f1870f714cb2a2a0250ab59a1fb12d9b2385266c14a3890",
+      "bytes": 861
+    },
+    {
+      "path": "runtimes/win-x64/native/preloads/extension_sdk_resolver.mjs",
+      "sha256": "e57d71730c8f937315a72b66187c56cc4fa78ecbd13590795136996e2851bf19",
+      "bytes": 1331
+    },
+    {
+      "path": "Microsoft.AspNetCore.DataProtection.Abstractions.dll",
+      "sha256": "7e0b2c359889325837f1caa41c49319621d4c04d648b3132c317736d97adf345",
+      "bytes": 24680
+    },
+    {
+      "path": "Microsoft.Identity.Client.dll",
+      "sha256": "02ee19218b90ed6caa8f0a7fc011d9a72b75ba3bf8c78c2ce9240e937a4badf3",
+      "bytes": 1004576
+    },
+    {
+      "path": "System.Security.Cryptography.Xml.dll",
+      "sha256": "deb76d308c6e93e76b92de651a749d29e63b756ed34d514060b7a7b63c20389f",
+      "bytes": 175272
+    },
+    {
+      "path": "pt-BR/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "0bb661e270c1b6675bf2b06b0465ea8b0b551f0765999f31ab9cae308f83e3de",
+      "bytes": 453928
+    },
+    {
+      "path": "runtimes/win-x64/native/OneAuthInterop.dll.stamp.json",
+      "sha256": "5fbf21cc63a490b7ea6c1b8296215acf0b58ffbd452f53ba064f29b2ff2438ed",
+      "bytes": 117
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/sdkProtocolVersion.d.ts",
+      "sha256": "ae088957f936521a2eede3dfaf39082622eaf2c7683181901ff7ded75cee5375",
+      "bytes": 294
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/test-sidekick-restart.yaml",
+      "sha256": "cc2a642bebefd30a20c1a85ac500e419fb024db508cbe233b59be0bb01ff6c4c",
+      "bytes": 831
+    },
+    {
+      "path": "runtimes/win-x64/native/ripgrep/bin/win32-x64/rg.exe",
+      "sha256": "cb5b860bf48e8194b880f481b462188fb16accbbf28983b31d1fe3e8b6e6ab3e",
+      "bytes": 5445920
+    },
+    {
+      "path": "Microsoft.AspNetCore.DataProtection.dll",
+      "sha256": "8ae66db502d343d6feae83b907456cdad22c9fd26967e22fc6674baee4404254",
+      "bytes": 155216
+    },
+    {
+      "path": "Microsoft.Identity.Client.Extensions.Msal.dll",
+      "sha256": "98c19b7ac459568c875b891829294a0150ed71ee6d95216503d3a65ac567678f",
+      "bytes": 66616
+    },
+    {
+      "path": "TextCopy.dll",
+      "sha256": "170f20ce2d323efe7bc9e71a75f75634ec159e90dced4215a2dc74ed5919765a",
+      "bytes": 30720
+    },
+    {
+      "path": "pt-BR/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "40258d2ce74c4fb71bd7b145f6d33081f3d73e19afda25050832dde3e58cf33f",
+      "bytes": 49424
+    },
+    {
+      "path": "runtimes/win-x64/native/OneAuthInterop.LICENSE.txt",
+      "sha256": "0fe665c2ada5962fd01190ab5b2947b9a9d2c625a9f8225577441eb3256e14e3",
+      "bytes": 13142
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/session.d.ts",
+      "sha256": "d60bf215fd9290aa3ffa82737aa7ec2845d8d7e8318dd03bfc306896642a65fc",
+      "bytes": 19251
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/sidekick/test-sidekick-trigger-once.yaml",
+      "sha256": "21900f8f87a49e80b4379bc12f701a5a578a54e9a8988478175186be25e14c55",
+      "bytes": 828
+    },
+    {
+      "path": "runtimes/win-x64/native/schemas/api.schema.json",
+      "sha256": "76e5d0871680e1625932757c7678b12e0288a5cfa82291b36b758aff4a003ec5",
+      "bytes": 2988473
+    },
+    {
+      "path": "Microsoft.AspNetCore.DataProtection.Extensions.dll",
+      "sha256": "3b608be339bbc4b5e5f259bc8a81584e806e0ad78e4626ee390f71b98a719c70",
+      "bytes": 23416
+    },
+    {
+      "path": "Microsoft.IdentityModel.Abstractions.dll",
+      "sha256": "24e97b54b6b5c234a124a336757e3116617ac6c30b655cdae74517dc2ecb5746",
+      "bytes": 19504
+    },
+    {
+      "path": "TextMateSharp.dll",
+      "sha256": "989bf40e3bea1c3d26636f115171175cd2efd0945829148954e3219514b4ecb9",
+      "bytes": 153600
+    },
+    {
+      "path": "pt-BR/System.CommandLine.resources.dll",
+      "sha256": "b1befe040f127d71de54d635f07100ba372707d580945073db787104cfeef034",
+      "bytes": 18976
+    },
+    {
+      "path": "runtimes/win-x64/native/restart-supervisor.js",
+      "sha256": "a11880aafe69269bac068965215f6e8d67ea80a397a4228f232a41f9790654a7",
+      "bytes": 50377
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/sessionFsProvider.d.ts",
+      "sha256": "c497ec069d9c9401b25bc10357ce02230193d561df697391d75919672a18c586",
+      "bytes": 6911
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/.mcp.json",
+      "sha256": "b1a8ae603aebc095a9cd8075f1b7b0f89f2a52fedecac4e61240699f20373391",
+      "bytes": 155
+    },
+    {
+      "path": "runtimes/win-x64/native/schemas/lifecycle-diagnostics.schema.json",
+      "sha256": "6e6fa7ab402106d76d82daf8a8308d800ddf96b61c7c6cecb791c072cc21f18b",
+      "bytes": 15826
+    },
+    {
+      "path": "Microsoft.Bcl.AsyncInterfaces.dll",
+      "sha256": "5705d245072d3eb78400547b32147dbb6e2c8b02ba8bda76729798f5efdeaecb",
+      "bytes": 16000
+    },
+    {
+      "path": "Microsoft.IdentityModel.JsonWebTokens.dll",
+      "sha256": "7761c80de8e9cb0f01d74ffcddd3fc620e1cc92bddc6f7fcacc342acfb0077d2",
+      "bytes": 172064
+    },
+    {
+      "path": "YamlDotNet.dll",
+      "sha256": "8a6ce981275076c03eff36438ce1ae12db62eb8be4670f95e0bca12c0b38484d",
+      "bytes": 269312
+    },
+    {
+      "path": "ru/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "68c0ed0122bd4e153717bcbd7d8a53d52d90535859b622df601c27eab58cfb3b",
+      "bytes": 621360
+    },
+    {
+      "path": "runtimes/win-x64/native/runtime.node",
+      "sha256": "5c817c3f315da691e31a3a2acbd7ab9a8ae4cea0aebb456999ccfa0ed1dade92",
+      "bytes": 140210976
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/telemetry.d.ts",
+      "sha256": "0721ce90ecd3a15eeb86d7787ca62236b1b545b0e93139ed5ef4419b16544722",
+      "bytes": 528
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/.release-target",
+      "sha256": "47865cb70f3801831acc971cb8fa442c22587d52136e7eb50e44d430d60e152f",
+      "bytes": 10
+    },
+    {
+      "path": "runtimes/win-x64/native/schemas/session-events.schema.json",
+      "sha256": "84b7518af2e12318585ff0420f837ed2babfdd1e7aedbb1960ad8d25191332ac",
+      "bytes": 1117349
+    },
+    {
+      "path": "Microsoft.BusinessCentral.BCal.dll",
+      "sha256": "a0fe5e8d5554e3e8702d3d11285b6689293cd877700911e9250a39e01d6a5294",
+      "bytes": 1526272
+    },
+    {
+      "path": "Microsoft.IdentityModel.Logging.dll",
+      "sha256": "3fe5d858fe4a698281cad38a9535b535ed626a874d060a6763c085544b1089ee",
+      "bytes": 36896
+    },
+    {
+      "path": "cs/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "f719e4b45e06f203a1c2d4e79fa2b496f8b16f6f63c4265809844def53ad41f3",
+      "bytes": 441640
+    },
+    {
+      "path": "ru/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "9f6778a2b6d2141397b8d331fc38577ae2b398b6120eb3654db7575b62e1b0d4",
+      "bytes": 60728
+    },
+    {
+      "path": "runtimes/win-x64/native/animations/banner.json.gz",
+      "sha256": "cc6dcef840f5f63c9683e84bd55478e6fd2a22130bf1be6f53dece870e996446",
+      "bytes": 4887
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/toolSet.d.ts",
+      "sha256": "41e53ae25809c90fd1a78f493cb912c6a9194c6e0a02e3e32545971c41a1cb56",
+      "bytes": 2725
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/channel.json",
+      "sha256": "b758fa182b3f8a7d7fe9ae230e8e5a8805f666d794f905d65c2d6a1e13d17d99",
+      "bytes": 818
+    },
+    {
+      "path": "runtimes/win-x64/native/tgrep/bin/win32-x64/tgrep.exe",
+      "sha256": "31d1b88670932a627192c0ba84bc23796809b1c32b2a566f5e5df87d99fa97b6",
+      "bytes": 6537336
+    },
+    {
+      "path": "Microsoft.BusinessCentral.BCal.Mcp.Client.dll",
+      "sha256": "6edefc2d9a01056ed0879e1cb38b066e7d3fa620314614e5181fe7bbe440aeac",
+      "bytes": 117760
+    },
+    {
+      "path": "Microsoft.IdentityModel.Tokens.dll",
+      "sha256": "da667d128077d2ae0141a562e73871db157639747fbfa30d0ebdb693adce718a",
+      "bytes": 384544
+    },
+    {
+      "path": "cs/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "818f84b95fd8273ec0e9753f90af2a98820bb0492cb53268db70a7403eaaa2af",
+      "bytes": 48424
+    },
+    {
+      "path": "ru/System.CommandLine.resources.dll",
+      "sha256": "23c028d33ac3e39f9f60b794358de822e885013e370b7f1719cf3745ddb4f57f",
+      "bytes": 19488
+    },
+    {
+      "path": "runtimes/win-x64/native/builtin/customize-cloud-agent/SKILL.md",
+      "sha256": "6acee791cd48a31eb881431c0f1394d3c79d33d62f0d58b2d9b699e4a275ea93",
+      "bytes": 18679
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/types.d.ts",
+      "sha256": "7c39457661228e79e429fd09fce1e5ef5a4771802d6bd2c7fc3599e53ec5edaa",
+      "bytes": 145581
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/README.md",
+      "sha256": "81ba28642c46e7245108ba3e78c5faf9210a7579f0b4c2131c9c96cfa567dcfe",
+      "bytes": 3473
+    },
+    {
+      "path": "runtimes/win-x86/native/libonigwrap.dll",
+      "sha256": "4da3ee819e73494cf96b125df360a1d6cf225fc3c70ff2216f521ee73b3b290a",
+      "bytes": 547328
+    },
+    {
+      "path": "Microsoft.BusinessCentral.BCal.Rendering.dll",
+      "sha256": "fec1a0d45d81ec34a76e02abad5175675bccec3fa2d00b43a2e819c594dc2e36",
+      "bytes": 337920
+    },
+    {
+      "path": "Microsoft.Security.AntiSSRF.dll",
+      "sha256": "09e1df6acd37b72a4f2e8ef68780a62cecdf0f4e21895f92f1929cfd4aafd587",
+      "bytes": 40760
+    },
+    {
+      "path": "cs/System.CommandLine.resources.dll",
+      "sha256": "9d6008167eefe58f70c13d8f3c24e5536039fbf7a5970b8045f0c8dd6d1dca15",
+      "bytes": 18976
+    },
+    {
+      "path": "runtimes/linux-arm64/native/libonigwrap.so",
+      "sha256": "b0efbc1d1f585dfb30f4aeb0bfae10c0f41519b8f595b90d05e2ea3bd839b235",
+      "bytes": 546888
+    },
+    {
+      "path": "runtimes/win-x64/native/builtin/discover-resources/SKILL.md",
+      "sha256": "9afbbacc30095ee4b4a70da34471781be9ad1df46f6c2df1ddbdc0473b34c6e7",
+      "bytes": 3647
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/workflow.d.ts",
+      "sha256": "4e3094f9130f678812eb324ebb4dd93a3f9209eef98c7a05585f43ed0917eafa",
+      "bytes": 17126
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/.plugin/plugin.json",
+      "sha256": "ea9f4920d6bab2e25df93f62be8705d788d2786681ae5ba75b6de1fa2978e76f",
+      "bytes": 730
+    },
+    {
+      "path": "tr/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "93202286c8514bfa1b1c4b413666cd11a84abd69496e7aa8d2f9d565bd2d15a1",
+      "bytes": 449848
+    },
+    {
+      "path": "Microsoft.BusinessCentral.BCal.Service.dll",
+      "sha256": "78c7f89d2a01198b9f98fe1f16fc263d6474562b21614f98e4d275c5f2c2eee0",
+      "bytes": 118784
+    },
+    {
+      "path": "ModelContextProtocol.Core.dll",
+      "sha256": "e54678c259e7a4d5a9ec0c555b56c7e515c23e7678a4892f110605f3afe6a750",
+      "bytes": 1169408
+    },
+    {
+      "path": "de/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "d936e4075af47eb5a34e8418e6bf1eaa3e4d3c86d6b40ab7dffefbd8e6f8b594",
+      "bytes": 471848
+    },
+    {
+      "path": "runtimes/linux-bionic-arm64/native/libonigwrap.so",
+      "sha256": "0059ce5e27b89217e85c86ac0be947fd9a02f9c83b3fced7a24b18dff4a0ed0d",
+      "bytes": 548256
+    },
+    {
+      "path": "runtimes/win-x64/native/builtin/github-pr-media/SKILL.md",
+      "sha256": "358f529ab8ceb7f57488a275804adf9ffd237fcf22ca3af1d5f7fd521877d011",
+      "bytes": 16053
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/docs/agent-author.md",
+      "sha256": "10c5719a0c79b98c3820ccb8e43ec0f56be00f772d1ca9b60fbbc6b12f0d284c",
+      "bytes": 14605
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/dist/browser-mcp.cjs",
+      "sha256": "332d890467aed85282716c022ca8c196f6ff3f9e87d51f9d3ac1246467f30582",
+      "bytes": 1104449
+    },
+    {
+      "path": "tr/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "6af8e8e793b071ef1de200629bb551dd2bdbce3823376b347836a2af15367a5c",
+      "bytes": 48936
+    },
+    {
+      "path": "Microsoft.BusinessCentral.BCal.Types.dll",
+      "sha256": "501a4524856d4e4c38588d65977526863e8e4eb51033401d97f98296a6064d30",
+      "bytes": 194560
+    },
+    {
+      "path": "ModelContextProtocol.dll",
+      "sha256": "4ac03d5f36a4e464d0bf4397963e8c8240cda6fd0d4359a37ffcf5a1999f0589",
+      "bytes": 86528
+    },
+    {
+      "path": "de/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "1b1d805608929ec02b8acc2fb8c09ec7a335797b11686719ee2112d5bfbb18fc",
+      "bytes": 50456
+    },
+    {
+      "path": "runtimes/linux-bionic-x64/native/libonigwrap.so",
+      "sha256": "b5f265a6b52afb90d42147ef3c6ec10db292e92adb1409698ec0c1d3835a0a70",
+      "bytes": 561336
+    },
+    {
+      "path": "runtimes/win-x64/native/builtin/pr-stack/SKILL.md",
+      "sha256": "5322b1a15a05f00846945f71458384cccf9bfd7d9075fcd5d9f5b8917879127b",
+      "bytes": 19396
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/docs/examples.md",
+      "sha256": "0f8af0a86c43023a73c4645fc143409c1a90bf6e511599cae8a5b0659788d592",
+      "bytes": 21728
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/dist/browser-run-worker.cjs",
+      "sha256": "0440a39bddff3bb80d51e033e27a4b72560b34dde957e7727f5453686882d183",
+      "bytes": 1045416
+    },
+    {
+      "path": "tr/System.CommandLine.resources.dll",
+      "sha256": "2566f89f11a60fb06372eb39dd798749ea1f3f739d4a7c5af0141b0d69ef4af9",
+      "bytes": 18976
+    },
+    {
+      "path": "Microsoft.CodeAnalysis.CSharp.dll",
+      "sha256": "53302acca07700e9bb10dcf21034435d6e0454c8eebf2481164ec13e520004c9",
+      "bytes": 6697768
+    },
+    {
+      "path": "Mono.Cecil.dll",
+      "sha256": "769a59793d4b8885bbbfbc5aee8f57a0d4e34d275c56c60c03994309b87f67e9",
+      "bytes": 356864
+    },
+    {
+      "path": "de/System.CommandLine.resources.dll",
+      "sha256": "fe9f8c7ccc17f77dcb32f7fc0a854ddeccaf410712f4683e5f243c72b899734b",
+      "bytes": 19016
+    },
+    {
+      "path": "runtimes/linux-musl-arm64/native/libonigwrap.so",
+      "sha256": "a36358408a643548aff1f4ff2aa7e686f12638ba396d89de1255213357fb92b7",
+      "bytes": 546624
+    },
+    {
+      "path": "runtimes/win-x64/native/builtin-skills/customize-cloud-agent/SKILL.md",
+      "sha256": "6acee791cd48a31eb881431c0f1394d3c79d33d62f0d58b2d9b699e4a275ea93",
+      "bytes": 18679
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/docs/extensions.md",
+      "sha256": "b2232be4b34b3c83068c4faa0b602fe126f9c8d5d7224a0167b4a88dc5beb8cd",
+      "bytes": 4707
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/dist/native-host.cjs",
+      "sha256": "0ba01d4fcf5bdd13bb58a8badc60fbe8cb63dcd29433c5f3ca380067f7addbfd",
+      "bytes": 364863
+    },
+    {
+      "path": "zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "5b81b1d4537d44a365fdb48aa24e51a0b0c3ee308debcc225c9339249e0a8bb3",
+      "bytes": 401168
+    },
+    {
+      "path": "Microsoft.CodeAnalysis.dll",
+      "sha256": "395736b2d0e02be77bedc3847b269da7a93bf8e49cd3431a4a8e68d2c52d5846",
+      "bytes": 3029800
+    },
+    {
+      "path": "Mono.Cecil.Mdb.dll",
+      "sha256": "61637f9940e5e336571cbf945be0f36d6d6050e06288df0f0232d93b26f0bde7",
+      "bytes": 39424
+    },
+    {
+      "path": "es/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "559fa2a4d36a832a5e05f92dabff6ba737cc0443f95850611c485b21592046fe",
+      "bytes": 461608
+    },
+    {
+      "path": "runtimes/linux-musl-x64/native/libonigwrap.so",
+      "sha256": "bd9b3d5e4e84f9aed678d6171147c61707dbdf46183a7eb72e25e135a17dddb6",
+      "bytes": 563232
+    },
+    {
+      "path": "runtimes/win-x64/native/builtin-skills/discover-resources/SKILL.md",
+      "sha256": "9afbbacc30095ee4b4a70da34471781be9ad1df46f6c2df1ddbdc0473b34c6e7",
+      "bytes": 3647
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/docs/workflows.md",
+      "sha256": "865f8d87879caba0d6404f9e4f54589b1f2942b0235cacd80a6807626c052a58",
+      "bytes": 21192
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/hooks/hooks.json",
+      "sha256": "753d3eeec2a80bdcfc5ee49fc3edbd7549072f0d606b97145eac65e1c88dea6a",
+      "bytes": 480
+    },
+    {
+      "path": "zh-Hans/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "a41b72555a1943e367e9714fb3329454dbad4366500db0899519ffb558a060cb",
+      "bytes": 45368
+    },
+    {
+      "path": "Microsoft.Dynamics.Nav.AL.Common.dll",
+      "sha256": "73d9193a349f0cfc4aeb74a38223eaa2622114fa477d9b870b615230dc6f1dd5",
+      "bytes": 52736
+    },
+    {
+      "path": "Mono.Cecil.Pdb.dll",
+      "sha256": "a5249a04ad8fd7dfd47e4d0a620aed0f7eb6051e1ddec102c541ca3e12f6e2a8",
+      "bytes": 89600
+    },
+    {
+      "path": "es/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "4c83f9c227fa9a912209c5450380ef34e84d91867aff8208300e8aadab269456",
+      "bytes": 49960
+    },
+    {
+      "path": "runtimes/linux-x64/native/libonigwrap.so",
+      "sha256": "bb4e2798476999b2bad43f2c82ef0d8b36c749be81cbbd1aac762fdd165217b7",
+      "bytes": 563640
+    },
+    {
+      "path": "runtimes/win-x64/native/builtin-skills/github-pr-media/SKILL.md",
+      "sha256": "358f529ab8ceb7f57488a275804adf9ffd237fcf22ca3af1d5f7fd521877d011",
+      "bytes": 16053
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/generated/lifecycle-diagnostics.d.ts",
+      "sha256": "d3904962cf8c0a6829d3a0b98b1958eab94a11d0f0fa42c77374db1bf18fc903",
+      "bytes": 7208
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/scripts/activate.mjs",
+      "sha256": "02c73ef964bd4ecf002f1f55d0e07fab21d530937e98621933b14a48a04da5a6",
+      "bytes": 2080
+    },
+    {
+      "path": "zh-Hans/System.CommandLine.resources.dll",
+      "sha256": "9299de70ac78456fc0cf1a5928384847bbbdffdba9f15fa408bf5748738e3df3",
+      "bytes": 19016
+    },
+    {
+      "path": "Microsoft.Dynamics.Nav.CodeAnalysis.dll",
+      "sha256": "570cf74aa2b2c6c302b8d0d3fe157fd459fa09b4ee1a5a615e3907694476aac3",
+      "bytes": 11028480
+    },
+    {
+      "path": "Mono.Cecil.Rocks.dll",
+      "sha256": "273292babd45f9f34de5054bd9cdfe1d859a7dbf6f4ad5974fe4ead70698ed5b",
+      "bytes": 24576
+    },
+    {
+      "path": "es/System.CommandLine.resources.dll",
+      "sha256": "12b2ca7b325e673ab69ddb22ae8cccbafd37e4a106e64ad3e0e2dcdef76ffa7e",
+      "bytes": 19016
+    },
+    {
+      "path": "runtimes/maccatalyst-arm64/native/libonigwrap.dylib",
+      "sha256": "c3e2ebb5143eab16d708ae46f38fa2f829be84f3566ee1ac7a49a688e17d15f1",
+      "bytes": 531408
+    },
+    {
+      "path": "runtimes/win-x64/native/builtin-skills/pr-stack/SKILL.md",
+      "sha256": "5322b1a15a05f00846945f71458384cccf9bfd7d9075fcd5d9f5b8917879127b",
+      "bytes": 19396
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/generated/rpc.d.ts",
+      "sha256": "140b68ae6b492451cb31660baf4c85b3836635efca8b80d96aa1905f1aba500a",
+      "bytes": 1516377
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/scripts/browserPrerequisites.d.mts",
+      "sha256": "c8bd982986d445199266866dba40d4d92f7efd24f4cb2cd8ae0c9c8e9c027119",
+      "bytes": 1700
+    },
+    {
+      "path": "zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "d1e716652b5705373fb560105ca2710ff2bc0b704285b50b08ec8df9fd2f8287",
+      "bytes": 400680
+    },
+    {
+      "path": "Microsoft.Dynamics.Nav.CodeAnalysis.Workspaces.dll",
+      "sha256": "a6eb174243143cd18b3f6a1b0ee6cba582108be132fa6181077498ab70c5a831",
+      "bytes": 1747456
+    },
+    {
+      "path": "Newtonsoft.Json.dll",
+      "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07",
+      "bytes": 712464
+    },
+    {
+      "path": "fr/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "c538cddb8e217bc1b96312956b7923855d6f392e467d7b7c7ce9341d9da1f23c",
+      "bytes": 473880
+    },
+    {
+      "path": "runtimes/maccatalyst-x64/native/libonigwrap.dylib",
+      "sha256": "bfbfa05dff27a17e2edec7b3823a31ed813ce119d62fb5ebd88b35e24c38b054",
+      "bytes": 523088
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/canvas.d.ts",
+      "sha256": "a4cc473276d27b6b64fb5d69f654ba7c014bd463f706b53c885efa9d4772670d",
+      "bytes": 6133
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/generated/session-events.d.ts",
+      "sha256": "027ed7b7c5eb96f19ef454f98feda915d268e5715d26893880f77b27b12b6232",
+      "bytes": 562812
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/scripts/deactivate.mjs",
+      "sha256": "95329db5e00fc404dcdc58487c128d5c4e795ec543748acf77a35d04d7f14bf7",
+      "bytes": 218
+    },
+    {
+      "path": "zh-Hant/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "0bb422559a2582df1a49faed25a337b6037eb3878ac4ee7c118b68349ca312b7",
+      "bytes": 45328
+    },
+    {
+      "path": "Microsoft.Dynamics.Nav.Deployment.dll",
+      "sha256": "0140888fb4dd702888c0cb5d0fd63b21de0ea75f451a92793b31bde6dbdedb34",
+      "bytes": 230912
+    },
+    {
+      "path": "Onigwrap.dll",
+      "sha256": "692899f8a9fbda37b309d88f982f25820195fcd88f9b5b99a373fa61a496907c",
+      "bytes": 12800
+    },
+    {
+      "path": "fr/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "a92746c7d8f241e7d207a7995007f59d694a10e5f8903ceadfc5a73c195f63a0",
+      "bytes": 50488
+    },
+    {
+      "path": "runtimes/osx-arm64/native/libonigwrap.dylib",
+      "sha256": "5922d0c6c3cd31bfdf9997ea03d48d7aff952d891e8d46c2b9bfccd8d8160665",
+      "bytes": 531424
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/client.d.ts",
+      "sha256": "8a5833d1f3d61bcefa8a9fccee53d1231dd253905384123e0169f4f6c31353fe",
+      "bytes": 19993
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/code-review.agent.yaml",
+      "sha256": "1290258ee70b44faca1f0c74be26254f13e8401e825713ff3f5523b848b361f9",
+      "bytes": 4604
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/scripts/doctor.mjs",
+      "sha256": "093b0b67beeccc1819922087ba0fc42e24b7c47cd2eb4da021a22e7751185138",
+      "bytes": 431151
+    },
+    {
+      "path": "zh-Hant/System.CommandLine.resources.dll",
+      "sha256": "2a2ad35e3e17e6a39464fb1b4244ffd23cffa29d766e0659c1304507213aa42c",
+      "bytes": 18976
+    },
+    {
+      "path": "Microsoft.Dynamics.Nav.Deployment.dll.config",
+      "sha256": "6460bda1d4d9b123377d9a33d264137fa9106babaf8cea39c90224411b038015",
+      "bytes": 548
+    },
+    {
+      "path": "PrettyPrompt.dll",
+      "sha256": "ffb740f849e179917e79912f07d1de5cb7797cfcb8f058554654796e0ee4740a",
+      "bytes": 150016
+    },
+    {
+      "path": "fr/System.CommandLine.resources.dll",
+      "sha256": "9ef5ca15e63ef4fab35030d96956d615fd2e05476882aa0a40e5a46178546f7e",
+      "bytes": 18976
+    },
+    {
+      "path": "runtimes/osx-x64/native/libonigwrap.dylib",
+      "sha256": "506dfefb25572f1ba30af8e315df15b8d02dad3d7212d07ec893e8b2ed614662",
+      "bytes": 523064
+    },
+    {
+      "path": "runtimes/win-x64/native/copilot-sdk/cliVersion.d.ts",
+      "sha256": "2b194e641c200f3bc825202b6b6ebf64277e25f7f24a050f4781125d3e988d00",
+      "bytes": 114
+    },
+    {
+      "path": "runtimes/win-x64/native/definitions/explore.agent.yaml",
+      "sha256": "dbcabc1be606ecc091e6345d37fd4ba5447fdbe5a0b7c343c67b6ee24401bfc5",
+      "bytes": 2668
+    },
+    {
+      "path": "runtimes/win-x64/native/plugins/browser-use/scripts/nativeMessagingRegistration.mjs",
+      "sha256": "d14ec4b2811dd1cf50f183fffcff03dfda620d7d416c1cbec432fe61b37e1600",
+      "bytes": 419789
+    },
+    {
+      "path": "Microsoft.Dynamics.Nav.TypeWrappers.dll",
+      "sha256": "15b55fdda04ea62b5361205d233a937e6d559caee2ffd38e66b25d235859ac09",
+      "bytes": 17920
+    },
+    {
+      "path": "Spectre.Console.dll",
+      "sha256": "200fb336c0516ae15912b2ad772931d5c4e8e48327b3e0c79bb4c15305ec4b94",
+      "bytes": 719872
+    }
+  ],
+  "package_id": "Microsoft.BusinessCentral.BCal.CLI",
+  "feed": "DynamicsSMBTest",
+  "version": "30.0.46.62891-beta",
+  "build_id": 3077455,
+  "archive_sha256": "b41f416d4e4e673fe28d9fc48a2190309a649ed630bdb5661ad3993e929dd864",
+  "archive_bytes": 306411002,
+  "owner_inventory_sha256": "7dd074ccbd1c00d30be4365225fb1574776882d1cdb2d95d695868d07cee4228",
+  "archive_files": [
+    {
+      "path": "_rels/.rels",
+      "sha256": "075d4cc600c29920d05728ab4cd6965c7e15e010ceeb0f902a84415da7a148b0",
+      "bytes": 528
+    },
+    {
+      "path": "Microsoft.BusinessCentral.BCal.CLI.nuspec",
+      "sha256": "3d5bc0fb3dbc2e7fd5b4028c76a9c2443628cc206ef5e38bd965f41c90e5fa2d",
+      "bytes": 596
+    },
+    {
+      "path": "tools/net10.0/any/DotnetToolSettings.xml",
+      "sha256": "333065f78904a2871a25f0d53cfcde7dc5aa03f142af9c7c889f863a9f06abfc",
+      "bytes": 183
+    },
+    {
+      "path": "tools/net8.0/any/DotnetToolSettings.xml",
+      "sha256": "333065f78904a2871a25f0d53cfcde7dc5aa03f142af9c7c889f863a9f06abfc",
+      "bytes": 183
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/code-review.agent.yaml",
+      "sha256": "1290258ee70b44faca1f0c74be26254f13e8401e825713ff3f5523b848b361f9",
+      "bytes": 4604
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/nativeMessagingRegistration.mjs",
+      "sha256": "d14ec4b2811dd1cf50f183fffcff03dfda620d7d416c1cbec432fe61b37e1600",
+      "bytes": 419789
+    },
+    {
+      "path": "tools/net8.0/any/Azure.Core.dll",
+      "sha256": "b74cdb738903bb6abe8269105c0ae4e71269f10dd7367b1fd562f573d0ebcfaf",
+      "bytes": 426552
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.Caching.Abstractions.dll",
+      "sha256": "31caebf834b6da88696a4a21ecb38eefff2623a531be925f6bd27719583ee3e2",
+      "bytes": 31008
+    },
+    {
+      "path": "tools/net8.0/any/System.CommandLine.dll",
+      "sha256": "424b7763b60a1c99b77a8c74645b96beee5064e14469e35986df00173d3ad9e1",
+      "bytes": 151584
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/maccatalyst-arm64/native/libonigwrap.dylib",
+      "sha256": "c3e2ebb5143eab16d708ae46f38fa2f829be84f3566ee1ac7a49a688e17d15f1",
+      "bytes": 531408
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/canvas.d.ts",
+      "sha256": "a4cc473276d27b6b64fb5d69f654ba7c014bd463f706b53c885efa9d4772670d",
+      "bytes": 6133
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/explore.agent.yaml",
+      "sha256": "dbcabc1be606ecc091e6345d37fd4ba5447fdbe5a0b7c343c67b6ee24401bfc5",
+      "bytes": 2668
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/skills/activate/SKILL.md",
+      "sha256": "265ef8a2282c9fca2395863f58246e5872630f952f17107112820de547d8f209",
+      "bytes": 1851
+    },
+    {
+      "path": "tools/net8.0/any/Azure.Identity.dll",
+      "sha256": "183dfcdc51fb4675d80c12a795d8e9d6bf7687f2f639451b938adc6f0e382652",
+      "bytes": 348704
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.Configuration.Abstractions.dll",
+      "sha256": "fefcdb267a73099cb90e5af56b5ef2bca59bed974339b3a6810352bde23537a6",
+      "bytes": 27936
+    },
+    {
+      "path": "tools/net8.0/any/System.ComponentModel.Composition.dll",
+      "sha256": "9b3a0a227630edfb80088c37bf21ea0a825685467052fd52e454f73694668830",
+      "bytes": 268872
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/maccatalyst-x64/native/libonigwrap.dylib",
+      "sha256": "bfbfa05dff27a17e2edec7b3823a31ed813ce119d62fb5ebd88b35e24c38b054",
+      "bytes": 523088
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/client.d.ts",
+      "sha256": "8a5833d1f3d61bcefa8a9fccee53d1231dd253905384123e0169f4f6c31353fe",
+      "bytes": 19993
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/rem-agent.agent.yaml",
+      "sha256": "895ac0f7d0ce5cd006501eed7f1abfd38405ba93c30d16be9c7205bed6f335bf",
+      "bytes": 968
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/skills/browser-use/BROWSER-RUN.md",
+      "sha256": "e04aeeffff6b4ae906a590fc6fb1a8fabe5ca742abe48600d3477ddaf8f66306",
+      "bytes": 29238
+    },
+    {
+      "path": "tools/net8.0/any/bcal.deps.json",
+      "sha256": "83607365dc23750fd18ff253c2efa5da46a34b26289c4f782b70805d994f215d",
+      "bytes": 58307
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+      "sha256": "962382e1fb5c5e3f0912adcd668641e3de57ee51fbc324e0aa2e850b30ea7a0a",
+      "bytes": 64848
+    },
+    {
+      "path": "tools/net8.0/any/System.Composition.AttributedModel.dll",
+      "sha256": "859b950e10aa1dc10efe626b6ea1efb8dd5b1c742ae12fa20a2a6b055c9c995b",
+      "bytes": 17992
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/osx-arm64/native/libonigwrap.dylib",
+      "sha256": "5922d0c6c3cd31bfdf9997ea03d48d7aff952d891e8d46c2b9bfccd8d8160665",
+      "bytes": 531424
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/cliVersion.d.ts",
+      "sha256": "2b194e641c200f3bc825202b6b6ebf64277e25f7f24a050f4781125d3e988d00",
+      "bytes": 114
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/research.agent.yaml",
+      "sha256": "bee7e95a758e894d81292797914ca55f6a14dc4da9bf79ee2635339941263ffa",
+      "bytes": 5613
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/skills/browser-use/SKILL.md",
+      "sha256": "80c5bfd6536739f870899017409488b0d508700d624b058d4a91f5a8045bea88",
+      "bytes": 7393
+    },
+    {
+      "path": "tools/net8.0/any/bcal.dll",
+      "sha256": "e044cba74a9e7025be1a1058d2d131a10726bf525f2cef05d4982427144b0048",
+      "bytes": 343552
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.DependencyInjection.dll",
+      "sha256": "7e9994e99cadf56f82a32653b5146549f0adcd33b373935520568aa3ce6d527c",
+      "bytes": 72784
+    },
+    {
+      "path": "tools/net8.0/any/System.Composition.Convention.dll",
+      "sha256": "bff7abe3763f31fafc1ad73b9db9156f69fa9a74dd1a594cb09f98db59cd73f2",
+      "bytes": 50760
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/osx-x64/native/libonigwrap.dylib",
+      "sha256": "506dfefb25572f1ba30af8e315df15b8d02dad3d7212d07ec893e8b2ed614662",
+      "bytes": 523064
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/copilotRequestHandler.d.ts",
+      "sha256": "ea9ab3ceb9fe6c44d53bd002174351836f0b2a05ce8384f3fa69df2cd2a74c23",
+      "bytes": 3815
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/rubber-duck.agent.yaml",
+      "sha256": "eb624f30ef69f8cfd18e7f3f14bcca63e13d1a0d3e05af006372b8d537bbd15d",
+      "bytes": 4820
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/skills/deactivate/SKILL.md",
+      "sha256": "6ac1f67894285ae73d481f799cd28d6214e54d45f67cfda330343e687f2e7a6e",
+      "bytes": 1134
+    },
+    {
+      "path": "tools/net8.0/any/bcal.exe",
+      "sha256": "cbe6484587b426509bf30294c9b84d4ba5c9bc9cc99383f96ae91279f02bed60",
+      "bytes": 151552
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.Diagnostics.Abstractions.dll",
+      "sha256": "9864dbcfdbfe395bbd64deec7568fdaf0cbc3850f0cd8f53e7359189bd158082",
+      "bytes": 30480
+    },
+    {
+      "path": "tools/net8.0/any/System.Composition.Hosting.dll",
+      "sha256": "c833d76a46d00d80e4a59c63b7d25a610fbfe35435b6eb56cd887d8492f83839",
+      "bytes": 52808
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win/lib/net7.0/System.Security.Cryptography.Pkcs.dll",
+      "sha256": "0b28b5b39bc058e44911e7e81b7b16cbff73c4f9c4145d14d139670d5e98858b",
+      "bytes": 313976
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/entra.d.ts",
+      "sha256": "8fccf69444884b83aa5f82b1846603c1395c26efee19a3235129b1a03e5a82ee",
+      "bytes": 233
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/security-review.agent.yaml",
+      "sha256": "3dd23e78e7efd6afc66d42636e4d4f9c6b4e185f71de05edc88fd8fbe9ddb981",
+      "bytes": 14924
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/skills/doctor/SKILL.md",
+      "sha256": "8c60899d232e0e199ef0b654344e120f6305a3448eb875194af0229b5e6640cc",
+      "bytes": 2972
+    },
+    {
+      "path": "tools/net8.0/any/bcal.runtimeconfig.json",
+      "sha256": "28329cf08f6505e73806b17558b187c02f0c1c516fe47ebfb7a013d082aaa306",
+      "bytes": 340
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.FileProviders.Abstractions.dll",
+      "sha256": "f08b1f597abb3647ab6e844282ded763e6078dbef6dd54b9d956ca419fac42fe",
+      "bytes": 22176
+    },
+    {
+      "path": "tools/net8.0/any/System.Composition.Runtime.dll",
+      "sha256": "ad84b243cd9e7af8efe7743559e9a772869ca70ba17cff08fcfcf12b205d8111",
+      "bytes": 23112
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win/lib/netstandard2.0/System.Security.Cryptography.ProtectedData.dll",
+      "sha256": "7f2b633eed63bf20d558a25ed9686d2f1ef6c6e3fef5c0b19c2c1258d90acabd",
+      "bytes": 32912
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/extension.d.ts",
+      "sha256": "e5dfbec88215c809e25fba8e6790c06e99afd011cb6bfd12cd3467e2f78cc8e4",
+      "bytes": 3548
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/task.agent.yaml",
+      "sha256": "f631baa82c0422b6d0768c34e6de019526c295e2f7e8bf52143561c16a0dd831",
+      "bytes": 2131
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/computer-use/.release-target",
+      "sha256": "47865cb70f3801831acc971cb8fa442c22587d52136e7eb50e44d430d60e152f",
+      "bytes": 10
+    },
+    {
+      "path": "tools/net8.0/any/DocumentFormat.OpenXml.dll",
+      "sha256": "2266c64e221f596881e692ac93400651f37796c4e2b07c6a050fd4fab0d92851",
+      "bytes": 6328296
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.Hosting.Abstractions.dll",
+      "sha256": "27f074952005f74ba37fc62756690255e5f743ff3f7426fcdeb65a0d6ec9ff77",
+      "bytes": 51472
+    },
+    {
+      "path": "tools/net8.0/any/System.Composition.TypedParts.dll",
+      "sha256": "d382343f09c413bfd39ddcc83c2ee96cf8a7ee80000deaeb27383b9f1610d941",
+      "bytes": 58952
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-arm64/native/libonigwrap.dll",
+      "sha256": "0f09da4817e359853d240a82be512589c925299d991e8dcd3fcd29aceed931fd",
+      "bytes": 501760
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/extension.js",
+      "sha256": "b41fd57683f4b4ee145598a17644099e8cf72a74040b75fe6d459c4f3d199925",
+      "bytes": 793468
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/cloud-session-search.yaml",
+      "sha256": "b38aeccb64267cc0c9d5ee87ced2a538421a98e7e781af549bfd89c239a90802",
+      "bytes": 1845
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/computer-use/computer-use-mcp.exe",
+      "sha256": "bd788084bee151d3c70580c73b7efa135c36a7f17c398de03f6c529ec74c0140",
+      "bytes": 3125536
+    },
+    {
+      "path": "tools/net8.0/any/DocumentFormat.OpenXml.Framework.dll",
+      "sha256": "e35980f07a5031fd8746606dd77517c832f58571ae24c3b9eddae59f9533d5df",
+      "bytes": 469104
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.Logging.Abstractions.dll",
+      "sha256": "91668af9bdf1389dd1a8906223226711e98123e26464c4205042d0b0685b5390",
+      "bytes": 65872
+    },
+    {
+      "path": "tools/net8.0/any/System.Diagnostics.DiagnosticSource.dll",
+      "sha256": "3103e4b6ab4acc3a969fae839fe6805d99a048979b33f6728b65f4a3a7407328",
+      "bytes": 191784
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/.copilot-runtime-assets",
+      "sha256": "38f83ce806084053ea0a1b2f79e0596513106833911b6bfd83b2874aee141d8c",
+      "bytes": 6692
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/ffiRuntimeHost.d.ts",
+      "sha256": "f078a716555bd04b889e4555e9f228af30d71e73e33609a072f7b30c1d80c883",
+      "bytes": 1834
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/github-context-memory.yaml",
+      "sha256": "57f7830cd8960810870247047829183bdc76715c4981fe91b9fe9cb8d94fafdf",
+      "bytes": 4133
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/computer-use/CopilotComputerUse.exe",
+      "sha256": "1e08639b8b9c078696382e7953ad9c60be7a9a9f434d4ec84d3c16d9015632f2",
+      "bytes": 3359520
+    },
+    {
+      "path": "tools/net8.0/any/GitHub.Copilot.SDK.dll",
+      "sha256": "37bbb7f4baff20782295236f4fc4461109a9ccf50f6303dbceb3d801e5676db9",
+      "bytes": 20548608
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.Options.dll",
+      "sha256": "5e01894cbc0661bacb8ca8f485a40d5ee4e02f28fef58007668a0276431b4693",
+      "bytes": 64776
+    },
+    {
+      "path": "tools/net8.0/any/System.IO.Packaging.dll",
+      "sha256": "12ddc8bff279fad856551a74894dc52b80fa437d5d2b32722e70ae6899217b7c",
+      "bytes": 142136
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-runtime.exe",
+      "sha256": "776e6a9c6365c7c5d60f4e6f692a5e16f9562a7add3347fe591342d62c5c4149",
+      "bytes": 770848
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/host.d.ts",
+      "sha256": "ec0fc34652c09dc5ca793c706dc49c5b7089ed904220e7d0ea32aec8377d305c",
+      "bytes": 7150
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/github-context.yaml",
+      "sha256": "e61a5fd50f94a6af496be8bb30f03ee3a7106417d854177c2e8bb7dbe6fa6f03",
+      "bytes": 2236
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/computer-use/mcp.json",
+      "sha256": "e4312d9f55ea9027d415759d7bead87031da73a8f46b4fe374c6f5c5c10e7b87",
+      "bytes": 240
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.ApplicationInsights.dll",
+      "sha256": "f2143331f1df700838ce093643220cc62f95eb070eec3db0acb1c679f514e89d",
+      "bytes": 343144
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.Primitives.dll",
+      "sha256": "446ff16e903e7479558816e213a3adee9a1c1adad65a56d853801b10933e29d7",
+      "bytes": 43680
+    },
+    {
+      "path": "tools/net8.0/any/System.IO.Pipelines.dll",
+      "sha256": "1c0a89a15927b2974c711259e4f5a335c7b07ec2a898ba0c4f86e0b87e6e03d3",
+      "bytes": 77096
+    },
+    {
+      "path": "tools/net8.0/any/es/System.CommandLine.resources.dll",
+      "sha256": "12b2ca7b325e673ab69ddb22ae8cccbafd37e4a106e64ad3e0e2dcdef76ffa7e",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot.exe",
+      "sha256": "776e6a9c6365c7c5d60f4e6f692a5e16f9562a7add3347fe591342d62c5c4149",
+      "bytes": 770848
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/index.d.ts",
+      "sha256": "ebd3161fa6983c639efdd67e40fefea4ce23c3de3a0ed2e6b6aeab9e71179319",
+      "bytes": 7051
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/session-search.yaml",
+      "sha256": "9c8238ec858b874ce0123288dfb15efeb139cff3b7bbf0dd556263a7985b3692",
+      "bytes": 1925
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/computer-use/plugin.json",
+      "sha256": "6de76c9301852083de69abda240b47f5cbfe14c8f34afe497a512dc519e59053",
+      "bytes": 185
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.AspNetCore.Cryptography.Internal.dll",
+      "sha256": "199c29163f7eceebd9878771213c89bfe8690b7d5d1ee0f4490606fa9ac03c13",
+      "bytes": 41344
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Identity.Client.dll",
+      "sha256": "02ee19218b90ed6caa8f0a7fc011d9a72b75ba3bf8c78c2ce9240e937a4badf3",
+      "bytes": 1004576
+    },
+    {
+      "path": "tools/net8.0/any/System.Memory.Data.dll",
+      "sha256": "8817d16a629710c78b3757f220b74878283c56fe7d9a866ece0eaef0be0a2bf1",
+      "bytes": 28264
+    },
+    {
+      "path": "tools/net8.0/any/fr/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "4f541605ac4d238b40b502cba4b5430a93b91e346c5de591c2d83894d377a563",
+      "bytes": 473896
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot_runtime.dll",
+      "sha256": "5c817c3f315da691e31a3a2acbd7ab9a8ae4cea0aebb456999ccfa0ed1dade92",
+      "bytes": 140210976
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/index.js",
+      "sha256": "9e1eb47e08ca7fae1b56c5a5470a3a48d067c2a4e88271422fe3ad0a2554c913",
+      "bytes": 798628
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/subconscious-agent.yaml",
+      "sha256": "16565318ef91a04db8e22cd86cea72df62762dad1a9d748a35def1ea64aca009",
+      "bytes": 2654
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/preloads/extension_bootstrap.mjs",
+      "sha256": "ef4efcd8c1d35c0ebe0900ecd5c9edbb22f0b7494e9aede63e3ba69b3836edfd",
+      "bytes": 3192
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.AspNetCore.DataProtection.Abstractions.dll",
+      "sha256": "7e0b2c359889325837f1caa41c49319621d4c04d648b3132c317736d97adf345",
+      "bytes": 24680
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Identity.Client.Extensions.Msal.dll",
+      "sha256": "98c19b7ac459568c875b891829294a0150ed71ee6d95216503d3a65ac567678f",
+      "bytes": 66616
+    },
+    {
+      "path": "tools/net8.0/any/System.Net.ServerSentEvents.dll",
+      "sha256": "9f970a18ca00533628c71e471e05984b1c0d179b121aa0b7ab0b08c1f0fa5a60",
+      "bytes": 41776
+    },
+    {
+      "path": "tools/net8.0/any/fr/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "e551b46b9e0cd4a1402be6615cf1a4537fe86ec480026b33b16d3c55a65ba4bd",
+      "bytes": 50472
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/dpapi.node",
+      "sha256": "c04d7bc4857f97fbd26fd925d576672703283f45a6862e3baa52fdb5d527e74d",
+      "bytes": 154400
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/installationConfirmation.d.ts",
+      "sha256": "e3671b1c2ad3a030d381408c416f912ea3221ca5195003fa6a967d119490245b",
+      "bytes": 1382
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/test-sidekick-context-changed.yaml",
+      "sha256": "f25d7907a28a8bbcec1e108ba26ced25b505b892d172bc67608b22c11c4b4b4c",
+      "bytes": 1029
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/preloads/extension_sdk_resolver.mjs",
+      "sha256": "e57d71730c8f937315a72b66187c56cc4fa78ecbd13590795136996e2851bf19",
+      "bytes": 1331
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.AspNetCore.DataProtection.dll",
+      "sha256": "8ae66db502d343d6feae83b907456cdad22c9fd26967e22fc6674baee4404254",
+      "bytes": 155216
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.IdentityModel.Abstractions.dll",
+      "sha256": "b375a42548eb4cfcb2479c83ba7afe033f4ce0684143304cb0de268d1a0863fa",
+      "bytes": 19528
+    },
+    {
+      "path": "tools/net8.0/any/System.Reflection.Metadata.dll",
+      "sha256": "cd87c789b7fa364165590f841770cdd481adf1478849b7f7fc6ad7972bebac3d",
+      "bytes": 501000
+    },
+    {
+      "path": "tools/net8.0/any/fr/System.CommandLine.resources.dll",
+      "sha256": "9ef5ca15e63ef4fab35030d96956d615fd2e05476882aa0a40e5a46178546f7e",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/libonigwrap.dll",
+      "sha256": "435c563677fe6fab2cbd8d6a437ef72d9a8fc62db1f720ec30b38fd316834d28",
+      "bytes": 541184
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/jsonrpcTypes.d.ts",
+      "sha256": "172bbd8f0133e4bb59084dad5952d9b97476b8668f29fd7c67b964be7e063740",
+      "bytes": 690
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/test-sidekick-persistent.yaml",
+      "sha256": "dcfdfdc4b135e71b7f1870f714cb2a2a0250ab59a1fb12d9b2385266c14a3890",
+      "bytes": 861
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/ripgrep/bin/win32-x64/rg.exe",
+      "sha256": "cb5b860bf48e8194b880f481b462188fb16accbbf28983b31d1fe3e8b6e6ab3e",
+      "bytes": 5445920
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.AspNetCore.DataProtection.Extensions.dll",
+      "sha256": "3b608be339bbc4b5e5f259bc8a81584e806e0ad78e4626ee390f71b98a719c70",
+      "bytes": 23416
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.IdentityModel.JsonWebTokens.dll",
+      "sha256": "8370749bf949c61ccfe746385c822898f6f868bb6f5b80d1c9abd4a9d88a1464",
+      "bytes": 171552
+    },
+    {
+      "path": "tools/net8.0/any/System.Security.Cryptography.Pkcs.dll",
+      "sha256": "c4275c68639e5cf7593b8939e076e943ae9e6c176280f3436c2953a292ac432f",
+      "bytes": 261256
+    },
+    {
+      "path": "tools/net8.0/any/it/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "3dedd7366678a7a9ba085b00224ef97d34f2ec193288427b6f5da7ff3145c102",
+      "bytes": 468272
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/msal-node-runtime.node",
+      "sha256": "28951ba4bd334306d5fe7914ea37d8973cdbe34e8523503bd48f1af0c1523267",
+      "bytes": 360736
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/runtimeArtifacts.d.ts",
+      "sha256": "1d78a2fd37b65e793e553db9a8323a6727b77e7ffbd6b61c462e778794dd76e2",
+      "bytes": 1248
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/test-sidekick-restart.yaml",
+      "sha256": "cc2a642bebefd30a20c1a85ac500e419fb024db508cbe233b59be0bb01ff6c4c",
+      "bytes": 831
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/schemas/api.schema.json",
+      "sha256": "76e5d0871680e1625932757c7678b12e0288a5cfa82291b36b758aff4a003ec5",
+      "bytes": 2988473
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Bcl.AsyncInterfaces.dll",
+      "sha256": "5705d245072d3eb78400547b32147dbb6e2c8b02ba8bda76729798f5efdeaecb",
+      "bytes": 16000
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.IdentityModel.Logging.dll",
+      "sha256": "20556d120af9113566ed63df2087a2ee69990baaa2b80960687d0ae4f794b083",
+      "bytes": 36896
+    },
+    {
+      "path": "tools/net8.0/any/System.Security.Cryptography.ProtectedData.dll",
+      "sha256": "80566f0839ece5946e66bf9f00d723e59e371ba1341a18e00c7c7a7c49298e1d",
+      "bytes": 25232
+    },
+    {
+      "path": "tools/net8.0/any/it/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "0c13186915f58144303f2d4059cbc73885fcbca51602fd69ab8b1c6f501d51a3",
+      "bytes": 50456
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/msalruntime.dll",
+      "sha256": "5d5eaa6a6d8bd75d65321caba29fa8ebe2b90fd5b081bde7e9b10193f3cbcaff",
+      "bytes": 3187320
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/schema.d.ts",
+      "sha256": "40223fad10dd2896a4e257dd761e06c62f3711d6bd40ef880e67386478982eba",
+      "bytes": 349
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/definitions/sidekick/test-sidekick-trigger-once.yaml",
+      "sha256": "21900f8f87a49e80b4379bc12f701a5a578a54e9a8988478175186be25e14c55",
+      "bytes": 828
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/schemas/lifecycle-diagnostics.schema.json",
+      "sha256": "6e6fa7ab402106d76d82daf8a8308d800ddf96b61c7c6cecb791c072cc21f18b",
+      "bytes": 15826
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.BusinessCentral.BCal.dll",
+      "sha256": "c7deb6f274e7955efd77f4e04c7d3bbabbf563bb77d8ca59ae48b30632585c9a",
+      "bytes": 1525760
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.IdentityModel.Tokens.dll",
+      "sha256": "218574c9aa3a8420412b5c0e5d71fd17c5323f5498dc4a1cda76228113a615b2",
+      "bytes": 385568
+    },
+    {
+      "path": "tools/net8.0/any/System.Security.Cryptography.Xml.dll",
+      "sha256": "deb76d308c6e93e76b92de651a749d29e63b756ed34d514060b7a7b63c20389f",
+      "bytes": 175272
+    },
+    {
+      "path": "tools/net8.0/any/it/System.CommandLine.resources.dll",
+      "sha256": "452a542a0c16f225ae769562916df2f882eeaf3ef246dc81dfd4305026f42239",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/OneAuthInterop.dll",
+      "sha256": "dcbee4cc1c1a91fc59319f95392cc79cb1840131af6eb13da3da677ac0a242cf",
+      "bytes": 6089848
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/sdkProtocolVersion.d.ts",
+      "sha256": "ae088957f936521a2eede3dfaf39082622eaf2c7683181901ff7ded75cee5375",
+      "bytes": 294
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/.mcp.json",
+      "sha256": "b1a8ae603aebc095a9cd8075f1b7b0f89f2a52fedecac4e61240699f20373391",
+      "bytes": 155
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/schemas/session-events.schema.json",
+      "sha256": "84b7518af2e12318585ff0420f837ed2babfdd1e7aedbb1960ad8d25191332ac",
+      "bytes": 1117349
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.BusinessCentral.BCal.Mcp.Client.dll",
+      "sha256": "bfd876562f14d6ce45884a9d73f5addb74c7289f773eefbbf5f53b2783a6eb35",
+      "bytes": 117760
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Security.AntiSSRF.dll",
+      "sha256": "09e1df6acd37b72a4f2e8ef68780a62cecdf0f4e21895f92f1929cfd4aafd587",
+      "bytes": 40760
+    },
+    {
+      "path": "tools/net8.0/any/System.Text.Encodings.Web.dll",
+      "sha256": "a992978878d1d3d9dbc5767f2ef79577329d5cc188fc956eb5162934a3b8ab74",
+      "bytes": 65872
+    },
+    {
+      "path": "tools/net8.0/any/ja/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "99d47090fe967a0d983db8c15a0c80d5f094b8d67b7224916cbc0e148d2f2391",
+      "bytes": 515336
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/OneAuthInterop.dll.stamp.json",
+      "sha256": "5fbf21cc63a490b7ea6c1b8296215acf0b58ffbd452f53ba064f29b2ff2438ed",
+      "bytes": 117
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/session.d.ts",
+      "sha256": "d60bf215fd9290aa3ffa82737aa7ec2845d8d7e8318dd03bfc306896642a65fc",
+      "bytes": 19251
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/.release-target",
+      "sha256": "47865cb70f3801831acc971cb8fa442c22587d52136e7eb50e44d430d60e152f",
+      "bytes": 10
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/tgrep/bin/win32-x64/tgrep.exe",
+      "sha256": "31d1b88670932a627192c0ba84bc23796809b1c32b2a566f5e5df87d99fa97b6",
+      "bytes": 6537336
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.BusinessCentral.BCal.Rendering.dll",
+      "sha256": "48c2fe0493ed4a47b895bc041e5af82dce9801baa2bf18cdb026267c55116835",
+      "bytes": 337920
+    },
+    {
+      "path": "tools/net8.0/any/ModelContextProtocol.Core.dll",
+      "sha256": "e6e9a3bd41679a37b7ee395a35bd43e7235ed63af4e7a5047889bb82563c06d7",
+      "bytes": 1164288
+    },
+    {
+      "path": "tools/net8.0/any/System.Text.Json.dll",
+      "sha256": "e26c4ed64d34c53b689953bd588aaff0d4fabd182a9e8ba6718609679374882f",
+      "bytes": 676688
+    },
+    {
+      "path": "tools/net8.0/any/ja/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "916cad281c5a9d760afe71277da866c559e98e20cbd06da1df36bd6d62beb8b5",
+      "bytes": 54072
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/OneAuthInterop.LICENSE.txt",
+      "sha256": "0fe665c2ada5962fd01190ab5b2947b9a9d2c625a9f8225577441eb3256e14e3",
+      "bytes": 13142
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/sessionFsProvider.d.ts",
+      "sha256": "c497ec069d9c9401b25bc10357ce02230193d561df697391d75919672a18c586",
+      "bytes": 6911
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/channel.json",
+      "sha256": "b758fa182b3f8a7d7fe9ae230e8e5a8805f666d794f905d65c2d6a1e13d17d99",
+      "bytes": 818
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x86/native/libonigwrap.dll",
+      "sha256": "4da3ee819e73494cf96b125df360a1d6cf225fc3c70ff2216f521ee73b3b290a",
+      "bytes": 547328
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.BusinessCentral.BCal.Service.dll",
+      "sha256": "a205a44be66004d0cf62f7ad791d3ad3b8cd910f4a1ee34e5cd4ed6e954212dc",
+      "bytes": 118784
+    },
+    {
+      "path": "tools/net8.0/any/ModelContextProtocol.dll",
+      "sha256": "c944ec6239e0f3b56b59b7ff895d1644ce4b0346380d19e1e90359121f52913d",
+      "bytes": 86528
+    },
+    {
+      "path": "tools/net8.0/any/TextCopy.dll",
+      "sha256": "170f20ce2d323efe7bc9e71a75f75634ec159e90dced4215a2dc74ed5919765a",
+      "bytes": 30720
+    },
+    {
+      "path": "tools/net8.0/any/ja/System.CommandLine.resources.dll",
+      "sha256": "0e3911aef82d94e0f623da91af05d7330b3a0c180cea0cadcb45ad3bf8ebe4f6",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/restart-supervisor.js",
+      "sha256": "a11880aafe69269bac068965215f6e8d67ea80a397a4228f232a41f9790654a7",
+      "bytes": 50377
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/telemetry.d.ts",
+      "sha256": "0721ce90ecd3a15eeb86d7787ca62236b1b545b0e93139ed5ef4419b16544722",
+      "bytes": 528
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/README.md",
+      "sha256": "81ba28642c46e7245108ba3e78c5faf9210a7579f0b4c2131c9c96cfa567dcfe",
+      "bytes": 3473
+    },
+    {
+      "path": "tools/net8.0/any/tr/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "d084f9a807e09d4016fc71ced8628952092ce7e61fd678622905eb0855624eb0",
+      "bytes": 449832
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.BusinessCentral.BCal.Types.dll",
+      "sha256": "4ecaa7a5fa6ee4f67ed383c1d23c60cbe9c011deb56f92f66aa472f73638195a",
+      "bytes": 194560
+    },
+    {
+      "path": "tools/net8.0/any/Mono.Cecil.dll",
+      "sha256": "769a59793d4b8885bbbfbc5aee8f57a0d4e34d275c56c60c03994309b87f67e9",
+      "bytes": 356864
+    },
+    {
+      "path": "tools/net8.0/any/TextMateSharp.dll",
+      "sha256": "989bf40e3bea1c3d26636f115171175cd2efd0945829148954e3219514b4ecb9",
+      "bytes": 153600
+    },
+    {
+      "path": "tools/net8.0/any/ko/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "4a6ebb0f25bbb5322802a454613394f582d60f1070f93a8ffe6f8d5f540066a7",
+      "bytes": 473400
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/runtime.node",
+      "sha256": "5c817c3f315da691e31a3a2acbd7ab9a8ae4cea0aebb456999ccfa0ed1dade92",
+      "bytes": 140210976
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/toolSet.d.ts",
+      "sha256": "41e53ae25809c90fd1a78f493cb912c6a9194c6e0a02e3e32545971c41a1cb56",
+      "bytes": 2725
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/.plugin/plugin.json",
+      "sha256": "ea9f4920d6bab2e25df93f62be8705d788d2786681ae5ba75b6de1fa2978e76f",
+      "bytes": 730
+    },
+    {
+      "path": "tools/net8.0/any/tr/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "7bf7367cc7d8930dd3d7f4f63a85b3153b2dd67a3e1826eb5aa93653d26c6426",
+      "bytes": 48936
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.CodeAnalysis.CSharp.dll",
+      "sha256": "9acdb971334046d22a07fad02648e2725ef5a1b9d0fbe4fe82f1ada57fa70c9e",
+      "bytes": 6697264
+    },
+    {
+      "path": "tools/net8.0/any/Mono.Cecil.Mdb.dll",
+      "sha256": "61637f9940e5e336571cbf945be0f36d6d6050e06288df0f0232d93b26f0bde7",
+      "bytes": 39424
+    },
+    {
+      "path": "tools/net8.0/any/YamlDotNet.dll",
+      "sha256": "8a6ce981275076c03eff36438ce1ae12db62eb8be4670f95e0bca12c0b38484d",
+      "bytes": 269312
+    },
+    {
+      "path": "tools/net8.0/any/ko/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "df64daacc01f379329edff5db8656eed9344afa1c773e1497d0f1f057c6accfe",
+      "bytes": 50472
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/animations/banner.json.gz",
+      "sha256": "cc6dcef840f5f63c9683e84bd55478e6fd2a22130bf1be6f53dece870e996446",
+      "bytes": 4887
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/types.d.ts",
+      "sha256": "7c39457661228e79e429fd09fce1e5ef5a4771802d6bd2c7fc3599e53ec5edaa",
+      "bytes": 145581
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/dist/browser-mcp.cjs",
+      "sha256": "332d890467aed85282716c022ca8c196f6ff3f9e87d51f9d3ac1246467f30582",
+      "bytes": 1104449
+    },
+    {
+      "path": "tools/net8.0/any/tr/System.CommandLine.resources.dll",
+      "sha256": "2566f89f11a60fb06372eb39dd798749ea1f3f739d4a7c5af0141b0d69ef4af9",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.CodeAnalysis.dll",
+      "sha256": "4125148915188f37458a9e265b7e6afd36511b9fd9765024456ecf17184bfb19",
+      "bytes": 3028776
+    },
+    {
+      "path": "tools/net8.0/any/Mono.Cecil.Pdb.dll",
+      "sha256": "a5249a04ad8fd7dfd47e4d0a620aed0f7eb6051e1ddec102c541ca3e12f6e2a8",
+      "bytes": 89600
+    },
+    {
+      "path": "tools/net8.0/any/cs/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "212f434f3c18d3b50f7d736c6e93f4f7d59a25284376e803432c7a9ecba81738",
+      "bytes": 441624
+    },
+    {
+      "path": "tools/net8.0/any/ko/System.CommandLine.resources.dll",
+      "sha256": "accd66cc48343a7ec08543ea9a68c3b3296867e6a4ecb347eb24b2cdc76c39d4",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/builtin/customize-cloud-agent/SKILL.md",
+      "sha256": "6acee791cd48a31eb881431c0f1394d3c79d33d62f0d58b2d9b699e4a275ea93",
+      "bytes": 18679
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/workflow.d.ts",
+      "sha256": "4e3094f9130f678812eb324ebb4dd93a3f9209eef98c7a05585f43ed0917eafa",
+      "bytes": 17126
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/dist/browser-run-worker.cjs",
+      "sha256": "0440a39bddff3bb80d51e033e27a4b72560b34dde957e7727f5453686882d183",
+      "bytes": 1045416
+    },
+    {
+      "path": "tools/net8.0/any/zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "81e3a341280cebaa0a80deb2fb79b58a995c75d01fb2772902be8ff4ffec4950",
+      "bytes": 401176
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Dynamics.Nav.AL.Common.dll",
+      "sha256": "73d9193a349f0cfc4aeb74a38223eaa2622114fa477d9b870b615230dc6f1dd5",
+      "bytes": 52736
+    },
+    {
+      "path": "tools/net8.0/any/Mono.Cecil.Rocks.dll",
+      "sha256": "273292babd45f9f34de5054bd9cdfe1d859a7dbf6f4ad5974fe4ead70698ed5b",
+      "bytes": 24576
+    },
+    {
+      "path": "tools/net8.0/any/cs/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "bf6e56b1de888e61118391f797dace521d30f9864eeea513312b48d542749d6a",
+      "bytes": 48392
+    },
+    {
+      "path": "tools/net8.0/any/pl/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "ef8f693335c0dc3b5acf0212a6655d19488fdcf578ae15b0fd61fe016f7f5a3c",
+      "bytes": 474408
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/builtin/discover-resources/SKILL.md",
+      "sha256": "9afbbacc30095ee4b4a70da34471781be9ad1df46f6c2df1ddbdc0473b34c6e7",
+      "bytes": 3647
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/docs/agent-author.md",
+      "sha256": "10c5719a0c79b98c3820ccb8e43ec0f56be00f772d1ca9b60fbbc6b12f0d284c",
+      "bytes": 14605
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/dist/native-host.cjs",
+      "sha256": "0ba01d4fcf5bdd13bb58a8badc60fbe8cb63dcd29433c5f3ca380067f7addbfd",
+      "bytes": 364863
+    },
+    {
+      "path": "tools/net8.0/any/zh-Hans/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "d230c21114d5ac8a396a491878f6c70f30ee9d1a9bc91d9acf5b1c1ffab0b5c7",
+      "bytes": 45344
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Dynamics.Nav.CodeAnalysis.dll",
+      "sha256": "8a73d3fe430ec862b8a164c9d64bb68a643d9cc608ec8d7cdaefc2dc1bd02bf5",
+      "bytes": 11028480
+    },
+    {
+      "path": "tools/net8.0/any/Newtonsoft.Json.dll",
+      "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07",
+      "bytes": 712464
+    },
+    {
+      "path": "tools/net8.0/any/cs/System.CommandLine.resources.dll",
+      "sha256": "9d6008167eefe58f70c13d8f3c24e5536039fbf7a5970b8045f0c8dd6d1dca15",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net8.0/any/pl/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "47ec2b9a81d97a3b4367045cd785d3f133e309af73ce5401b47fb45e99e939b4",
+      "bytes": 50456
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/builtin/github-pr-media/SKILL.md",
+      "sha256": "358f529ab8ceb7f57488a275804adf9ffd237fcf22ca3af1d5f7fd521877d011",
+      "bytes": 16053
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/docs/examples.md",
+      "sha256": "0f8af0a86c43023a73c4645fc143409c1a90bf6e511599cae8a5b0659788d592",
+      "bytes": 21728
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/hooks/hooks.json",
+      "sha256": "753d3eeec2a80bdcfc5ee49fc3edbd7549072f0d606b97145eac65e1c88dea6a",
+      "bytes": 480
+    },
+    {
+      "path": "tools/net8.0/any/zh-Hans/System.CommandLine.resources.dll",
+      "sha256": "9299de70ac78456fc0cf1a5928384847bbbdffdba9f15fa408bf5748738e3df3",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Dynamics.Nav.CodeAnalysis.Workspaces.dll",
+      "sha256": "8cb02fc7b9a6e86df386f11e59094372ee1fe3762bbbb3f576ac44add0403a83",
+      "bytes": 1747456
+    },
+    {
+      "path": "tools/net8.0/any/Onigwrap.dll",
+      "sha256": "692899f8a9fbda37b309d88f982f25820195fcd88f9b5b99a373fa61a496907c",
+      "bytes": 12800
+    },
+    {
+      "path": "tools/net8.0/any/de/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "67c946772e4d590a4f530b96027d673450005b0bebb86b2952bb785951824878",
+      "bytes": 471856
+    },
+    {
+      "path": "tools/net8.0/any/pl/System.CommandLine.resources.dll",
+      "sha256": "f6fd1271f64c4600cd705cd4742cf191547181fe0625c5fc83a3ba3102815a69",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/builtin/pr-stack/SKILL.md",
+      "sha256": "5322b1a15a05f00846945f71458384cccf9bfd7d9075fcd5d9f5b8917879127b",
+      "bytes": 19396
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/docs/extensions.md",
+      "sha256": "b2232be4b34b3c83068c4faa0b602fe126f9c8d5d7224a0167b4a88dc5beb8cd",
+      "bytes": 4707
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/activate.mjs",
+      "sha256": "02c73ef964bd4ecf002f1f55d0e07fab21d530937e98621933b14a48a04da5a6",
+      "bytes": 2080
+    },
+    {
+      "path": "tools/net8.0/any/zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "b30a1c551d75e255fef178b7bc21afdaab3297e65792170bb800300176d40de2",
+      "bytes": 400688
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Dynamics.Nav.Deployment.dll",
+      "sha256": "6c29545d84a3cb2c22b5d51dfeefa6407ffb8bd997781fe7ef48f638ec63c4c7",
+      "bytes": 230912
+    },
+    {
+      "path": "tools/net8.0/any/PrettyPrompt.dll",
+      "sha256": "ffb740f849e179917e79912f07d1de5cb7797cfcb8f058554654796e0ee4740a",
+      "bytes": 150016
+    },
+    {
+      "path": "tools/net8.0/any/de/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "96c9b96270c9ee76b194d939520208cfbabe76e44ec2a4585b0cc581a6aa48de",
+      "bytes": 50472
+    },
+    {
+      "path": "tools/net8.0/any/pt-BR/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "7e6d5bb0309a49b318d8cd90097835efb45a87f49a57d9c5dae7a7816ef59764",
+      "bytes": 453904
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/builtin-skills/customize-cloud-agent/SKILL.md",
+      "sha256": "6acee791cd48a31eb881431c0f1394d3c79d33d62f0d58b2d9b699e4a275ea93",
+      "bytes": 18679
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/docs/workflows.md",
+      "sha256": "865f8d87879caba0d6404f9e4f54589b1f2942b0235cacd80a6807626c052a58",
+      "bytes": 21192
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/browserPrerequisites.d.mts",
+      "sha256": "c8bd982986d445199266866dba40d4d92f7efd24f4cb2cd8ae0c9c8e9c027119",
+      "bytes": 1700
+    },
+    {
+      "path": "tools/net8.0/any/zh-Hant/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "5ba78d87162212cc7ab569f5f844595e07c9f063cab317d9a5b4310a15cb52cd",
+      "bytes": 45352
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Dynamics.Nav.Deployment.dll.config",
+      "sha256": "6460bda1d4d9b123377d9a33d264137fa9106babaf8cea39c90224411b038015",
+      "bytes": 548
+    },
+    {
+      "path": "tools/net8.0/any/Spectre.Console.dll",
+      "sha256": "200fb336c0516ae15912b2ad772931d5c4e8e48327b3e0c79bb4c15305ec4b94",
+      "bytes": 719872
+    },
+    {
+      "path": "tools/net8.0/any/de/System.CommandLine.resources.dll",
+      "sha256": "fe9f8c7ccc17f77dcb32f7fc0a854ddeccaf410712f4683e5f243c72b899734b",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net8.0/any/pt-BR/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "190f6245cc468b8bb830c79d330469b0fd782bf2e81341ae4eb60e462d89729a",
+      "bytes": 49456
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/builtin-skills/discover-resources/SKILL.md",
+      "sha256": "9afbbacc30095ee4b4a70da34471781be9ad1df46f6c2df1ddbdc0473b34c6e7",
+      "bytes": 3647
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/generated/lifecycle-diagnostics.d.ts",
+      "sha256": "d3904962cf8c0a6829d3a0b98b1958eab94a11d0f0fa42c77374db1bf18fc903",
+      "bytes": 7208
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/deactivate.mjs",
+      "sha256": "95329db5e00fc404dcdc58487c128d5c4e795ec543748acf77a35d04d7f14bf7",
+      "bytes": 218
+    },
+    {
+      "path": "tools/net8.0/any/zh-Hant/System.CommandLine.resources.dll",
+      "sha256": "2a2ad35e3e17e6a39464fb1b4244ffd23cffa29d766e0659c1304507213aa42c",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Dynamics.Nav.TypeWrappers.dll",
+      "sha256": "56cbdcacf594dad5c168e73fba867dd01bf7d7372b2aef2520b9c4b4bfa64a34",
+      "bytes": 17920
+    },
+    {
+      "path": "tools/net8.0/any/System.ClientModel.dll",
+      "sha256": "db26ba55aa35083a9ff53f0ae44401e65d514c2c9837fd46f629e3292cfff77c",
+      "bytes": 111128
+    },
+    {
+      "path": "tools/net8.0/any/es/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "6ce630896f87abba63ae9c3e4d7281dd88411674b0b200f69dc61816366aeb91",
+      "bytes": 461584
+    },
+    {
+      "path": "tools/net8.0/any/pt-BR/System.CommandLine.resources.dll",
+      "sha256": "b1befe040f127d71de54d635f07100ba372707d580945073db787104cfeef034",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/builtin-skills/github-pr-media/SKILL.md",
+      "sha256": "358f529ab8ceb7f57488a275804adf9ffd237fcf22ca3af1d5f7fd521877d011",
+      "bytes": 16053
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/generated/rpc.d.ts",
+      "sha256": "140b68ae6b492451cb31660baf4c85b3836635efca8b80d96aa1905f1aba500a",
+      "bytes": 1516377
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/doctor.mjs",
+      "sha256": "093b0b67beeccc1819922087ba0fc42e24b7c47cd2eb4da021a22e7751185138",
+      "bytes": 431151
+    },
+    {
+      "path": "tools/net8.0/any/Microsoft.Extensions.AI.Abstractions.dll",
+      "sha256": "c7bb9fb22c3262b3136c2576197448e66476dc81bc9e7efbb9a60f4781de3977",
+      "bytes": 681272
+    },
+    {
+      "path": "tools/net8.0/any/System.Collections.Immutable.dll",
+      "sha256": "33d310036fec4d1a78f75c885ea091c0e054ad08d50c424cc8db8042544aab3c",
+      "bytes": 251160
+    },
+    {
+      "path": "tools/net8.0/any/es/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "b649ad72e382c807afc2e2dfc8def3d586158214f89d86761cdd4ac969f7676c",
+      "bytes": 49952
+    },
+    {
+      "path": "tools/net8.0/any/ru/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "4e1473e69c089644f13fa73a0527bcf05f847f0bd679c634af3a7b3836d4dc33",
+      "bytes": 621360
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/builtin-skills/pr-stack/SKILL.md",
+      "sha256": "5322b1a15a05f00846945f71458384cccf9bfd7d9075fcd5d9f5b8917879127b",
+      "bytes": 19396
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/win-x64/native/copilot-sdk/generated/session-events.d.ts",
+      "sha256": "027ed7b7c5eb96f19ef454f98feda915d268e5715d26893880f77b27b12b6232",
+      "bytes": 562812
+    },
+    {
+      "path": "tools/net8.0/any/ru/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "2621d1bec5b0ae468142a913e3e80c37b1e25e3989786490bdd411bc82772308",
+      "bytes": 60712
+    },
+    {
+      "path": "tools/net8.0/any/ru/System.CommandLine.resources.dll",
+      "sha256": "23c028d33ac3e39f9f60b794358de822e885013e370b7f1719cf3745ddb4f57f",
+      "bytes": 19488
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/browser/lib/net8.0/System.Text.Encodings.Web.dll",
+      "sha256": "b77957e5ef7bc844d7ac984cdee01042f4b792f50ebb015d4522760257e7212d",
+      "bytes": 65872
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/linux-arm64/native/libonigwrap.so",
+      "sha256": "b0efbc1d1f585dfb30f4aeb0bfae10c0f41519b8f595b90d05e2ea3bd839b235",
+      "bytes": 546888
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/linux-bionic-arm64/native/libonigwrap.so",
+      "sha256": "0059ce5e27b89217e85c86ac0be947fd9a02f9c83b3fced7a24b18dff4a0ed0d",
+      "bytes": 548256
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/linux-bionic-x64/native/libonigwrap.so",
+      "sha256": "b5f265a6b52afb90d42147ef3c6ec10db292e92adb1409698ec0c1d3835a0a70",
+      "bytes": 561336
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/linux-musl-arm64/native/libonigwrap.so",
+      "sha256": "a36358408a643548aff1f4ff2aa7e686f12638ba396d89de1255213357fb92b7",
+      "bytes": 546624
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/linux-musl-x64/native/libonigwrap.so",
+      "sha256": "bd9b3d5e4e84f9aed678d6171147c61707dbdf46183a7eb72e25e135a17dddb6",
+      "bytes": 563232
+    },
+    {
+      "path": "tools/net8.0/any/runtimes/linux-x64/native/libonigwrap.so",
+      "sha256": "bb4e2798476999b2bad43f2c82ef0d8b36c749be81cbbd1aac762fdd165217b7",
+      "bytes": 563640
+    },
+    {
+      "path": "tools/net10.0/any/System.ClientModel.dll",
+      "sha256": "db26ba55aa35083a9ff53f0ae44401e65d514c2c9837fd46f629e3292cfff77c",
+      "bytes": 111128
+    },
+    {
+      "path": "tools/net10.0/any/it/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "995a868345367e1c68011617d8b8ac85decf2dd15fb85ea92a28205e2c6a5fba",
+      "bytes": 468240
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win/lib/net7.0/System.Security.Cryptography.Pkcs.dll",
+      "sha256": "0b28b5b39bc058e44911e7e81b7b16cbff73c4f9c4145d14d139670d5e98858b",
+      "bytes": 313976
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/copilotRequestHandler.d.ts",
+      "sha256": "ea9ab3ceb9fe6c44d53bd002174351836f0b2a05ce8384f3fa69df2cd2a74c23",
+      "bytes": 3815
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/rem-agent.agent.yaml",
+      "sha256": "895ac0f7d0ce5cd006501eed7f1abfd38405ba93c30d16be9c7205bed6f335bf",
+      "bytes": 968
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/skills/activate/SKILL.md",
+      "sha256": "265ef8a2282c9fca2395863f58246e5872630f952f17107112820de547d8f209",
+      "bytes": 1851
+    },
+    {
+      "path": "tools/net10.0/any/Azure.Core.dll",
+      "sha256": "b74cdb738903bb6abe8269105c0ae4e71269f10dd7367b1fd562f573d0ebcfaf",
+      "bytes": 426552
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.AI.Abstractions.dll",
+      "sha256": "a3216886dec2b2528b2d7212c438d21c3d6de2061b500bd2ea505a41f896f8d3",
+      "bytes": 679224
+    },
+    {
+      "path": "tools/net10.0/any/System.CommandLine.dll",
+      "sha256": "424b7763b60a1c99b77a8c74645b96beee5064e14469e35986df00173d3ad9e1",
+      "bytes": 151584
+    },
+    {
+      "path": "tools/net10.0/any/it/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "9489584f3d6ec723bfd2adf1a0d1bdc9bafcadab857fa7c48d18157e223a5541",
+      "bytes": 50440
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win/lib/netstandard2.0/System.Security.Cryptography.ProtectedData.dll",
+      "sha256": "7f2b633eed63bf20d558a25ed9686d2f1ef6c6e3fef5c0b19c2c1258d90acabd",
+      "bytes": 32912
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/entra.d.ts",
+      "sha256": "8fccf69444884b83aa5f82b1846603c1395c26efee19a3235129b1a03e5a82ee",
+      "bytes": 233
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/research.agent.yaml",
+      "sha256": "bee7e95a758e894d81292797914ca55f6a14dc4da9bf79ee2635339941263ffa",
+      "bytes": 5613
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/skills/browser-use/BROWSER-RUN.md",
+      "sha256": "e04aeeffff6b4ae906a590fc6fb1a8fabe5ca742abe48600d3477ddaf8f66306",
+      "bytes": 29238
+    },
+    {
+      "path": "tools/net10.0/any/Azure.Identity.dll",
+      "sha256": "183dfcdc51fb4675d80c12a795d8e9d6bf7687f2f639451b938adc6f0e382652",
+      "bytes": 348704
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.Caching.Abstractions.dll",
+      "sha256": "fa03dd765799a7fcc8d56f01b070316aa8ad54373386d0de64d70e67d7aec0a6",
+      "bytes": 38192
+    },
+    {
+      "path": "tools/net10.0/any/System.ComponentModel.Composition.dll",
+      "sha256": "9b3a0a227630edfb80088c37bf21ea0a825685467052fd52e454f73694668830",
+      "bytes": 268872
+    },
+    {
+      "path": "tools/net10.0/any/it/System.CommandLine.resources.dll",
+      "sha256": "452a542a0c16f225ae769562916df2f882eeaf3ef246dc81dfd4305026f42239",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-arm64/native/libonigwrap.dll",
+      "sha256": "0f09da4817e359853d240a82be512589c925299d991e8dcd3fcd29aceed931fd",
+      "bytes": 501760
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/extension.d.ts",
+      "sha256": "e5dfbec88215c809e25fba8e6790c06e99afd011cb6bfd12cd3467e2f78cc8e4",
+      "bytes": 3548
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/rubber-duck.agent.yaml",
+      "sha256": "eb624f30ef69f8cfd18e7f3f14bcca63e13d1a0d3e05af006372b8d537bbd15d",
+      "bytes": 4820
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/skills/browser-use/SKILL.md",
+      "sha256": "80c5bfd6536739f870899017409488b0d508700d624b058d4a91f5a8045bea88",
+      "bytes": 7393
+    },
+    {
+      "path": "tools/net10.0/any/bcal.deps.json",
+      "sha256": "7636c3050de8b3c0c19ef96dc88bfac9ad7eec85bdd780abef6b36a830c21c03",
+      "bytes": 53108
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.Configuration.Abstractions.dll",
+      "sha256": "722430c2456c43709a390c3e411f39d1fd32ccb7c820b39d1997e2573cf0a581",
+      "bytes": 28944
+    },
+    {
+      "path": "tools/net10.0/any/System.Composition.AttributedModel.dll",
+      "sha256": "859b950e10aa1dc10efe626b6ea1efb8dd5b1c742ae12fa20a2a6b055c9c995b",
+      "bytes": 17992
+    },
+    {
+      "path": "tools/net10.0/any/ja/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "866eabb5f0f51df82de1a2be933c542df60617d033f463e7010719bdc6f55fa7",
+      "bytes": 515376
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/.copilot-runtime-assets",
+      "sha256": "38f83ce806084053ea0a1b2f79e0596513106833911b6bfd83b2874aee141d8c",
+      "bytes": 6692
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/extension.js",
+      "sha256": "b41fd57683f4b4ee145598a17644099e8cf72a74040b75fe6d459c4f3d199925",
+      "bytes": 793468
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/security-review.agent.yaml",
+      "sha256": "3dd23e78e7efd6afc66d42636e4d4f9c6b4e185f71de05edc88fd8fbe9ddb981",
+      "bytes": 14924
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/skills/deactivate/SKILL.md",
+      "sha256": "6ac1f67894285ae73d481f799cd28d6214e54d45f67cfda330343e687f2e7a6e",
+      "bytes": 1134
+    },
+    {
+      "path": "tools/net10.0/any/bcal.dll",
+      "sha256": "e63c6a42188bb5daff0f8b02e577ce3328eb05bea277f401a6b918b37aa709fa",
+      "bytes": 343552
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+      "sha256": "6674a200ae49ee36af214cfaef4a511674d0a17828482e0f3eb5f1c21c241c75",
+      "bytes": 65832
+    },
+    {
+      "path": "tools/net10.0/any/System.Composition.Convention.dll",
+      "sha256": "bff7abe3763f31fafc1ad73b9db9156f69fa9a74dd1a594cb09f98db59cd73f2",
+      "bytes": 50760
+    },
+    {
+      "path": "tools/net10.0/any/ja/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "9b0bea97965c04ce925e92a5b8575b866c75b185a89741185f4b24f72182a0bb",
+      "bytes": 54040
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-runtime.exe",
+      "sha256": "776e6a9c6365c7c5d60f4e6f692a5e16f9562a7add3347fe591342d62c5c4149",
+      "bytes": 770848
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/ffiRuntimeHost.d.ts",
+      "sha256": "f078a716555bd04b889e4555e9f228af30d71e73e33609a072f7b30c1d80c883",
+      "bytes": 1834
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/task.agent.yaml",
+      "sha256": "f631baa82c0422b6d0768c34e6de019526c295e2f7e8bf52143561c16a0dd831",
+      "bytes": 2131
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/skills/doctor/SKILL.md",
+      "sha256": "8c60899d232e0e199ef0b654344e120f6305a3448eb875194af0229b5e6640cc",
+      "bytes": 2972
+    },
+    {
+      "path": "tools/net10.0/any/bcal.exe",
+      "sha256": "e7571a771f94a039491a7773f10ca484d3eee113ed3f6ea05f779cb350c0fbf6",
+      "bytes": 162304
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.DependencyInjection.dll",
+      "sha256": "7e9994e99cadf56f82a32653b5146549f0adcd33b373935520568aa3ce6d527c",
+      "bytes": 72784
+    },
+    {
+      "path": "tools/net10.0/any/System.Composition.Hosting.dll",
+      "sha256": "c833d76a46d00d80e4a59c63b7d25a610fbfe35435b6eb56cd887d8492f83839",
+      "bytes": 52808
+    },
+    {
+      "path": "tools/net10.0/any/ja/System.CommandLine.resources.dll",
+      "sha256": "0e3911aef82d94e0f623da91af05d7330b3a0c180cea0cadcb45ad3bf8ebe4f6",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot.exe",
+      "sha256": "776e6a9c6365c7c5d60f4e6f692a5e16f9562a7add3347fe591342d62c5c4149",
+      "bytes": 770848
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/host.d.ts",
+      "sha256": "ec0fc34652c09dc5ca793c706dc49c5b7089ed904220e7d0ea32aec8377d305c",
+      "bytes": 7150
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/cloud-session-search.yaml",
+      "sha256": "b38aeccb64267cc0c9d5ee87ced2a538421a98e7e781af549bfd89c239a90802",
+      "bytes": 1845
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/computer-use/.release-target",
+      "sha256": "47865cb70f3801831acc971cb8fa442c22587d52136e7eb50e44d430d60e152f",
+      "bytes": 10
+    },
+    {
+      "path": "tools/net10.0/any/bcal.runtimeconfig.json",
+      "sha256": "c230a317a54dd960bcbeb5f347f52e18dc665a26f7efda2159fced9a5ac7e097",
+      "bytes": 342
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.Diagnostics.Abstractions.dll",
+      "sha256": "f307f2b10163e42593822dd768b530516eb8f7ba24fda3576d18b49a8f0f05f5",
+      "bytes": 31496
+    },
+    {
+      "path": "tools/net10.0/any/System.Composition.Runtime.dll",
+      "sha256": "ad84b243cd9e7af8efe7743559e9a772869ca70ba17cff08fcfcf12b205d8111",
+      "bytes": 23112
+    },
+    {
+      "path": "tools/net10.0/any/ko/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "f8b995c988ddee33a02e41fe4658d63aef32f380678aef70a5164143a25c1ee4",
+      "bytes": 473392
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot_runtime.dll",
+      "sha256": "5c817c3f315da691e31a3a2acbd7ab9a8ae4cea0aebb456999ccfa0ed1dade92",
+      "bytes": 140210976
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/index.d.ts",
+      "sha256": "ebd3161fa6983c639efdd67e40fefea4ce23c3de3a0ed2e6b6aeab9e71179319",
+      "bytes": 7051
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/github-context-memory.yaml",
+      "sha256": "57f7830cd8960810870247047829183bdc76715c4981fe91b9fe9cb8d94fafdf",
+      "bytes": 4133
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/computer-use/computer-use-mcp.exe",
+      "sha256": "bd788084bee151d3c70580c73b7efa135c36a7f17c398de03f6c529ec74c0140",
+      "bytes": 3125536
+    },
+    {
+      "path": "tools/net10.0/any/DocumentFormat.OpenXml.dll",
+      "sha256": "2266c64e221f596881e692ac93400651f37796c4e2b07c6a050fd4fab0d92851",
+      "bytes": 6328296
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.FileProviders.Abstractions.dll",
+      "sha256": "345e29f6887414124b18f67de668c16ff77e20fb195bbba4234e09a2bb1f9f22",
+      "bytes": 23816
+    },
+    {
+      "path": "tools/net10.0/any/System.Composition.TypedParts.dll",
+      "sha256": "d382343f09c413bfd39ddcc83c2ee96cf8a7ee80000deaeb27383b9f1610d941",
+      "bytes": 58952
+    },
+    {
+      "path": "tools/net10.0/any/ko/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "2c799493e0a5032ed0e643a550d149dc324210da3a69337a68ae6460f56bb2e1",
+      "bytes": 50464
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/dpapi.node",
+      "sha256": "c04d7bc4857f97fbd26fd925d576672703283f45a6862e3baa52fdb5d527e74d",
+      "bytes": 154400
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/index.js",
+      "sha256": "9e1eb47e08ca7fae1b56c5a5470a3a48d067c2a4e88271422fe3ad0a2554c913",
+      "bytes": 798628
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/github-context.yaml",
+      "sha256": "e61a5fd50f94a6af496be8bb30f03ee3a7106417d854177c2e8bb7dbe6fa6f03",
+      "bytes": 2236
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/computer-use/CopilotComputerUse.exe",
+      "sha256": "1e08639b8b9c078696382e7953ad9c60be7a9a9f434d4ec84d3c16d9015632f2",
+      "bytes": 3359520
+    },
+    {
+      "path": "tools/net10.0/any/DocumentFormat.OpenXml.Framework.dll",
+      "sha256": "e35980f07a5031fd8746606dd77517c832f58571ae24c3b9eddae59f9533d5df",
+      "bytes": 469104
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.Hosting.Abstractions.dll",
+      "sha256": "ddb12c9ee77c9ad262f2202808010b727016077d701ddeb4d93cceaea709646d",
+      "bytes": 54584
+    },
+    {
+      "path": "tools/net10.0/any/System.IO.Packaging.dll",
+      "sha256": "12ddc8bff279fad856551a74894dc52b80fa437d5d2b32722e70ae6899217b7c",
+      "bytes": 142136
+    },
+    {
+      "path": "tools/net10.0/any/ko/System.CommandLine.resources.dll",
+      "sha256": "accd66cc48343a7ec08543ea9a68c3b3296867e6a4ecb347eb24b2cdc76c39d4",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/libonigwrap.dll",
+      "sha256": "435c563677fe6fab2cbd8d6a437ef72d9a8fc62db1f720ec30b38fd316834d28",
+      "bytes": 541184
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/installationConfirmation.d.ts",
+      "sha256": "e3671b1c2ad3a030d381408c416f912ea3221ca5195003fa6a967d119490245b",
+      "bytes": 1382
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/session-search.yaml",
+      "sha256": "9c8238ec858b874ce0123288dfb15efeb139cff3b7bbf0dd556263a7985b3692",
+      "bytes": 1925
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/computer-use/mcp.json",
+      "sha256": "e4312d9f55ea9027d415759d7bead87031da73a8f46b4fe374c6f5c5c10e7b87",
+      "bytes": 240
+    },
+    {
+      "path": "tools/net10.0/any/GitHub.Copilot.SDK.dll",
+      "sha256": "f788257d2b1d8f158a85ce1940d2f757495e6e9c40406973f9ae16d7d12b7f1f",
+      "bytes": 20550144
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.Logging.Abstractions.dll",
+      "sha256": "1e28c2090e866ef94bf05c57a7ec934604ab1b69dc080e9af52d18284d6368ed",
+      "bytes": 66896
+    },
+    {
+      "path": "tools/net10.0/any/System.Memory.Data.dll",
+      "sha256": "8817d16a629710c78b3757f220b74878283c56fe7d9a866ece0eaef0be0a2bf1",
+      "bytes": 28264
+    },
+    {
+      "path": "tools/net10.0/any/pl/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "bfd0ba4491a1e072f243b4599d0b9fe1f189ecbef4aae6b0aa4c6306079717df",
+      "bytes": 474416
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/msal-node-runtime.node",
+      "sha256": "28951ba4bd334306d5fe7914ea37d8973cdbe34e8523503bd48f1af0c1523267",
+      "bytes": 360736
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/jsonrpcTypes.d.ts",
+      "sha256": "172bbd8f0133e4bb59084dad5952d9b97476b8668f29fd7c67b964be7e063740",
+      "bytes": 690
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/subconscious-agent.yaml",
+      "sha256": "16565318ef91a04db8e22cd86cea72df62762dad1a9d748a35def1ea64aca009",
+      "bytes": 2654
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/computer-use/plugin.json",
+      "sha256": "6de76c9301852083de69abda240b47f5cbfe14c8f34afe497a512dc519e59053",
+      "bytes": 185
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.ApplicationInsights.dll",
+      "sha256": "f2143331f1df700838ce093643220cc62f95eb070eec3db0acb1c679f514e89d",
+      "bytes": 343144
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.Options.dll",
+      "sha256": "b0a7ca186efe6c6e52779d5f0b5698fd8cf3d81eaee9333a44312f59e6a432eb",
+      "bytes": 65800
+    },
+    {
+      "path": "tools/net10.0/any/System.Security.Cryptography.Pkcs.dll",
+      "sha256": "c4275c68639e5cf7593b8939e076e943ae9e6c176280f3436c2953a292ac432f",
+      "bytes": 261256
+    },
+    {
+      "path": "tools/net10.0/any/pl/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "a6d855a49e7b867ff1837b5b24d037a67a7bc9723a569ebdea85f0c73c8146e2",
+      "bytes": 50488
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/msalruntime.dll",
+      "sha256": "5d5eaa6a6d8bd75d65321caba29fa8ebe2b90fd5b081bde7e9b10193f3cbcaff",
+      "bytes": 3187320
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/runtimeArtifacts.d.ts",
+      "sha256": "1d78a2fd37b65e793e553db9a8323a6727b77e7ffbd6b61c462e778794dd76e2",
+      "bytes": 1248
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/test-sidekick-context-changed.yaml",
+      "sha256": "f25d7907a28a8bbcec1e108ba26ced25b505b892d172bc67608b22c11c4b4b4c",
+      "bytes": 1029
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/preloads/extension_bootstrap.mjs",
+      "sha256": "ef4efcd8c1d35c0ebe0900ecd5c9edbb22f0b7494e9aede63e3ba69b3836edfd",
+      "bytes": 3192
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.AspNetCore.Cryptography.Internal.dll",
+      "sha256": "199c29163f7eceebd9878771213c89bfe8690b7d5d1ee0f4490606fa9ac03c13",
+      "bytes": 41344
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Extensions.Primitives.dll",
+      "sha256": "36785e9195be2ddbd3eca11a94bbd6b3f4ac0efc27fb84dbf042fed8e16e5568",
+      "bytes": 45360
+    },
+    {
+      "path": "tools/net10.0/any/System.Security.Cryptography.ProtectedData.dll",
+      "sha256": "80566f0839ece5946e66bf9f00d723e59e371ba1341a18e00c7c7a7c49298e1d",
+      "bytes": 25232
+    },
+    {
+      "path": "tools/net10.0/any/pl/System.CommandLine.resources.dll",
+      "sha256": "f6fd1271f64c4600cd705cd4742cf191547181fe0625c5fc83a3ba3102815a69",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/OneAuthInterop.dll",
+      "sha256": "dcbee4cc1c1a91fc59319f95392cc79cb1840131af6eb13da3da677ac0a242cf",
+      "bytes": 6089848
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/schema.d.ts",
+      "sha256": "40223fad10dd2896a4e257dd761e06c62f3711d6bd40ef880e67386478982eba",
+      "bytes": 349
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/test-sidekick-persistent.yaml",
+      "sha256": "dcfdfdc4b135e71b7f1870f714cb2a2a0250ab59a1fb12d9b2385266c14a3890",
+      "bytes": 861
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/preloads/extension_sdk_resolver.mjs",
+      "sha256": "e57d71730c8f937315a72b66187c56cc4fa78ecbd13590795136996e2851bf19",
+      "bytes": 1331
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.AspNetCore.DataProtection.Abstractions.dll",
+      "sha256": "7e0b2c359889325837f1caa41c49319621d4c04d648b3132c317736d97adf345",
+      "bytes": 24680
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Identity.Client.dll",
+      "sha256": "02ee19218b90ed6caa8f0a7fc011d9a72b75ba3bf8c78c2ce9240e937a4badf3",
+      "bytes": 1004576
+    },
+    {
+      "path": "tools/net10.0/any/System.Security.Cryptography.Xml.dll",
+      "sha256": "deb76d308c6e93e76b92de651a749d29e63b756ed34d514060b7a7b63c20389f",
+      "bytes": 175272
+    },
+    {
+      "path": "tools/net10.0/any/pt-BR/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "0bb661e270c1b6675bf2b06b0465ea8b0b551f0765999f31ab9cae308f83e3de",
+      "bytes": 453928
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/OneAuthInterop.dll.stamp.json",
+      "sha256": "5fbf21cc63a490b7ea6c1b8296215acf0b58ffbd452f53ba064f29b2ff2438ed",
+      "bytes": 117
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/sdkProtocolVersion.d.ts",
+      "sha256": "ae088957f936521a2eede3dfaf39082622eaf2c7683181901ff7ded75cee5375",
+      "bytes": 294
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/test-sidekick-restart.yaml",
+      "sha256": "cc2a642bebefd30a20c1a85ac500e419fb024db508cbe233b59be0bb01ff6c4c",
+      "bytes": 831
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/ripgrep/bin/win32-x64/rg.exe",
+      "sha256": "cb5b860bf48e8194b880f481b462188fb16accbbf28983b31d1fe3e8b6e6ab3e",
+      "bytes": 5445920
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.AspNetCore.DataProtection.dll",
+      "sha256": "8ae66db502d343d6feae83b907456cdad22c9fd26967e22fc6674baee4404254",
+      "bytes": 155216
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Identity.Client.Extensions.Msal.dll",
+      "sha256": "98c19b7ac459568c875b891829294a0150ed71ee6d95216503d3a65ac567678f",
+      "bytes": 66616
+    },
+    {
+      "path": "tools/net10.0/any/TextCopy.dll",
+      "sha256": "170f20ce2d323efe7bc9e71a75f75634ec159e90dced4215a2dc74ed5919765a",
+      "bytes": 30720
+    },
+    {
+      "path": "tools/net10.0/any/pt-BR/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "40258d2ce74c4fb71bd7b145f6d33081f3d73e19afda25050832dde3e58cf33f",
+      "bytes": 49424
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/OneAuthInterop.LICENSE.txt",
+      "sha256": "0fe665c2ada5962fd01190ab5b2947b9a9d2c625a9f8225577441eb3256e14e3",
+      "bytes": 13142
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/session.d.ts",
+      "sha256": "d60bf215fd9290aa3ffa82737aa7ec2845d8d7e8318dd03bfc306896642a65fc",
+      "bytes": 19251
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/sidekick/test-sidekick-trigger-once.yaml",
+      "sha256": "21900f8f87a49e80b4379bc12f701a5a578a54e9a8988478175186be25e14c55",
+      "bytes": 828
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/schemas/api.schema.json",
+      "sha256": "76e5d0871680e1625932757c7678b12e0288a5cfa82291b36b758aff4a003ec5",
+      "bytes": 2988473
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.AspNetCore.DataProtection.Extensions.dll",
+      "sha256": "3b608be339bbc4b5e5f259bc8a81584e806e0ad78e4626ee390f71b98a719c70",
+      "bytes": 23416
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.IdentityModel.Abstractions.dll",
+      "sha256": "24e97b54b6b5c234a124a336757e3116617ac6c30b655cdae74517dc2ecb5746",
+      "bytes": 19504
+    },
+    {
+      "path": "tools/net10.0/any/TextMateSharp.dll",
+      "sha256": "989bf40e3bea1c3d26636f115171175cd2efd0945829148954e3219514b4ecb9",
+      "bytes": 153600
+    },
+    {
+      "path": "tools/net10.0/any/pt-BR/System.CommandLine.resources.dll",
+      "sha256": "b1befe040f127d71de54d635f07100ba372707d580945073db787104cfeef034",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/restart-supervisor.js",
+      "sha256": "a11880aafe69269bac068965215f6e8d67ea80a397a4228f232a41f9790654a7",
+      "bytes": 50377
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/sessionFsProvider.d.ts",
+      "sha256": "c497ec069d9c9401b25bc10357ce02230193d561df697391d75919672a18c586",
+      "bytes": 6911
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/.mcp.json",
+      "sha256": "b1a8ae603aebc095a9cd8075f1b7b0f89f2a52fedecac4e61240699f20373391",
+      "bytes": 155
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/schemas/lifecycle-diagnostics.schema.json",
+      "sha256": "6e6fa7ab402106d76d82daf8a8308d800ddf96b61c7c6cecb791c072cc21f18b",
+      "bytes": 15826
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Bcl.AsyncInterfaces.dll",
+      "sha256": "5705d245072d3eb78400547b32147dbb6e2c8b02ba8bda76729798f5efdeaecb",
+      "bytes": 16000
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.IdentityModel.JsonWebTokens.dll",
+      "sha256": "7761c80de8e9cb0f01d74ffcddd3fc620e1cc92bddc6f7fcacc342acfb0077d2",
+      "bytes": 172064
+    },
+    {
+      "path": "tools/net10.0/any/YamlDotNet.dll",
+      "sha256": "8a6ce981275076c03eff36438ce1ae12db62eb8be4670f95e0bca12c0b38484d",
+      "bytes": 269312
+    },
+    {
+      "path": "tools/net10.0/any/ru/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "68c0ed0122bd4e153717bcbd7d8a53d52d90535859b622df601c27eab58cfb3b",
+      "bytes": 621360
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/runtime.node",
+      "sha256": "5c817c3f315da691e31a3a2acbd7ab9a8ae4cea0aebb456999ccfa0ed1dade92",
+      "bytes": 140210976
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/telemetry.d.ts",
+      "sha256": "0721ce90ecd3a15eeb86d7787ca62236b1b545b0e93139ed5ef4419b16544722",
+      "bytes": 528
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/.release-target",
+      "sha256": "47865cb70f3801831acc971cb8fa442c22587d52136e7eb50e44d430d60e152f",
+      "bytes": 10
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/schemas/session-events.schema.json",
+      "sha256": "84b7518af2e12318585ff0420f837ed2babfdd1e7aedbb1960ad8d25191332ac",
+      "bytes": 1117349
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.BusinessCentral.BCal.dll",
+      "sha256": "a0fe5e8d5554e3e8702d3d11285b6689293cd877700911e9250a39e01d6a5294",
+      "bytes": 1526272
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.IdentityModel.Logging.dll",
+      "sha256": "3fe5d858fe4a698281cad38a9535b535ed626a874d060a6763c085544b1089ee",
+      "bytes": 36896
+    },
+    {
+      "path": "tools/net10.0/any/cs/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "f719e4b45e06f203a1c2d4e79fa2b496f8b16f6f63c4265809844def53ad41f3",
+      "bytes": 441640
+    },
+    {
+      "path": "tools/net10.0/any/ru/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "9f6778a2b6d2141397b8d331fc38577ae2b398b6120eb3654db7575b62e1b0d4",
+      "bytes": 60728
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/animations/banner.json.gz",
+      "sha256": "cc6dcef840f5f63c9683e84bd55478e6fd2a22130bf1be6f53dece870e996446",
+      "bytes": 4887
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/toolSet.d.ts",
+      "sha256": "41e53ae25809c90fd1a78f493cb912c6a9194c6e0a02e3e32545971c41a1cb56",
+      "bytes": 2725
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/channel.json",
+      "sha256": "b758fa182b3f8a7d7fe9ae230e8e5a8805f666d794f905d65c2d6a1e13d17d99",
+      "bytes": 818
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/tgrep/bin/win32-x64/tgrep.exe",
+      "sha256": "31d1b88670932a627192c0ba84bc23796809b1c32b2a566f5e5df87d99fa97b6",
+      "bytes": 6537336
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.BusinessCentral.BCal.Mcp.Client.dll",
+      "sha256": "6edefc2d9a01056ed0879e1cb38b066e7d3fa620314614e5181fe7bbe440aeac",
+      "bytes": 117760
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.IdentityModel.Tokens.dll",
+      "sha256": "da667d128077d2ae0141a562e73871db157639747fbfa30d0ebdb693adce718a",
+      "bytes": 384544
+    },
+    {
+      "path": "tools/net10.0/any/cs/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "818f84b95fd8273ec0e9753f90af2a98820bb0492cb53268db70a7403eaaa2af",
+      "bytes": 48424
+    },
+    {
+      "path": "tools/net10.0/any/ru/System.CommandLine.resources.dll",
+      "sha256": "23c028d33ac3e39f9f60b794358de822e885013e370b7f1719cf3745ddb4f57f",
+      "bytes": 19488
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/builtin/customize-cloud-agent/SKILL.md",
+      "sha256": "6acee791cd48a31eb881431c0f1394d3c79d33d62f0d58b2d9b699e4a275ea93",
+      "bytes": 18679
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/types.d.ts",
+      "sha256": "7c39457661228e79e429fd09fce1e5ef5a4771802d6bd2c7fc3599e53ec5edaa",
+      "bytes": 145581
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/README.md",
+      "sha256": "81ba28642c46e7245108ba3e78c5faf9210a7579f0b4c2131c9c96cfa567dcfe",
+      "bytes": 3473
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x86/native/libonigwrap.dll",
+      "sha256": "4da3ee819e73494cf96b125df360a1d6cf225fc3c70ff2216f521ee73b3b290a",
+      "bytes": 547328
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.BusinessCentral.BCal.Rendering.dll",
+      "sha256": "fec1a0d45d81ec34a76e02abad5175675bccec3fa2d00b43a2e819c594dc2e36",
+      "bytes": 337920
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Security.AntiSSRF.dll",
+      "sha256": "09e1df6acd37b72a4f2e8ef68780a62cecdf0f4e21895f92f1929cfd4aafd587",
+      "bytes": 40760
+    },
+    {
+      "path": "tools/net10.0/any/cs/System.CommandLine.resources.dll",
+      "sha256": "9d6008167eefe58f70c13d8f3c24e5536039fbf7a5970b8045f0c8dd6d1dca15",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/linux-arm64/native/libonigwrap.so",
+      "sha256": "b0efbc1d1f585dfb30f4aeb0bfae10c0f41519b8f595b90d05e2ea3bd839b235",
+      "bytes": 546888
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/builtin/discover-resources/SKILL.md",
+      "sha256": "9afbbacc30095ee4b4a70da34471781be9ad1df46f6c2df1ddbdc0473b34c6e7",
+      "bytes": 3647
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/workflow.d.ts",
+      "sha256": "4e3094f9130f678812eb324ebb4dd93a3f9209eef98c7a05585f43ed0917eafa",
+      "bytes": 17126
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/.plugin/plugin.json",
+      "sha256": "ea9f4920d6bab2e25df93f62be8705d788d2786681ae5ba75b6de1fa2978e76f",
+      "bytes": 730
+    },
+    {
+      "path": "tools/net10.0/any/tr/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "93202286c8514bfa1b1c4b413666cd11a84abd69496e7aa8d2f9d565bd2d15a1",
+      "bytes": 449848
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.BusinessCentral.BCal.Service.dll",
+      "sha256": "78c7f89d2a01198b9f98fe1f16fc263d6474562b21614f98e4d275c5f2c2eee0",
+      "bytes": 118784
+    },
+    {
+      "path": "tools/net10.0/any/ModelContextProtocol.Core.dll",
+      "sha256": "e54678c259e7a4d5a9ec0c555b56c7e515c23e7678a4892f110605f3afe6a750",
+      "bytes": 1169408
+    },
+    {
+      "path": "tools/net10.0/any/de/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "d936e4075af47eb5a34e8418e6bf1eaa3e4d3c86d6b40ab7dffefbd8e6f8b594",
+      "bytes": 471848
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/linux-bionic-arm64/native/libonigwrap.so",
+      "sha256": "0059ce5e27b89217e85c86ac0be947fd9a02f9c83b3fced7a24b18dff4a0ed0d",
+      "bytes": 548256
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/builtin/github-pr-media/SKILL.md",
+      "sha256": "358f529ab8ceb7f57488a275804adf9ffd237fcf22ca3af1d5f7fd521877d011",
+      "bytes": 16053
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/docs/agent-author.md",
+      "sha256": "10c5719a0c79b98c3820ccb8e43ec0f56be00f772d1ca9b60fbbc6b12f0d284c",
+      "bytes": 14605
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/dist/browser-mcp.cjs",
+      "sha256": "332d890467aed85282716c022ca8c196f6ff3f9e87d51f9d3ac1246467f30582",
+      "bytes": 1104449
+    },
+    {
+      "path": "tools/net10.0/any/tr/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "6af8e8e793b071ef1de200629bb551dd2bdbce3823376b347836a2af15367a5c",
+      "bytes": 48936
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.BusinessCentral.BCal.Types.dll",
+      "sha256": "501a4524856d4e4c38588d65977526863e8e4eb51033401d97f98296a6064d30",
+      "bytes": 194560
+    },
+    {
+      "path": "tools/net10.0/any/ModelContextProtocol.dll",
+      "sha256": "4ac03d5f36a4e464d0bf4397963e8c8240cda6fd0d4359a37ffcf5a1999f0589",
+      "bytes": 86528
+    },
+    {
+      "path": "tools/net10.0/any/de/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "1b1d805608929ec02b8acc2fb8c09ec7a335797b11686719ee2112d5bfbb18fc",
+      "bytes": 50456
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/linux-bionic-x64/native/libonigwrap.so",
+      "sha256": "b5f265a6b52afb90d42147ef3c6ec10db292e92adb1409698ec0c1d3835a0a70",
+      "bytes": 561336
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/builtin/pr-stack/SKILL.md",
+      "sha256": "5322b1a15a05f00846945f71458384cccf9bfd7d9075fcd5d9f5b8917879127b",
+      "bytes": 19396
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/docs/examples.md",
+      "sha256": "0f8af0a86c43023a73c4645fc143409c1a90bf6e511599cae8a5b0659788d592",
+      "bytes": 21728
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/dist/browser-run-worker.cjs",
+      "sha256": "0440a39bddff3bb80d51e033e27a4b72560b34dde957e7727f5453686882d183",
+      "bytes": 1045416
+    },
+    {
+      "path": "tools/net10.0/any/tr/System.CommandLine.resources.dll",
+      "sha256": "2566f89f11a60fb06372eb39dd798749ea1f3f739d4a7c5af0141b0d69ef4af9",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.CodeAnalysis.CSharp.dll",
+      "sha256": "53302acca07700e9bb10dcf21034435d6e0454c8eebf2481164ec13e520004c9",
+      "bytes": 6697768
+    },
+    {
+      "path": "tools/net10.0/any/Mono.Cecil.dll",
+      "sha256": "769a59793d4b8885bbbfbc5aee8f57a0d4e34d275c56c60c03994309b87f67e9",
+      "bytes": 356864
+    },
+    {
+      "path": "tools/net10.0/any/de/System.CommandLine.resources.dll",
+      "sha256": "fe9f8c7ccc17f77dcb32f7fc0a854ddeccaf410712f4683e5f243c72b899734b",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/linux-musl-arm64/native/libonigwrap.so",
+      "sha256": "a36358408a643548aff1f4ff2aa7e686f12638ba396d89de1255213357fb92b7",
+      "bytes": 546624
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/builtin-skills/customize-cloud-agent/SKILL.md",
+      "sha256": "6acee791cd48a31eb881431c0f1394d3c79d33d62f0d58b2d9b699e4a275ea93",
+      "bytes": 18679
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/docs/extensions.md",
+      "sha256": "b2232be4b34b3c83068c4faa0b602fe126f9c8d5d7224a0167b4a88dc5beb8cd",
+      "bytes": 4707
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/dist/native-host.cjs",
+      "sha256": "0ba01d4fcf5bdd13bb58a8badc60fbe8cb63dcd29433c5f3ca380067f7addbfd",
+      "bytes": 364863
+    },
+    {
+      "path": "tools/net10.0/any/zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "5b81b1d4537d44a365fdb48aa24e51a0b0c3ee308debcc225c9339249e0a8bb3",
+      "bytes": 401168
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.CodeAnalysis.dll",
+      "sha256": "395736b2d0e02be77bedc3847b269da7a93bf8e49cd3431a4a8e68d2c52d5846",
+      "bytes": 3029800
+    },
+    {
+      "path": "tools/net10.0/any/Mono.Cecil.Mdb.dll",
+      "sha256": "61637f9940e5e336571cbf945be0f36d6d6050e06288df0f0232d93b26f0bde7",
+      "bytes": 39424
+    },
+    {
+      "path": "tools/net10.0/any/es/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "559fa2a4d36a832a5e05f92dabff6ba737cc0443f95850611c485b21592046fe",
+      "bytes": 461608
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/linux-musl-x64/native/libonigwrap.so",
+      "sha256": "bd9b3d5e4e84f9aed678d6171147c61707dbdf46183a7eb72e25e135a17dddb6",
+      "bytes": 563232
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/builtin-skills/discover-resources/SKILL.md",
+      "sha256": "9afbbacc30095ee4b4a70da34471781be9ad1df46f6c2df1ddbdc0473b34c6e7",
+      "bytes": 3647
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/docs/workflows.md",
+      "sha256": "865f8d87879caba0d6404f9e4f54589b1f2942b0235cacd80a6807626c052a58",
+      "bytes": 21192
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/hooks/hooks.json",
+      "sha256": "753d3eeec2a80bdcfc5ee49fc3edbd7549072f0d606b97145eac65e1c88dea6a",
+      "bytes": 480
+    },
+    {
+      "path": "tools/net10.0/any/zh-Hans/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "a41b72555a1943e367e9714fb3329454dbad4366500db0899519ffb558a060cb",
+      "bytes": 45368
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Dynamics.Nav.AL.Common.dll",
+      "sha256": "73d9193a349f0cfc4aeb74a38223eaa2622114fa477d9b870b615230dc6f1dd5",
+      "bytes": 52736
+    },
+    {
+      "path": "tools/net10.0/any/Mono.Cecil.Pdb.dll",
+      "sha256": "a5249a04ad8fd7dfd47e4d0a620aed0f7eb6051e1ddec102c541ca3e12f6e2a8",
+      "bytes": 89600
+    },
+    {
+      "path": "tools/net10.0/any/es/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "4c83f9c227fa9a912209c5450380ef34e84d91867aff8208300e8aadab269456",
+      "bytes": 49960
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/linux-x64/native/libonigwrap.so",
+      "sha256": "bb4e2798476999b2bad43f2c82ef0d8b36c749be81cbbd1aac762fdd165217b7",
+      "bytes": 563640
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/builtin-skills/github-pr-media/SKILL.md",
+      "sha256": "358f529ab8ceb7f57488a275804adf9ffd237fcf22ca3af1d5f7fd521877d011",
+      "bytes": 16053
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/generated/lifecycle-diagnostics.d.ts",
+      "sha256": "d3904962cf8c0a6829d3a0b98b1958eab94a11d0f0fa42c77374db1bf18fc903",
+      "bytes": 7208
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/activate.mjs",
+      "sha256": "02c73ef964bd4ecf002f1f55d0e07fab21d530937e98621933b14a48a04da5a6",
+      "bytes": 2080
+    },
+    {
+      "path": "tools/net10.0/any/zh-Hans/System.CommandLine.resources.dll",
+      "sha256": "9299de70ac78456fc0cf1a5928384847bbbdffdba9f15fa408bf5748738e3df3",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Dynamics.Nav.CodeAnalysis.dll",
+      "sha256": "570cf74aa2b2c6c302b8d0d3fe157fd459fa09b4ee1a5a615e3907694476aac3",
+      "bytes": 11028480
+    },
+    {
+      "path": "tools/net10.0/any/Mono.Cecil.Rocks.dll",
+      "sha256": "273292babd45f9f34de5054bd9cdfe1d859a7dbf6f4ad5974fe4ead70698ed5b",
+      "bytes": 24576
+    },
+    {
+      "path": "tools/net10.0/any/es/System.CommandLine.resources.dll",
+      "sha256": "12b2ca7b325e673ab69ddb22ae8cccbafd37e4a106e64ad3e0e2dcdef76ffa7e",
+      "bytes": 19016
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/maccatalyst-arm64/native/libonigwrap.dylib",
+      "sha256": "c3e2ebb5143eab16d708ae46f38fa2f829be84f3566ee1ac7a49a688e17d15f1",
+      "bytes": 531408
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/builtin-skills/pr-stack/SKILL.md",
+      "sha256": "5322b1a15a05f00846945f71458384cccf9bfd7d9075fcd5d9f5b8917879127b",
+      "bytes": 19396
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/generated/rpc.d.ts",
+      "sha256": "140b68ae6b492451cb31660baf4c85b3836635efca8b80d96aa1905f1aba500a",
+      "bytes": 1516377
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/browserPrerequisites.d.mts",
+      "sha256": "c8bd982986d445199266866dba40d4d92f7efd24f4cb2cd8ae0c9c8e9c027119",
+      "bytes": 1700
+    },
+    {
+      "path": "tools/net10.0/any/zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "d1e716652b5705373fb560105ca2710ff2bc0b704285b50b08ec8df9fd2f8287",
+      "bytes": 400680
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Dynamics.Nav.CodeAnalysis.Workspaces.dll",
+      "sha256": "a6eb174243143cd18b3f6a1b0ee6cba582108be132fa6181077498ab70c5a831",
+      "bytes": 1747456
+    },
+    {
+      "path": "tools/net10.0/any/Newtonsoft.Json.dll",
+      "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07",
+      "bytes": 712464
+    },
+    {
+      "path": "tools/net10.0/any/fr/Microsoft.CodeAnalysis.CSharp.resources.dll",
+      "sha256": "c538cddb8e217bc1b96312956b7923855d6f392e467d7b7c7ce9341d9da1f23c",
+      "bytes": 473880
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/maccatalyst-x64/native/libonigwrap.dylib",
+      "sha256": "bfbfa05dff27a17e2edec7b3823a31ed813ce119d62fb5ebd88b35e24c38b054",
+      "bytes": 523088
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/canvas.d.ts",
+      "sha256": "a4cc473276d27b6b64fb5d69f654ba7c014bd463f706b53c885efa9d4772670d",
+      "bytes": 6133
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/generated/session-events.d.ts",
+      "sha256": "027ed7b7c5eb96f19ef454f98feda915d268e5715d26893880f77b27b12b6232",
+      "bytes": 562812
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/deactivate.mjs",
+      "sha256": "95329db5e00fc404dcdc58487c128d5c4e795ec543748acf77a35d04d7f14bf7",
+      "bytes": 218
+    },
+    {
+      "path": "tools/net10.0/any/zh-Hant/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "0bb422559a2582df1a49faed25a337b6037eb3878ac4ee7c118b68349ca312b7",
+      "bytes": 45328
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Dynamics.Nav.Deployment.dll",
+      "sha256": "0140888fb4dd702888c0cb5d0fd63b21de0ea75f451a92793b31bde6dbdedb34",
+      "bytes": 230912
+    },
+    {
+      "path": "tools/net10.0/any/Onigwrap.dll",
+      "sha256": "692899f8a9fbda37b309d88f982f25820195fcd88f9b5b99a373fa61a496907c",
+      "bytes": 12800
+    },
+    {
+      "path": "tools/net10.0/any/fr/Microsoft.CodeAnalysis.resources.dll",
+      "sha256": "a92746c7d8f241e7d207a7995007f59d694a10e5f8903ceadfc5a73c195f63a0",
+      "bytes": 50488
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/osx-arm64/native/libonigwrap.dylib",
+      "sha256": "5922d0c6c3cd31bfdf9997ea03d48d7aff952d891e8d46c2b9bfccd8d8160665",
+      "bytes": 531424
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/client.d.ts",
+      "sha256": "8a5833d1f3d61bcefa8a9fccee53d1231dd253905384123e0169f4f6c31353fe",
+      "bytes": 19993
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/code-review.agent.yaml",
+      "sha256": "1290258ee70b44faca1f0c74be26254f13e8401e825713ff3f5523b848b361f9",
+      "bytes": 4604
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/doctor.mjs",
+      "sha256": "093b0b67beeccc1819922087ba0fc42e24b7c47cd2eb4da021a22e7751185138",
+      "bytes": 431151
+    },
+    {
+      "path": "tools/net10.0/any/zh-Hant/System.CommandLine.resources.dll",
+      "sha256": "2a2ad35e3e17e6a39464fb1b4244ffd23cffa29d766e0659c1304507213aa42c",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Dynamics.Nav.Deployment.dll.config",
+      "sha256": "6460bda1d4d9b123377d9a33d264137fa9106babaf8cea39c90224411b038015",
+      "bytes": 548
+    },
+    {
+      "path": "tools/net10.0/any/PrettyPrompt.dll",
+      "sha256": "ffb740f849e179917e79912f07d1de5cb7797cfcb8f058554654796e0ee4740a",
+      "bytes": 150016
+    },
+    {
+      "path": "tools/net10.0/any/fr/System.CommandLine.resources.dll",
+      "sha256": "9ef5ca15e63ef4fab35030d96956d615fd2e05476882aa0a40e5a46178546f7e",
+      "bytes": 18976
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/osx-x64/native/libonigwrap.dylib",
+      "sha256": "506dfefb25572f1ba30af8e315df15b8d02dad3d7212d07ec893e8b2ed614662",
+      "bytes": 523064
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/copilot-sdk/cliVersion.d.ts",
+      "sha256": "2b194e641c200f3bc825202b6b6ebf64277e25f7f24a050f4781125d3e988d00",
+      "bytes": 114
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/definitions/explore.agent.yaml",
+      "sha256": "dbcabc1be606ecc091e6345d37fd4ba5447fdbe5a0b7c343c67b6ee24401bfc5",
+      "bytes": 2668
+    },
+    {
+      "path": "tools/net10.0/any/runtimes/win-x64/native/plugins/browser-use/scripts/nativeMessagingRegistration.mjs",
+      "sha256": "d14ec4b2811dd1cf50f183fffcff03dfda620d7d416c1cbec432fe61b37e1600",
+      "bytes": 419789
+    },
+    {
+      "path": "tools/net10.0/any/Microsoft.Dynamics.Nav.TypeWrappers.dll",
+      "sha256": "15b55fdda04ea62b5361205d233a937e6d559caee2ffd38e66b25d235859ac09",
+      "bytes": 17920
+    },
+    {
+      "path": "tools/net10.0/any/Spectre.Console.dll",
+      "sha256": "200fb336c0516ae15912b2ad772931d5c4e8e48327b3e0c79bb4c15305ec4b94",
+      "bytes": 719872
+    },
+    {
+      "path": "[Content_Types].xml",
+      "sha256": "931630895291241a7a57d0a2f251d32d81a553212d73e85430acd1c948095792",
+      "bytes": 1632
+    },
+    {
+      "path": "package/services/metadata/core-properties/08b3a9d5861042bdac304154492adc32.psmdcp",
+      "sha256": "9e9636ca98405849e35acfd14a4332b6040dff96b91c91dd4794b9929bfb8f5e",
+      "bytes": 782
+    }
+  ]
+}
