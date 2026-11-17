@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, cast
 
@@ -12,6 +13,7 @@ if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
 
 _CERT_FILE_ENV = "LLM_API_CERTIFICATE_FILE"
+_STATE_DIR_ENV = "BCAL_LLM_STATE_DIR"
 
 # Separates the agent-under-test traffic from bc-eval's judge traffic (bc-eval's own agent host uses the same step).
 _TAXONOMY_INFERENCE_STEP = "HostAgent"
@@ -74,6 +76,110 @@ def _local_certificate_credential(tenant_id: str, client_id: str) -> TokenCreden
     )
 
 
+def _objects(value: object, name: str) -> list[dict[str, object]]:
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise TypeError(f"{name} must be an array of objects.")
+    return cast(list[dict[str, object]], value)
+
+
+def _tool_state_path(state_dir: Path, model: str, calls: list[dict[str, object]]) -> Path:
+    call_id = calls[0]["id"]
+    if not isinstance(call_id, str) or not call_id:
+        raise ValueError("A tool call requires a non-empty string id.")
+    return state_dir / f"{sha256(f'{model}:{call_id}'.encode()).hexdigest()}.json"
+
+
+def _responses_input(messages: list[dict[str, object]], model: str, state_dir: Path) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for message in messages:
+        role = message.get("role")
+        if role == "tool":
+            items.append({"type": "function_call_output", "call_id": message["tool_call_id"], "output": message["content"]})
+        elif role == "assistant" and message.get("tool_calls"):
+            calls = _objects(message["tool_calls"], "tool_calls")
+            # BCal reconstructs assistant messages and drops opaque reasoning. Restore the exact
+            # Responses output, including encrypted reasoning and function-call item IDs.
+            path = _tool_state_path(state_dir, model, calls)
+            items.extend(_objects(json.loads(path.read_text(encoding="utf-8")), "Saved Responses output"))
+        elif role in ("system", "developer", "user", "assistant"):
+            items.append({"role": role, "content": message["content"]})
+        else:
+            raise ValueError(f"Unsupported BCal message role: {role!r}")
+    return items
+
+
+def _responses_kwargs(request: dict[str, object], model: str, messages: list[dict[str, object]], state_dir: Path) -> dict[str, object]:
+    effort = request.get("reasoning_effort") or "medium"
+    if effort in ("none", "minimal"):
+        raise ValueError("GPT-6 Luna evaluations require reasoning_effort of low or higher.")
+    tools = []
+    for tool in _objects(request.get("tools") or [], "tools"):
+        if tool.get("type") != "function":
+            raise ValueError("Only function tools are supported by the BCal Responses bridge.")
+        function = tool["function"]
+        if not isinstance(function, dict):
+            raise TypeError("A function tool requires a function object.")
+        # Responses otherwise enables strict schemas, unlike Chat Completions.
+        tools.append({**function, "type": "function", "strict": False})
+    return {
+        "model": model,
+        "input": _responses_input(messages, model, state_dir),
+        "tools": tools,
+        "reasoning": {"effort": effort, "context": "current_turn"},
+        "max_output_tokens": request.get("max_completion_tokens", 16384),
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
+        "extra_headers": {"x-sticky-route-session-ticket": ""},
+    }
+
+
+def _responses_completion(response: dict[str, object]) -> dict[str, object]:
+    if response.get("status") != "completed":
+        raise RuntimeError(f"LLM API Responses request did not complete: {response.get('status')}; {response.get('error') or response.get('incomplete_details')}")
+    text: list[str] = []
+    calls: list[dict[str, object]] = []
+    for item in _objects(response.get("output"), "Responses output"):
+        match item.get("type"):
+            case "reasoning":
+                if not item.get("encrypted_content"):
+                    raise RuntimeError("LLM API did not return encrypted reasoning for stateless replay.")
+            case "message":
+                for content in _objects(item.get("content"), "Response message content"):
+                    match content.get("type"):
+                        case "output_text":
+                            text.append(str(content["text"]))
+                        case "refusal":
+                            text.append(str(content["refusal"]))
+                        case _:
+                            raise ValueError(f"Unsupported Responses content type: {content.get('type')!r}")
+            case "function_call":
+                calls.append({"id": item["call_id"], "type": "function", "function": {"name": item["name"], "arguments": item["arguments"]}})
+            case _:
+                raise ValueError(f"Unsupported Responses output type: {item.get('type')!r}")
+    if not text and not calls:
+        raise RuntimeError("LLM API returned neither text nor tool calls.")
+    message: dict[str, object] = {"role": "assistant", "content": "".join(text) or None}
+    if calls:
+        message["tool_calls"] = calls
+    result: dict[str, object] = {
+        "id": response["id"],
+        "object": "chat.completion",
+        "created": response["created_at"],
+        "model": response["model"],
+        "choices": [{"index": 0, "finish_reason": "tool_calls" if calls else "stop", "message": message}],
+    }
+    usage = response.get("usage")
+    if isinstance(usage, dict):
+        result["usage"] = {
+            "prompt_tokens": usage["input_tokens"],
+            "completion_tokens": usage["output_tokens"],
+            "total_tokens": usage["total_tokens"],
+            "prompt_tokens_details": usage.get("input_tokens_details"),
+            "completion_tokens_details": usage.get("output_tokens_details"),
+        }
+    return result
+
+
 def main() -> int:
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
@@ -95,6 +201,21 @@ def main() -> int:
         settings=settings,
         credential=_local_certificate_credential(settings.tenant_id, settings.client_id),
     )
+    if model == "gpt-6-luna":
+        state_dir_value = os.environ.get(_STATE_DIR_ENV)
+        if not state_dir_value:
+            raise RuntimeError(f"{_STATE_DIR_ENV} is required for GPT-6 Luna reasoning continuity. Run through bcbench or set a per-run temporary directory.")
+        state_dir = Path(state_dir_value)
+        state_dir.mkdir(parents=True, exist_ok=True)
+        response = _to_jsonable(client.responses.create(**_responses_kwargs(request, model, _objects(messages, "messages"), state_dir)))
+        completion = _responses_completion(response)
+        message = _objects(completion["choices"], "choices")[0]["message"]
+        if isinstance(message, dict) and message.get("tool_calls"):
+            path = _tool_state_path(state_dir, model, _objects(message["tool_calls"], "tool_calls"))
+            path.write_text(json.dumps(response["output"]), encoding="utf-8")
+        json.dump(completion, sys.stdout)
+        return 0
+
     kwargs: dict[str, object] = {
         "model": model,
         "messages": messages,

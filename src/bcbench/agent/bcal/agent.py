@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -189,7 +190,7 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
 
             try:
                 start = time.monotonic()
-                subprocess.run(cmd_args, timeout=timeout, check=True)
+                subprocess.run(cmd_args, timeout=timeout, check=True, env={**os.environ, "BCAL_LLM_STATE_DIR": temp_dir})
                 execution_time = time.monotonic() - start
             except subprocess.TimeoutExpired:
                 logger.exception(f"bcal CLI timed out after {timeout} seconds")
@@ -228,15 +229,17 @@ def run_bcal_prompt(
     cmd_args = _bcal_cmd_args(entry, package_cache_path, export_folder, backend_config, f"--prompt={query}")
 
     try:
-        result = subprocess.run(
-            cmd_args,
-            timeout=timeout,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=True,
-        )
+        with tempfile.TemporaryDirectory(prefix="bcbench-bcal-llm-") as state_dir:
+            result = subprocess.run(
+                cmd_args,
+                timeout=timeout,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+                env={**os.environ, "BCAL_LLM_STATE_DIR": state_dir},
+            )
         stdout = result.stdout or ""
     except subprocess.TimeoutExpired as exc:
         details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
