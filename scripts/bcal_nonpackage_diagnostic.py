@@ -11,6 +11,7 @@ import secrets
 import shutil
 import subprocess
 from pathlib import Path, PureWindowsPath
+from typing import Literal
 
 from bcal_reasoning_coding import AdmissionError, CodingPolicy, CodingRun, coding_command, process_environment, transcript_summary, write_json
 from bcal_reasoning_smoke import TASK, verify_symbol_closure
@@ -98,14 +99,21 @@ class DiagnosticFile(BaseModel):
 class NonpackageIdentity(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    kind: Literal["source-built-nonpackage"] = "source-built-nonpackage"
+    packageAdmissionClaimed: Literal[False] = False
     source_commit: str = Field(pattern=r"^[a-f0-9]{40}$")
     patch_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     product_version: str = Field(min_length=1, max_length=160)
-    sdk_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
+    sdk_version: str = Field(pattern=r"^\d+\.\d+\.\d+(\+[a-zA-Z0-9.-]+)?$")
     native_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     sdk_path: str
-    native_path: str
-    files: tuple[DiagnosticFile, ...] = Field(min_length=4)
+    native_path: tuple[str, ...] = Field(min_length=1)
+    native_library_path: str = r"runtimes\win-x64\native\copilot_runtime.dll"
+    files: tuple[DiagnosticFile, ...] = Field(min_length=5)
+
+    @property
+    def sdk_package_version(self) -> str:
+        return self.sdk_version.split("+", 1)[0]
 
     def verify(self, runtime: Path) -> dict:
         expected = {}
@@ -121,8 +129,8 @@ class NonpackageIdentity(BaseModel):
                 raise AdmissionError("Nonpackage runtime bytes differ from the immutable inventory.")
             expected[canonical] = item
         actual = {ntpath.normcase(str(PureWindowsPath(path.relative_to(runtime)))) for path in runtime.rglob("*") if path.is_file()}
-        required = ("bcal.exe", "bcal.dll", ntpath.normcase(self.sdk_path), ntpath.normcase(self.native_path))
-        if actual != set(expected) or len(set(required)) != 4 or any(name not in expected for name in required):
+        required = ("bcal.exe", "bcal.dll", ntpath.normcase(self.sdk_path), ntpath.normcase(self.native_library_path), *(ntpath.normcase(path) for path in self.native_path))
+        if actual != set(expected) or len(set(required)) != len(required) or any(name not in expected for name in required):
             raise AdmissionError("Nonpackage runtime inventory or required binary roles differ.")
         version = subprocess.check_output([str(runtime / "bcal.exe"), "--version"], env=process_environment(), text=True, timeout=30).strip()
         if version != self.product_version:
@@ -137,9 +145,11 @@ class NonpackageIdentity(BaseModel):
             "executableSha256": expected["bcal.exe"].sha256,
             "assemblySha256": expected["bcal.dll"].sha256,
             "sdkVersion": self.sdk_version,
+            "sdkPackageVersion": self.sdk_package_version,
             "sdkSha256": expected[required[2]].sha256,
             "nativeVersion": self.native_version,
             "nativeSha256": expected[required[3]].sha256,
+            "nativeLauncherSha256": [expected[path].sha256 for path in required[4:]],
         }
 
 
@@ -230,7 +240,7 @@ def run(args: argparse.Namespace) -> None:
             raw.get("executionIdentity", {}).get("sourceCommitSha") != identity.source_commit
             or runtime_identity.get("mainModel") != policy.model
             or runtime_identity.get("reasoningEffort") != "medium"
-            or runtime_identity.get("sdkPackageVersion") != identity.sdk_version
+            or runtime_identity.get("sdkPackageVersion") != identity.sdk_package_version
             or runtime_identity.get("sdkRuntimeVersion") != identity.native_version
             or list((private / "auxiliary").iterdir())
             or budget.events

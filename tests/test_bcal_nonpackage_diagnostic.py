@@ -12,16 +12,17 @@ import bcal_nonpackage_diagnostic as diagnostic
 
 
 def identity(tmp_path):
-    values = {"bcal.exe": b"synthetic-exe", "bcal.dll": b"synthetic-cli", "sdk.dll": b"synthetic-sdk", "native.exe": b"synthetic-native"}
+    values = {"bcal.exe": b"synthetic-exe", "bcal.dll": b"synthetic-cli", "sdk.dll": b"synthetic-sdk", "native.exe": b"synthetic-native-launcher", "native-runtime.dll": b"synthetic-native-library"}
     for name, content in values.items():
         (tmp_path / name).write_bytes(content)
     return diagnostic.NonpackageIdentity(
         source_commit="c" * 40,
         product_version="diagnostic-test",
-        sdk_version="1.0.29",
+        sdk_version="1.0.29+synthetic-build",
         native_version="1.0.107",
         sdk_path="sdk.dll",
-        native_path="native.exe",
+        native_path=("native.exe",),
+        native_library_path="native-runtime.dll",
         files=tuple(diagnostic.DiagnosticFile(path=name, sha256=hashlib.sha256(content).hexdigest(), bytes=len(content)) for name, content in values.items()),
     )
 
@@ -40,12 +41,14 @@ def test_nonpackage_identity_is_complete_exact_and_never_governed_package(tmp_pa
         path = {"case-collision": "BCAL.EXE", "traversal": r"..\outside", "absolute": r"C:\outside", "stream": "bcal.exe:secret"}[damage]
         pin = pin.model_copy(update={"files": (*pin.files, pin.files[0].model_copy(update={"path": path}))})
     elif damage == "role":
-        pin = pin.model_copy(update={"native_path": "sdk.dll"})
+        pin = pin.model_copy(update={"native_path": ("sdk.dll",)})
     if damage == "none":
         proof = pin.verify(tmp_path)
         assert proof["kind"] == "source-built-nonpackage"
         assert not proof["packageAdmissionClaimed"]
-        assert proof["verifiedFiles"] == 4
+        assert proof["verifiedFiles"] == 5
+        assert proof["sdkPackageVersion"] == "1.0.29"
+        assert proof["sdkVersion"] == "1.0.29+synthetic-build"
         assert "path" not in json.dumps(proof)
     else:
         with pytest.raises((diagnostic.AdmissionError, FileNotFoundError)):
@@ -160,7 +163,7 @@ def test_nonpackage_driver_uses_original_command_environment_and_independent_ide
             {
                 "completed": False,
                 "executionIdentity": {"sourceCommitSha": pin.source_commit},
-                "runtimeIdentity": {"mainModel": "gpt-56-reasoning-sol", "reasoningEffort": "medium", "sdkPackageVersion": pin.sdk_version, "sdkRuntimeVersion": pin.native_version},
+                "runtimeIdentity": {"mainModel": "gpt-56-reasoning-sol", "reasoningEffort": "medium", "sdkPackageVersion": pin.sdk_package_version, "sdkRuntimeVersion": pin.native_version},
                 "agentRuntimeEvidence": [{"modelRequests": 0, "terminalState": "error", "failure": {"stage": "session_create", "exceptionCategory": "io"}}],
                 "failure": {"code": "turn_failed", "message": "PRIVATE"},
             },
