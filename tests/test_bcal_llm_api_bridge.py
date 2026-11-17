@@ -157,9 +157,8 @@ def test_main_sends_empty_routing_ticket_without_local_certificate(monkeypatch, 
 
 
 @pytest.fixture
-def luna_api(monkeypatch, fake_llm_api, tmp_path):
+def luna_api(monkeypatch, fake_llm_api):
     monkeypatch.delenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, raising=False)
-    monkeypatch.setenv("BCAL_LLM_STATE_DIR", str(tmp_path / "responses"))
     fake_llm_api["responses_response"] = {
         "id": "resp-1",
         "model": "gpt-6-luna",
@@ -179,6 +178,12 @@ def luna_api(monkeypatch, fake_llm_api, tmp_path):
         },
     }
     return fake_llm_api
+
+
+def test_model_protocol_defaults_to_chat_and_explicitly_routes_luna_to_responses():
+    assert bc_eval_llm_api_bridge._protocol_for_model("gpt-6-luna") == "responses"
+    assert bc_eval_llm_api_bridge._protocol_for_model("gpt-55-chat") == "chat-completions"
+    assert bc_eval_llm_api_bridge._protocol_for_model("future-model") == "chat-completions"
 
 
 def test_luna_uses_responses_with_reasoning_and_non_strict_tools(monkeypatch, luna_api):
@@ -205,6 +210,11 @@ def test_luna_uses_responses_with_reasoning_and_non_strict_tools(monkeypatch, lu
             "message": {
                 "role": "assistant",
                 "content": None,
+                "provider_context": {
+                    "format": "bcbench.responses.v1",
+                    "model": "gpt-6-luna",
+                    "output": luna_api["responses_response"]["output"],
+                },
                 "tool_calls": [
                     {"id": "call-1", "type": "function", "function": {"name": "lookup", "arguments": '{"name":"Customer"}'}},
                     {"id": "call-2", "type": "function", "function": {"name": "lookup", "arguments": '{"name":"Vendor"}'}},
@@ -222,7 +232,7 @@ def test_luna_uses_responses_with_reasoning_and_non_strict_tools(monkeypatch, lu
 
 
 @pytest.mark.parametrize("trim_history", [False, True])
-def test_luna_replays_reasoning_and_parallel_calls_after_bcal_reconstructs_history(monkeypatch, luna_api, trim_history):
+def test_luna_replays_provider_context_and_parallel_calls_from_bcal_history(monkeypatch, luna_api, trim_history):
     messages: list[dict[str, object]] = [{"role": "user", "content": "Look up Customer and Vendor."}]
     completion = json.loads(_run_main(monkeypatch, {"model": "gpt-6-luna", "messages": messages}))
     output = luna_api["responses_response"]["output"]
@@ -252,22 +262,54 @@ def test_luna_replays_reasoning_and_parallel_calls_after_bcal_reconstructs_histo
     assert luna_api["responses_request"]["reasoning"]["effort"] == "high"
     assert result["choices"][0]["finish_reason"] == "stop"
     assert result["choices"][0]["message"]["content"] == "Both are tables."
+    assert result["choices"][0]["message"]["provider_context"] == {
+        "format": "bcbench.responses.v1",
+        "model": "gpt-6-luna",
+        "output": luna_api["responses_response"]["output"],
+    }
 
 
-def test_luna_requires_run_scoped_state(monkeypatch, fake_llm_api):
-    monkeypatch.delenv("BCAL_LLM_STATE_DIR", raising=False)
+def test_luna_rejects_tool_call_history_without_provider_context(monkeypatch, luna_api):
+    message = {
+        "role": "assistant",
+        "content": "Tool calls requested.",
+        "tool_calls": [{"id": "call-1", "type": "function", "function": {"name": "lookup", "arguments": "{}"}}],
+    }
 
-    with pytest.raises(RuntimeError, match="BCAL_LLM_STATE_DIR is required"):
-        _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": []})
-
-
-def test_luna_does_not_silently_drop_missing_reasoning_state(monkeypatch, luna_api):
-    message = {"role": "assistant", "content": "Tool calls requested.", "tool_calls": [{"id": "call-from-another-run"}]}
-
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(ValueError, match="requires provider_context"):
         _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": [message]})
 
     assert "responses_request" not in luna_api
+
+
+def test_luna_rejects_provider_context_for_another_model(monkeypatch, luna_api):
+    message = {
+        "role": "assistant",
+        "content": "Tool calls requested.",
+        "tool_calls": [],
+        "provider_context": {"format": "bcbench.responses.v1", "model": "other-model", "output": []},
+    }
+
+    with pytest.raises(ValueError, match="incompatible provider_context"):
+        _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": [message]})
+
+    assert "responses_request" not in luna_api
+
+
+def test_luna_rejects_provider_context_that_does_not_match_tool_calls(monkeypatch, luna_api):
+    message = {
+        "role": "assistant",
+        "content": "Tool calls requested.",
+        "tool_calls": [{"id": "different-call", "type": "function", "function": {"name": "lookup", "arguments": "{}"}}],
+        "provider_context": {
+            "format": "bcbench.responses.v1",
+            "model": "gpt-6-luna",
+            "output": luna_api["responses_response"]["output"],
+        },
+    }
+
+    with pytest.raises(ValueError, match="does not match"):
+        _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": [message]})
 
 
 @pytest.mark.parametrize(

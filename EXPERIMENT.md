@@ -84,7 +84,7 @@ The **Evaluation with bcal** workflow supports `gpt-6-luna` through its `externa
 
 For local runs, pass `--llm-model gpt-6-luna` to `bcbench run bcal` or `bcbench evaluate bcal`, or set `BCAL_LLM_MODEL=gpt-6-luna`. Configure `BCAL_LLM_COMMAND` and the LLM API credentials as described in [`.env.sample`](.env.sample).
 
-Luna uses the M365 LLM API's Responses endpoint with `medium` reasoning. Chat Completions does not support Luna's combination of tools and reasoning. The bridge translates BCAL's Chat Completions protocol and retains encrypted reasoning throughout each tool loop in a per-run temporary directory managed by BC-Bench. Requests use `store=false` and `reasoning.context=current_turn`; reasoning is carried across tool calls within the current user turn, not into subsequent user turns. Existing models keep their Chat Completions behavior.
+Luna uses the M365 LLM API's Responses endpoint with `medium` reasoning. Chat Completions does not support Luna's combination of tools and reasoning. The bridge translates BCAL's Chat Completions protocol and returns the Responses output as opaque provider context so compatible BCAL versions can carry encrypted reasoning across tool calls. Requests use `store=false` and `reasoning.context=current_turn`; existing models keep their Chat Completions behavior.
 
 ### Encouraging plugin usage
 

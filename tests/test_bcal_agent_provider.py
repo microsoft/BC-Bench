@@ -76,12 +76,9 @@ class TestRunBcalAgent:
     def test_passes_external_command_to_bcal(self, workspace: Path):
         entry = create_nl2al_entry()
         captured: dict[str, list[str]] = {}
-        state_dirs: list[Path] = []
 
-        def fake_run(args: list[str], *, env: dict[str, str], **_: object) -> MagicMock:
+        def fake_run(args: list[str], **_: object) -> MagicMock:
             captured["args"] = args
-            state_dirs.append(Path(env["BCAL_LLM_STATE_DIR"]))
-            assert state_dirs[-1].is_dir()
             _write_result(args)
             mock = MagicMock()
             mock.returncode = 0
@@ -100,7 +97,6 @@ class TestRunBcalAgent:
         assert "--llm-command=python bridge.py" in args
         assert not any(a.startswith("--endpoint=") for a in args)
         assert not any(a.startswith("--capi-") for a in args)
-        assert not state_dirs[0].exists()
 
     def test_external_command_requires_command(self, workspace: Path):
         entry = create_nl2al_entry()
