@@ -19,6 +19,9 @@ PWSH = shutil.which("pwsh")
         "none",
         "same-package-projection",
         "same-package-recovery",
+        "same-package-markers",
+        "unchanged-markers",
+        "wrong-marker-prior-run",
         "unchanged-projection",
         "missing-id",
         "path",
@@ -35,9 +38,10 @@ def test_actual_workflow_admits_only_fresh_ready_identity_once(tmp_path, damage)
     source = "e" * 40
     archive = "a" * 64
     attempt = "build-123-" + archive[:12]
-    projection = damage in ("same-package-projection", "same-package-recovery", "unchanged-projection")
+    marker_probe = damage in ("same-package-markers", "unchanged-markers", "wrong-marker-prior-run")
+    projection = damage in ("same-package-projection", "same-package-recovery", "unchanged-projection") or marker_probe
     if projection:
-        attempt += "-recovery1" if damage == "same-package-recovery" else "-projection1"
+        attempt += "-markers1" if marker_probe else "-recovery1" if damage == "same-package-recovery" else "-projection1"
     profile = tmp_path / "experiments" / "bcal-startup-diagnostic" / "attempts" / attempt
     profile.mkdir(parents=True)
 
@@ -79,6 +83,10 @@ def test_actual_workflow_admits_only_fresh_ready_identity_once(tmp_path, damage)
             proof["diagnosticRevision"] = admission["diagnosticRevision"] = "startup-failure-projection-v2-recovery"
             proof["priorDiagnosticRevision"] = "startup-failure-projection-v1"
             proof["priorRunId"] = "44065963616"
+        if marker_probe:
+            proof["diagnosticRevision"] = admission["diagnosticRevision"] = "startup-failure-projection-v3-markers"
+            proof["priorDiagnosticRevision"] = "startup-failure-projection-v3-markers" if damage == "unchanged-markers" else "startup-failure-projection-v2-recovery"
+            proof["priorRunId"] = "44068523635" if damage != "wrong-marker-prior-run" else "44065963616"
         admission["ownerProofSha256"] = save("owner-proof-admission.json", proof)
     save("admission.json", admission)
     if damage == "identity-bytes":
@@ -107,7 +115,7 @@ def test_actual_workflow_admits_only_fresh_ready_identity_once(tmp_path, damage)
         "GITHUB_OUTPUT": str(tmp_path / "outputs.txt"),
     }
     result = subprocess.run([PWSH, "-NoProfile", "-File", str(script)], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
-    if damage in ("none", "same-package-projection", "same-package-recovery"):
+    if damage in ("none", "same-package-projection", "same-package-recovery", "same-package-markers"):
         assert result.returncode == 0, result.stderr
         assert "version=30.0.46.99999-beta" in (tmp_path / "outputs.txt").read_text()
         assert attempt in (tmp_path / "outputs.txt").read_text()

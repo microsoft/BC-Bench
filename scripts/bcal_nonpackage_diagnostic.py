@@ -65,19 +65,61 @@ NATIVE_FAILURE_CATEGORIES = frozenset(
         "sdk_rpc",
     )
 )
+CONSTRUCTION_MARKERS = {
+    "network_dns": ("enotfound", "eai_again", "no such host", "failed to lookup"),
+    "network_connect": ("econnrefused", "enetunreach", "ehostunreach", "wsaeacces"),
+    "network_timeout": ("etimedout", "request timed out"),
+    "network_request": ("error sending request", "fetch failed", "tunnel error"),
+    "database_open": ("unable to open database",),
+    "database_lock": ("database is locked",),
+    "filesystem_access": ("eacces", "eperm", "access is denied", "permission denied"),
+    "filesystem_missing": ("enoent", "cannot find the path", "no such file"),
+    "native_async_runtime": ("native async runtime failed to initialize",),
+    "hook_init": ("failed to initialize native hook session",),
+    "lsp_init": ("failed to initialize lsp configs",),
+    "tools_init": ("failed to initialize standalone session tools",),
+    "extensions_init": ("failed to initialize standalone session extensions",),
+}
+CONSTRUCTION_REFERENCES = {
+    "model_reference": ("model",),
+    "auth_reference": ("authentication", "credential", "sign-in"),
+    "config_reference": ("config", "configuration"),
+    "json_reference": ("json", "serialization", "deserialization"),
+    "git_reference": ("git",),
+    "prompt_reference": ("prompt",),
+    "invalid_reference": ("invalid",),
+    "unsupported_reference": ("unsupported", "not supported"),
+}
+CONSTRUCTION_MARKER_NAMES = frozenset(CONSTRUCTION_MARKERS) | frozenset(CONSTRUCTION_REFERENCES)
+OS_MARKER_STATES = frozenset(("absent", "malformed", "multiple", "out_of_range", "admitted"))
 
 
 def startup_failure_projection(value: object) -> dict:
     result = {"evidenceSource": "scenario_failure_message"}
     if not isinstance(value, str):
         return result
-    kinds = tuple(kind for phrase, kind in (("failed to register ownership for session", "session_ownership"), ("session construction failed", "session_construction")) if phrase in value)
-    if len(kinds) != 1:
-        return result
-    result["nativeFailureKind"] = kinds[0]
-    codes = re.findall(r"\(os error ([0-9]{1,5})\)", value)
-    if value.count("(os error ") == 1 and len(codes) == 1 and int(codes[0]) <= 65535:
-        result["nativeErrorCode"] = int(codes[0])
+    text = value.lower()
+    kinds = tuple(kind for phrase, kind in (("failed to register ownership for session", "session_ownership"), ("session construction failed", "session_construction")) if phrase in text)
+    if len(kinds) == 1:
+        result["nativeFailureKind"] = kinds[0]
+    markers = {key for key, phrases in CONSTRUCTION_MARKERS.items() if any(phrase in text for phrase in phrases)}
+    markers.update(key for key, words in CONSTRUCTION_REFERENCES.items() if any(re.search(r"\b" + re.escape(word) + r"\b", text) for word in words))
+    result["constructionMarkers"] = sorted(markers)
+    count = text.count("(os error")
+    code = re.search(r"\(os error ([0-9]+)\)", text) if count == 1 else None
+    if count == 0:
+        state = "absent"
+    elif count > 1:
+        state = "multiple"
+    elif code is None:
+        state = "malformed"
+    elif len(code[1]) > 5 or int(code[1]) > 65535:
+        state = "out_of_range"
+    else:
+        state = "admitted"
+        if len(kinds) == 1:
+            result["nativeErrorCode"] = int(code[1])
+    result["osMarkerState"] = state
     return result
 
 

@@ -143,31 +143,68 @@ def test_exact_production_failure_path_is_preserved_without_raw_messages(tmp_pat
 
 
 @pytest.mark.parametrize(
-    ("message", "expected"),
+    ("message", "expected", "os_state"),
     [
-        ("failed to register ownership for session PRIVATE_UUID PRIVATE_PATH (os error 183)", {"nativeFailureKind": "session_ownership", "nativeErrorCode": 183}),
-        ("session construction failed PRIVATE_DATA (os error 0)", {"nativeFailureKind": "session_construction", "nativeErrorCode": 0}),
-        ("session construction failed (os error 65535)", {"nativeFailureKind": "session_construction", "nativeErrorCode": 65535}),
-        ("failed to register ownership for session PRIVATE_PATH", {"nativeFailureKind": "session_ownership"}),
-        ("session construction failed (os error 65536)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed (os error 100000)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed (os error -1)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed (os error +183)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed (os error 1.5)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed (os error 183) (os error 184)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed (os error 183) (os error 100000)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed (os error 183) (os error -1)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed (os error 183suffix)", {"nativeFailureKind": "session_construction"}),
-        ("session construction failed; failed to register ownership for session (os error 183)", {}),
-        ("UNKNOWN_PRIVATE_MESSAGE (os error 183)", {}),
-        (None, {}),
-        ({"message": "PRIVATE", "errorData": "PRIVATE"}, {}),
+        ("failed to register ownership for session PRIVATE_UUID PRIVATE_PATH (os error 183)", {"nativeFailureKind": "session_ownership", "nativeErrorCode": 183}, "admitted"),
+        ("session construction failed PRIVATE_DATA (os error 0)", {"nativeFailureKind": "session_construction", "nativeErrorCode": 0}, "admitted"),
+        ("session construction failed (os error 65535)", {"nativeFailureKind": "session_construction", "nativeErrorCode": 65535}, "admitted"),
+        ("failed to register ownership for session PRIVATE_PATH", {"nativeFailureKind": "session_ownership"}, "absent"),
+        ("session construction failed (os error 65536)", {"nativeFailureKind": "session_construction"}, "out_of_range"),
+        ("session construction failed (os error 100000)", {"nativeFailureKind": "session_construction"}, "out_of_range"),
+        ("session construction failed (os error -1)", {"nativeFailureKind": "session_construction"}, "malformed"),
+        ("session construction failed (os error +183)", {"nativeFailureKind": "session_construction"}, "malformed"),
+        ("session construction failed (os error 1.5)", {"nativeFailureKind": "session_construction"}, "malformed"),
+        ("session construction failed (os error 183) (os error 184)", {"nativeFailureKind": "session_construction"}, "multiple"),
+        ("session construction failed (os error 183) (os error 100000)", {"nativeFailureKind": "session_construction"}, "multiple"),
+        ("session construction failed (os error 183) (os error -1)", {"nativeFailureKind": "session_construction"}, "multiple"),
+        ("session construction failed (os error 183) (os error-1)", {"nativeFailureKind": "session_construction"}, "multiple"),
+        ("session construction failed (os error 183suffix)", {"nativeFailureKind": "session_construction"}, "malformed"),
+        ("session construction failed; failed to register ownership for session (os error 183)", {}, "admitted"),
+        ("UNKNOWN_PRIVATE_MESSAGE (os error 183)", {}, "admitted"),
+        (None, {}, None),
+        ({"message": "PRIVATE", "errorData": "PRIVATE"}, {}, None),
     ],
 )
-def test_scenario_message_projection_exposes_only_fixed_reason_and_bounded_os_code(message, expected):
+def test_scenario_message_projection_exposes_only_fixed_reason_and_bounded_os_code(message, expected, os_state):
     projected = diagnostic.startup_failure_projection(message)
-    assert projected == {"evidenceSource": "scenario_failure_message", **expected}
+    optional = {} if os_state is None else {"constructionMarkers": [], "osMarkerState": os_state}
+    assert projected == {"evidenceSource": "scenario_failure_message", **expected, **optional}
     assert "PRIVATE" not in json.dumps(projected)
+
+
+@pytest.mark.parametrize(
+    ("message", "markers"),
+    [
+        ("ENOTFOUND; EAI_AGAIN; No Such Host; failed to lookup; model; MODEL", ["model_reference", "network_dns"]),
+        ("econnrefused; ENETUNREACH; EHOSTUNREACH; WSAEACCES; fetch failed; tunnel error; error sending request", ["filesystem_access", "network_connect", "network_request"]),
+        ("ETIMEDOUT; request timed out; unable to open database; database is locked", ["database_lock", "database_open", "network_timeout"]),
+        ("EACCES; EPERM; access is denied; permission denied; ENOENT; cannot find the path; no such file", ["filesystem_access", "filesystem_missing"]),
+        ("native async runtime failed to initialize; failed to initialize native hook session; failed to initialize LSP configs", ["hook_init", "lsp_init", "native_async_runtime"]),
+        ("Failed to initialize standalone session tools; Failed to initialize standalone session extensions", ["extensions_init", "tools_init"]),
+        (
+            "authentication; credential; sign-in; config; configuration; JSON; serialization; deserialization; git; prompt; invalid; unsupported; not supported",
+            ["auth_reference", "config_reference", "git_reference", "invalid_reference", "json_reference", "prompt_reference", "unsupported_reference"],
+        ),
+        ("modeling authenticationx credentials reconfiguration GitLab prompted invalidity unsupportedness not supportedness JSONified", []),
+        ("unknown opaque failure", []),
+    ],
+)
+def test_construction_markers_are_closed_case_insensitive_text_evidence_not_cause(message, markers):
+    projected = diagnostic.startup_failure_projection("SESSION CONSTRUCTION FAILED PRIVATE_PATH PRIVATE_UUID " + message)
+    assert projected == {"evidenceSource": "scenario_failure_message", "nativeFailureKind": "session_construction", "constructionMarkers": markers, "osMarkerState": "absent"}
+    assert "PRIVATE" not in json.dumps(projected)
+    assert "rpcErrorCode" not in projected
+
+
+def test_mixed_marker_projection_never_exports_private_text_or_oversize_multiple_os_codes():
+    projected = diagnostic.startup_failure_projection("session construction failed PRIVATE_PATH PRIVATE_UUID ENOTFOUND CONFIG (os error 183) (os error " + "9" * 10000 + ")")
+    assert projected == {
+        "evidenceSource": "scenario_failure_message",
+        "nativeFailureKind": "session_construction",
+        "constructionMarkers": ["config_reference", "network_dns"],
+        "osMarkerState": "multiple",
+    }
+    assert diagnostic.startup_failure_projection("session construction failed (os error " + "9" * 10000 + ")")["osMarkerState"] == "out_of_range"
 
 
 def test_nonpackage_driver_uses_original_command_environment_and_independent_identity(tmp_path, monkeypatch):
@@ -242,6 +279,12 @@ def test_nonpackage_driver_uses_original_command_environment_and_independent_ide
     assert proof["processEvidence"]["exitCode"] == 1
     assert proof["terminalEvidence"]["turns"][0]["failure"]["stage"] == "session_create"
     assert proof["terminalEvidence"]["turns"][0]["failure"] == {"stage": "session_create", "exceptionCategory": "io"}
-    assert proof["startupFailureProjection"] == {"evidenceSource": "scenario_failure_message", "nativeFailureKind": "session_ownership", "nativeErrorCode": 183}
+    assert proof["startupFailureProjection"] == {
+        "evidenceSource": "scenario_failure_message",
+        "nativeFailureKind": "session_ownership",
+        "nativeErrorCode": 183,
+        "constructionMarkers": [],
+        "osMarkerState": "admitted",
+    }
     assert "PRIVATE" not in json.dumps(proof)
     assert diagnostic.os.environ["BCAL_REASONING_LOCAL_KEY"] == "previous"

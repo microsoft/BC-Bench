@@ -600,10 +600,17 @@ profiles, receipts and the62891 startup phase remain unchanged. This sequence
 does not authorize provider access, live coding, smoke, gold or phase5.
 
 The diagnostic-only `startupFailureProjection` is separate from native failure
-fields. Its source is explicitly `scenario_failure_message`; only fixed session
+fields. Its source is explicitly `scenario_failure_message`; fixed session
 ownership/construction phrases and one `(os error N)` integer from0through65535
-are projected. Unknown or absent details are omitted. Raw messages, paths,
-UUIDs and SDK error data never leave the private transcript.
+are projected. The `-markers1` revision additionally emits sorted unique closed
+`constructionMarkers` for network, database, filesystem and native initialization
+phrases, plus whole-word model/auth/config/JSON/git/prompt/invalid/unsupported
+references. These are literal case-insensitive text matches, not typed causes.
+`osMarkerState` distinguishes absent, malformed, multiple, out-of-range and
+admitted numeric syntax; malformed/multiple markers never supply a code. Unknown
+markers are omitted (an empty marker array is valid). Raw messages, paths,
+UUIDs and SDK error data never leave the private transcript. This fresh attempt
+references the terminal recovery run and does not reset any historical marker.
 
 The separate `-recovery1` attempt adds closed driver-stage journaling and
 schema-validated `BCAL_SAFE_DIAGNOSTIC` console evidence after cleanup, so artifact

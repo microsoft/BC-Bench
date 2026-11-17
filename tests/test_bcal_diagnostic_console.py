@@ -34,12 +34,18 @@ def test_console_preserves_partial_failure_and_cleanup_when_artifact_upload_is_u
     assert "counters" not in safe
 
 
-@pytest.mark.parametrize("damage", ["none", "projection", "code", "failure", "cleanup", "journal"])
+@pytest.mark.parametrize("damage", ["none", "projection", "code", "failure", "cleanup", "journal", "marker", "marker-order", "marker-duplicate", "marker-object", "os-state", "os-code-conflict"])
 def test_console_validates_all_exported_fields_and_never_leaks_raw_content(tmp_path, damage):
     output, cleanup = inputs(tmp_path)
     body = {
         "benchCommit": "a" * 40,
-        "startupFailureProjection": {"evidenceSource": "scenario_failure_message", "nativeFailureKind": "session_ownership", "nativeErrorCode": 183},
+        "startupFailureProjection": {
+            "evidenceSource": "scenario_failure_message",
+            "nativeFailureKind": "session_ownership",
+            "nativeErrorCode": 183,
+            "constructionMarkers": ["config_reference", "network_dns"],
+            "osMarkerState": "admitted",
+        },
         "terminalEvidence": {
             "turns": [{"modelRequests": 0, "responseIterations": 0, "toolCalls": 0, "usageEvents": 0, "failure": {"stage": "session_create", "exceptionCategory": "io", "message": "PRIVATE"}}]
         },
@@ -58,6 +64,18 @@ def test_console_validates_all_exported_fields_and_never_leaks_raw_content(tmp_p
         cleanup.write_text(json.dumps({"denialRulesRemoved": "true"}))
     elif damage == "journal":
         (tmp_path / "diagnostic-driver-stage.json").write_text(json.dumps({"status": "failed", "stage": "PRIVATE"}))
+    elif damage == "marker":
+        body["startupFailureProjection"]["constructionMarkers"] = ["PRIVATE"]
+    elif damage == "marker-order":
+        body["startupFailureProjection"]["constructionMarkers"].reverse()
+    elif damage == "marker-duplicate":
+        body["startupFailureProjection"]["constructionMarkers"] = ["network_dns", "network_dns"]
+    elif damage == "marker-object":
+        body["startupFailureProjection"]["constructionMarkers"] = [{"PRIVATE": "PRIVATE"}]
+    elif damage == "os-state":
+        body["startupFailureProjection"]["osMarkerState"] = "PRIVATE"
+    elif damage == "os-code-conflict":
+        body["startupFailureProjection"]["osMarkerState"] = "multiple"
     (output / "package-startup-summary.json").write_text(json.dumps(body))
     if damage == "none":
         safe = console.receipt(output, cleanup)

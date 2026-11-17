@@ -41,7 +41,7 @@ jobs:
           $profile = 'experiments\bcal-startup-diagnostic'
           $suffix = ' / reasoning-package-startup-v1'
           if ($env:DIAGNOSTIC_ATTEMPT_ID) {
-            if ($env:DIAGNOSTIC_ATTEMPT_ID -notmatch '^build-[1-9][0-9]*-[a-f0-9]{12}(-(projection1|recovery1))?$') { throw 'Diagnostic attempt ID is invalid.' }
+            if ($env:DIAGNOSTIC_ATTEMPT_ID -notmatch '^build-[1-9][0-9]*-[a-f0-9]{12}(-(projection1|recovery1|markers1))?$') { throw 'Diagnostic attempt ID is invalid.' }
             $profile = Join-Path $profile "attempts\$env:DIAGNOSTIC_ATTEMPT_ID"
             $suffix = " / reasoning-package-diagnostic $env:DIAGNOSTIC_ATTEMPT_ID"
           }
@@ -68,12 +68,16 @@ jobs:
             $recoveryAdded = $proof.diagnosticRevision -eq 'startup-failure-projection-v2-recovery' -and
                 $proof.priorDiagnosticRevision -eq 'startup-failure-projection-v1' -and $admission.diagnosticRevision -eq $proof.diagnosticRevision -and
                 $proof.priorRunId -eq '44065963616'
+            $markersAdded = $proof.diagnosticRevision -eq 'startup-failure-projection-v3-markers' -and
+                $proof.priorDiagnosticRevision -eq 'startup-failure-projection-v2-recovery' -and $admission.diagnosticRevision -eq $proof.diagnosticRevision -and
+                $proof.priorRunId -eq '44068523635'
             if ($projectionAdded) { $expectedAttempt += '-projection1' }
             if ($recoveryAdded) { $expectedAttempt += '-recovery1' }
+            if ($markersAdded) { $expectedAttempt += '-markers1' }
             if ($env:DIAGNOSTIC_ATTEMPT_ID -ne $expectedAttempt -or $admission.attemptId -ne $expectedAttempt -or
                 $proof.attemptId -ne $expectedAttempt -or $proof.hypothesis -notmatch '^[a-z][a-z0-9_-]{2,79}$' -or
                 $proof.priorRunId -notmatch '^[1-9][0-9]*$' -or $proof.priorArchiveSha256 -notmatch '^[a-f0-9]{64}$' -or
-                ($proof.priorArchiveSha256 -eq $identity.archive_sha256 -and -not ($projectionAdded -or $recoveryAdded))) { throw 'Fresh diagnostic hypothesis or package identity is not admitted.' }
+                ($proof.priorArchiveSha256 -eq $identity.archive_sha256 -and -not ($projectionAdded -or $recoveryAdded -or $markersAdded))) { throw 'Fresh diagnostic hypothesis or package identity is not admitted.' }
           }
           if ($proof.ownerReady -ne $true -or $proof.packagedOfflineProofsVerified -ne $true -or
               $proof.providerAttempts -ne 0 -or $proof.sourceCommit -ne $identity.source_commit -or

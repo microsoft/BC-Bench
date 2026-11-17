@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-from bcal_nonpackage_diagnostic import safe_native_failure
+from bcal_nonpackage_diagnostic import CONSTRUCTION_MARKER_NAMES, OS_MARKER_STATES, safe_native_failure
 from bcal_package_diagnostic import DRIVER_CATEGORIES, DRIVER_STAGES
 from bcal_reasoning_coding import AdmissionError
 
@@ -48,12 +48,24 @@ def receipt(output: Path, cleanup_path: Path) -> dict:
         if not isinstance(source, str) or re.fullmatch(r"[a-f0-9]{40}", source) is None:
             raise AdmissionError("Console diagnostic source is malformed.")
         projection = summary.get("startupFailureProjection")
-        if not isinstance(projection, dict) or set(projection) - {"evidenceSource", "nativeFailureKind", "nativeErrorCode"} or projection.get("evidenceSource") != "scenario_failure_message":
+        if (
+            not isinstance(projection, dict)
+            or set(projection) - {"evidenceSource", "nativeFailureKind", "nativeErrorCode", "constructionMarkers", "osMarkerState"}
+            or projection.get("evidenceSource") != "scenario_failure_message"
+        ):
             raise AdmissionError("Console startup projection is malformed.")
         if "nativeFailureKind" in projection and projection["nativeFailureKind"] not in ("session_ownership", "session_construction"):
             raise AdmissionError("Unknown console native failure kind.")
         if "nativeErrorCode" in projection and (type(projection["nativeErrorCode"]) is not int or not 0 <= projection["nativeErrorCode"] <= 65535):
             raise AdmissionError("Console native error code is invalid.")
+        if "constructionMarkers" in projection:
+            markers = projection["constructionMarkers"]
+            if not isinstance(markers, list) or not all(isinstance(marker, str) and marker in CONSTRUCTION_MARKER_NAMES for marker in markers) or markers != sorted(set(markers)):
+                raise AdmissionError("Console construction markers are not closed sorted unique values.")
+        if "osMarkerState" in projection:
+            state = projection["osMarkerState"]
+            if not isinstance(state, str) or state not in OS_MARKER_STATES or ("nativeErrorCode" in projection and state != "admitted"):
+                raise AdmissionError("Console OS marker state is invalid.")
         terminal = summary.get("terminalEvidence", {})
         turns = terminal.get("turns")
         if not isinstance(turns, list) or len(turns) != 1 or not isinstance(turns[0], dict):
