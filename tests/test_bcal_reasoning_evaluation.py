@@ -95,7 +95,7 @@ def test_package_control_gate_rejects_mismatched_or_failed_proof(tmp_path, damag
         evaluation.validate_tool_proof(path, p, "start_new_work")
 
 
-@pytest.mark.parametrize("failure", [None, "process", "http429", "identity", "auxiliary", "stale", "safety-empty", "empty-output"])
+@pytest.mark.parametrize("failure", [None, "process", "zero-request", "process-timeout", "launch", "http429", "identity", "auxiliary", "stale", "safety-empty", "empty-output"])
 def test_new_package_coding_uses_actual_cli_and_keeps_infrastructure_unscored(tmp_path, monkeypatch, failure):
     import bcal_governed_study
 
@@ -110,7 +110,8 @@ def test_new_package_coding_uses_actual_cli_and_keeps_infrastructure_unscored(tm
 
     @contextmanager
     def route(policy, budget, key):
-        budget.send("main", {"model": policy.model, "reasoning": {"effort": "medium"}}, lambda: SimpleNamespace(status_code=429 if failure == "http429" else 200))
+        if failure not in ("zero-request", "process-timeout", "launch"):
+            budget.send("main", {"model": policy.model, "reasoning": {"effort": "medium"}}, lambda: SimpleNamespace(status_code=429 if failure == "http429" else 200))
         yield "http://127.0.0.1:1234"
 
     monkeypatch.setattr(evaluation, "provider_route", route)
@@ -126,6 +127,8 @@ def test_new_package_coding_uses_actual_cli_and_keeps_infrastructure_unscored(tm
     args = Namespace(package=tmp_path, archive=tmp_path / "archive", job=job, private=private, receipt=tmp_path / "receipt.json", symbols=tmp_path / "symbols", study_budget=study.path)
 
     def run(command, **kwargs):
+        if failure == "launch":
+            raise PermissionError("PRIVATE")
         assert command[0] == str(tmp_path / "bcal.exe")
         assert "--sdk-reasoning-effort=medium" in command
         assert ("--sdk-max-model-requests=64" if gold else "--sdk-max-model-requests=30") in command
@@ -146,13 +149,28 @@ def test_new_package_coding_uses_actual_cli_and_keeps_infrastructure_unscored(tm
             (private / "auxiliary" / "forbidden.json").write_text("{}")
         if failure == "process":
             raise subprocess.CalledProcessError(1, command)
+        if failure == "zero-request":
+            raise subprocess.CalledProcessError(23, command, output="PRIVATE")
+        if failure == "process-timeout":
+            raise subprocess.TimeoutExpired(command, 420, output="PRIVATE")
+        return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(agent, "_run_bcal_process", run)
     evaluation.run_code(args)
     receipt = json.loads(args.receipt.read_bytes())
-    assert receipt["providerAttempts"] == 1
+    assert receipt["providerAttempts"] == (0 if failure in ("zero-request", "process-timeout", "launch") else 1)
     assert receipt["runtimeCleanupVerified"]
     assert "PRIVATE" not in json.dumps(receipt)
+    if failure == "launch":
+        assert receipt["failureStage"] == "runtime_process"
+        assert receipt["processEvidence"] == {"outcome": "launch_failed", "exitCode": None, "exceptionCategory": "os_error"}
+    if failure in ("zero-request", "process-timeout"):
+        assert receipt["failureStage"] == "provider_accounting"
+        assert receipt["processEvidence"] == {
+            "outcome": "nonzero_exit" if failure == "zero-request" else "timed_out",
+            "exitCode": 23 if failure == "zero-request" else None,
+            "exceptionCategory": "process_exit" if failure == "zero-request" else "process_timeout",
+        }
     if failure in ("process", "empty-output"):
         assert receipt["status"] == "agent-failed"
         assert receipt["quality"] == 0

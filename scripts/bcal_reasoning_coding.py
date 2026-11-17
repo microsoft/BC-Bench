@@ -116,12 +116,38 @@ class ProviderBudget:
         self.seen: set[str] = set()
         self.stopped = False
         self.blocked = 0
+        self.route_stages: dict[str, int] = {}
+        self.route_failure: dict | None = None
         self.lock = threading.RLock()
         with path.open("x", encoding="utf-8") as file:
             json.dump(self.snapshot(), file)
 
     def snapshot(self) -> dict:
-        return {"limit": self.limit, "attempts": len(self.events), "blocked": self.blocked, "stopped": self.stopped, "events": self.events}
+        return {
+            "limit": self.limit,
+            "attempts": len(self.events),
+            "blocked": self.blocked,
+            "stopped": self.stopped,
+            "events": self.events,
+            "routeStages": self.route_stages,
+            "routeFailure": self.route_failure,
+        }
+
+    def observe_route(
+        self,
+        stage: Literal[
+            "listener_ready", "local_get", "local_post", "forward_entered", "authentication_started", "authentication_completed", "wire_validated", "forward_failed", "proxy_error", "listener_stopped"
+        ],
+        *,
+        status: int | None = None,
+        category: Literal["authentication", "http_transport", "policy", "other"] | None = None,
+    ) -> None:
+        with self.lock:
+            self.route_stages[stage] = self.route_stages.get(stage, 0) + 1
+            if status is not None or category is not None:
+                previous = self.route_failure or {}
+                self.route_failure = {"stage": stage, "httpStatus": status, "exceptionCategory": category if category is not None else previous.get("exceptionCategory")}
+            write_json(self.path, self.snapshot())
 
     def reject(self, category: str) -> None:
         with self.lock:
@@ -339,6 +365,7 @@ def verify_auxiliary_command(environment: dict[str, str]) -> None:
 
 @contextmanager
 def provider_route(policy: CodingPolicy | None, budget: ProviderBudget, key: str) -> Iterator[str]:
+    from azure.core.exceptions import AzureError
     from azure.identity import CertificateCredential, get_bearer_token_provider
     from bc_eval.llm.llm_api import ENDPOINTS, SCOPE, LlmApiSettings, LlmApiTransport, httpx, taxonomy_headers
 
@@ -369,6 +396,7 @@ def provider_route(policy: CodingPolicy | None, budget: ProviderBudget, key: str
                     budget.reject("Provider model taxonomy differs.")
             except (AdmissionError, ValueError):
                 budget.reject("Outbound model, taxonomy or effort mismatch.")
+            budget.observe_route("wire_validated")
             request.headers.update({"X-SessionId": session, "X-InteractionId": session, "x-sticky-route-session-ticket": self.ticket})
             response = budget.send(role, body, lambda: self.inner.handle_request(request))
             self.ticket = response.headers.get("x-sticky-route-session-ticket", "")
@@ -391,8 +419,12 @@ def provider_route(policy: CodingPolicy | None, budget: ProviderBudget, key: str
 
         @contextmanager
         def forward(route: str, body: dict) -> Iterator[ObservedResponse]:
+            budget.observe_route("forward_entered")
             try:
-                request = client.build_request("POST", ENDPOINTS["TEST"] + route, json=body, headers={"Authorization": "Bearer " + token()})
+                budget.observe_route("authentication_started")
+                bearer = token()
+                budget.observe_route("authentication_completed")
+                request = client.build_request("POST", ENDPOINTS["TEST"] + route, json=body, headers={"Authorization": "Bearer " + bearer})
                 with budget.lock, client.stream(request.method, request.url, headers=request.headers, content=request.content) as response:
                     observed = ObservedResponse(response, budget, bool(body.get("stream")))
                     try:
@@ -400,12 +432,25 @@ def provider_route(policy: CodingPolicy | None, budget: ProviderBudget, key: str
                     finally:
                         if not observed.completed:
                             budget.fail()
-            except Exception:  # noqa: BLE001 - stop and redact authentication, upstream and partial-stream failures
+            except Exception as error:  # noqa: BLE001 - stop and redact authentication, upstream and partial-stream failures
+                category: Literal["authentication", "http_transport", "policy", "other"] = (
+                    "authentication" if isinstance(error, AzureError) else "http_transport" if isinstance(error, httpx.HTTPError) else "policy" if isinstance(error, AdmissionError) else "other"
+                )
+                budget.observe_route("forward_failed", category=category)
                 budget.fail()
                 raise proxy.ProxyError("Opt-in provider transport failed; run stopped.") from None
 
         class Handler(proxy._handler(key, model, wire, forward)):
+            def do_GET(self) -> None:
+                budget.observe_route("local_get")
+                super().do_GET()
+
+            def do_POST(self) -> None:
+                budget.observe_route("local_post")
+                super().do_POST()
+
             def _error(self, status: int, message: str) -> None:
+                budget.observe_route("proxy_error", status=status)
                 budget.fail()
                 super()._error(status, message)
 
@@ -413,10 +458,12 @@ def provider_route(policy: CodingPolicy | None, budget: ProviderBudget, key: str
             thread = threading.Thread(target=server.serve_forever)
             thread.start()
             try:
+                budget.observe_route("listener_ready")
                 yield f"http://127.0.0.1:{server.server_port}"
             finally:
                 server.shutdown()
                 thread.join()
+                budget.observe_route("listener_stopped")
 
 
 def validate_scenario(path: Path) -> bytes:

@@ -283,17 +283,28 @@ def run_code(args: argparse.Namespace) -> None:
     commit_changes(workspace, "Initial AL output scaffold", allow_empty=True)
     run = CodingRun(policies=(policy,), max_provider_attempts=64 if gold else 30, timeout_seconds=1230 if gold else 420, page=job["page"], audience=job["audience"])
     process_error = None
+    stage = "provider_initialization"
+    receipt["processEvidence"] = {"outcome": "not_started", "exitCode": None, "exceptionCategory": None}
     try:
         with provider_route(policy, budget, key) as url:
+            stage = "command_construction"
             command, config = coding_command(args.package, args.symbols, scenario, private, policy, run, url)
             command = [value if not value.startswith("--exportfolder=") else f"--exportfolder={exports}" for value in command]
             with (private / "console.txt").open("w", encoding="utf-8") as console:
+                stage = "runtime_process"
                 try:
-                    _run_bcal_process(command, timeout=1430 if gold else 420, stdout=console, env={**process_environment(), "BCAL_REASONING_LOCAL_KEY": key})
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-                    process_error = type(error).__name__
+                    result = _run_bcal_process(command, timeout=1430 if gold else 420, stdout=console, env={**process_environment(), "BCAL_REASONING_LOCAL_KEY": key})
+                    receipt["processEvidence"].update(outcome="completed", exitCode=result.returncode)
+                except subprocess.CalledProcessError as error:
+                    process_error = "CalledProcessError"
+                    receipt["processEvidence"].update(outcome="nonzero_exit", exitCode=error.returncode, exceptionCategory="process_exit")
+                except subprocess.TimeoutExpired:
+                    process_error = "TimeoutExpired"
+                    receipt["processEvidence"].update(outcome="timed_out", exceptionCategory="process_timeout")
+        stage = "owned_cleanup"
         verify_owned_cleanup(args.package / "bcal.exe")
         receipt["runtimeCleanupVerified"] = True
+        stage = "transcript_identity"
         transcript = _read_transcript(private / "result.json")
         require(transcript["executionIdentity"]["sourceCommitSha"] == pin.source, "Executed source differs.")
         identity = transcript["runtimeIdentity"]
@@ -301,16 +312,19 @@ def run_code(args: argparse.Namespace) -> None:
         require(identity["mainModel"] == policy.model and identity["reasoningEffort"] == "medium", "Runtime model/effort differs.")
         require(not any((private / "auxiliary").iterdir()), "Forbidden auxiliary invocation.")
         receipt["terminalEvidence"] = transcript_summary(private / "result.json")
+        stage = "provider_accounting"
         require(
             not budget.stopped and budget.events and all(event.get("httpStatus") == 200 for event in budget.events), "Provider failure or stopped accounting is infrastructure, not a quality score."
         )
         if process_error:
             receipt.update(status="agent-failed", failureCategory=process_error, quality=0.0, testPassed=False)
             return
+        stage = "completion_evidence"
         experiment = config.experiment(1430 if gold else 420, transcript)
         auxiliary = experiment.execution["auxiliary"]
         experiment = ExperimentConfiguration(execution={**experiment.execution, "auxiliary": {**auxiliary, "completionReviewModel": None}})
         _require_completed(transcript, metrics=_result_metrics(transcript, time.monotonic() - started), config=experiment)
+        stage = "compile_export"
         files = sorted(exports.rglob("*.al"))
         compiled = all(turn.get("compileCoversLatestChange") is True for turn in transcript["agentRuntimeEvidence"])
         safety_empty = gold and job["safety"] and not files
@@ -330,9 +344,11 @@ def run_code(args: argparse.Namespace) -> None:
             write_json(private / "judge-input.json", {"input": job["prompt"], "expected": {"assertions": job["expected"]}, "output": output})
         receipt.update(status="completed", freshCompiled=compiled, exported=True, exportHashes=[sha(path) for path in files])
     except AgentError:
-        receipt.update(status="infrastructure-failed", failureCategory="completion_evidence", quality=None, testPassed=None)
+        receipt.update(status="infrastructure-failed", failureCategory="completion_evidence", failureStage=stage, quality=None, testPassed=None)
     except Exception as error:  # noqa: BLE001 - only safe categories cross the private process boundary
-        receipt.update(status="infrastructure-failed", failureCategory=failure_category(error), quality=None, testPassed=None)
+        receipt.update(status="infrastructure-failed", failureCategory=failure_category(error), failureStage=stage, quality=None, testPassed=None)
+        if stage == "runtime_process" and receipt["processEvidence"]["outcome"] == "not_started":
+            receipt["processEvidence"].update(outcome="launch_failed", exceptionCategory="os_error" if isinstance(error, OSError) else "other")
         budget.fail()
     finally:
         try:

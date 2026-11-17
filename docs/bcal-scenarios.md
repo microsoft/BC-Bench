@@ -526,3 +526,11 @@ SQLite ledger are retained even when a child cannot write a terminal receipt.
 No retry, rejudging, replacement or additional repetition is authorized.
 Provider, identity, accounting and judge failures remain unscored rather than
 being silently converted to model quality failures.
+
+Coding failures retain an allowlisted validation stage, subprocess outcome,
+exit code and exception category. Route journals separately count listener,
+local request, authentication and wire-validation boundaries without recording
+URLs, credentials, headers, prompts or exception messages. Zero provider sends
+alone do not identify a startup cause; a missing native startup stage or unknown
+terminal message remains an explicit diagnostic gap. Diagnostic source changes
+also change the same-SHA smoke/gold binding and never authorize a replacement.

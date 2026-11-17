@@ -201,7 +201,9 @@ def test_failure_signature_requires_exact_full_source_constant(tmp_path, suffix)
     assert "PRIVATE" not in json.dumps(summary)
 
 
-@pytest.mark.parametrize(("failure", "shared"), [(failure, shared) for failure in ("429", "redirect", "wire", "model", "duplicate") for shared in (False, True)] + [("aggregate", True)])
+@pytest.mark.parametrize(
+    ("failure", "shared"), [(failure, shared) for failure in ("429", "redirect", "wire", "model", "duplicate", "authentication") for shared in (False, True)] + [("aggregate", True)]
+)
 def test_actual_loopback_handler_and_innermost_boundary_fail_closed(tmp_path, monkeypatch, failure, shared):
     from bcal_reasoning_budget import StudyBudget
 
@@ -230,8 +232,15 @@ def test_actual_loopback_handler_and_innermost_boundary_fail_closed(tmp_path, mo
     def credential(*args, **kwargs):
         yield object()
 
+    def token():
+        if failure == "authentication":
+            from azure.core.exceptions import ClientAuthenticationError
+
+            raise ClientAuthenticationError("PRIVATE")
+        return "PRIVATE"
+
     monkeypatch.setattr(identity, "CertificateCredential", credential)
-    monkeypatch.setattr(identity, "get_bearer_token_provider", lambda *args: lambda: "PRIVATE")
+    monkeypatch.setattr(identity, "get_bearer_token_provider", lambda *args: token)
     monkeypatch.setattr(llm_api.LlmApiSettings, "from_env", lambda: SimpleNamespace(environment="TEST", tenant_id="local", client_id="local"))
     monkeypatch.setattr(llm_api, "LlmApiTransport", lambda settings, inner: inner)
     monkeypatch.setattr(llm_api, "taxonomy_headers", lambda *args, **kwargs: {"X-ModelType": "dev-" + policy.model, "x-llm-models": "dev-" + policy.model})
@@ -253,9 +262,14 @@ def test_actual_loopback_handler_and_innermost_boundary_fail_closed(tmp_path, mo
         body["model"] = MODELS[1]
     with coding.provider_route(policy, budget, "local") as url:
         status = post(url, body)
-        assert status == {"429": 429, "redirect": 302, "wire": 502, "model": 400, "duplicate": 200, "aggregate": 502}[failure]
+        assert status == {"429": 429, "redirect": 302, "wire": 502, "model": 400, "duplicate": 200, "aggregate": 502, "authentication": 502}[failure]
         assert post(url, {**body, "reasoning": {"effort": "medium"}}) in (400, 502)
-    assert len(sent) == budget.snapshot()["attempts"] == (0 if failure in ("wire", "model", "aggregate") else 1)
+    assert len(sent) == budget.snapshot()["attempts"] == (0 if failure in ("wire", "model", "aggregate", "authentication") else 1)
+    assert budget.snapshot()["routeStages"]["local_post"] == 2
+    if failure == "authentication":
+        assert budget.snapshot()["routeStages"]["authentication_started"] == 2
+        assert "authentication_completed" not in budget.snapshot()["routeStages"]
+        assert budget.snapshot()["routeFailure"] == {"stage": "proxy_error", "httpStatus": 502, "exceptionCategory": "authentication"}
     if study:
         assert study.snapshot()["codingAttempts"] == (64 if failure == "aggregate" else len(sent))
     assert budget.stopped
