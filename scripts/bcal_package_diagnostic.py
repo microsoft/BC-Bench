@@ -141,7 +141,7 @@ def prepare_identity(owner_inventory: Path, expected_sha256: str, source: str, b
     )
     if destination.exists():
         raise AdmissionError("Diagnostic identity preparation cannot overwrite prior evidence.")
-    write_json(destination, identity.model_dump(mode="json"))
+    destination.write_text(identity.model_dump_json(indent=2) + "\n", encoding="utf-8", newline="\n")
     return identity
 
 

@@ -583,3 +583,6 @@ response, network-denial gates and cleanup with the nonpackage diagnostic.
 Diagnostic package admission never admits a live smoke or gold run. Hosted
 execution remains blocked until the runtime owner supplies the final package
 identity, packaged offline proofs and an explicit READY handoff.
+The separate once-only `reasoning-package-startup-v1` phase enforces that gate
+before installation; `experiments\bcal-startup-diagnostic\admission.json`
+initially records `awaiting-owner-ready`, not a guessed version or archive.

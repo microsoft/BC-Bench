@@ -164,6 +164,8 @@ def test_owner_inventory_conversion_requires_exact_external_publication_facts(tm
         prepared = diagnostic.prepare_identity(inventory, digest, identity.source_commit, identity.build_id, output)
         assert prepared.archive_sha256 == identity.archive_sha256
         assert "PRIVATE" not in output.read_text()
+        assert b"\r" not in output.read_bytes()
+        assert output.read_bytes().endswith(b"\n")
         assert diagnostic.load_identity(output, diagnostic.sha(output)) == prepared
     else:
         with pytest.raises(diagnostic.AdmissionError):

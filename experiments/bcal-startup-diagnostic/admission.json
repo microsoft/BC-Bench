@@ -1,0 +1,10 @@
+{
+  "status": "awaiting-owner-ready",
+  "sourceCommit": "7f36211148cd5a09cdf121d58677052fd803da39",
+  "buildId": 3077455,
+  "identitySha256": null,
+  "ownerProofSha256": null,
+  "providerAuthorized": false,
+  "smokeAuthorized": false,
+  "goldAuthorized": false
+}
