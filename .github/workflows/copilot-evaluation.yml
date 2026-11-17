@@ -7,14 +7,15 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: "Ignored on this branch: evaluations always use MAI Code 2"
+        description: "Ignored on this branch: evaluations always use GPT-6.1 Sol"
         required: false
-        default: "mai-code-2"
+        default: "gpt-6.1-sol"
         type: choice
         options:
           - "claude-sonnet-5"
           - "claude-opus-5"
           - "gpt-5.6-sol"
+          - "gpt-6.1-sol"
           - "gpt-5.6-terra"
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
@@ -154,7 +155,7 @@ jobs:
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
-            --model "mai-code-2" `
+            --model "gpt-6.1-sol" `
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
@@ -178,7 +179,7 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
-      model: "mai-code-2"
+      model: "gpt-6.1-sol"
       agent: "GitHub Copilot CLI"
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
@@ -197,4 +198,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "mai-code-2", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "bc-mcp": "${{ inputs.bc-mcp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "gpt-6.1-sol", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "bc-mcp": "${{ inputs.bc-mcp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

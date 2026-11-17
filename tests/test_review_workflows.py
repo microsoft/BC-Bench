@@ -30,15 +30,15 @@ def test_copilot_workflow_routes_code_review_through_copilot() -> None:
     assert 'agent: "GitHub Copilot CLI"' in workflow
 
 
-def test_copilot_workflow_forces_mai_code_2_for_evaluation_summary_and_requeue() -> None:
+def test_copilot_workflow_forces_gpt_6_1_sol_for_evaluation_summary_and_requeue() -> None:
     text = _workflow("copilot-evaluation.yml")
     workflow = yaml.safe_load(text)
     jobs = workflow["jobs"]
     evaluate = next(step for step in jobs["evaluate-with-copilot-cli"]["steps"] if "bcbench evaluate copilot" in step.get("run", ""))
 
-    assert '--model "mai-code-2"' in evaluate["run"]
-    assert jobs["summarize-results"]["with"]["model"] == "mai-code-2"
-    assert json.loads(jobs["requeue"]["with"]["workflow-inputs"])["model"] == "mai-code-2"
+    assert '--model "gpt-6.1-sol"' in evaluate["run"]
+    assert jobs["summarize-results"]["with"]["model"] == "gpt-6.1-sol"
+    assert json.loads(jobs["requeue"]["with"]["workflow-inputs"])["model"] == "gpt-6.1-sol"
     assert "inputs.model" not in text
 
 
