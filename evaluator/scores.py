@@ -2,6 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from bc_eval.scorers.autoeval.lmchecklist import LmChecklist as _LmChecklist
+
+
+class LmChecklist(_LmChecklist):
+    def _request_args(self, output: object, expected: object, **kwargs: object) -> dict[str, Any]:
+        return {
+            **super()._request_args(output, expected, **kwargs),
+            "extra_headers": {"x-sticky-route-session-ticket": ""},
+        }
+
 
 class ResolutionRate:
     def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
