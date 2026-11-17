@@ -108,6 +108,31 @@ def test_exact_production_failure_path_is_preserved_without_raw_messages(tmp_pat
             assert "failure" not in safe["turns"][0]
 
 
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("failed to register ownership for session PRIVATE_UUID PRIVATE_PATH (os error 183)", {"nativeFailureKind": "session_ownership", "nativeErrorCode": 183}),
+        ("session construction failed PRIVATE_DATA (os error 0)", {"nativeFailureKind": "session_construction", "nativeErrorCode": 0}),
+        ("session construction failed (os error 65535)", {"nativeFailureKind": "session_construction", "nativeErrorCode": 65535}),
+        ("failed to register ownership for session PRIVATE_PATH", {"nativeFailureKind": "session_ownership"}),
+        ("session construction failed (os error 65536)", {"nativeFailureKind": "session_construction"}),
+        ("session construction failed (os error 100000)", {"nativeFailureKind": "session_construction"}),
+        ("session construction failed (os error -1)", {"nativeFailureKind": "session_construction"}),
+        ("session construction failed (os error +183)", {"nativeFailureKind": "session_construction"}),
+        ("session construction failed (os error 1.5)", {"nativeFailureKind": "session_construction"}),
+        ("session construction failed (os error 183) (os error 184)", {"nativeFailureKind": "session_construction"}),
+        ("session construction failed; failed to register ownership for session (os error 183)", {}),
+        ("UNKNOWN_PRIVATE_MESSAGE (os error 183)", {}),
+        (None, {}),
+        ({"message": "PRIVATE", "errorData": "PRIVATE"}, {}),
+    ],
+)
+def test_scenario_message_projection_exposes_only_fixed_reason_and_bounded_os_code(message, expected):
+    projected = diagnostic.startup_failure_projection(message)
+    assert projected == {"evidenceSource": "scenario_failure_message", **expected}
+    assert "PRIVATE" not in json.dumps(projected)
+
+
 def test_nonpackage_driver_uses_original_command_environment_and_independent_identity(tmp_path, monkeypatch):
     import bcal_governed_study
     from bcal_startup_fixture import offline_route
@@ -165,7 +190,7 @@ def test_nonpackage_driver_uses_original_command_environment_and_independent_ide
                 "executionIdentity": {"sourceCommitSha": pin.source_commit},
                 "runtimeIdentity": {"mainModel": "gpt-56-reasoning-sol", "reasoningEffort": "medium", "sdkPackageVersion": pin.sdk_package_version, "sdkRuntimeVersion": pin.native_version},
                 "agentRuntimeEvidence": [{"modelRequests": 0, "terminalState": "error", "failure": {"stage": "session_create", "exceptionCategory": "io"}}],
-                "failure": {"code": "turn_failed", "message": "PRIVATE"},
+                "failure": {"code": "turn_failed", "message": "failed to register ownership for session PRIVATE_PATH PRIVATE_UUID (os error 183)"},
             },
         )
         raise subprocess.CalledProcessError(1, command, output="PRIVATE")
@@ -179,5 +204,7 @@ def test_nonpackage_driver_uses_original_command_environment_and_independent_ide
     assert proof["providerAttempts"] == proof["judgeCalls"] == proof["auxiliaryInvocations"] == 0
     assert proof["processEvidence"]["exitCode"] == 1
     assert proof["terminalEvidence"]["turns"][0]["failure"]["stage"] == "session_create"
+    assert proof["terminalEvidence"]["turns"][0]["failure"] == {"stage": "session_create", "exceptionCategory": "io"}
+    assert proof["startupFailureProjection"] == {"evidenceSource": "scenario_failure_message", "nativeFailureKind": "session_ownership", "nativeErrorCode": 183}
     assert "PRIVATE" not in json.dumps(proof)
     assert diagnostic.os.environ["BCAL_REASONING_LOCAL_KEY"] == "previous"

@@ -7,6 +7,7 @@ import hashlib
 import json
 import ntpath
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -62,6 +63,20 @@ NATIVE_FAILURE_CATEGORIES = frozenset(
         "sdk_session_error",
     )
 )
+
+
+def startup_failure_projection(value: object) -> dict:
+    result = {"evidenceSource": "scenario_failure_message"}
+    if not isinstance(value, str):
+        return result
+    kinds = tuple(kind for phrase, kind in (("failed to register ownership for session", "session_ownership"), ("session construction failed", "session_construction")) if phrase in value)
+    if len(kinds) != 1:
+        return result
+    result["nativeFailureKind"] = kinds[0]
+    codes = re.findall(r"\(os error ([0-9]{1,5})\)", value)
+    if len(codes) == 1 and int(codes[0]) <= 65535:
+        result["nativeErrorCode"] = int(codes[0])
+    return result
 
 
 def safe_native_failure(value: object) -> dict | None:
@@ -266,6 +281,7 @@ def run(args: argparse.Namespace, *, admitted_identity: RuntimeIdentity | None =
             "auxiliaryInvocations": 0,
             "processEvidence": process,
             "terminalEvidence": transcript,
+            "startupFailureProjection": startup_failure_projection(raw.get("failure", {}).get("message") if isinstance(raw.get("failure"), dict) else None),
             "networkDenial": denial,
             "parentSocketGuard": network,
             "runtimeCleanupVerified": True,

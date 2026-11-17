@@ -1,0 +1,12 @@
+{
+  "status": "owner-ready",
+  "sourceCommit": "7f36211148cd5a09cdf121d58677052fd803da39",
+  "buildId": 3077455,
+  "identitySha256": "fac12eb21bc84e4afec5648ca7b86fc154a057c27bd2b28375c421cce6cc8efd",
+  "ownerProofSha256": "1d28d376646905fa03f17b7c872358bac5b924073688075a0910139a771c4053",
+  "providerAuthorized": false,
+  "smokeAuthorized": false,
+  "goldAuthorized": false,
+  "attemptId": "build-3077455-b41f416d4e4e-projection1",
+  "diagnosticRevision": "startup-failure-projection-v1"
+}

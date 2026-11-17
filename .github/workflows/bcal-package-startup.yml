@@ -1,12 +1,21 @@
 name: Once-only exact diagnostic package startup fixture
 on:
   workflow_call:
+    inputs:
+      diagnostic-attempt-id:
+        type: string
+        required: false
+        default: ""
+      require-attempt-id:
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
   actions: read
   id-token: write
 concurrency:
-  group: bcal-diagnostic-package-startup-v1-3077455
+  group: bcal-diagnostic-package-${{ inputs.diagnostic-attempt-id || 'startup-v1-3077455' }}
   cancel-in-progress: false
 jobs:
   diagnose:
@@ -22,35 +31,58 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          DIAGNOSTIC_ATTEMPT_ID: ${{ inputs.diagnostic-attempt-id }}
+          REQUIRE_DIAGNOSTIC_ATTEMPT_ID: ${{ inputs.require-attempt-id }}
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'Diagnostic package rerun is not authorized.' }
-          $admission = Get-Content -Raw -LiteralPath experiments\bcal-startup-diagnostic\admission.json | ConvertFrom-Json
-          if ($admission.status -ne 'owner-ready' -or $admission.sourceCommit -ne '7f36211148cd5a09cdf121d58677052fd803da39' -or
-              $admission.buildId -ne 3077455 -or $admission.identitySha256 -notmatch '^[a-f0-9]{64}$' -or
+          if ($env:REQUIRE_DIAGNOSTIC_ATTEMPT_ID -eq 'true' -and -not $env:DIAGNOSTIC_ATTEMPT_ID) { throw 'Fresh diagnostic attempt ID is required.' }
+          $profile = 'experiments\bcal-startup-diagnostic'
+          $suffix = ' / reasoning-package-startup-v1'
+          if ($env:DIAGNOSTIC_ATTEMPT_ID) {
+            if ($env:DIAGNOSTIC_ATTEMPT_ID -notmatch '^build-[1-9][0-9]*-[a-f0-9]{12}(-projection1)?$') { throw 'Diagnostic attempt ID is invalid.' }
+            $profile = Join-Path $profile "attempts\$env:DIAGNOSTIC_ATTEMPT_ID"
+            $suffix = " / reasoning-package-diagnostic $env:DIAGNOSTIC_ATTEMPT_ID"
+          }
+          $admission = Get-Content -Raw -LiteralPath (Join-Path $profile 'admission.json') | ConvertFrom-Json
+          if ($admission.status -ne 'owner-ready' -or $admission.sourceCommit -notmatch '^[a-f0-9]{40}$' -or
+              $admission.buildId -le 0 -or $admission.identitySha256 -notmatch '^[a-f0-9]{64}$' -or
               $admission.ownerProofSha256 -notmatch '^[a-f0-9]{64}$' -or $admission.providerAuthorized -ne $false -or
               $admission.smokeAuthorized -ne $false -or $admission.goldAuthorized -ne $false) { throw 'Exact diagnostic package owner READY is not admitted.' }
-          $identityPath = 'experiments\bcal-startup-diagnostic\package.json'
+          if (-not $env:DIAGNOSTIC_ATTEMPT_ID -and ($admission.sourceCommit -ne '7f36211148cd5a09cdf121d58677052fd803da39' -or
+              $admission.buildId -ne 3077455)) { throw 'Historical diagnostic package source differs.' }
+          $identityPath = Join-Path $profile 'package.json'
           if ((Get-FileHash -Algorithm SHA256 -LiteralPath $identityPath).Hash.ToLowerInvariant() -ne $admission.identitySha256) { throw 'Diagnostic package identity bytes differ.' }
-          $proofPath = 'experiments\bcal-startup-diagnostic\owner-proof-admission.json'
+          $proofPath = Join-Path $profile 'owner-proof-admission.json'
           if ((Get-FileHash -Algorithm SHA256 -LiteralPath $proofPath).Hash.ToLowerInvariant() -ne $admission.ownerProofSha256) { throw 'Diagnostic package owner proof bytes differ.' }
           $proof = Get-Content -Raw -LiteralPath $proofPath | ConvertFrom-Json
           $identity = Get-Content -Raw -LiteralPath $identityPath | ConvertFrom-Json
           if ($identity.kind -ne 'exact-diagnostic-package' -or $identity.source_commit -ne $admission.sourceCommit -or
               $identity.build_id -ne $admission.buildId -or $identity.version -notmatch '^\d+\.\d+\.\d+\.\d+-beta$' -or
               $identity.feed -ne 'DynamicsSMBTest') { throw 'Diagnostic package source or version differs.' }
+          if ($env:DIAGNOSTIC_ATTEMPT_ID) {
+            $expectedAttempt = "build-$($identity.build_id)-$($identity.archive_sha256.Substring(0,12))"
+            $projectionAdded = $proof.diagnosticRevision -eq 'startup-failure-projection-v1' -and
+                $proof.priorDiagnosticRevision -eq 'native-failure-only' -and $admission.diagnosticRevision -eq $proof.diagnosticRevision
+            if ($projectionAdded) { $expectedAttempt += '-projection1' }
+            if ($env:DIAGNOSTIC_ATTEMPT_ID -ne $expectedAttempt -or $admission.attemptId -ne $expectedAttempt -or
+                $proof.attemptId -ne $expectedAttempt -or $proof.hypothesis -notmatch '^[a-z][a-z0-9_-]{2,79}$' -or
+                $proof.priorRunId -notmatch '^[1-9][0-9]*$' -or $proof.priorArchiveSha256 -notmatch '^[a-f0-9]{64}$' -or
+                ($proof.priorArchiveSha256 -eq $identity.archive_sha256 -and -not $projectionAdded)) { throw 'Fresh diagnostic hypothesis or package identity is not admitted.' }
+          }
           if ($proof.ownerReady -ne $true -or $proof.packagedOfflineProofsVerified -ne $true -or
               $proof.providerAttempts -ne 0 -or $proof.sourceCommit -ne $identity.source_commit -or
               $proof.buildId -ne $identity.build_id -or $proof.archiveSha256 -ne $identity.archive_sha256) { throw 'Exact package offline proof or owner READY differs.' }
           $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
           $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
           if ($runs.total_count -gt 100) { throw 'Diagnostic package dispatch inventory incomplete.' }
-          if (@($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith(' / reasoning-package-startup-v1') }).Count) {
+          if (@($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith($suffix) }).Count) {
             throw 'The sole diagnostic package dispatch was consumed.'
           }
           "version=$($identity.version)" >> $env:GITHUB_OUTPUT
           "identity-sha256=$($admission.identitySha256)" >> $env:GITHUB_OUTPUT
+          "identity-path=$identityPath" >> $env:GITHUB_OUTPUT
       - uses: ./.github/actions/setup-python-uv
       - uses: ./.github/actions/install-bcal
         with:
@@ -70,7 +102,7 @@ jobs:
           uv export --frozen --group dev --no-hashes --output-file .reasoning-runtime-requirements.txt *> "$env:RUNNER_TEMP\package-diagnostic-export.log"
           uv pip install --python .\.reasoning-venv\Scripts\python.exe --no-deps -r .reasoning-runtime-requirements.txt
           uv pip install --python .\.reasoning-venv\Scripts\python.exe --no-deps -r experiments\bcal-sdk-policy\judge-requirements.txt
-          & .\.reasoning-venv\Scripts\python.exe -m pytest tests\test_bcal_package_diagnostic.py tests\test_bcal_nonpackage_diagnostic.py tests\test_bcal_stage_nonpackage.py tests\test_bcal_startup_fixture.py tests\test_bcal_reasoning_package.py --noconftest -q --override-ini="addopts="
+          & .\.reasoning-venv\Scripts\python.exe -m pytest tests\test_bcal_diagnostic_admission.py tests\test_bcal_package_diagnostic.py tests\test_bcal_nonpackage_diagnostic.py tests\test_bcal_stage_nonpackage.py tests\test_bcal_startup_fixture.py tests\test_bcal_reasoning_package.py --noconftest -q --override-ini="addopts="
           if ($LASTEXITCODE -ne 0) { throw 'Diagnostic package offline regressions failed.' }
       - name: Download frozen symbols before network denial
         shell: pwsh
@@ -88,6 +120,7 @@ jobs:
         env:
           DIAGNOSTIC_VERSION: ${{ steps.admission.outputs.version }}
           DIAGNOSTIC_IDENTITY_SHA256: ${{ steps.admission.outputs.identity-sha256 }}
+          DIAGNOSTIC_IDENTITY_PATH: ${{ steps.admission.outputs.identity-path }}
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
@@ -95,12 +128,12 @@ jobs:
           $binaries = @(Get-ChildItem -LiteralPath $root -Recurse -Filter bcal.dll | Where-Object { $_.Directory.Name -eq 'any' -and $_.Directory.Parent.Name -eq 'net10.0' })
           $archives = @(Get-ChildItem -LiteralPath $root -Recurse -Filter "microsoft.businesscentral.bcal.cli.$env:DIAGNOSTIC_VERSION.nupkg")
           if ($binaries.Count -ne 1 -or $archives.Count -ne 1) { throw 'Exact diagnostic package discovery differs.' }
-          & scripts\Run-BCalStartupFixture.ps1 -Python "$PWD\.reasoning-venv\Scripts\python.exe" -DiagnosticRuntime $binaries[0].Directory.FullName -DiagnosticArchive $archives[0].FullName -Identity "$PWD\experiments\bcal-startup-diagnostic\package.json" -IdentitySha256 $env:DIAGNOSTIC_IDENTITY_SHA256 -Symbols "$env:RUNNER_TEMP\package-diagnostic-symbols" -Work "$env:RUNNER_TEMP\bcal-reasoning-medium-private" -Output "$PWD\package-diagnostic-sanitized\execution"
+          & scripts\Run-BCalStartupFixture.ps1 -Python "$PWD\.reasoning-venv\Scripts\python.exe" -DiagnosticRuntime $binaries[0].Directory.FullName -DiagnosticArchive $archives[0].FullName -Identity (Join-Path $PWD $env:DIAGNOSTIC_IDENTITY_PATH) -IdentitySha256 $env:DIAGNOSTIC_IDENTITY_SHA256 -Symbols "$env:RUNNER_TEMP\package-diagnostic-symbols" -Work "$env:RUNNER_TEMP\bcal-reasoning-medium-private" -Output "$PWD\package-diagnostic-sanitized\execution"
       - name: Retain allowlisted package diagnostic evidence only
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: reasoning-package-startup-v1-sanitized
+          name: ${{ inputs.diagnostic-attempt-id && format('reasoning-package-diagnostic-{0}-sanitized', inputs.diagnostic-attempt-id) || 'reasoning-package-startup-v1-sanitized' }}
           path: |
             package-diagnostic-sanitized\*.json
             package-diagnostic-sanitized\execution\*.json

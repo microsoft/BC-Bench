@@ -586,3 +586,21 @@ identity, packaged offline proofs and an explicit READY handoff.
 The separate once-only `reasoning-package-startup-v1` phase enforces that gate
 before installation; `experiments\bcal-startup-diagnostic\admission.json`
 initially records `awaiting-owner-ready`, not a guessed version or archive.
+
+Further diagnosis-only checks use `reasoning-package-diagnostic` with an
+append-only profile under `experiments\bcal-startup-diagnostic\attempts`.
+The attempt ID binds the build ID and first12 archive hash characters.
+Each profile needs owner READY, verified offline proofs and a closed hypothesis
+identifier referencing the previous run. A changed package archive ordinarily
+defines a fresh attempt. The additional `-projection1` identity permits one
+same-package diagnostic only when adding the scenario failure projector to a
+previously native-failure-only attempt; it never resets the old marker.
+The workflow rejects reruns and previously dispatched attempt IDs. Earlier
+profiles, receipts and the62891 startup phase remain unchanged. This sequence
+does not authorize provider access, live coding, smoke, gold or phase5.
+
+The diagnostic-only `startupFailureProjection` is separate from native failure
+fields. Its source is explicitly `scenario_failure_message`; only fixed session
+ownership/construction phrases and one `(os error N)` integer from0through65535
+are projected. Unknown or absent details are omitted. Raw messages, paths,
+UUIDs and SDK error data never leave the private transcript.
