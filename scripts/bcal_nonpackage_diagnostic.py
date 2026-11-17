@@ -74,7 +74,7 @@ def startup_failure_projection(value: object) -> dict:
         return result
     result["nativeFailureKind"] = kinds[0]
     codes = re.findall(r"\(os error ([0-9]{1,5})\)", value)
-    if len(codes) == 1 and int(codes[0]) <= 65535:
+    if value.count("(os error ") == 1 and len(codes) == 1 and int(codes[0]) <= 65535:
         result["nativeErrorCode"] = int(codes[0])
     return result
 
