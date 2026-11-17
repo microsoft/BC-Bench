@@ -1,8 +1,12 @@
 param(
     [Parameter(Mandatory)][string]$Python,
-    [Parameter(Mandatory)][string]$Package,
-    [Parameter(Mandatory)][string]$Archive,
-    [Parameter(Mandatory)][string]$SymbolCache,
+    [Parameter(Mandatory, ParameterSetName='Package')][string]$Package,
+    [Parameter(Mandatory, ParameterSetName='Package')][string]$Archive,
+    [Parameter(Mandatory, ParameterSetName='Package')][string]$SymbolCache,
+    [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Runtime,
+    [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Identity,
+    [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$IdentitySha256,
+    [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Symbols,
     [Parameter(Mandatory)][string]$Work,
     [Parameter(Mandatory)][string]$Output
 )
@@ -64,7 +68,11 @@ try {
     $proof.status = 'outbound-denial-active'
     $proof | ConvertTo-Json | Set-Content -LiteralPath $proofPath
     $stage = 'offline_fixture'
-    & $Python scripts\bcal_startup_fixture.py --package $Package --archive $Archive --symbol-cache $SymbolCache --work $Work --output $Output --network-proof $proofPath
+    if ($PSCmdlet.ParameterSetName -eq 'Nonpackage') {
+        & $Python scripts\bcal_nonpackage_diagnostic.py --runtime $Runtime --identity $Identity --identity-sha256 $IdentitySha256 --symbols $Symbols --work $Work --output $Output --network-proof $proofPath
+    } else {
+        & $Python scripts\bcal_startup_fixture.py --package $Package --archive $Archive --symbol-cache $SymbolCache --work $Work --output $Output --network-proof $proofPath
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Offline startup fixture failed; no replacement authorized.' }
 } finally {
     if ($proof.status -ne 'outbound-denial-active') {

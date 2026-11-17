@@ -1,0 +1,92 @@
+name: Once-only private nonpackage startup diagnostic
+on:
+  workflow_call:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: bcal-nonpackage-startup-diagnostic-v1-39123cc1
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Require sole nonpackage diagnostic dispatch
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'Nonpackage diagnostic rerun is not authorized.' }
+          $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
+          if ($runs.total_count -gt 100) { throw 'Nonpackage dispatch inventory incomplete.' }
+          if (@($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith(' / reasoning-nonpackage-startup-v1') }).Count) {
+            throw 'The sole nonpackage diagnostic dispatch was consumed.'
+          }
+      - uses: ./.github/actions/setup-python-uv
+      - name: Prepare offline diagnostic toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          uv venv .reasoning-venv --python .\.venv\Scripts\python.exe
+          uv export --frozen --group dev --no-hashes --output-file .reasoning-runtime-requirements.txt *> "$env:RUNNER_TEMP\nonpackage-export.log"
+          uv pip install --python .\.reasoning-venv\Scripts\python.exe --no-deps -r .reasoning-runtime-requirements.txt
+          uv pip install --python .\.reasoning-venv\Scripts\python.exe --no-deps -r experiments\bcal-sdk-policy\judge-requirements.txt
+          & .\.reasoning-venv\Scripts\python.exe -m pytest tests\test_bcal_nonpackage_diagnostic.py tests\test_bcal_stage_nonpackage.py tests\test_bcal_startup_fixture.py --noconftest -q --override-ini="addopts="
+          if ($LASTEXITCODE -ne 0) { throw 'Nonpackage offline regressions failed.' }
+      - name: Download frozen symbols before network denial
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease | Out-Null
+          Import-Module BcContainerHelper -Force -DisableNameChecking
+          $url = Get-BCArtifactUrl -type Sandbox -version '28.0.46665.57479' -country w1 -select Latest
+          if (-not $url -or ([uri]$url).Segments[-2].Trim('/') -ne '28.0.46665.57479') { throw 'Frozen symbols unavailable.' }
+          Download-Artifacts -artifactUrl $url -includePlatform *> "$env:RUNNER_TEMP\nonpackage-symbol-download.log"
+          & .\.reasoning-venv\Scripts\python.exe -c "import sys;from pathlib import Path;sys.path.insert(0,'scripts');from bcal_reasoning_smoke import materialize_symbols;materialize_symbols(Path(r'C:\bcartifacts.cache\sandbox'),Path(sys.argv[1]))" "$env:RUNNER_TEMP\nonpackage-symbols"
+      - name: Download and verify private immutable runtime before denial
+        shell: pwsh
+        env:
+          PRIVATE_BLOB_URL: ${{ secrets.BCAL_STARTUP_DIAGNOSTIC_BLOB_URL }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $archive = "$env:RUNNER_TEMP\nonpackage-runtime.zip"
+          try {
+            $uri = [uri]$env:PRIVATE_BLOB_URL
+            if ($uri.Scheme -ne 'https' -or $uri.Host -ne 'devtoolsautomation.blob.core.windows.net' -or
+                $uri.AbsolutePath -ne '/bcal-startup-diagnostic-private/native-startup-v1/aedb870f3c7af06904e2bbb80cb779cb243f692583a6fb45fcf7784852dec30f.zip') { throw 'Private staging identity differs.' }
+            Invoke-WebRequest -Uri $uri -OutFile $archive -TimeoutSec 300 | Out-Null
+          } catch { throw 'Private diagnostic download failed; no fixture admitted.' }
+          finally { Remove-Item Env:\PRIVATE_BLOB_URL -ErrorAction SilentlyContinue }
+          & .\.reasoning-venv\Scripts\python.exe scripts\bcal_stage_nonpackage.py --archive $archive --archive-sha256 aedb870f3c7af06904e2bbb80cb779cb243f692583a6fb45fcf7784852dec30f --archive-bytes 158624827 --identity-sha256 39123cc115ca17a100e8b9fadc365dd15e6373d8896080d97a43ee7bdc959f41 --patch-sha256 db6b22986468ab680c0a167f3d7c2c07438661ee3a557af230057d336c65833c --summary-sha256 9756e9ce290161c5c8c639f95474199e929c2768005492424c133b14882b599c --destination "$env:RUNNER_TEMP\nonpackage-runtime" --receipt nonpackage-sanitized\archive-admission.json
+          if ($LASTEXITCODE -ne 0) { throw 'Private immutable archive admission failed.' }
+      - name: Deny external egress and execute one nonpackage startup diagnostic
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          & scripts\Run-BCalStartupFixture.ps1 -Python "$PWD\.reasoning-venv\Scripts\python.exe" -Runtime "$env:RUNNER_TEMP\nonpackage-runtime\runtime" -Identity "$env:RUNNER_TEMP\nonpackage-runtime\identity.json" -IdentitySha256 39123cc115ca17a100e8b9fadc365dd15e6373d8896080d97a43ee7bdc959f41 -Symbols "$env:RUNNER_TEMP\nonpackage-symbols" -Work "$env:RUNNER_TEMP\bcal-reasoning-medium-private" -Output "$PWD\nonpackage-sanitized\execution"
+      - name: Retain allowlisted diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: reasoning-nonpackage-startup-v1-sanitized
+          path: |
+            nonpackage-sanitized\*.json
+            nonpackage-sanitized\execution\*.json
+            ${{ runner.temp }}\startup-network-denial.json
+            ${{ runner.temp }}\startup-network-cleanup.json
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Remove runner-local private runtime archive
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath "$env:RUNNER_TEMP\nonpackage-runtime.zip") { Remove-Item -LiteralPath "$env:RUNNER_TEMP\nonpackage-runtime.zip" -Force }

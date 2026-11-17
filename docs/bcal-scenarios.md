@@ -558,3 +558,13 @@ Native failure fields are read only from `agentRuntimeEvidence[i].failure`;
 stage and exception categories must match the runtime owner's closed sets.
 Unknown values fail the diagnostic gate rather than being silently dropped.
 No binary staging or hosted execution is implied by preparing this driver.
+
+The separately authorized `reasoning-nonpackage-startup-v1` phase consumes only
+the exact frozen diagnostic archive from a private Azure blob. Its short-lived,
+read-only HTTPS delegation URL is passed as a masked repository secret, never
+as a workflow input or artifact. Archive bytes, complete inventory and three
+root provenance files are verified before extraction; no runtime build or
+package publication occurs. The original package phase and its once-only
+history remain separate. The staging owner removes the private blob and
+ephemeral repository secret immediately on terminal completion or failure and
+verifies absence; URL expiration alone is not data retention enforcement.
