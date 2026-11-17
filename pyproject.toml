@@ -37,7 +37,12 @@ dependencies = [
 # packages (pyrit, transformers, datasets, ...) that no other command needs.
 redteam = [
     "azure-ai-evaluation[redteam]>=1.18.2",
+    "azure-core>=1.41.0",
     "azure-identity>=1.25.3",
+    "openpyxl>=3.1.5",
+    "pyrit>=0.11.0",
+    "opentelemetry-sdk>=1.45.2",
+    "opentelemetry-instrumentation-requests>=0.66b2",
 ]
 
 [project.scripts]

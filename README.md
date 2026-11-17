@@ -44,6 +44,7 @@ BC-Bench is open source, and you're welcome to fork and adapt it for your own us
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — fork setup, repo layout, versioning, day-to-day maintainer ops
 - **[EXPERIMENT.md](EXPERIMENT.md)** — run an experiment (toggle instructions / skills / agents / MCP / model) against an existing category
 - **[CATEGORIES.md](CATEGORIES.md)** — add a new evaluation category alongside the existing `bug-fix` / `test-generation` / `code-review` / `nl2al`
+- **[Local harms runs](docs/harms-capture.md)** — generated Direct and supplied UPIA/XPIA evaluation; aggregate summaries with private local capture/export
 
 ## Citation
 

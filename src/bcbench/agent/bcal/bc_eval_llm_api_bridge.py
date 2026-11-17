@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
+import time
+from dataclasses import replace
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, cast
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
@@ -74,7 +79,24 @@ def _local_certificate_credential(tenant_id: str, client_id: str) -> TokenCreden
     )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--capture-config", type=Path)
+    parser.add_argument("--capture-dir", type=Path)
+    args = parser.parse_args(argv or [])
+    if bool(args.capture_config) != bool(args.capture_dir):
+        raise ValueError("Capture configuration and directory must be supplied together.")
+    capture_config = None
+    capture_dir = None
+    if args.capture_config:
+        capture_config = json.loads(args.capture_config.read_text(encoding="utf-8"))
+        if capture_config["bc_eval_version"] != version("bc-eval"):
+            raise ValueError("Installed bc-eval differs from the selected transport version.")
+        if capture_config["environment"] not in ("TEST", "PROD") or capture_config["reasoning_effort"] not in ("none", "minimal", "low", "medium", "high", "xhigh"):
+            raise ValueError("Explicit environment and supported reasoning effort are required.")
+        capture_dir = args.capture_dir / uuid4().hex
+        capture_dir.mkdir(parents=True)
+
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
     messages = request.get("messages")
@@ -90,6 +112,12 @@ def main() -> int:
         raise RuntimeError("bc-eval>=0.6.0 is required for the bcal LLM API bridge.") from exc
 
     settings = LlmApiSettings.from_env()
+    if capture_config is not None:
+        if model != capture_config["model"]:
+            raise ValueError("BCal requested a different model than the capture configuration.")
+        if request.get("reasoning_effort") not in (None, capture_config["reasoning_effort"]):
+            raise ValueError("BCal reasoning effort conflicts with the explicit capture configuration.")
+        settings = replace(settings, environment=capture_config["environment"])
     client = create_llm_api_client(
         inference_step=_TAXONOMY_INFERENCE_STEP,
         settings=settings,
@@ -106,8 +134,42 @@ def main() -> int:
         kwargs["tools"] = request["tools"]
 
     reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
+    if capture_config is not None:
+        reasoning_effort = capture_config["reasoning_effort"]
     if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
+
+    if capture_dir is not None and capture_config is not None:
+        (capture_dir / "runtime-request.json").write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
+        (capture_dir / "request.json").write_text(json.dumps(kwargs, ensure_ascii=False), encoding="utf-8")
+        identity = {
+            "request_started_ns": time.time_ns(),
+            "model": model,
+            "reasoning_effort": reasoning_effort,
+            "environment": settings.environment,
+            "bc_eval_version": version("bc-eval"),
+            "provider": "M365 LLM API",
+            "configured_endpoint": str(client.base_url),
+            "service_tier": settings.service_tier,
+        }
+        (capture_dir / "identity.json").write_text(json.dumps(identity), encoding="utf-8")
+        raw = client.chat.completions.with_raw_response.create(**kwargs)
+        http_response = raw.http_response
+        (capture_dir / "http.json").write_text(
+            json.dumps(
+                {
+                    "url": str(http_response.request.url),
+                    "status": http_response.status_code,
+                    "routed_model": http_response.request.headers.get("x-llm-models"),
+                    "request_id": http_response.headers.get("x-request-id"),
+                }
+            ),
+            encoding="utf-8",
+        )
+        response = _to_jsonable(raw.parse())
+        (capture_dir / "response.json").write_text(json.dumps(response, ensure_ascii=False), encoding="utf-8")
+        json.dump(response, sys.stdout)
+        return 0
 
     response = client.chat.completions.create(**kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
@@ -115,4 +177,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))
