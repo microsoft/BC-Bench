@@ -6,9 +6,14 @@ param(
     [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Runtime,
     [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')][string]$DiagnosticRuntime,
     [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')][string]$DiagnosticArchive,
+    [Parameter(Mandatory, ParameterSetName='SdkControl')][string]$SdkRuntime,
+    [Parameter(Mandatory, ParameterSetName='SdkControl')][string]$SdkArchive,
+    [Parameter(Mandatory, ParameterSetName='SdkControl')][string]$ControlManifestSha256,
+    [Parameter(Mandatory, ParameterSetName='SdkControl')]
     [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')]
     [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Identity,
     [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')]
+    [Parameter(Mandatory, ParameterSetName='SdkControl')]
     [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$IdentitySha256,
     [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')]
     [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Symbols,
@@ -75,7 +80,9 @@ try {
     $proof.status = 'outbound-denial-active'
     $proof | ConvertTo-Json | Set-Content -LiteralPath $proofPath
     $stage = 'offline_fixture'
-    if ($PSCmdlet.ParameterSetName -eq 'DiagnosticPackage') {
+    if ($PSCmdlet.ParameterSetName -eq 'SdkControl') {
+        & $Python scripts\bcal_sdk_startup_control.py run --runtime $SdkRuntime --archive $SdkArchive --identity $Identity --identity-sha256 $IdentitySha256 --work $Work --output $Output --network-proof $proofPath --control-manifest-sha256 $ControlManifestSha256
+    } elseif ($PSCmdlet.ParameterSetName -eq 'DiagnosticPackage') {
         & $Python scripts\bcal_package_diagnostic.py --runtime $DiagnosticRuntime --archive $DiagnosticArchive --identity $Identity --identity-sha256 $IdentitySha256 --symbols $Symbols --work $Work --output $Output --network-proof $proofPath
     } elseif ($PSCmdlet.ParameterSetName -eq 'Nonpackage') {
         & $Python scripts\bcal_nonpackage_diagnostic.py --runtime $Runtime --identity $Identity --identity-sha256 $IdentitySha256 --symbols $Symbols --work $Work --output $Output --network-proof $proofPath
@@ -94,9 +101,24 @@ try {
         Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction Stop
         $cleanup.denialRulesRemoved = @(Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue).Count -eq 0
         $ownedRoot = [IO.Path]::GetFullPath($Work).TrimEnd('\') + '\'
-        $owned = @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($ownedRoot, [StringComparison]::OrdinalIgnoreCase) })
+        $dotnetExe = $null
+        $controlPattern = $null
+        if ($PSCmdlet.ParameterSetName -eq 'SdkControl') {
+            $dotnetExe = (Get-Command dotnet -ErrorAction Stop).Source
+            $controlPattern = '(?:^|\s)"?' + [regex]::Escape((Join-Path $ownedRoot 'control\SdkStartupControl.dll')) + '"?(?:\s|$)'
+        }
+        $ownedProcess = {
+            $_.ExecutablePath -and ($_.ExecutablePath.StartsWith($ownedRoot, [StringComparison]::OrdinalIgnoreCase) -or
+                ($dotnetExe -and $_.ExecutablePath.Equals($dotnetExe, [StringComparison]::OrdinalIgnoreCase) -and $_.CommandLine -match $controlPattern))
+        }
+        $owned = @(Get-CimInstance Win32_Process | Where-Object $ownedProcess)
         foreach ($process in $owned) { Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop }
-        $cleanup.runtimeProcessCleanupVerified = @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($ownedRoot, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0
+        $cleanup.runtimeProcessCleanupVerified = @(Get-CimInstance Win32_Process | Where-Object $ownedProcess).Count -eq 0
+        if ($PSCmdlet.ParameterSetName -eq 'SdkControl') {
+            $state = Join-Path $ownedRoot 'sdk-state'
+            if (Test-Path -LiteralPath $state) { Remove-Item -LiteralPath $state -Recurse -Force -ErrorAction Stop }
+            $cleanup.controlOwnedStateRemoved = -not (Test-Path -LiteralPath $state)
+        }
         if ($cleanup.denialRulesRemoved) {
             $dnsAfter = @(Get-DnsClientServerAddress | Sort-Object InterfaceIndex, AddressFamily | Select-Object InterfaceIndex, AddressFamily, ServerAddresses) | ConvertTo-Json -Depth 5 -Compress
             $cleanup.dnsConfigurationUnchanged = $dnsBefore -eq $dnsAfter
@@ -105,13 +127,17 @@ try {
             $cleanup.dnsProbeSucceeded = @(Resolve-DnsName github.com -DnsOnly -ErrorAction Stop).Count -gt 0
         }
     } catch { $cleanup.failureCategory = 'host_cleanup' }
+    if ($PSCmdlet.ParameterSetName -eq 'SdkControl' -and -not $cleanup.Contains('controlOwnedStateRemoved')) { $cleanup.controlOwnedStateRemoved = $false }
     $cleanupPath = Join-Path $env:RUNNER_TEMP 'startup-network-cleanup.json'
     $cleanup | ConvertTo-Json | Set-Content -LiteralPath $cleanupPath
-    if ($PSCmdlet.ParameterSetName -eq 'DiagnosticPackage') {
+    if ($PSCmdlet.ParameterSetName -eq 'SdkControl') {
+        try { & $Python scripts\bcal_sdk_startup_control.py console --output $Output --cleanup $cleanupPath }
+        catch { Write-Output 'BCAL_SAFE_DIAGNOSTIC {"status":"console_emitter_failed","evidenceSource":"post_cleanup_public_sdk_control"}' }
+    } elseif ($PSCmdlet.ParameterSetName -eq 'DiagnosticPackage') {
         try { & $Python scripts\bcal_diagnostic_console.py --output $Output --cleanup $cleanupPath }
         catch { Write-Output 'BCAL_SAFE_DIAGNOSTIC {"status":"console_emitter_failed","evidenceSource":"post_cleanup_console"}' }
     }
-    if (-not $cleanup.denialRulesRemoved -or -not $cleanup.runtimeProcessCleanupVerified -or -not $cleanup.dnsConfigurationUnchanged -or -not $cleanup.dnsCacheCleared -or -not $cleanup.dnsProbeSucceeded) {
+    if (-not $cleanup.denialRulesRemoved -or -not $cleanup.runtimeProcessCleanupVerified -or -not $cleanup.dnsConfigurationUnchanged -or -not $cleanup.dnsCacheCleared -or -not $cleanup.dnsProbeSucceeded -or ($PSCmdlet.ParameterSetName -eq 'SdkControl' -and -not $cleanup.controlOwnedStateRemoved)) {
         throw 'Temporary firewall/runtime/DNS cleanup failed; inspect closed console receipt.'
     }
 }

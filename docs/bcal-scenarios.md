@@ -626,3 +626,23 @@ Future instrumented packages may expose optional typed `rpcErrorCode`
 `sdk_rpc` exception category. Missing/null fields remain omitted. These are
 consumed only when present in the native failure object; they are never
 backfilled from the separate scenario-message projection for62891.
+
+The separate `-sdkcontrol1` attempt is a source-only public SDK startup control,
+not another BCAL model fixture. The owner-frozen C# source and project reference
+only public SDK APIs and actual62891 assemblies. Offline restore uses only the
+local source directory with NuGet auditing disabled. Before denial, the host
+freezes every compiled helper/copied dependency hash and verifies dependencies
+against the full package inventory. It does not assume DLL hashes are portable
+across compilation paths.
+
+After the same OS denial gates, exactly one three-argument valid-case invocation
+starts the native runtime, creates a session and disposes it. It never calls
+Send, accepts no provider credentials, and uses a rejection-only request handler.
+The locally controlled invalid-directory variant is not authorized on the host.
+Typed category/code and RPC data **kind**, lifecycle booleans and numeric timing
+are the only native diagnostics exported; no message, path or RPC data contents
+are published. The wrapper also verifies removal of the exact owned dotnet
+control process and state directory before emitting post-cleanup console JSON.
+The control compares bare public SDK startup with already observed BCAL startup,
+not inference, coding success or gold admission. Stop and reason from its result;
+there is no automatic follow-up dispatch.

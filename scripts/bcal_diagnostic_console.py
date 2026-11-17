@@ -22,7 +22,7 @@ def load(path: Path) -> dict | None:
     return value
 
 
-def receipt(output: Path, cleanup_path: Path) -> dict:
+def cleanup_receipt(cleanup_path: Path) -> dict:
     cleanup = load(cleanup_path)
     if cleanup is None:
         raise AdmissionError("Cleanup evidence is required before console emission.")
@@ -31,6 +31,11 @@ def receipt(output: Path, cleanup_path: Path) -> dict:
         if type(cleanup.get(key)) is not bool:
             raise AdmissionError("Closed cleanup boolean is missing.")
         safe_cleanup[key] = cleanup[key]
+    return safe_cleanup
+
+
+def receipt(output: Path, cleanup_path: Path) -> dict:
+    safe_cleanup = cleanup_receipt(cleanup_path)
     journal = load(output.parent / "diagnostic-driver-stage.json")
     safe_journal = None
     if journal is not None:
