@@ -62,6 +62,7 @@ NATIVE_FAILURE_CATEGORIES = frozenset(
         "unknown",
         "http_status",
         "sdk_session_error",
+        "sdk_rpc",
     )
 )
 
@@ -96,6 +97,17 @@ def safe_native_failure(value: object) -> dict | None:
         if type(status) is not int or not 100 <= status <= 599:
             raise AdmissionError("Native diagnostic HTTP status is invalid.")
         result["httpStatusCode"] = status
+    for key, minimum, maximum in (("rpcErrorCode", -(2**31), 2**31 - 1), ("nativeErrorCode", 0, 65535)):
+        code = value.get(key)
+        if code is not None:
+            if type(code) is not int or not minimum <= code <= maximum:
+                raise AdmissionError("Native diagnostic numeric code is invalid.")
+            result[key] = code
+    kind = value.get("nativeFailureKind")
+    if kind is not None:
+        if kind not in ("session_ownership", "session_construction"):
+            raise AdmissionError("Native diagnostic failure kind is not admitted.")
+        result["nativeFailureKind"] = kind
     return result
 
 

@@ -612,3 +612,10 @@ owned firewall/process removal, unchanged DNS configuration and cache clearing
 before a DNS control probe and artifact upload. Missing old cleanup receipts
 remain unknown; a terminal GitHub-hosted job is lifecycle evidence, not proof
 that each old rule was removed.
+
+Future instrumented packages may expose optional typed `rpcErrorCode`
+(signed32-bit), `nativeErrorCode` (0through65535), and closed
+`nativeFailureKind` (`session_ownership` or `session_construction`), plus the
+`sdk_rpc` exception category. Missing/null fields remain omitted. These are
+consumed only when present in the native failure object; they are never
+backfilled from the separate scenario-message projection for62891.

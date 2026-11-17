@@ -83,6 +83,40 @@ def test_unknown_native_diagnostics_are_rejected_not_silently_discarded(damage):
     assert diagnostic.safe_native_failure(None) is None
 
 
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"rpcErrorCode": -(2**31), "nativeErrorCode": 0, "nativeFailureKind": "session_construction"},
+        {"rpcErrorCode": 2**31 - 1, "nativeErrorCode": 65535, "nativeFailureKind": "session_ownership"},
+        {"rpcErrorCode": None, "nativeErrorCode": None, "nativeFailureKind": None},
+    ],
+)
+def test_future_typed_rpc_fields_are_bounded_optional_and_not_scenario_projection(fields):
+    source = {"stage": "session_create", "exceptionCategory": "io", "innerExceptionCategory": "sdk_rpc", **fields, "errorData": "PRIVATE", "message": "PRIVATE"}
+    safe = diagnostic.safe_native_failure(source)
+    assert safe == {key: value for key, value in source.items() if key not in ("message", "errorData") and value is not None}
+    assert "evidenceSource" not in safe
+    assert "PRIVATE" not in json.dumps(safe)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"rpcErrorCode": -(2**31) - 1},
+        {"rpcErrorCode": 2**31},
+        {"rpcErrorCode": True},
+        {"nativeErrorCode": -1},
+        {"nativeErrorCode": 65536},
+        {"nativeErrorCode": "183"},
+        {"nativeErrorCode": False},
+        {"nativeFailureKind": "PRIVATE"},
+    ],
+)
+def test_unknown_or_out_of_range_typed_native_fields_stop_admission(fields):
+    with pytest.raises(diagnostic.AdmissionError):
+        diagnostic.safe_native_failure({"stage": "session_create", "exceptionCategory": "sdk_rpc", **fields})
+
+
 @pytest.mark.parametrize("capture", ["failure", "successful", "missing", "unknown", "wrong-placement"])
 def test_exact_production_failure_path_is_preserved_without_raw_messages(tmp_path, capture):
     row = {"modelRequests": 0, "terminalState": "error"}
