@@ -19,8 +19,11 @@ from bcbench_core.agent.metrics import AgentMetrics
 from bcbench_core.container import ContainerConfig
 from bcbench_core.dataset import TestEntry
 
+from bcbench.categories.data_query import DataQueryEntry
 from bcbench.categories.ext_request_advisor import ExtRequestAdvisorEntry
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry
+from bcbench.categories.ext_request_implement import ExtRequestImplementEntry
+from bcbench.categories.ext_request_triage import ExtRequestTriageEntry, ManagedLabel
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output

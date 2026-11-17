@@ -195,18 +195,24 @@ def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
 
 
 @pytest.mark.parametrize("category", [EvaluationCategory.BUG_FIX, EvaluationCategory.TEST_GENERATION, EvaluationCategory.NL2AL, EvaluationCategory.EXT_REQUEST_IMPLEMENT])
-def test_al_evaluation_pipelines_pass_recommended_diff_exclusions(tmp_path, category):
+def test_al_evaluators_pass_recommended_diff_exclusions(tmp_path, category: EvaluationCategory):
     entry = category.entry_class.model_validate(_entry_for_category(category).model_dump())
     ctx = create_evaluation_context(tmp_path, entry=entry, category=category)
-    pipeline = category.pipeline(AgentConfig())
-    module = type(pipeline).__module__
+    if (definition := category.definition) is not None:
+        implementation = definition.make(AgentConfig())
+        module = type(implementation).__module__
+        evaluate = implementation.grade
+    else:
+        pipeline = category.pipeline(AgentConfig())
+        module = type(pipeline).__module__
+        evaluate = pipeline.evaluate
 
     with (
         patch(f"{module}.clean_project_paths", create=True),
         patch(f"{module}.stage_and_get_diff", side_effect=RuntimeError("stop before evaluation")) as stage_diff,
         pytest.raises(RuntimeError, match="stop before evaluation"),
     ):
-        pipeline.evaluate(ctx, AgentResult())
+        evaluate(ctx, AgentResult())
 
     stage_diff.assert_called_once_with(ctx.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
 
