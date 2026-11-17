@@ -101,15 +101,13 @@ jobs:
 
       - name: Upload result using bceval
         env:
-          BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
-          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           JUDGE_MODEL: ${{ steps.bceval.outputs.judge_model }}
         run: |
           # Get Azure DevOps access token from Azure CLI (uses the OIDC token from azure/login)
           ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$ADO_TOKEN"
 
-          uv tool install bc-eval==0.6.1 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          uv tool install bc-eval==0.11.0 --python 3.13 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
           # Upload summary using bc-eval
           MODEL_TAG="$EVALUATION_MODEL"
@@ -135,7 +133,7 @@ jobs:
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
             ${{ inputs.experiment && '--eval-run-type experiment' || '' }} \
-            ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
+            ${{ !inputs.mock && '--storage kusto' || '' }}
 
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock && !inputs.skip-leaderboard }}

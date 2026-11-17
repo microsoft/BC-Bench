@@ -105,3 +105,15 @@ def test_experimental_feed_runs_are_published_as_experiments():
     assert job["with"]["experiment"] == "${{ inputs.bcal-feed == 'experiment' }}"
     assert summarize[True]["workflow_call"]["inputs"]["experiment"]["default"] is False
     assert "${{ inputs.experiment && '--eval-run-type experiment' || '' }}" in _step(summarize, "summarize-results", "Upload result using bceval")["run"]
+
+
+def test_bceval_workflows_use_supported_version_and_storage():
+    bcal = _step(_workflow("bcal-evaluation.yml"), "evaluate-with-bcal", "Build bc-eval LLM API bridge venv")["run"]
+    summarize = _step(_workflow("summarize-results.yml"), "summarize-results", "Upload result using bceval")
+
+    assert '"bc-eval==0.11.0"' in bcal
+    assert "bc-eval==0.11.0 --python 3.13" in summarize["run"]
+    assert "--storage braintrust" not in summarize["run"]
+    assert "--storage kusto" in summarize["run"]
+    assert "BRAINTRUST_PROJECT_ID" not in summarize["env"]
+    assert "BRAINTRUST_API_KEY" not in summarize["env"]
