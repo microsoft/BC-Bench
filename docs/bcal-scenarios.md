@@ -546,3 +546,15 @@ connections. Rules are removed before safe artifacts upload. Failure to establis
 denial stops admission, never falls back to live access. Startup error with zero
 requests and successful startup reaching the deliberate400 are diagnostic
 outcomes, not domain completion or replacement smoke/gold approval.
+
+Nonpackage startup diagnostics have a separate preparation-only driver,
+`scripts\bcal_nonpackage_diagnostic.py`. It requires an externally hashed
+identity manifest (source, optional dirty-patch hash, CLI version, complete
+file hashes/sizes and explicit SDK/native binary roles), verifies the full
+runtime before and after a worker copy, and always labels it
+`source-built-nonpackage` with no package or gold admission claim. It never
+changes the governed package verifier or reuses a consumed hosted phase.
+Native failure fields are read only from `agentRuntimeEvidence[i].failure`;
+stage and exception categories must match the runtime owner's closed sets.
+Unknown values fail the diagnostic gate rather than being silently dropped.
+No binary staging or hosted execution is implied by preparing this driver.
