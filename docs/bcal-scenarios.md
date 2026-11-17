@@ -534,3 +534,15 @@ URLs, credentials, headers, prompts or exception messages. Zero provider sends
 alone do not identify a startup cause; a missing native startup stage or unknown
 terminal message remains an explicit diagnostic gap. Diagnostic source changes
 also change the same-SHA smoke/gold binding and never authorize a replacement.
+
+The separate once-only `reasoning-startup-offline` diagnostic phase exercises
+the same actual-package smoke command, package copy, symbols, sanitized child
+environment and export scaffold without provider credentials. A synthetic
+loopback HTTP400 stops the first native request without executing tools.
+Before any fixture child, active Windows firewall rules deny all non-loopback
+IPv4/IPv6 traffic for all programs/protocols; external-denial and loopback
+control probes must pass. A parent socket guard also rejects external DNS and
+connections. Rules are removed before safe artifacts upload. Failure to establish
+denial stops admission, never falls back to live access. Startup error with zero
+requests and successful startup reaching the deliberate400 are diagnostic
+outcomes, not domain completion or replacement smoke/gold approval.

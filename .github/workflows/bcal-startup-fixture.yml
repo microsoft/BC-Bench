@@ -1,0 +1,87 @@
+name: Once-only zero-provider BCAL startup fixture
+on:
+  workflow_call:
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: bcal-startup-zero-provider-20261117
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    environment:
+      name: ado-read
+      deployment: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Require sole diagnostic dispatch
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'Diagnostic rerun is not authorized.' }
+          $branch = [uri]::EscapeDataString($env:GITHUB_REF_NAME)
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/bcal-evaluation.yml/runs?branch=$branch&per_page=100" | ConvertFrom-Json
+          if ($runs.total_count -gt 100) { throw 'Diagnostic dispatch inventory is incomplete.' }
+          if (@($runs.workflow_runs | Where-Object { $_.id -ne [long]$env:GITHUB_RUN_ID -and $_.display_title.EndsWith(' / reasoning-startup-offline') }).Count) {
+            throw 'The sole diagnostic dispatch has already been consumed.'
+          }
+      - uses: ./.github/actions/setup-python-uv
+      - uses: ./.github/actions/install-bcal
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          package-id: Microsoft.BusinessCentral.BCal.CLI
+          feed: experiment
+          version: 30.0.46.59225-beta
+          official-feed-url: ${{ secrets.BCAL_FEED_URL }}
+          experiment-feed-url: ${{ secrets.BCAL_TEST_FEED_URL }}
+      - name: Prepare frozen Python dependencies without provider credentials
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          uv venv .reasoning-venv --python .\.venv\Scripts\python.exe
+          uv export --frozen --group dev --no-hashes --output-file .reasoning-runtime-requirements.txt *> "$env:RUNNER_TEMP\startup-export.log"
+          uv pip install --python .\.reasoning-venv\Scripts\python.exe --no-deps -r .reasoning-runtime-requirements.txt
+          uv pip install --python .\.reasoning-venv\Scripts\python.exe --no-deps -r experiments\bcal-sdk-policy\judge-requirements.txt
+          & .\.reasoning-venv\Scripts\python.exe -m pytest tests\test_bcal_startup_fixture.py tests\test_bcal_reasoning_evaluation.py tests\test_bcal_reasoning_package.py --noconftest -q --override-ini="addopts="
+          if ($LASTEXITCODE -ne 0) { throw 'Offline diagnostic regression gate failed.' }
+      - name: Download frozen symbols before enabling network denial
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease | Out-Null
+          Import-Module BcContainerHelper -Force -DisableNameChecking
+          $url = Get-BCArtifactUrl -type Sandbox -version '28.0.46665.57479' -country w1 -select Latest
+          if (-not $url -or ([uri]$url).Segments[-2].Trim('/') -ne '28.0.46665.57479') { throw 'Frozen symbols unavailable.' }
+          Download-Artifacts -artifactUrl $url -includePlatform *> "$env:RUNNER_TEMP\startup-symbol-download.log"
+      - name: Deny external egress and execute one actual-package startup control
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $version = '30.0.46.59225-beta'
+          $root = "$HOME\.dotnet\tools\.store\microsoft.businesscentral.bcal.cli\$version"
+          $binaries = @(Get-ChildItem -LiteralPath $root -Recurse -Filter bcal.dll | Where-Object { $_.Directory.Name -eq 'any' -and $_.Directory.Parent.Name -eq 'net10.0' })
+          $archives = @(Get-ChildItem -LiteralPath $root -Recurse -Filter "microsoft.businesscentral.bcal.cli.$version.nupkg")
+          if ($binaries.Count -ne 1 -or $archives.Count -ne 1) { throw 'Actual package discovery differs.' }
+          & scripts\Run-BCalStartupFixture.ps1 -Python "$PWD\.reasoning-venv\Scripts\python.exe" -Package $binaries[0].Directory.FullName -Archive $archives[0].FullName -SymbolCache C:\bcartifacts.cache\sandbox -Work "$env:RUNNER_TEMP\bcal-reasoning-medium-private" -Output "$PWD\startup-sanitized"
+      - name: Retain safe diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: reasoning-startup-offline-sanitized
+          path: |
+            startup-sanitized\*.json
+            startup-fixture-failure.json
+            ${{ runner.temp }}\startup-network-denial.json
+            ${{ runner.temp }}\startup-network-cleanup.json
+          retention-days: 30
+          if-no-files-found: warn
