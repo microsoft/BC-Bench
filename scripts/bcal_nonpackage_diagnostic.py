@@ -1,4 +1,4 @@
-"""Explicit nonpackage identity and closed native diagnostic evidence."""
+"""Shared startup diagnostic driver and explicit nonpackage identity."""
 
 from __future__ import annotations
 
@@ -96,13 +96,11 @@ class DiagnosticFile(BaseModel):
     bytes: int = Field(strict=True, gt=0)
 
 
-class NonpackageIdentity(BaseModel):
+class RuntimeIdentity(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    kind: Literal["source-built-nonpackage"] = "source-built-nonpackage"
-    packageAdmissionClaimed: Literal[False] = False
+    kind: str
     source_commit: str = Field(pattern=r"^[a-f0-9]{40}$")
-    patch_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     product_version: str = Field(min_length=1, max_length=160)
     sdk_version: str = Field(pattern=r"^\d+\.\d+\.\d+(\+[a-zA-Z0-9.-]+)?$")
     native_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
@@ -115,31 +113,31 @@ class NonpackageIdentity(BaseModel):
     def sdk_package_version(self) -> str:
         return self.sdk_version.split("+", 1)[0]
 
+    def provenance(self) -> dict:
+        return {"kind": self.kind, "sourceCommit": self.source_commit}
+
     def verify(self, runtime: Path) -> dict:
         expected = {}
         for item in self.files:
             relative = PureWindowsPath(item.path)
             canonical = ntpath.normcase(str(relative))
             if not item.path or relative.anchor or relative.drive or any(part in ("..", ".") or ":" in part or part.endswith((" ", ".")) for part in relative.parts) or canonical in expected:
-                raise AdmissionError("Nonpackage inventory path is invalid or duplicated.")
+                raise AdmissionError("Diagnostic inventory path is invalid or duplicated.")
             path = runtime.joinpath(*relative.parts)
             if path.is_symlink() or any(parent.is_symlink() for parent in path.parents if parent != runtime.parent):
-                raise AdmissionError("Nonpackage runtime must not use symbolic links.")
+                raise AdmissionError("Diagnostic runtime must not use symbolic links.")
             if path.stat().st_size != item.bytes or sha(path) != item.sha256:
-                raise AdmissionError("Nonpackage runtime bytes differ from the immutable inventory.")
+                raise AdmissionError("Diagnostic runtime bytes differ from the immutable inventory.")
             expected[canonical] = item
         actual = {ntpath.normcase(str(PureWindowsPath(path.relative_to(runtime)))) for path in runtime.rglob("*") if path.is_file()}
         required = ("bcal.exe", "bcal.dll", ntpath.normcase(self.sdk_path), ntpath.normcase(self.native_library_path), *(ntpath.normcase(path) for path in self.native_path))
         if actual != set(expected) or len(set(required)) != len(required) or any(name not in expected for name in required):
-            raise AdmissionError("Nonpackage runtime inventory or required binary roles differ.")
+            raise AdmissionError("Diagnostic runtime inventory or required binary roles differ.")
         version = subprocess.check_output([str(runtime / "bcal.exe"), "--version"], env=process_environment(), text=True, timeout=30).strip()
         if version != self.product_version:
-            raise AdmissionError("Nonpackage CLI product version differs.")
+            raise AdmissionError("Diagnostic CLI product version differs.")
         return {
-            "kind": "source-built-nonpackage",
-            "packageAdmissionClaimed": False,
-            "sourceCommit": self.source_commit,
-            "patchSha256": self.patch_sha256,
+            **self.provenance(),
             "productVersion": version,
             "verifiedFiles": len(expected),
             "executableSha256": expected["bcal.exe"].sha256,
@@ -151,6 +149,15 @@ class NonpackageIdentity(BaseModel):
             "nativeSha256": expected[required[3]].sha256,
             "nativeLauncherSha256": [expected[path].sha256 for path in required[4:]],
         }
+
+
+class NonpackageIdentity(RuntimeIdentity):
+    kind: Literal["source-built-nonpackage"] = "source-built-nonpackage"
+    packageAdmissionClaimed: Literal[False] = False
+    patch_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+
+    def provenance(self) -> dict:
+        return {**super().provenance(), "packageAdmissionClaimed": False, "patchSha256": self.patch_sha256}
 
 
 def load_identity(path: Path, expected_sha256: str) -> NonpackageIdentity:
@@ -176,7 +183,7 @@ def diagnostic_transcript(path: Path) -> dict:
     return summary
 
 
-def run(args: argparse.Namespace) -> None:
+def run(args: argparse.Namespace, *, admitted_identity: RuntimeIdentity | None = None) -> None:
     from bcal_governed_study import verify_owned_cleanup
     from bcal_reasoning_coding import ProviderBudget
     from bcbench_core.git import commit_changes, init_repo
@@ -185,10 +192,10 @@ def run(args: argparse.Namespace) -> None:
 
     denial = verify_denial(args.network_proof)
     if any(name.startswith("LLM_API_") or name in {"OPENAI_API_KEY", "AZURE_CLIENT_SECRET"} for name in os.environ):
-        raise AdmissionError("Nonpackage diagnosis forbids inherited provider credentials.")
-    identity = load_identity(args.identity, args.identity_sha256)
+        raise AdmissionError("Startup diagnosis forbids inherited provider credentials.")
+    identity = admitted_identity if admitted_identity is not None else load_identity(args.identity, args.identity_sha256)
     args.output.mkdir(exist_ok=False)
-    write_json(args.output / "execution-once.json", {"identitySha256": args.identity_sha256, "kind": "source-built-nonpackage", "providerAuthorized": False})
+    write_json(args.output / "execution-once.json", {"identitySha256": args.identity_sha256, "kind": identity.kind, "providerAuthorized": False})
     args.work.mkdir(exist_ok=False)
     with loopback_only() as network:
         before = identity.verify(args.runtime)
@@ -196,7 +203,7 @@ def run(args: argparse.Namespace) -> None:
         runtime = args.work / "worker-0" / "runtime"
         shutil.copytree(args.runtime, runtime)
         if identity.verify(runtime) != before:
-            raise AdmissionError("Copied nonpackage runtime identity differs.")
+            raise AdmissionError("Copied diagnostic runtime identity differs.")
         private = args.work / "000-gpt-56-reasoning-sol"
         (private / "auxiliary").mkdir(parents=True)
         exports = private / "workspace" / "smoke" / "src"
@@ -232,7 +239,7 @@ def run(args: argparse.Namespace) -> None:
             verify_owned_cleanup(runtime / "bcal.exe")
             write_json(args.output / "process-evidence.json", process)
             if identity.verify(runtime) != before or identity.verify(args.runtime) != before:
-                raise AdmissionError("Nonpackage diagnostic runtime changed during execution.")
+                raise AdmissionError("Diagnostic runtime changed during execution.")
         transcript = diagnostic_transcript(private / "result.json")
         raw = json.loads((private / "result.json").read_bytes())
         runtime_identity = raw.get("runtimeIdentity", {})
@@ -246,9 +253,9 @@ def run(args: argparse.Namespace) -> None:
             or budget.events
             or network["blockedExternalConnects"]
         ):
-            raise AdmissionError("Nonpackage diagnostic execution identity or zero-provider boundary differs.")
+            raise AdmissionError("Diagnostic execution identity or zero-provider boundary differs.")
     write_json(
-        args.output / "nonpackage-startup-summary.json",
+        args.output / ("nonpackage-startup-summary.json" if identity.kind == "source-built-nonpackage" else "package-startup-summary.json"),
         {
             "status": "diagnostic-complete",
             "identity": before,

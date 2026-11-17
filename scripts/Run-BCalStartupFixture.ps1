@@ -4,8 +4,13 @@ param(
     [Parameter(Mandatory, ParameterSetName='Package')][string]$Archive,
     [Parameter(Mandatory, ParameterSetName='Package')][string]$SymbolCache,
     [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Runtime,
+    [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')][string]$DiagnosticRuntime,
+    [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')][string]$DiagnosticArchive,
+    [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')]
     [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Identity,
+    [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')]
     [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$IdentitySha256,
+    [Parameter(Mandatory, ParameterSetName='DiagnosticPackage')]
     [Parameter(Mandatory, ParameterSetName='Nonpackage')][string]$Symbols,
     [Parameter(Mandatory)][string]$Work,
     [Parameter(Mandatory)][string]$Output
@@ -68,7 +73,9 @@ try {
     $proof.status = 'outbound-denial-active'
     $proof | ConvertTo-Json | Set-Content -LiteralPath $proofPath
     $stage = 'offline_fixture'
-    if ($PSCmdlet.ParameterSetName -eq 'Nonpackage') {
+    if ($PSCmdlet.ParameterSetName -eq 'DiagnosticPackage') {
+        & $Python scripts\bcal_package_diagnostic.py --runtime $DiagnosticRuntime --archive $DiagnosticArchive --identity $Identity --identity-sha256 $IdentitySha256 --symbols $Symbols --work $Work --output $Output --network-proof $proofPath
+    } elseif ($PSCmdlet.ParameterSetName -eq 'Nonpackage') {
         & $Python scripts\bcal_nonpackage_diagnostic.py --runtime $Runtime --identity $Identity --identity-sha256 $IdentitySha256 --symbols $Symbols --work $Work --output $Output --network-proof $proofPath
     } else {
         & $Python scripts\bcal_startup_fixture.py --package $Package --archive $Archive --symbol-cache $SymbolCache --work $Work --output $Output --network-proof $proofPath

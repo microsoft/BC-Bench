@@ -568,3 +568,18 @@ package publication occurs. The original package phase and its once-only
 history remain separate. The staging owner removes the private blob and
 ephemeral repository secret immediately on terminal completion or failure and
 verifies absence; URL expiration alone is not data retention enforcement.
+
+The private-blob nonpackage lane was stopped before dispatch when publication
+through the internal test feed was authorized. Its staging blob, container and
+ephemeral secret were removed and absence verified.
+
+New diagnostic packages use the separate `scripts\bcal_package_diagnostic.py`
+admission path, not the governed59225 pin. An externally hashed identity binds
+the exact DynamicsSMBTest version, source, build, complete NuGet entry inventory,
+archive hash/size, full net10 runtime inventory and SDK/native binary roles.
+NuGet metadata, installed runtime and worker copy must match. It shares the
+same production command, closed native failure evidence, loopback-only synthetic
+response, network-denial gates and cleanup with the nonpackage diagnostic.
+Diagnostic package admission never admits a live smoke or gold run. Hosted
+execution remains blocked until the runtime owner supplies the final package
+identity, packaged offline proofs and an explicit READY handoff.
