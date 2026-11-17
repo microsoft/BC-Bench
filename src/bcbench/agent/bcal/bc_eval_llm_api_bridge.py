@@ -16,9 +16,7 @@ _CERT_FILE_ENV = "LLM_API_CERTIFICATE_FILE"
 # Separates the agent-under-test traffic from bc-eval's judge traffic (bc-eval's own agent host uses the same step).
 _TAXONOMY_INFERENCE_STEP = "HostAgent"
 
-# Reasoning effort (not all models support this parameter), different models might have different available values:
-# Set to None to omit the parameter entirely (lets the model/service use its own default).
-_DEFAULT_REASONING_EFFORT: str | None = None
+_TOOLS_REASONING_EFFORT = "none"
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -102,12 +100,15 @@ def main() -> int:
         # bc-eval creates a new session per request; LLM API requires an empty ticket when none is cached.
         "extra_headers": {"x-sticky-route-session-ticket": ""},
     }
-    if request.get("tools"):
-        kwargs["tools"] = request["tools"]
-
-    reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
-    if reasoning_effort is not None:
-        kwargs["reasoning_effort"] = reasoning_effort
+    tools = request.get("tools")
+    if tools:
+        kwargs["tools"] = tools
+        # Chat Completions rejects function tools with reasoning enabled for these model families.
+        kwargs["reasoning_effort"] = _TOOLS_REASONING_EFFORT
+    else:
+        reasoning_effort = request.get("reasoning_effort")
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
 
     response = client.chat.completions.create(**kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
