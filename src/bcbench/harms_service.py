@@ -12,6 +12,8 @@ from bcbench.harms import write_json
 
 
 class ServiceEvidence:
+    """Verify judgment completeness before accepting the SDK's potentially defaulted verdict."""
+
     def __init__(self, directory: Path) -> None:
         self.directory = directory
         self.events: list[dict[str, JsonValue]] = []

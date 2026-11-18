@@ -15,11 +15,10 @@ from azure.identity import DefaultAzureCredential
 from pydantic import JsonValue, TypeAdapter
 from pyrit.memory import CentralMemory, SQLiteMemory
 
-from bcbench.harms import Capture, CaptureConfig, Case, EvaluationProject, Trial, capture_case, export_captures, prepare_capture, run_capture, write_json
+from bcbench.harms import Capture, CaptureConfig, Case, EvaluationProject, Trial, capture_case, export_captures, prepare_capture, read_objects, run_capture, write_json
 from bcbench.harms_report import write_report
 from bcbench.harms_service import ServiceEvidence
 from bcbench.harms_summary import CONTENT_METRICS
-from bcbench.redteam import _ensure_utf8_file_handlers
 
 if TYPE_CHECKING:
     # The public SDK reexports also include empty Sphinx-only placeholder classes.
@@ -28,6 +27,20 @@ if TYPE_CHECKING:
     from azure.ai.evaluation.red_team._red_team import RedTeam
 else:
     from azure.ai.evaluation.red_team import AttackStrategy, RedTeam, RiskCategory, SupportedLanguages
+
+
+def _ensure_utf8_file_handlers(logger: logging.Logger) -> None:
+    for handler in logger.handlers[:]:
+        if not isinstance(handler, logging.FileHandler) or handler.encoding == "utf-8":
+            continue
+        replacement = logging.FileHandler(handler.baseFilename, mode=handler.mode, encoding="utf-8", delay=handler.delay, errors=handler.errors)
+        replacement.setLevel(handler.level)
+        replacement.setFormatter(handler.formatter)
+        for handler_filter in handler.filters:
+            replacement.addFilter(handler_filter)
+        logger.removeHandler(handler)
+        handler.close()
+        logger.addHandler(replacement)
 
 
 def _objects(value: JsonValue) -> list[dict[str, JsonValue]]:
@@ -88,7 +101,7 @@ def summarize_sdk_results(raw: dict[str, JsonValue], captures: list[Capture], ri
 
 
 def export_sdk_report(output: Path) -> None:
-    captures = [Capture.model_validate_json(line) for line in (output / "captures.jsonl").read_text(encoding="utf-8").splitlines()]
+    captures = [Capture.model_validate(row) for row in read_objects(output / "captures.jsonl")]
     evaluations = TypeAdapter(dict[str, dict[str, JsonValue]]).validate_json((output / "sdk" / "completeness.json").read_text(encoding="utf-8"))
     by_id = {capture.case.execution_id: capture for capture in captures}
     rows: list[dict[str, JsonValue]] = []
@@ -332,7 +345,7 @@ def run_manual_evaluation(cases_path: Path, config: CaptureConfig, bcal: Path, b
     if project is None:
         raise ValueError("Manual scoring requires an explicit existing evaluation_project.")
     summary = run_capture(cases_path, config, bcal, bridge_python, symbols, output)
-    captures = [Capture.model_validate_json(line) for line in (output / "captures.jsonl").read_text(encoding="utf-8").splitlines()]
+    captures = [Capture.model_validate(row) for row in read_objects(output / "captures.jsonl")]
     sdk_root = output / "sdk"
     sdk_root.mkdir()
     write_json(

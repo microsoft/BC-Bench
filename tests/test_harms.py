@@ -53,7 +53,7 @@ def case(vector="direct", execution_id="one", channel="test"):
 
 
 def write_jsonl(path, values):
-    path.write_text("".join(json.dumps(value) + "\n" for value in values), encoding="utf-8")
+    path.write_text("".join(json.dumps(value, ensure_ascii=False) + "\n" for value in values), encoding="utf-8")
 
 
 def capture(value, **changes):
@@ -71,7 +71,7 @@ def capture(value, **changes):
 
 
 def recorded_case(tmp_path, config, value):
-    (tmp_path / "export").mkdir()
+    (tmp_path / "export").mkdir(exist_ok=True)
     (tmp_path / "export" / "b.al").write_text("second", encoding="utf-8")
     (tmp_path / "export" / "a.al").write_text("first", encoding="utf-8")
     (tmp_path / "stdout.txt").write_text("runtime status", encoding="utf-8")
@@ -308,7 +308,24 @@ def test_cli_rejects_non_windows_before_capture(tmp_path, config, monkeypatch):
     monkeypatch.setattr("bcbench.commands.harms.os", SimpleNamespace(name="posix"))
     monkeypatch.setattr("bcbench.commands.harms.run_capture", lambda *args: pytest.fail("target must not run"))
 
-    result = CliRunner().invoke(harms_app, ["run", "--source", "generated", "--config", str(config_path), "--output", str(tmp_path / "out")])
+    result = CliRunner().invoke(
+        harms_app,
+        [
+            "run",
+            "--source",
+            "generated",
+            "--config",
+            str(config_path),
+            "--output",
+            str(tmp_path / "out"),
+            "--symbols",
+            str(tmp_path),
+            "--bcal",
+            str(config_path),
+            "--bridge-python",
+            str(config_path),
+        ],
+    )
 
     assert result.exit_code == 2
     assert "requires Windows" in result.output
@@ -331,7 +348,7 @@ def test_runtime_receives_unchanged_fixture_and_isolated_symbols(tmp_path, confi
         recorded_case(directory, config, value)
         return SimpleNamespace(wait=lambda timeout: 0)
 
-    monkeypatch.setattr("bcbench.harms.subprocess.Popen", popen)
+    monkeypatch.setattr("bcbench.agent.bcal.agent.subprocess.Popen", popen)
     result = capture_case(value, config, tmp_path / "bcal.exe", tmp_path / "python.exe", symbols, tmp_path / "capture")
     assert result.exportable
     assert (symbols / "example.app").read_bytes() == b"original"
@@ -352,9 +369,23 @@ def test_timeout_terminates_only_the_owned_process_tree(tmp_path, config, monkey
             raise subprocess.TimeoutExpired("test-runtime", timeout)
         return 1
 
-    monkeypatch.setattr("bcbench.harms.subprocess.Popen", lambda *args, **kwargs: SimpleNamespace(pid=12345, wait=wait))
-    monkeypatch.setattr("bcbench.harms.subprocess.run", lambda args, **kwargs: terminated.append(args))
+    monkeypatch.setattr("bcbench.agent.bcal.agent.subprocess.Popen", lambda *args, **kwargs: SimpleNamespace(pid=12345, wait=wait))
+    monkeypatch.setattr("bcbench.agent.bcal.agent.subprocess.run", lambda args, **kwargs: terminated.append(args))
     result = capture_case(case(), config, tmp_path / "bcal.exe", tmp_path / "python.exe", symbols, tmp_path / "capture")
     assert terminated == [["taskkill", "/PID", "12345", "/T", "/F"]]
     assert waits == [config.timeout_seconds, None]
     assert not result.completed
+
+
+@pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
+def test_jsonl_export_preserves_unicode_in_prompts_and_responses(tmp_path, separator):
+    value = case()
+    value = value.model_copy(update={"trial": value.trial.model_copy(update={"prompt": f"First{separator}second"})})
+    result = capture(value, response=f"Response{separator}continued")
+    write_jsonl(tmp_path / "cases.jsonl", [value.model_dump()])
+    write_jsonl(tmp_path / "captures.jsonl", [result.model_dump()])
+    assert load_cases(tmp_path / "cases.jsonl") == [value]
+    assert export_captures(tmp_path)["captured"] == 1
+    row = json.loads((tmp_path / "foundry" / "direct.jsonl").read_text(encoding="utf-8"))
+    assert row["query"] == value.trial.prompt
+    assert row["response"] == result.response

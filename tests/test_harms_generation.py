@@ -139,10 +139,11 @@ def test_duplicate_captures_cannot_share_one_sdk_judgment():
     assert summary["complete"] is False
 
 
-def test_private_report_retains_indirect_sdk_label_and_reason(tmp_path):
+@pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
+def test_private_report_retains_indirect_sdk_label_and_exact_unicode(tmp_path, separator):
     from openpyxl import load_workbook
 
-    value = captured()
+    value = captured(f"First{separator}second").model_copy(update={"response": f"Response{separator}continued"})
     (tmp_path / "captures.jsonl").write_text(value.model_dump_json() + "\n", encoding="utf-8")
     (tmp_path / "sdk").mkdir()
     result = {"indirect_attack_label": True, "indirect_attack_reason": "=literal SDK reason"}
@@ -157,8 +158,67 @@ def test_private_report_retains_indirect_sdk_label_and_reason(tmp_path):
     assert row["Label (SDK)"].value is True
     assert row["Reason (SDK)"].value == result["indirect_attack_reason"]
     assert row["Reason (SDK)"].data_type == "s"
+    assert row["Input prompt"].value == value.case.trial.prompt
+    assert row["Output"].value == value.response
     assert json.loads(row["SDK result"].value) == result
     workbook.close()
+
+
+@pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
+@pytest.mark.parametrize("judgment_present", [True, False])
+def test_manual_reader_preserves_unicode_and_rejects_unconfirmed_sdk_pass(tmp_path, monkeypatch, separator, judgment_present):
+    from tests.test_harms import case
+
+    value = captured(f"First{separator}second").model_copy(update={"response": f"Response{separator}continued"})
+    value = value.model_copy(update={"case": case("symbols").model_copy(update={"trial": case("symbols").trial.model_copy(update={"prompt": value.case.trial.prompt})}), "injection_landed": True})
+    config = CaptureConfig(
+        bcal_feed="official",
+        bcal_package_version="1.2.3",
+        bcal_runtime_version="1.2.3",
+        bc_eval_version="0.10.1",
+        model="test-model",
+        reasoning_effort="none",
+        environment="TEST",
+        evaluation_project={"subscription_id": "test-subscription", "resource_group_name": "test-group", "project_name": "test-project"},
+    )
+
+    def capture(*args):
+        (tmp_path / "captures.jsonl").write_text(value.model_dump_json() + "\n", encoding="utf-8")
+        return {"captured": 1}
+
+    def evaluate(*, query, response):
+        assert query == value.case.trial.prompt
+        assert response == value.response
+        return {"indirect_attack_label": False}
+
+    class Credential:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    class Memory:
+        def __init__(self, *, db_path):
+            self.db_path = db_path
+
+        def dispose_engine(self):
+            pass
+
+    monkeypatch.setattr(harms_generation, "run_capture", capture)
+    monkeypatch.setattr(harms_generation, "SQLiteMemory", Memory)
+    monkeypatch.setattr(harms_generation.CentralMemory, "set_memory_instance", lambda memory: None)
+    monkeypatch.setattr(harms_generation, "DefaultAzureCredential", Credential)
+    monkeypatch.setattr(harms_generation, "IndirectAttackEvaluator", lambda **kwargs: evaluate)
+    monkeypatch.setattr(harms_generation.ServiceEvidence, "confirms", lambda *args: judgment_present)
+    if judgment_present:
+        assert harms_generation.run_manual_evaluation(tmp_path, config, tmp_path, tmp_path, tmp_path, tmp_path) == {"captured": 1}
+    else:
+        with pytest.raises(RuntimeError, match="scoring incomplete"):
+            harms_generation.run_manual_evaluation(tmp_path, config, tmp_path, tmp_path, tmp_path, tmp_path)
+    result = json.loads((tmp_path / "sdk" / "completeness.json").read_text())["manual_xpia/indirect_attack"]["outcomes"][0]
+    assert result["sdk_result"]["indirect_attack_label"] is False
+    assert result["status"] == ("evaluated" if judgment_present else "error")
 
 
 @pytest.fixture

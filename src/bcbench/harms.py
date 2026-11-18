@@ -5,7 +5,6 @@ import html
 import json
 import shutil
 import subprocess
-import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,7 +12,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
 
-from bcbench.agent.bcal import bc_eval_llm_api_bridge
+from bcbench.agent.bcal import BCalBackendConfig, bc_eval_llm_api_bridge, run_bcal_prompt
 
 type Subset = Literal["direct", "upia", "xpia"]
 type Vector = Literal["direct", "page_inspector", "symbols"]
@@ -140,7 +139,8 @@ def write_json(path: Path, value: object) -> None:
 
 
 def read_objects(path: Path) -> list[dict[str, JsonValue]]:
-    values = [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines()]
+    with path.open(encoding="utf-8-sig") as stream:
+        values = [json.loads(line) for line in stream]
     return TypeAdapter(list[dict[str, JsonValue]]).validate_python(values)
 
 
@@ -278,37 +278,24 @@ def capture_case(case: Case, config: CaptureConfig, bcal: Path, bridge_python: P
     # The runtime may write to its package cache. Isolate each execution without changing runtime behavior.
     cache = directory / "symbols"
     shutil.copytree(symbols, cache)
-    args = [
-        str(bcal),
-        f"--packagecachepath={cache}",
-        "--llm-backend=external-command",
-        f"--llm-command={command}",
-        f"--deployment={config.model}",
-        f"--page={case.context.page}",
-        f"--audience={case.context.audience}",
-        f"--prompt={case.trial.prompt}",
-        f"--exportfolder={directory / 'export'}",
-        f"--log={directory / 'runtime.jsonl'}",
-        "--log-full",
-    ]
+    fixture_path = None
     if case.fixture is not None:
         fixture_path = directory / "fixture.json"
         write_json(fixture_path, case.fixture)
-        args.append(f"--harms-fixture={fixture_path}")
-    write_json(directory / "invocation.json", {"case": case.model_dump(), "args": args})
-    started = time.monotonic()
-    timed_out = False
-    with (directory / "stdout.txt").open("wb") as stdout, (directory / "stderr.txt").open("wb") as stderr:
-        process = subprocess.Popen(args, cwd=directory, stdout=stdout, stderr=stderr)
-        try:
-            exit_code = process.wait(timeout=config.timeout_seconds)
-        except subprocess.TimeoutExpired:
-            # Kill only this invocation and its children, not other BCal/bridge processes.
-            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], check=True, stdout=stderr, stderr=stderr)
-            exit_code = process.wait()
-            timed_out = True
-    write_json(directory / "process.json", {"exit_code": exit_code, "timed_out": timed_out, "duration_seconds": time.monotonic() - started})
-    return inspect_capture(directory, case, config, exit_code, timed_out)
+    write_json(directory / "invocation.json", {"case": case.model_dump()})
+    result = run_bcal_prompt(
+        query=case.trial.prompt,
+        page=case.context.page,
+        audience=case.context.audience,
+        package_cache_path=cache,
+        export_folder=directory / "export",
+        backend_config=BCalBackendConfig(command=command, model=config.model),
+        executable=bcal,
+        output=directory,
+        fixture=fixture_path,
+        timeout=config.timeout_seconds,
+    )
+    return inspect_capture(directory, case, config, result.exit_code, result.timed_out)
 
 
 def export_captures(output: Path) -> dict[str, JsonValue]:

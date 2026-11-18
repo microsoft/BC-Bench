@@ -23,24 +23,21 @@ def show_config(config: Annotated[Path, typer.Option(exists=True, dir_okay=False
 @harms_app.command("run")
 def run(
     source: Annotated[Literal["generated", "manual"], typer.Option()],
-    output: Annotated[Path, typer.Option(help="New private local output directory; never an Actions artifact.")],
-    config: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
-    cases: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
-    symbols: Annotated[Path | None, typer.Option(exists=True, file_okay=False)] = None,
-    bcal: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
-    bridge_python: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
+    output: Annotated[Path, typer.Option(resolve_path=True, help="New private local output directory; never an Actions artifact.")],
+    config: Annotated[Path, typer.Option(exists=True, dir_okay=False, resolve_path=True)],
+    symbols: Annotated[Path, typer.Option(exists=True, file_okay=False, resolve_path=True)],
+    bcal: Annotated[Path, typer.Option(exists=True, dir_okay=False, resolve_path=True)],
+    bridge_python: Annotated[Path, typer.Option(exists=True, dir_okay=False, resolve_path=True)],
+    cases: Annotated[Path | None, typer.Option(exists=True, dir_okay=False, resolve_path=True)] = None,
     evaluate: Annotated[bool, typer.Option("--evaluate/--capture-only", help="Score with public SDK evaluators; capture-only is manual/local only.")] = True,
     ephemeral: Annotated[bool, typer.Option(help="Record that detailed local evidence is discarded at runner teardown.")] = False,
 ) -> None:
     if os.name != "nt":
         raise typer.BadParameter("BCal harms capture currently requires Windows.")
-    if symbols is None or bcal is None or bridge_python is None:
-        raise typer.BadParameter("Capture requires --symbols, --bcal and --bridge-python.")
     if (source == "manual") != (cases is not None):
         raise typer.BadParameter("Supply --cases for manual capture only; generated harms come from RedTeam.")
     if source == "generated" and not evaluate:
         raise typer.BadParameter("Public RedTeam generation requires evaluation; capture-only supports supplied cases only.")
-    output = output.resolve()
     if output.exists():
         raise typer.BadParameter("Output directory already exists; existing evidence will not be overwritten.")
     output.mkdir(parents=True)
@@ -57,13 +54,13 @@ def run(
                     if evaluate:
                         from bcbench.harms_generation import run_manual_evaluation
 
-                        run_manual_evaluation(cases.resolve(), value, bcal.resolve(), bridge_python.resolve(), symbols.resolve(), output)
+                        run_manual_evaluation(cases, value, bcal, bridge_python, symbols, output)
                     else:
-                        run_capture(cases.resolve(), value, bcal.resolve(), bridge_python.resolve(), symbols.resolve(), output)
+                        run_capture(cases, value, bcal, bridge_python, symbols, output)
                 else:
                     from bcbench.harms_generation import run_generation
 
-                    run_generation(value, bcal.resolve(), bridge_python.resolve(), symbols.resolve(), output)
+                    run_generation(value, bcal, bridge_python, symbols, output)
                 failed = False
         except Exception as exc:
             # Exception details can contain prompts. Keep them local, including validation/subprocess errors.

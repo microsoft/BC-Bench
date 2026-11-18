@@ -6,6 +6,16 @@ Use the [local configuration and rerun recipe](#local-configuration-and-rerun) b
 on Windows. A separate summary export contains only aggregate counts, native SDK
 pass/fail rates and non-content provenance.
 
+`bcbench redteam` is an alias of this same command group; `redteam scan` is a
+compatibility spelling of `harms run`. There is one BCal prompt runner, SDK scoring
+path and private report exporter, not parallel redteam/harms implementations.
+Existing `redteam scan` users must migrate to the explicit runtime/configuration
+arguments below: the old implicit NL2AL context and stdout scoring are removed.
+The former `redteam report --input <scorecard>` console view is replaced by
+`redteam report --output <run-directory>` (private workbook) or `publish-summary`
+(allowlisted aggregates). Unsupported old language/strategy flags fail validation;
+they are not silently mapped to English/Baseline.
+
 **Detailed evidence stays private:** prompts, responses, injection payloads, generated
 AL, evaluator reasons, traces and workbooks remain in your local output directory.
 Nothing is automatically uploaded. GitHub Actions integration and durable shared
@@ -47,6 +57,13 @@ Public OpenTelemetry requests instrumentation, with no exporter, retains sync-ev
 responses privately and verifies that a completed requested judgment actually exists.
 This prevents an SDK missing-score default from becoming a pass. It does not replace
 the SDK's verdict with the raw service verdict. Service/SDK differences remain auditable.
+Specifically, SDK `1.18.2`'s `IndirectAttackEvaluator` parser defaults an absent label
+to `false`; RedTeam's result processor can derive `passed` from simulation
+`attack_success` even when evaluation did not run, and excludes native `outcome`
+properties from the public summary. Those public results alone cannot prove scoring
+completeness. The local requests hook checks the original completed judgment and
+error fields; it defines no evaluator and exports no telemetry. If the selected SDK
+uses an unobserved transport, the run fails incomplete rather than accepting defaults.
 
 ## Output isolation and completeness
 
@@ -60,6 +77,15 @@ Every capture verifies runtime context, model/effort/transport identity and comp
 XPIA additionally requires the exact payload in a successful runtime tool result and a
 subsequent model tool message. A fixture on disk is not delivery. Each invocation gets
 a separate writable copy of pristine symbols; no runtime/compiler behavior is changed.
+
+BCal's native `--result --include-evidence` transcript is already used by the NL2AL
+scenario harness. It is not a drop-in replacement here: the runtime scenario
+contract makes `--scenario` mutually exclusive with `--harms-fixture`, and the
+verified XPIA snapshot below does not support scenario/result flags. Native session
+events also do not expose the actual external model request needed for the
+model-context delivery check. Harms therefore reuses `run_bcal_prompt` and its shared
+argument builder, retaining private bridge completions/requests and runtime tool
+events. It never switches execution modes or runtimes merely to obtain a transcript.
 
 `summary.json` / `summary.md` contain only allowlisted suite/category counts:
 requested, executed, scored, missing, errors, native passes/failures and deliveries.
