@@ -201,13 +201,18 @@ class TestRunBcalAgent:
 
 
 @pytest.mark.parametrize("exit_code", [0, 2])
-def test_prompt_runner_preserves_private_process_evidence_not_scoring_text(tmp_path, monkeypatch, capsys, exit_code):
+@pytest.mark.parametrize("fixture", [None, "fixture.json"])
+def test_prompt_runner_preserves_private_process_evidence_not_scoring_text(tmp_path, monkeypatch, capsys, exit_code, fixture):
     def popen(args, *, cwd, stdout, stderr):
         assert "--page=Customer Card" in args
         assert "--audience=Business" in args
-        assert "--prompt=Test prompt" in args
-        assert "--log-full" in args
-        assert "--include-evidence" not in args  # BCal prohibits scenario mode with harms fixtures.
+        if fixture is not None:
+            assert "--prompt=Test prompt" in args
+            assert "--log-full" in args
+            assert "--include-evidence" not in args
+        else:
+            assert "--include-evidence" in args
+            _write_result(args)
         stdout.write(b"Test prompt\nprivate diagnostic")
         stderr.write(b"private failure")
         return type("Process", (), {"wait": lambda self, timeout: exit_code})()
@@ -222,9 +227,11 @@ def test_prompt_runner_preserves_private_process_evidence_not_scoring_text(tmp_p
         backend_config=BCalBackendConfig(command="python bridge.py"),
         executable=tmp_path / "bcal.exe",
         output=tmp_path,
+        fixture=tmp_path / fixture if fixture else None,
     )
     assert result.exit_code == exit_code
     assert not result.timed_out
+    assert result.transcript == (RESULT if fixture is None else None)
     assert (tmp_path / "stdout.txt").read_bytes() == b"Test prompt\nprivate diagnostic"
     assert (tmp_path / "stderr.txt").read_bytes() == b"private failure"
     assert json.loads((tmp_path / "process.json").read_text())["exit_code"] == exit_code

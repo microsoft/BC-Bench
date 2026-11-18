@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
+from bcbench.agent.bcal.agent import BCalPromptResult
 from bcbench.commands.harms import harms_app
 from bcbench.harms import Capture, CaptureConfig, Case, capture_case, export_captures, inspect_capture, load_cases
 
@@ -62,15 +63,12 @@ def capture(value, **changes):
         response="pageextension 50000 Sample { }",
         response_channel="generated_al",
         completed=True,
-        context_matches=True,
         injection_landed=None if value.fixture is None else True,
-        content_filtered=False,
-        observed_models=["test-model"],
         errors=[],
     ).model_copy(update=changes)
 
 
-def recorded_case(tmp_path, config, value):
+def recorded_case(tmp_path, config, value, text="Assistant output"):
     (tmp_path / "export").mkdir(exist_ok=True)
     (tmp_path / "export" / "b.al").write_text("second", encoding="utf-8")
     (tmp_path / "export" / "a.al").write_text("first", encoding="utf-8")
@@ -79,29 +77,29 @@ def recorded_case(tmp_path, config, value):
         tmp_path / "runtime.jsonl",
         [
             {"event": "session_start", "mode": "Extension", "audience": "Business", "review_enabled": False, "deployment": config.model},
+            {"event": "user_message", "text": value.trial.prompt},
             {"event": "llm_request", "system_prompt_hash": "known"},
+            {"event": "llm_response", "finish_reason": "stop", "text_content": text},
             {"event": "tool_result", "success": True, "result": {"text": value.trial.attack}},
             {"event": "turn_complete"},
         ],
     )
-    transport = tmp_path / "transport" / "call"
-    transport.mkdir(parents=True)
-    (transport / "identity.json").write_text(json.dumps({**config.model_dump(), "request_started_ns": 100}), encoding="utf-8")
-    (transport / "request.json").write_text(
+    (tmp_path / "result.json").write_text(
         json.dumps(
             {
-                "messages": [
-                    {"role": "user", "content": value.trial.prompt},
-                    {"role": "tool", "content": value.trial.attack},
-                ],
+                "schemaVersion": "1.0",
+                "completed": True,
+                "steps": [{"id": "benchmark-prompt", "status": "succeeded", "assistantText": text}],
+                "evidence": {"promptEvidence": {"compositions": [{"fullPromptHash": "known"}]}},
             }
         ),
         encoding="utf-8",
     )
-    (transport / "response.json").write_text(
-        json.dumps({"model": "test-model", "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Assistant output"}}]}), encoding="utf-8"
-    )
-    return transport
+
+
+def inspect(directory, value, config, timed_out=False):
+    transcript = json.loads((directory / "result.json").read_text(encoding="utf-8")) if value.fixture is None else None
+    return inspect_capture(directory, value, config, BCalPromptResult(exit_code=0, timed_out=timed_out, transcript=transcript))
 
 
 def test_manual_identity_preserves_distinct_vectors(tmp_path):
@@ -123,7 +121,7 @@ def test_rejects_changed_fixture_payload():
 
 def test_missing_delivery_evidence_cannot_be_exported():
     assert not capture(case("symbols"), injection_landed=None).exportable
-    assert not capture(case(), observed_models=[]).exportable
+    assert not capture(case(), completed=False).exportable
 
 
 def test_requires_explicit_context_and_effort(config):
@@ -139,73 +137,82 @@ def test_requires_explicit_context_and_effort(config):
 
 def test_inspection_preserves_assistant_and_al_and_requires_actual_payload_delivery(tmp_path, config):
     value = case("symbols")
-    transport = recorded_case(tmp_path, config, value)
-    result = inspect_capture(tmp_path, value, config, 0, False)
+    recorded_case(tmp_path, config, value)
+    result = inspect(tmp_path, value, config)
     assert result.exportable
     assert result.response == "Assistant output\n\nfirst\n\nsecond"
-    request = json.loads((transport / "request.json").read_text(encoding="utf-8"))
-    request["messages"] = request["messages"][:1]
-    (transport / "request.json").write_text(json.dumps(request), encoding="utf-8")
-    assert inspect_capture(tmp_path, value, config, 0, False).injection_landed is False
+    with (tmp_path / "runtime.jsonl").open(encoding="utf-8") as stream:
+        events = [json.loads(line) for line in stream]
+    events = [event for event in events if event["event"] != "tool_result"]
+    # An echoed fixture in a request or diagnostic is not successful tool delivery.
+    events.append({"event": "llm_request", "messages": [{"content": value.trial.attack}]})
+    write_jsonl(tmp_path / "runtime.jsonl", events)
+    assert inspect(tmp_path, value, config).injection_landed is False
     for path in (tmp_path / "export").glob("*.al"):
         path.unlink()
-    assert inspect_capture(tmp_path, value, config, 0, False).response == "Assistant output"
+    assert inspect(tmp_path, value, config).response == "Assistant output"
 
 
-def test_refusal_does_not_include_echoed_user_prompt(tmp_path, config):
-    value = case()
-    transport = recorded_case(tmp_path, config, value)
+@pytest.mark.parametrize("vector", ["direct", "symbols"])
+def test_refusal_does_not_include_echoed_user_prompt(tmp_path, config, vector):
+    value = case(vector)
+    recorded_case(tmp_path, config, value, "I cannot help with that.")
     for path in (tmp_path / "export").glob("*.al"):
         path.unlink()
     (tmp_path / "stdout.txt").write_text(f"Prompt: {value.trial.prompt}\nDiagnostic text\nI cannot help with that.", encoding="utf-8")
-    (transport / "response.json").write_text(
-        json.dumps({"model": "test-model", "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": None, "refusal": "I cannot help with that."}}]}), encoding="utf-8"
-    )
-    result = inspect_capture(tmp_path, value, config, 0, False)
+    result = inspect(tmp_path, value, config)
     assert result.exportable
     assert result.response == "I cannot help with that."
     assert result.response_channel == "assistant"
 
 
-@pytest.mark.parametrize("message", [None, {"role": "user", "content": "Echo"}, {"role": "assistant", "content": {"unsupported": "content"}}])
-def test_missing_or_ambiguous_assistant_source_never_falls_back_to_stdout(tmp_path, config, message):
+@pytest.mark.parametrize("failure", ["missing", "ambiguous", "invalid"])
+def test_missing_or_ambiguous_assistant_source_never_falls_back_to_stdout(tmp_path, config, failure):
     value = case()
-    transport = recorded_case(tmp_path, config, value)
-    (transport / "response.json").write_text(json.dumps({"model": "test-model", "choices": [{"finish_reason": "stop", "message": message}]}), encoding="utf-8")
-    result = inspect_capture(tmp_path, value, config, 0, False)
+    recorded_case(tmp_path, config, value)
+    path = tmp_path / "result.json"
+    transcript = json.loads(path.read_text(encoding="utf-8"))
+    if failure == "ambiguous":
+        transcript["steps"] *= 2
+    elif failure == "missing":
+        transcript["steps"] = []
+    else:
+        transcript["steps"][0]["assistantText"] = {"unsupported": "content"}
+    path.write_text(json.dumps(transcript), encoding="utf-8")
+    result = inspect(tmp_path, value, config)
     assert not result.exportable
     assert "runtime status" not in result.response
     assert "assistant_output_unavailable" in result.errors
 
 
-def test_genuine_assistant_content_is_not_treated_as_a_prompt_echo(tmp_path, config):
-    value = case()
-    transport = recorded_case(tmp_path, config, value)
-    (transport / "response.json").write_text(
-        json.dumps({"model": "test-model", "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": value.trial.prompt}}]}), encoding="utf-8"
-    )
-    result = inspect_capture(tmp_path, value, config, 0, False)
+@pytest.mark.parametrize("vector", ["direct", "symbols"])
+def test_genuine_assistant_content_is_not_treated_as_a_prompt_echo(tmp_path, config, vector):
+    value = case(vector)
+    recorded_case(tmp_path, config, value, value.trial.prompt)
+    result = inspect(tmp_path, value, config)
     assert result.exportable
     assert result.response.startswith(value.trial.prompt)
 
 
-@pytest.mark.parametrize("failure", ["filter", "transport", "context", "timeout", "prompt", "effort"])
+@pytest.mark.parametrize("failure", ["filter", "missing", "context", "timeout", "prompt", "truncated"])
 def test_incomplete_or_mismatched_execution_cannot_be_exported(tmp_path, config, failure):
-    value = case()
-    transport = recorded_case(tmp_path, config, value)
+    value = case("symbols")
+    recorded_case(tmp_path, config, value)
+    path = tmp_path / "runtime.jsonl"
+    with path.open(encoding="utf-8") as stream:
+        events = [json.loads(line) for line in stream]
     if failure == "filter":
-        (transport / "response.json").write_text(json.dumps({"model": "test-model", "choices": [{"finish_reason": "content_filter"}]}), encoding="utf-8")
-    elif failure == "transport":
-        (transport / "response.json").unlink()
+        events[3]["finish_reason"] = "content_filter"
+    elif failure == "truncated":
+        events[3]["was_truncated"] = True
+    elif failure == "missing":
+        events = [event for event in events if event["event"] != "llm_response"]
     elif failure == "context":
-        (tmp_path / "runtime.jsonl").write_text("", encoding="utf-8")
+        events[0]["audience"] = "Developer"
     elif failure == "prompt":
-        (transport / "request.json").write_text('{"messages": []}', encoding="utf-8")
-    elif failure == "effort":
-        identity = config.model_dump()
-        identity["reasoning_effort"] = "none"
-        (transport / "identity.json").write_text(json.dumps(identity), encoding="utf-8")
-    assert not inspect_capture(tmp_path, value, config, 0, failure == "timeout").exportable
+        events[1]["text"] = "Different prompt"
+    write_jsonl(path, events)
+    assert not inspect(tmp_path, value, config, failure == "timeout").exportable
 
 
 def test_export_keeps_denominators_and_context_without_judgments(tmp_path):

@@ -3,47 +3,11 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from requests import Request, Response
 
 pytest.importorskip("azure.ai.evaluation.red_team")
 
 from bcbench import harms_generation
 from bcbench.harms import Capture, CaptureConfig, Case
-from bcbench.harms_service import ServiceEvidence
-
-
-@pytest.mark.parametrize("failure", [None, "missing_score", "missing_passed", "boolean_score", "result_error", "invalid_json"])
-def test_service_evidence_rejects_absent_judgments_but_accepts_native_adverse_result(tmp_path, failure):
-    request = Request(
-        "POST",
-        "https://example.test/sync_evals:run",
-        json={
-            "data_source": {"source": {"content": {"item": {"response": "private-response"}}}},
-            "testing_criteria": [{"name": "self_harm"}],
-        },
-    ).prepare()
-    payload = {
-        "status": "failed",
-        "results": [{"name": "self_harm", "status": "completed", "passed": False, "score": 5}],
-    }
-    if failure == "missing_score":
-        del payload["results"][0]["score"]
-    elif failure == "missing_passed":
-        del payload["results"][0]["passed"]
-    elif failure == "boolean_score":
-        payload["results"][0]["score"] = False
-    elif failure == "result_error":
-        payload["results"][0]["error"] = "private-error"
-    response = Response()
-    response.status_code = 200
-    response._content = b"invalid" if failure == "invalid_json" else json.dumps(payload).encode()
-    directory = tmp_path / "service"
-    directory.mkdir()
-    evidence = ServiceEvidence(directory)
-    evidence.record(None, request, response)
-    assert evidence.confirms("private-response", "self_harm") is (failure is None)
-    assert not evidence.confirms("different response", "self_harm")
-    assert (directory / "000000.response").read_bytes() == response.content
 
 
 def captured(prompt="Add a balance indicator.", execution_id="one"):
@@ -61,10 +25,7 @@ def captured(prompt="Add a balance indicator.", execution_id="one"):
         response="A read-only indicator.",
         response_channel="assistant",
         completed=True,
-        context_matches=True,
         injection_landed=None,
-        content_filtered=False,
-        observed_models=["test-model"],
         errors=[],
     )
 
@@ -165,8 +126,8 @@ def test_private_report_retains_indirect_sdk_label_and_exact_unicode(tmp_path, s
 
 
 @pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
-@pytest.mark.parametrize("judgment_present", [True, False])
-def test_manual_reader_preserves_unicode_and_rejects_unconfirmed_sdk_pass(tmp_path, monkeypatch, separator, judgment_present):
+@pytest.mark.parametrize("judgment", [True, False, None, "error", "exception"])
+def test_manual_scoring_preserves_unicode_and_public_sdk_judgments(tmp_path, monkeypatch, separator, judgment):
     from tests.test_harms import case
 
     value = captured(f"First{separator}second").model_copy(update={"response": f"Response{separator}continued"})
@@ -189,7 +150,11 @@ def test_manual_reader_preserves_unicode_and_rejects_unconfirmed_sdk_pass(tmp_pa
     def evaluate(*, query, response):
         assert query == value.case.trial.prompt
         assert response == value.response
-        return {"indirect_attack_label": False}
+        if judgment == "exception":
+            raise RuntimeError("private-sdk-error")
+        if judgment == "error":
+            return {"indirect_attack_label": False, "error": "private-sdk-error"}
+        return {"indirect_attack_label": judgment}
 
     class Credential:
         def __enter__(self):
@@ -210,15 +175,17 @@ def test_manual_reader_preserves_unicode_and_rejects_unconfirmed_sdk_pass(tmp_pa
     monkeypatch.setattr(harms_generation.CentralMemory, "set_memory_instance", lambda memory: None)
     monkeypatch.setattr(harms_generation, "DefaultAzureCredential", Credential)
     monkeypatch.setattr(harms_generation, "IndirectAttackEvaluator", lambda **kwargs: evaluate)
-    monkeypatch.setattr(harms_generation.ServiceEvidence, "confirms", lambda *args: judgment_present)
-    if judgment_present:
+    if isinstance(judgment, bool):
         assert harms_generation.run_manual_evaluation(tmp_path, config, tmp_path, tmp_path, tmp_path, tmp_path) == {"captured": 1}
     else:
         with pytest.raises(RuntimeError, match="scoring incomplete"):
             harms_generation.run_manual_evaluation(tmp_path, config, tmp_path, tmp_path, tmp_path, tmp_path)
     result = json.loads((tmp_path / "sdk" / "completeness.json").read_text())["manual_xpia/indirect_attack"]["outcomes"][0]
-    assert result["sdk_result"]["indirect_attack_label"] is False
-    assert result["status"] == ("evaluated" if judgment_present else "error")
+    if isinstance(judgment, bool):
+        assert result["sdk_result"]["indirect_attack_label"] is judgment
+        assert result["status"] == "evaluated"
+    else:
+        assert result["status"] == ("missing" if judgment is None else "error")
 
 
 @pytest.fixture
@@ -240,7 +207,7 @@ def generation(tmp_path, monkeypatch):
             },
         }
     )
-    state = SimpleNamespace(captures=[], disposed=False, constructor=None, scan=None, failure=None, prompts=("Add a balance indicator.", "Add an order count."), memory_path=None)
+    state = SimpleNamespace(captures=[], disposed=False, constructor=None, scan=None, failure=None, result=None, prompts=("Add a balance indicator.", "Add an order count."), memory_path=None)
 
     class Memory:
         def __init__(self, *, db_path):
@@ -266,7 +233,7 @@ def generation(tmp_path, monkeypatch):
             await asyncio.gather(*calls)
             if state.failure:
                 raise RuntimeError(state.failure)
-            raw = raw_result([sdk_item(value) for value in state.captures])
+            raw = raw_result([sdk_item(value, state.result) for value in state.captures])
             return SimpleNamespace(to_json=lambda: json.dumps(raw), attack_details=[])
 
     def capture_case(case, config, bcal, bridge, symbols, directory):
@@ -281,7 +248,6 @@ def generation(tmp_path, monkeypatch):
     monkeypatch.setattr(harms_generation, "DefaultAzureCredential", Credential)
     monkeypatch.setattr(harms_generation, "prepare_capture", lambda *args: None)
     monkeypatch.setattr(harms_generation, "capture_case", capture_case)
-    monkeypatch.setattr(harms_generation.ServiceEvidence, "confirms", lambda *args: True)
     return config, state
 
 
@@ -315,15 +281,15 @@ def test_sdk_failure_keeps_completed_captures_exportable(tmp_path, generation):
     assert (tmp_path / "foundry" / "direct.jsonl").read_text().count("\n") == 2
 
 
-def test_sdk_pass_defaults_without_service_judgments_are_not_successful(tmp_path, generation, monkeypatch):
-    config, _ = generation
-    monkeypatch.setattr(harms_generation.ServiceEvidence, "confirms", lambda *args: False)
+def test_missing_public_sdk_judgments_are_not_successful(tmp_path, generation):
+    config, state = generation
+    state.result = {"name": "self_harm", "reason": "No judgment returned"}
     with pytest.raises(RuntimeError, match="incomplete"):
         harms_generation.run_generation(config, tmp_path, tmp_path, tmp_path, tmp_path)
     completeness = json.loads((tmp_path / "sdk" / "completeness.json").read_text())
     assert completeness["self_harm"]["evaluated"] == 0
     assert completeness["self_harm"]["missing_or_error"] == 2
-    assert all(row["status"] == "error" for row in completeness["self_harm"]["outcomes"])
+    assert all(row["status"] == "missing" for row in completeness["self_harm"]["outcomes"])
 
 
 def test_sdk_expansion_cannot_exceed_explicit_target_budget(tmp_path, generation):

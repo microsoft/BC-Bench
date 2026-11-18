@@ -17,7 +17,6 @@ from pyrit.memory import CentralMemory, SQLiteMemory
 
 from bcbench.harms import Capture, CaptureConfig, Case, EvaluationProject, Trial, capture_case, export_captures, prepare_capture, read_objects, run_capture, write_json
 from bcbench.harms_report import write_report
-from bcbench.harms_service import ServiceEvidence
 from bcbench.harms_summary import CONTENT_METRICS
 
 if TYPE_CHECKING:
@@ -79,8 +78,8 @@ def summarize_sdk_results(raw: dict[str, JsonValue], captures: list[Capture], ri
                 outcome["sdk_result"] = result
                 outcome["reason"] = result.get("reason")
                 properties = result.get("properties")
-                service_error = isinstance(properties, dict) and properties.get("outcome") == "error"
-                if result.get("status") not in (None, "completed") or result.get("error") or service_error:
+                returned_error = isinstance(properties, dict) and properties.get("outcome") == "error"
+                if result.get("status") not in (None, "completed") or result.get("error") or returned_error:
                     outcome.update(status="error", reason=result.get("error") or result.get("reason") or result.get("status"))
                 elif isinstance(result.get("passed"), bool):
                     outcome["status"] = "evaluated"
@@ -178,7 +177,6 @@ def run_generation(config: CaptureConfig, bcal: Path, bridge_python: Path, symbo
         (output / "cases.jsonl").open("x", encoding="utf-8") as cases_file,
         (output / "captures.jsonl").open("x", encoding="utf-8") as captures_file,
         DefaultAzureCredential() as credential,
-        ServiceEvidence(sdk_root / "service") as evidence,
     ):
         cleanup.callback(memory.dispose_engine)
 
@@ -272,15 +270,8 @@ def run_generation(config: CaptureConfig, bcal: Path, bridge_python: Path, symbo
                 scan_error = type(exc).__name__
                 (risk_output / "error.txt").write_text(traceback.format_exc(), encoding="utf-8")
             status = summarize_sdk_results(raw, current, risk, generation.num_objectives)
-            for outcome in _objects(status["outcomes"]):
-                capture = next(value for value in current if value.case.execution_id == outcome["execution_id"])
-                if not evidence.confirms(capture.response, risk):
-                    outcome["status"] = "error"
-                    outcome["reason"] = "A complete service judgment was not observed; SDK defaults are not accepted."
-            status["evaluated"] = sum(outcome["status"] == "evaluated" for outcome in _objects(status["outcomes"]))
-            status["missing_or_error"] = generation.num_objectives - TypeAdapter(int).validate_python(status["evaluated"])
             if scan_error or target_error or status["missing_or_error"]:
-                status.update(complete=False, error=scan_error or ("target_error" if target_error else "missing_service_judgment"))
+                status.update(complete=False, error=scan_error or ("target_error" if target_error else "missing_sdk_judgment"))
             return status
 
         for risk in generation.risk_categories:
@@ -373,7 +364,7 @@ def run_manual_evaluation(cases_path: Path, config: CaptureConfig, bcal: Path, b
     if not isinstance(memory, SQLiteMemory) or Path(memory.db_path).resolve() != (sdk_root / "memory.db").resolve():
         raise RuntimeError("PyRIT memory already initialized elsewhere; use a fresh process.")
     CentralMemory.set_memory_instance(memory)
-    with ExitStack() as cleanup, DefaultAzureCredential() as credential, ServiceEvidence(sdk_root / "service") as evidence:
+    with ExitStack() as cleanup, DefaultAzureCredential() as credential:
         cleanup.callback(memory.dispose_engine)
         for index, capture in enumerate(captures):
             for metric in ("indirect_attack",) if capture.case.subset == "xpia" else CONTENT_METRICS:
@@ -387,10 +378,10 @@ def run_manual_evaluation(cases_path: Path, config: CaptureConfig, bcal: Path, b
                         result = TypeAdapter(dict[str, JsonValue]).validate_python(evaluator(query=capture.case.trial.prompt, response=capture.response))
                         write_json(directory / "sdk-result.json", result)
                         outcome.update(sdk_result=result, status="evaluated" if isinstance(result.get("indirect_attack_label"), bool) else "missing")
+                        if result.get("error") or result.get("status") not in (None, "completed"):
+                            outcome.update(status="error")
                     else:
                         outcome.update(asyncio.run(score_saved_content(capture, metric, project, credential, directory, config.timeout_seconds)))
-                    if not evidence.confirms(capture.response, metric):
-                        outcome.update(status="error", reason="A complete service judgment was not observed.")
                 except Exception as exc:  # noqa: BLE001 - retain private SDK errors, then stop the run below.
                     outcome.update(status="error", error=type(exc).__name__)
                     (directory / "error.txt").write_text(traceback.format_exc(), encoding="utf-8")

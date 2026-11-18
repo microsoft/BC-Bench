@@ -107,6 +107,13 @@ def _read_transcript_after_failure(result_path: Path) -> dict[str, JsonValue] | 
         return None
 
 
+def _scenario_args(query: str, directory: Path) -> list[str]:
+    scenario_path = directory / "scenario.json"
+    scenario = {"schemaVersion": _SCENARIO_SCHEMA_VERSION, "steps": [{"id": "benchmark-prompt", "type": "user", "text": query}]}
+    scenario_path.write_text(json.dumps(scenario), encoding="utf-8")
+    return [f"--scenario={scenario_path}", f"--result={directory / 'result.json'}", "--include-evidence"]
+
+
 @dataclass(frozen=True)
 class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
     """The bcal CLI, generating AL code for NL2AL entries into the prepared workspace."""
@@ -137,11 +144,8 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
 
         # Only scenario mode writes a result file with the transcript; --scenario takes a file, not inline JSON
         with tempfile.TemporaryDirectory(prefix="bcbench-bcal-") as temp_dir:
-            scenario_path = Path(temp_dir) / "scenario.json"
             result_path = Path(temp_dir) / "result.json"
-            scenario = {"schemaVersion": _SCENARIO_SCHEMA_VERSION, "steps": [{"id": "benchmark-prompt", "type": "user", "text": entry.get_task()}]}
-            scenario_path.write_text(json.dumps(scenario), encoding="utf-8")
-            cmd_args = _bcal_cmd_args(entry.page, entry.audience, package_cache_path, export_folder, backend_config, f"--scenario={scenario_path}", f"--result={result_path}", "--include-evidence")
+            cmd_args = _bcal_cmd_args(entry.page, entry.audience, package_cache_path, export_folder, backend_config, *_scenario_args(entry.get_task(), Path(temp_dir)))
             logger.debug(f"bcal CLI command: {cmd_args}")
 
             try:
@@ -167,6 +171,7 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
 class BCalPromptResult:
     exit_code: int
     timed_out: bool
+    transcript: dict[str, JsonValue] | None
 
 
 def run_bcal_prompt(
@@ -184,19 +189,17 @@ def run_bcal_prompt(
 ) -> BCalPromptResult:
     """Keep process output private; callers must score structured assistant evidence, never stdout."""
     export_folder.mkdir(parents=True, exist_ok=True)
+    # Scenario mode rejects harms fixtures; those use BCal's native structured log.
+    mode_args = [f"--prompt={query}", f"--log={output / 'runtime.jsonl'}", "--log-full", f"--harms-fixture={fixture}"] if fixture is not None else _scenario_args(query, output)
     cmd_args = _bcal_cmd_args(
         page,
         audience,
         package_cache_path,
         export_folder,
         backend_config,
-        f"--prompt={query}",
-        f"--log={output / 'runtime.jsonl'}",
-        "--log-full",
+        *mode_args,
         executable=executable,
     )
-    if fixture is not None:
-        cmd_args.append(f"--harms-fixture={fixture}")
     (output / "command.json").write_text(json.dumps(cmd_args, ensure_ascii=False), encoding="utf-8")
     started = time.monotonic()
     timed_out = False
@@ -210,4 +213,7 @@ def run_bcal_prompt(
             exit_code = process.wait()
             timed_out = True
     (output / "process.json").write_text(json.dumps({"exit_code": exit_code, "timed_out": timed_out, "duration_seconds": time.monotonic() - started}), encoding="utf-8")
-    return BCalPromptResult(exit_code=exit_code, timed_out=timed_out)
+    transcript = None
+    if fixture is None:
+        transcript = _read_transcript(output / "result.json") if exit_code == 0 and not timed_out else _read_transcript_after_failure(output / "result.json")
+    return BCalPromptResult(exit_code=exit_code, timed_out=timed_out, transcript=transcript)

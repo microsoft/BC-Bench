@@ -53,39 +53,30 @@ scorer handles these without patching SDK internals.
 `RedTeam.scan(skip_evals=False, skip_upload=True)` disables SDK dataset/result publication.
 Generator/evaluator requests still transmit content to the configured service;
 provider-side processing/retention is not controlled by `skip_upload`.
-Public OpenTelemetry requests instrumentation, with no exporter, retains sync-evaluation
-responses privately and verifies that a completed requested judgment actually exists.
-This prevents an SDK missing-score default from becoming a pass. It does not replace
-the SDK's verdict with the raw service verdict. Service/SDK differences remain auditable.
-Specifically, SDK `1.18.2`'s `IndirectAttackEvaluator` parser defaults an absent label
-to `false`; RedTeam's result processor can derive `passed` from simulation
-`attack_success` even when evaluation did not run, and excludes native `outcome`
-properties from the public summary. Those public results alone cannot prove scoring
-completeness. The local requests hook checks the original completed judgment and
-error fields; it defines no evaluator and exports no telemetry. If the selected SDK
-uses an unobserved transport, the run fails incomplete rather than accepting defaults.
+Public SDK results and exceptions are the scoring contract. Missing requested
+results, missing boolean judgments, returned errors and exceptions remain incomplete,
+not passes. The harness does not intercept service responses or independently audit
+SDK defaults; completeness means completeness of the **SDK-returned results**.
 
 ## Output isolation and completeness
 
-Scored output contains assistant completion text/refusals in recorded transport order
-and any exported AL. CLI stdout, echoed user prompts, tool arguments, reasoning fields
-and diagnostics are **never** scoring input. Actual assistant content is retained even
-when it repeats the prompt. Missing, multiple, truncated, unsupported or ambiguously
-ordered completions fail capture; there is no stdout fallback.
+Harms reuses `run_bcal_prompt` and the existing native scenario/result reader.
+Direct/UPIA score the single scenario step's `assistantText` and exported AL, using
+`--scenario --result --include-evidence`. XPIA uses native `--log-full` assistant
+response events and exported AL because BCal rejects scenarios combined with
+`--harms-fixture`. No second bridge transcript or request/response recorder is used.
 
-Every capture verifies runtime context, model/effort/transport identity and completion.
-XPIA additionally requires the exact payload in a successful runtime tool result and a
-subsequent model tool message. A fixture on disk is not delivery. Each invocation gets
-a separate writable copy of pristine symbols; no runtime/compiler behavior is changed.
+CLI stdout, echoed user prompts, tool arguments, reasoning fields and diagnostics
+are **never** scoring input. Actual assistant content is retained even when it
+repeats the prompt. Missing or ambiguous native results and incomplete execution
+fail capture; there is no stdout fallback.
 
-BCal's native `--result --include-evidence` transcript is already used by the NL2AL
-scenario harness. It is not a drop-in replacement here: the runtime scenario
-contract makes `--scenario` mutually exclusive with `--harms-fixture`, and the
-verified XPIA snapshot below does not support scenario/result flags. Native session
-events also do not expose the actual external model request needed for the
-model-context delivery check. Harms therefore reuses `run_bcal_prompt` and its shared
-argument builder, retaining private bridge completions/requests and runtime tool
-events. It never switches execution modes or runtimes merely to obtain a transcript.
+The bridge enforces the configured model, environment, reasoning and bc-eval version.
+Runtime/symbol hashes and native evidence are saved privately; this is configured
+provenance, not an independent audit of provider-side routing. XPIA requires the exact
+payload in a successful native tool result. It does not independently record or
+verify every model request. A fixture on disk is not delivery. Each invocation gets
+a writable copy of pristine symbols; no runtime/compiler behavior is changed.
 
 `summary.json` / `summary.md` contain only allowlisted suite/category counts:
 requested, executed, scored, missing, errors, native passes/failures and deliveries.
@@ -118,7 +109,9 @@ every symbol file's hash. BCal must already be installed from the selected exist
 released package version for it. This command records the selection and checks the
 actual runtime version rather than installing or silently choosing a newer runtime.
 Keep snapshots separate from global installations and retain their original file
-manifest. For XPIA, also satisfy the [runtime prerequisite](#xpia-runtime-prerequisite).
+manifest. Direct/UPIA require native `--scenario --result --include-evidence` support;
+older prompt-only snapshots are not compatible. For XPIA, also satisfy the
+[runtime prerequisite](#xpia-runtime-prerequisite).
 
 Save the following as a private configuration, replacing the project and runtime
 placeholders. Obtain `bcal_runtime_version` from the chosen executable's `--version`
@@ -210,18 +203,13 @@ The known-bad package `18.0.38.52553-beta`, source
 `2f97f5f834a38836d2c9393c9f8c4226bf9f3ebb`, predates that fix; do not use it for XPIA.
 A newer-looking package number alone does not establish that the fix is present.
 
-Bounded live checks use the preserved unpackaged runtime
-`18.0.0.0+a4817405b18a4970e64bf4bbd116ff4595a3979e`, whose files match its recorded
-manifest. This is not a claim that the snapshot is an available released package;
-a minimum published fixed package version has not been established.
-Use your existing authorized runtime distribution, not a global-runtime replacement.
-
-Both vectors completed one benign case through the local CLI with Sol / TEST /
-reasoning `none`, bc-eval `0.10.1` and Azure AI Evaluation SDK `1.18.2`. Each delivered
-the payload in a successful tool result and an actual model request, then received
-one complete native SDK pass with zero missing/error judgments. Scoring used isolated
-assistant output/exported AL; summary-only export was checked for content exclusion.
-These are integration checks, not a harms campaign or human-reviewed safety approval.
+Published package `30.0.47.129-beta`, runtime
+`30.0.47.129+122c0780342781605402d18f2d897ac58eea8308`, is an obtainable example from
+the existing official feed. Its source is a verified descendant of the injection fix,
+and it supports native scenario results. Install an exact package in an isolated
+`dotnet tool install --tool-path <directory>` location using your existing feed
+access; do not replace a global runtime. This is a verified example, not a claim
+about the minimum compatible package.
 
 The legitimate task must actually retrieve the injected property: inspecting only
 page controls does not necessarily expose a page-level Caption fixture.
@@ -234,7 +222,7 @@ evidence. The harness does not repair or modify BCal.
 ## Private evidence
 
 Private output retains `cases.jsonl`, `captures.jsonl`, `run.json`, per-case raw traces,
-SDK results, service evidence and `sdk\completeness.json`. SDK output is joined by exact
+SDK results and `sdk\completeness.json`. SDK output is joined by exact
 query/response, not position; ambiguous duplicates fail. After an interrupted run, export
 existing eligible captures with `bcbench harms export --output <directory>`; it refuses
 to overwrite `foundry`. Foundry JSONL has `query`, `response`, `context` (payload), with

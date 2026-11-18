@@ -162,7 +162,7 @@ def test_main_sends_empty_routing_ticket_without_local_certificate(monkeypatch, 
 
 
 @pytest.mark.parametrize("effort", ["none", "high"])
-def test_capture_bridge_preserves_explicit_effort_and_records_transport(monkeypatch, fake_llm_api, tmp_path, effort):
+def test_configured_bridge_preserves_explicit_effort_without_transport_capture(monkeypatch, fake_llm_api, tmp_path, effort):
     @dataclass
     class Settings:
         tenant_id: str = "tenant"
@@ -175,28 +175,23 @@ def test_capture_bridge_preserves_explicit_effort_and_records_transport(monkeypa
             return cls()
 
     calls = []
+    settings = []
     response = {"model": "served-model", "choices": [{"finish_reason": "stop"}]}
 
     def create(**kwargs):
         calls.append(kwargs)
-        return types.SimpleNamespace(
-            parse=lambda: response,
-            http_response=types.SimpleNamespace(
-                request=types.SimpleNamespace(url="https://example.invalid/chat/completions", headers={"x-llm-models": "routed-model", "Authorization": "never-save"}),
-                headers={"x-request-id": "correlation"},
-                status_code=200,
-            ),
-        )
+        return response
+
+    def create_client(**kwargs):
+        settings.append(kwargs["settings"])
+        return types.SimpleNamespace(chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=create)))
 
     module = sys.modules["bc_eval.llm.llm_api"]
     monkeypatch.setattr(module, "LlmApiSettings", Settings)
     monkeypatch.setattr(
         module,
         "create_llm_api_client",
-        lambda **kwargs: types.SimpleNamespace(
-            base_url="https://example.invalid",
-            chat=types.SimpleNamespace(completions=types.SimpleNamespace(with_raw_response=types.SimpleNamespace(create=create))),
-        ),
+        create_client,
     )
     monkeypatch.setattr(bc_eval_llm_api_bridge, "version", lambda _: "0.10.1")
     monkeypatch.delenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, raising=False)
@@ -206,22 +201,20 @@ def test_capture_bridge_preserves_explicit_effort_and_records_transport(monkeypa
     monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(buffer=BytesIO(json.dumps(request).encode())))
     stdout = io.StringIO()
     monkeypatch.setattr(sys, "stdout", stdout)
-    assert bc_eval_llm_api_bridge.main(["--capture-config", str(config), "--capture-dir", str(tmp_path / "calls")]) == 0
+    assert bc_eval_llm_api_bridge.main(["--config", str(config)]) == 0
     assert len(calls) == 1
     assert calls[0]["reasoning_effort"] == effort
     assert calls[0]["extra_headers"] == {"x-sticky-route-session-ticket": ""}
     assert calls[0]["tools"] == request["tools"]
     assert json.loads(stdout.getvalue()) == response
-    directory = next((tmp_path / "calls").iterdir())
-    assert json.loads((directory / "identity.json").read_text())["reasoning_effort"] == effort
-    assert json.loads((directory / "http.json").read_text())["routed_model"] == "routed-model"
-    assert "never-save" not in "".join(path.read_text() for path in directory.iterdir())
+    assert settings[0].environment == "PROD"
+    assert list(tmp_path.iterdir()) == [config]
 
 
-def test_capture_bridge_rejects_transport_version_before_request(monkeypatch, fake_llm_api, tmp_path):
+def test_configured_bridge_rejects_transport_version_before_request(monkeypatch, fake_llm_api, tmp_path):
     config = tmp_path / "config.json"
     config.write_text('{"bc_eval_version": "0.10.1"}', encoding="utf-8")
     monkeypatch.setattr(bc_eval_llm_api_bridge, "version", lambda _: "0.6.1")
     with pytest.raises(ValueError, match="selected transport"):
-        bc_eval_llm_api_bridge.main(["--capture-config", str(config), "--capture-dir", str(tmp_path / "calls")])
+        bc_eval_llm_api_bridge.main(["--config", str(config)])
     assert not fake_llm_api

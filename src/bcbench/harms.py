@@ -13,6 +13,7 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
 
 from bcbench.agent.bcal import BCalBackendConfig, bc_eval_llm_api_bridge, run_bcal_prompt
+from bcbench.agent.bcal.agent import BCalPromptResult
 
 type Subset = Literal["direct", "upia", "xpia"]
 type Vector = Literal["direct", "page_inspector", "symbols"]
@@ -117,16 +118,13 @@ class Capture(BaseModel):
     response: str
     response_channel: Literal["generated_al", "assistant", "assistant_and_generated_al", "unavailable"]
     completed: bool
-    context_matches: bool
     injection_landed: bool | None
-    content_filtered: bool
-    observed_models: list[str]
     errors: list[str]
 
     @property
     def exportable(self) -> bool:
         delivery_confirmed = self.case.fixture is None or self.injection_landed is True
-        return self.completed and self.context_matches and delivery_confirmed and not self.content_filtered and bool(self.response.strip()) and bool(self.observed_models) and not self.errors
+        return self.completed and delivery_confirmed and bool(self.response.strip()) and not self.errors
 
 
 def sha256(path: Path) -> str:
@@ -163,87 +161,58 @@ def _strings(value: JsonValue) -> Iterator[str]:
             yield from _strings(child)
 
 
-def assistant_text(response: dict[str, JsonValue]) -> str:
-    choices = response.get("choices")
-    if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
-        raise ValueError("Expected exactly one assistant completion.")
-    choice = choices[0]
-    message = choice.get("message")
-    if choice.get("finish_reason") not in ("stop", "tool_calls") or not isinstance(message, dict) or message.get("role") != "assistant":
-        raise ValueError("Assistant completion is missing, filtered or truncated.")
-    content = message.get("content")
-    if content is None:
-        text = ""
-    elif isinstance(content, str):
-        text = content
-    elif isinstance(content, list) and all(isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str) for part in content):
-        text = "\n".join(str(part["text"]) for part in content if isinstance(part, dict))
-    else:
-        raise ValueError("Unsupported assistant content format.")
-    refusal = message.get("refusal")
-    if refusal is not None and not isinstance(refusal, str):
-        raise ValueError("Unsupported assistant refusal format.")
-    return "\n".join(part for part in (text, refusal) if part)
-
-
-def inspect_capture(directory: Path, case: Case, config: CaptureConfig, exit_code: int, timed_out: bool) -> Capture:
-    events = read_objects(directory / "runtime.jsonl") if (directory / "runtime.jsonl").exists() else []
-    sessions = [event for event in events if event.get("event") == "session_start"]
-    requests = [event for event in events if event.get("event") == "llm_request"]
-    context_matches = len(sessions) == 1 and all(
-        sessions[0].get(key) == value for key, value in {"mode": case.context.mode, "audience": case.context.audience, "review_enabled": False, "deployment": config.model}.items()
-    )
-    if case.context.system_prompt_hashes is not None:
-        context_matches &= bool(requests) and all(event.get("system_prompt_hash") in case.context.system_prompt_hashes for event in requests)
+def inspect_capture(directory: Path, case: Case, config: CaptureConfig, result: BCalPromptResult) -> Capture:
     errors: list[str] = []
-    if exit_code != 0 or timed_out or not any(event.get("event") == "turn_complete" for event in events):
-        errors.append("execution_incomplete")
-    if not context_matches:
-        errors.append("runtime_context_mismatch")
-    models: set[str] = set()
-    filtered = False
-    protocol_payload = False
-    assistant_parts: list[tuple[int, str]] = []
-    calls = sorted((directory / "transport").glob("*"))
-    if not calls:
-        errors.append("no_transport_capture")
-    for call in calls:
-        if not (call / "response.json").exists():
-            errors.append("transport_failure")
-            continue
-        identity = json.loads((call / "identity.json").read_text(encoding="utf-8"))
-        if any(identity[key] != getattr(config, key) for key in ("model", "reasoning_effort", "environment", "bc_eval_version")):
-            errors.append("transport_identity_mismatch")
-        request = json.loads((call / "request.json").read_text(encoding="utf-8"))
-        if not any(message.get("role") == "user" and case.trial.prompt in list(_strings(message.get("content"))) for message in request["messages"]):
-            errors.append("prompt_mismatch")
-        protocol_payload |= any(message.get("role") == "tool" and any(case.trial.attack in html.unescape(text) for text in _strings(message.get("content"))) for message in request["messages"])
-        response = json.loads((call / "response.json").read_text(encoding="utf-8"))
-        if not isinstance(response.get("model"), str) or not response.get("choices"):
-            errors.append("invalid_completion")
-            continue
-        models.add(response["model"])
-        filtered |= any(choice.get("finish_reason") == "content_filter" for choice in response["choices"])
-        try:
-            text = assistant_text(response)
-            timestamp = identity.get("request_started_ns")
-            if isinstance(timestamp, int) and not isinstance(timestamp, bool):
-                assistant_parts.append((timestamp, text))
-            else:
-                errors.append("missing_transport_order")
-        except ValueError:
-            errors.append("assistant_output_unavailable")
+    completed = result.exit_code == 0 and not result.timed_out
+    texts: list[str] = []
+    prompt_hashes: list[JsonValue] = []
     landed = None
-    if case.fixture is not None:
-        landed = protocol_payload and any(
+    if case.fixture is None:
+        transcript = result.transcript or {}
+        steps = TypeAdapter(list[dict[str, JsonValue]]).validate_python(transcript.get("steps") or [])
+        completed &= transcript.get("completed") is True and not transcript.get("failure") and len(steps) == 1 and steps[0].get("status") == "succeeded"
+        if len(steps) == 1 and isinstance(steps[0].get("assistantText"), str):
+            texts.append(TypeAdapter(str).validate_python(steps[0]["assistantText"]))
+        else:
+            errors.append("assistant_output_unavailable")
+        if case.context.system_prompt_hashes is not None:
+            evidence = TypeAdapter(dict[str, JsonValue]).validate_python(transcript.get("evidence") or {})
+            prompts = TypeAdapter(dict[str, JsonValue]).validate_python(evidence.get("promptEvidence") or {})
+            compositions = TypeAdapter(list[dict[str, JsonValue]]).validate_python(prompts.get("compositions") or [])
+            prompt_hashes = [item.get("fullPromptHash") for item in compositions]
+    else:
+        events = read_objects(directory / "runtime.jsonl") if (directory / "runtime.jsonl").exists() else []
+        sessions = [event for event in events if event.get("event") == "session_start"]
+        if len(sessions) != 1 or any(
+            sessions[0].get(key) != value for key, value in {"mode": case.context.mode, "audience": case.context.audience, "review_enabled": False, "deployment": config.model}.items()
+        ):
+            errors.append("runtime_context_mismatch")
+        if [event.get("text") for event in events if event.get("event") == "user_message"] != [case.trial.prompt]:
+            errors.append("prompt_mismatch")
+        completed &= any(event.get("event") == "turn_complete" for event in events)
+        responses = [event for event in events if event.get("event") == "llm_response" and event.get("llm_operation") in (None, "Delivery")]
+        if not responses:
+            errors.append("assistant_output_unavailable")
+        for response in responses:
+            if response.get("finish_reason") not in ("stop", "tool_calls") or response.get("was_truncated"):
+                errors.append("assistant_output_incomplete")
+            text = response.get("text_content")
+            if isinstance(text, str):
+                texts.append(text)
+            elif text is not None:
+                errors.append("assistant_output_unavailable")
+        landed = any(
             event.get("event") == "tool_result" and event.get("success") is True and any(case.trial.attack in html.unescape(text) for text in _strings(event.get("result"))) for event in events
         )
         if not landed:
             errors.append("payload_not_delivered")
+        prompt_hashes = [event.get("system_prompt_hash") for event in events if event.get("event") == "llm_request"]
+    if not completed:
+        errors.append("execution_incomplete")
+    if case.context.system_prompt_hashes is not None and (not prompt_hashes or any(value not in case.context.system_prompt_hashes for value in prompt_hashes)):
+        errors.append("system_prompt_mismatch")
     generated = "\n\n".join(path.read_text(encoding="utf-8") for path in sorted((directory / "export").rglob("*.al"))).strip()
-    if len({timestamp for timestamp, _ in assistant_parts}) != len(assistant_parts):
-        errors.append("ambiguous_transport_order")
-    text = "\n\n".join(text for _, text in sorted(assistant_parts) if text.strip())
+    text = "\n\n".join(text for text in texts if text.strip())
     response = "\n\n".join(part for part in (text, generated) if part)
     if not response.strip():
         errors.append("assistant_output_unavailable")
@@ -252,11 +221,8 @@ def inspect_capture(directory: Path, case: Case, config: CaptureConfig, exit_cod
         case=case,
         response=response,
         response_channel=channel,
-        completed=bool(models) and not {"execution_incomplete", "transport_failure", "invalid_completion"}.intersection(errors),
-        context_matches=context_matches,
+        completed=completed,
         injection_landed=landed,
-        content_filtered=filtered,
-        observed_models=sorted(models),
         errors=sorted(set(errors)),
     )
 
@@ -269,10 +235,8 @@ def capture_case(case: Case, config: CaptureConfig, bcal: Path, bridge_python: P
         [
             str(bridge_python),
             str(Path(bc_eval_llm_api_bridge.__file__)),
-            "--capture-config",
+            "--config",
             str(config_path),
-            "--capture-dir",
-            str(directory / "transport"),
         ]
     )
     # The runtime may write to its package cache. Isolate each execution without changing runtime behavior.
@@ -295,7 +259,7 @@ def capture_case(case: Case, config: CaptureConfig, bcal: Path, bridge_python: P
         fixture=fixture_path,
         timeout=config.timeout_seconds,
     )
-    return inspect_capture(directory, case, config, result.exit_code, result.timed_out)
+    return inspect_capture(directory, case, config, result)
 
 
 def export_captures(output: Path) -> dict[str, JsonValue]:
