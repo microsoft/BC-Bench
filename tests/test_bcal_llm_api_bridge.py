@@ -130,6 +130,7 @@ def test_main_passes_local_certificate_credential_to_llm_api_client(monkeypatch,
         "messages": [{"role": "user", "content": "hi"}],
         "max_completion_tokens": 16384,
         "tools": tools,
+        "reasoning_effort": "none",
         "extra_headers": {"x-sticky-route-session-ticket": ""},
     }
 
@@ -141,6 +142,14 @@ def test_main_falls_back_to_bc_eval_default_credential_without_local_cert(monkey
 
     assert fake_llm_api["client"]["credential"] is None
     assert fake_llm_api["request"]["reasoning_effort"] == "low"
+
+
+def test_main_disables_reasoning_when_function_tools_are_present(monkeypatch, fake_llm_api):
+    tools = [{"type": "function", "function": {"name": "noop"}}]
+
+    _run_main(monkeypatch, {"model": "gpt-56-reasoning-sol", "messages": [], "tools": tools, "reasoning_effort": "high"})
+
+    assert fake_llm_api["request"]["reasoning_effort"] == "none"
 
 
 @pytest.mark.parametrize("model", ["gpt-55-chat", "gpt-56-reasoning-sol"])

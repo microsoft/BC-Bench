@@ -21,9 +21,7 @@ _CERT_FILE_ENV = "LLM_API_CERTIFICATE_FILE"
 # Separates the agent-under-test traffic from bc-eval's judge traffic (bc-eval's own agent host uses the same step).
 _TAXONOMY_INFERENCE_STEP = "HostAgent"
 
-# Reasoning effort (not all models support this parameter), different models might have different available values:
-# Set to None to omit the parameter entirely (lets the model/service use its own default).
-_DEFAULT_REASONING_EFFORT: str | None = None
+_TOOLS_REASONING_EFFORT = "none"
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -130,12 +128,15 @@ def main(argv: list[str] | None = None) -> int:
         # bc-eval creates a new session per request; LLM API requires an empty ticket when none is cached.
         "extra_headers": {"x-sticky-route-session-ticket": ""},
     }
-    if request.get("tools"):
-        kwargs["tools"] = request["tools"]
-
-    reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
+    tools = request.get("tools")
+    if tools:
+        kwargs["tools"] = tools
+    reasoning_effort = request.get("reasoning_effort")
     if capture_config is not None:
+        # A measured capture must never silently downgrade its explicit setting.
         reasoning_effort = capture_config["reasoning_effort"]
+    elif tools:
+        reasoning_effort = _TOOLS_REASONING_EFFORT
     if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
 
