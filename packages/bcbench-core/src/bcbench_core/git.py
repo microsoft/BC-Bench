@@ -132,7 +132,7 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         Path(patch_file).unlink(missing_ok=True)
 
 
-def stage_and_get_diff(repo_path: Path, *, include: tuple[str, ...], exclude: tuple[str, ...] = ()) -> str:
+def stage_and_get_diff(repo_path: Path, include: tuple[str, ...], exclude: tuple[str, ...] = ()) -> str:
     """Stage changes to files matching `include` and return the staged diff against HEAD.
 
     Args:
