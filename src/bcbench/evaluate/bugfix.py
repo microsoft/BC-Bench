@@ -50,7 +50,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
         # Clean test projects to revert any unintended agent changes before capturing diff
         clean_project_paths(context.repo_path, test_projects)
 
-        generated_patch = stage_and_get_diff(context.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
+        generated_patch = stage_and_get_diff(context.repo_path, include=("*.al",), exclude=("**/app.json", "*.docx", "*.md"))
         result: BugFixResult | None = None
 
         try:
