@@ -208,7 +208,7 @@ def test_al_evaluation_pipelines_pass_recommended_diff_exclusions(tmp_path, cate
     ):
         pipeline.evaluate(ctx, AgentResult())
 
-    stage_diff.assert_called_once_with(ctx.repo_path, exclude=("**/app.json", "*.docx", "*.md"))
+    stage_diff.assert_called_once_with(ctx.repo_path, include=("*.al",), exclude=("**/app.json", "*.docx", "*.md"))
 
 
 class TestMockPipelineCoversAllCategories:

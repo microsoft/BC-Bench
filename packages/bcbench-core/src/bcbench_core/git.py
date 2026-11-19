@@ -132,11 +132,12 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         Path(patch_file).unlink(missing_ok=True)
 
 
-def stage_and_get_diff(repo_path: Path, exclude: tuple[str, ...] = ()) -> str:
-    """Stage all *.al file changes and return the staged diff against HEAD.
+def stage_and_get_diff(repo_path: Path, include: tuple[str, ...], exclude: tuple[str, ...] = ()) -> str:
+    """Stage changes to files matching `include` and return the staged diff against HEAD.
 
     Args:
         repo_path: Path to the git repository.
+        include: Git pathspec patterns of the files to stage, e.g. `("*.al",)`; `*` also matches across directories.
         exclude: Git pathspec patterns left out of the diff, including files staged earlier (e.g. by the agent).
             Defaults to no exclusions. For AL-only evaluation, you'll likely want to pass `("**/app.json", "*.docx", "*.md")`
 
@@ -146,18 +147,18 @@ def stage_and_get_diff(repo_path: Path, exclude: tuple[str, ...] = ()) -> str:
     Raises:
         EmptyDiffError: If the generated diff is empty (agent made no changes).
     """
-    logger.info("Staging *.al file changes and getting git diff")
+    logger.info(f"Staging changes to {include} and getting git diff")
 
-    # Stage all changes, so new files can be captured in the diff (only *.al files for now).
-    # A missing-pathspec error (exit 128) means the agent produced no *.al files at all -> empty diff.
+    # Stage each pattern separately: git fails the whole add if any pathspec matches nothing.
+    # A missing-pathspec error (exit 128) only means the agent produced no such files; the empty diff below covers it.
     # Any other failure is a real git error and propagates to fail the job.
-    try:
-        subprocess.run(["git", "add", "*.al"], cwd=repo_path, capture_output=True, encoding="utf-8", text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        if e.stderr and "did not match" in e.stderr:
-            logger.warning("No *.al files produced by agent - treating as empty diff")
-            raise EmptyDiffError from e
-        raise
+    for pattern in include:
+        try:
+            subprocess.run(["git", "add", "--", pattern], cwd=repo_path, capture_output=True, encoding="utf-8", text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            if not (e.stderr and "did not match" in e.stderr):
+                raise
+            logger.info(f"No files match {pattern}")
 
     # Get diff of staged changes against HEAD
     result = subprocess.run(
