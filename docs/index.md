@@ -12,12 +12,7 @@ A benchmark for evaluating AI coding agents on real-world **Business Central (AL
 | [Bug Fixing](bug-fix.md) | Follows [SWE-Bench](https://www.swebench.com/) methodology to evaluate bug fixing in AL code |
 | [Test Generation](test-generation.md) | "Reverses" SWE-Bench: Generates reproduction tests (TDD) instead of fixes |
 | [Code Review](code-review.md) | Reviews AL pull requests; scored with Precision / Recall / F1 against gold findings |
-
-## Diagnostics
-
-| Diagnostic | Description |
-|------------|-------------|
-| [Contamination — File-path Identification](contamination-file-path-identification.md) | Context-free bug localization to detect dataset memorization, adapting [The SWE-Bench Illusion](https://arxiv.org/abs/2506.12286) |
+| [Data Query](data-query.md) | Retrieves data from a live BC environment to answer natural-language questions; scored deterministically against a gold query's result set (baseline vs. BC MCP Data Query tools) |
 
 ## What is Business Central?
 

@@ -14,12 +14,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from bcbench_core.scoring import precision_recall
 from pydantic import BaseModel, ConfigDict
 
 from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.evaluate.codereview_judge import judge_verdicts
-from bcbench.results.metrics import precision_recall
 from bcbench.types import JudgeCalibrationReport
 
 _config = get_config()

@@ -43,6 +43,7 @@ import json
 import re
 import sys
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -85,9 +86,7 @@ _WINPATH_RE = re.compile(r"[A-Z]:\\[^\n]+")
 
 def _normalize_error_message(msg: str) -> str:
     """Normalize error messages so similar failures group together."""
-    if msg is None:
-        return ""
-    msg = str(msg).replace("\r\n", "\n")
+    msg = msg.replace("\r\n", "\n")
     msg = _ANSI_RE.sub("", msg)
     msg = _TIME_RE.sub("[HH:MM:SS]", msg)
     msg = _WINPATH_RE.sub("<path>", msg)
@@ -224,9 +223,10 @@ def iter_records_from_file(path: Path) -> list[dict[str, Any]]:
     return [parse_kv_record(block) for block in split_kv_records(content)]
 
 
-def get_test_id(rec: dict[str, Any]) -> str:
-    if isinstance(rec.get("instance_id"), str) and rec["instance_id"].strip():
-        return rec["instance_id"].strip()
+def get_test_id(rec: Mapping[str, object]) -> str:
+    instance_id = rec.get("instance_id")
+    if isinstance(instance_id, str) and instance_id.strip():
+        return instance_id.strip()
     for k in ["test_name", "testName", "name", "id", "testId", "test_id", "title"]:
         v = rec.get(k)
         if isinstance(v, str) and v.strip():
@@ -234,12 +234,12 @@ def get_test_id(rec: dict[str, Any]) -> str:
     return "unknown_test"
 
 
-def get_category(rec: dict[str, Any]) -> str | None:
+def get_category(rec: Mapping[str, object]) -> str | None:
     v = rec.get("category")
     return v.strip() if isinstance(v, str) and v.strip() else None
 
 
-def get_success_fail(rec: dict[str, Any]) -> str | None:
+def get_success_fail(rec: Mapping[str, object]) -> str | None:
     # KV schema
     if isinstance(rec.get("resolved"), bool) or isinstance(rec.get("build"), bool) or isinstance(rec.get("timeout"), bool):
         resolved = rec.get("resolved")
@@ -267,9 +267,10 @@ def get_success_fail(rec: dict[str, Any]) -> str | None:
     return None
 
 
-def extract_code_text(rec: dict[str, Any]) -> tuple[str, str] | None:
-    if isinstance(rec.get("generated_patch"), str) and rec["generated_patch"].strip():
-        return (".diff", rec["generated_patch"])
+def extract_code_text(rec: Mapping[str, object]) -> tuple[str, str] | None:
+    generated_patch = rec.get("generated_patch")
+    if isinstance(generated_patch, str) and generated_patch.strip():
+        return (".diff", generated_patch)
 
     for k in ["test_code", "testCode", "generated_code", "generatedCode", "code", "al", "al_code", "source"]:
         v = rec.get(k)

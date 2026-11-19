@@ -3,14 +3,13 @@
 Both `altool launchmcpserver` and `altool launchlspserver` need the same package-cache layout and assembly probing paths.
 """
 
+import logging
 from pathlib import Path
 
+from bcbench_core.artifacts import resolve_artifact_version_root
 from packaging.version import InvalidVersion, Version
 
-from bcbench.logger import get_logger
-from bcbench.operations import resolve_artifact_version_root
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # .NET major versions excluded from runtime detection (unstable/preview)
 # See: navcontainerhelper/InitializeModule.ps1 line 62
@@ -118,7 +117,7 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     # platform/ alone — the AL compiler recursively scans `--assemblyprobingpaths`
     # (SearchOption.AllDirectories), so a single root covers ServiceTier, Test Assemblies, etc.
     platform_dir = version_root / "platform"
-    assembly_probing_paths = [str(platform_dir)] if platform_dir.is_dir() else []
+    assembly_probing_paths: list[str] = [str(platform_dir)] if platform_dir.is_dir() else []
 
     # System .NET runtime — same fallback as the container-derived path so DotNet interop types resolve even without BC-shipped reference assemblies.
     assembly_probing_paths.extend(_dotnet_runtime_probing_paths())

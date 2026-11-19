@@ -1,18 +1,20 @@
 import json
+import logging
 from abc import ABC
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.scoring import pass_hat_k
+from bcbench_core.stats import bootstrap_ci
 from pydantic import BaseModel, field_validator
 
-from bcbench.logger import get_logger
-from bcbench.results.metrics import bootstrap_ci, pass_hat_k
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class LeaderboardAggregate(BaseModel, ABC):
@@ -26,6 +28,7 @@ class LeaderboardAggregate(BaseModel, ABC):
     model: str
     agent_name: str
     category: EvaluationCategory
+    agent_version: str | None = None
     experiment: ExperimentConfiguration | None = None
 
     total: int
@@ -53,6 +56,7 @@ class LeaderboardAggregate(BaseModel, ABC):
         return {
             "model": first_run.model,
             "agent_name": first_run.agent_name,
+            "agent_version": first_run.agent_version,
             "category": first_run.category,
             "experiment": first_run.experiment,
             "total": first_run.total,
@@ -88,6 +92,7 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
     pass_hat_5: float | None = None
 
     @classmethod
+    @override
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "ExecutionBasedLeaderboardAggregate":
         base = super().from_runs(runs)
         assert isinstance(base, ExecutionBasedLeaderboardAggregate)
@@ -120,6 +125,7 @@ class JudgeBasedLeaderboardAggregate(LeaderboardAggregate):
     judge_model: str
 
     @classmethod
+    @override
     def _base_fields(cls, runs: Sequence[EvaluationResultSummary]) -> dict[str, Any]:
         from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 
@@ -147,7 +153,14 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     macro_precision: float = 0.0
     macro_recall: float = 0.0
 
+    valid_review_output_rate: float = 0.0
+    average_prompt_tokens: float | None = None
+    average_completion_tokens: float | None = None
+    average_total_tokens: float | None = None
+    average_ai_credits: float | None = None
+
     @classmethod
+    @override
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":
         from bcbench.results.codereview import CodeReviewResultSummary
 
@@ -156,6 +169,10 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
 
         cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
         n = len(cr_runs)
+
+        def mean_metric(values: Sequence[float | None]) -> float | None:
+            available = [value for value in values if value is not None]
+            return sum(available) / len(available) if available else None
 
         # The micro headline pools every comment across the dataset, so there is no per-task
         # decomposition to resample; its CI is intentionally over run-level means and captures
@@ -184,6 +201,11 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
                 "macro_f_beta_2": sum(r.macro_f_beta_2 for r in cr_runs) / n,
                 "macro_precision": sum(r.macro_precision for r in cr_runs) / n,
                 "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
+                "valid_review_output_rate": sum(r.valid_review_output_rate for r in cr_runs) / n,
+                "average_prompt_tokens": mean_metric([run.average_prompt_tokens for run in cr_runs]),
+                "average_completion_tokens": mean_metric([run.average_completion_tokens for run in cr_runs]),
+                "average_total_tokens": mean_metric([run.average_total_tokens for run in cr_runs]),
+                "average_ai_credits": mean_metric([run.average_ai_credits for run in cr_runs]),
             }
         )
 

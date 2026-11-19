@@ -2,10 +2,12 @@ import json
 from datetime import UTC, date, datetime
 
 import pytest
+from bcbench_core.agent.experiment import ExperimentConfiguration
+from bcbench_core.agent.metrics import AgentMetrics
 
 from bcbench.config import get_config
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 _config = get_config()
@@ -226,6 +228,18 @@ class TestFromResults:
         assert summary.average_ai_credits is None
         assert summary.to_dict()["average_ai_credits"] is None
 
+    def test_to_dict_preserves_exact_ai_credit_precision(self):
+        result = create_bugfix_result(
+            instance_id="test__1",
+            project="app",
+            resolved=True,
+            metrics=AgentMetrics(execution_time=100.0, ai_credits=0.123456),
+        )
+
+        summary = ExecutionBasedEvaluationResultSummary.from_results([result], run_id="test_run_123")
+
+        assert summary.to_dict()["average_ai_credits"] == pytest.approx(0.123456)
+
     def test_from_results_calculates_average_tool_usage(self):
         results = [
             create_bugfix_result(
@@ -257,6 +271,7 @@ class TestFromResults:
         assert summary.average_tool_usage["view"] == 4
         # edit: (0 + 2) / 2 = 1
         assert summary.average_tool_usage["edit"] == 1
+        assert summary.to_dict()["average_tool_usage"] == {"bash": 8.0, "view": 4.0, "edit": 1.0}
 
     def test_from_results_handles_no_tool_usage(self):
         results = [
@@ -271,6 +286,7 @@ class TestFromResults:
         summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run")
 
         assert summary.average_tool_usage is None
+        assert "average_tool_usage" not in summary.to_dict()
 
 
 class TestExperimentConfiguration:

@@ -1,3 +1,3 @@
-from bcbench.agent.pr_review.agent import run_pr_review_agent
+from bcbench.agent.pr_review.agent import PRReviewHarness, get_pr_review_version
 
-__all__ = ["run_pr_review_agent"]
+__all__ = ["PRReviewHarness", "get_pr_review_version"]

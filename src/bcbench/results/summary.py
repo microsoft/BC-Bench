@@ -1,4 +1,5 @@
 import json
+import logging
 import tomllib
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -6,18 +7,18 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
+from bcbench_core.agent.experiment import ExperimentConfiguration
 from pydantic import BaseModel, Field
 
-from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def get_benchmark_version() -> str:
@@ -28,7 +29,8 @@ def get_benchmark_version() -> str:
         except PackageNotFoundError:
             return "unknown"
     with pyproject_path.open("rb") as f:
-        return tomllib.load(f).get("project", {}).get("version", "unknown")
+        project_version = tomllib.load(f).get("project", {}).get("version")
+    return project_version if isinstance(project_version, str) else "unknown"
 
 
 class EvaluationResultSummary(BaseModel, ABC):
@@ -45,6 +47,7 @@ class EvaluationResultSummary(BaseModel, ABC):
     model: str
     agent_name: str
     category: EvaluationCategory
+    agent_version: str | None = None
 
     average_duration: float
     average_prompt_tokens: float
@@ -91,6 +94,7 @@ class EvaluationResultSummary(BaseModel, ABC):
             "category": first_result.category,
             "model": first_result.model,
             "agent_name": first_result.agent_name,
+            "agent_version": first_result.agent_version,
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
             "average_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
             "average_completion_tokens": sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
@@ -123,10 +127,11 @@ class EvaluationResultSummary(BaseModel, ABC):
     def to_dict(self) -> dict[str, Any]:
         data = self.model_dump(mode="json")
         data["average_duration"] = round(data["average_duration"], 1)
-        data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1)
-        data["average_completion_tokens"] = round(data["average_completion_tokens"], 1)
+        data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1) if data["average_prompt_tokens"] is not None else None
+        data["average_completion_tokens"] = round(data["average_completion_tokens"], 1) if data["average_completion_tokens"] is not None else None
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
-        data["average_ai_credits"] = round(data["average_ai_credits"], 2) if data["average_ai_credits"] is not None else None
+        if data["average_tool_usage"] is None:
+            del data["average_tool_usage"]
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:
@@ -137,14 +142,14 @@ class EvaluationResultSummary(BaseModel, ABC):
         logger.info(f"Saved evaluation summary to {output_file}")
 
     def combination_key(self) -> tuple[str | None, ...]:
-        """Key for identifying runs of the same agent, model, experiment, and benchmark version.
+        """Key for runs with the same harness version, model, experiment, and benchmark version.
 
         Judge-scored categories extend the key with their judge model, so runs judged by different models stay separate.
         """
         experiment_key: str | None = None
         if self.experiment and not self.experiment.is_empty():
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
-        return (self.agent_name, self.model, experiment_key, self.benchmark_version)
+        return (self.agent_name, self.agent_version, self.model, experiment_key, self.benchmark_version)
 
 
 class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
@@ -161,10 +166,12 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
     # Per-instance pass/fail for aggregate metrics (pass^k, CI)
     instance_results: dict[str, bool] = Field(default_factory=dict)
 
+    @override
     def render_github_metrics_markdown(self) -> str:
         return f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
 
     @classmethod
+    @override
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "ExecutionBasedEvaluationResultSummary":
         from bcbench.results.base import ExecutionBasedEvaluationResult
 
@@ -193,6 +200,7 @@ class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
     judge_model: str
 
     @classmethod
+    @override
     def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
         from bcbench.results.base import JudgeScoredEvaluationResult
 
@@ -200,10 +208,12 @@ class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
         assert isinstance(first_result, JudgeScoredEvaluationResult)
         return {**super()._base_fields(results, run_id), "judge_model": first_result.judge_model}
 
+    @override
     def combination_key(self) -> tuple[str | None, ...]:
         """Runs judged by different models are aggregated separately."""
         return (*super().combination_key(), self.judge_model)
 
+    @override
     def render_github_metrics_markdown(self) -> str:
         """Judge scoring happens externally, so there are no in-run metrics to surface."""
         return ""

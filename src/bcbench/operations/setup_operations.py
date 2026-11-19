@@ -1,14 +1,16 @@
 """Setup operations for repository preparation."""
 
 import json
+import logging
+import re
 from pathlib import Path
 from uuid import uuid4
 
-from bcbench.dataset.dataset_entry import RepoGroundedEntry
-from bcbench.logger import get_logger
-from bcbench.operations.git_operations import checkout_commit, clean_repo
+from bcbench_core.git import checkout_commit, clean_repo, commit_changes
 
-logger = get_logger(__name__)
+from bcbench.dataset.dataset_entry import RepoGroundedEntry
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["bootstrap_app_json", "set_runtime_version", "setup_repo_prebuild"]
 
@@ -16,6 +18,10 @@ __all__ = ["bootstrap_app_json", "set_runtime_version", "setup_repo_prebuild"]
 # E.g. platform 25.0 (BC 2024w2) → runtime 14.0, platform 27.0 → runtime 16.0
 # See: BC-DeveloperExperience RuntimeVersion.cs
 _PLATFORM_TO_RUNTIME_OFFSET = 11
+_SCOPE_ONPREM = re.compile(
+    rb"^[ \t]*Scope[ \t]*=[ \t]*OnPrem;[ \t]*(?:\r?\n|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def setup_repo_prebuild(entry: RepoGroundedEntry, repo_path: Path) -> None:
@@ -30,6 +36,39 @@ def setup_repo_prebuild(entry: RepoGroundedEntry, repo_path: Path) -> None:
     """
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
+    if removed_count := _remove_table_scope_onprem(repo_path, entry.project_paths):
+        commit_changes(repo_path, f"Remove {removed_count} Scope = OnPrem declaration(s)")
+
+
+def _remove_table_scope_onprem(repo_path: Path, project_paths: list[str]) -> int:
+    removed_count = 0
+    for project_path in dict.fromkeys(project_paths):
+        project_root = repo_path / project_path
+        if not project_root.is_dir():
+            continue
+
+        for path in project_root.rglob("*.al"):
+            if not path.name.casefold().endswith(".table.al") or _is_under_symlink(path, project_root):
+                continue
+
+            content = path.read_bytes()
+            updated, count = _SCOPE_ONPREM.subn(b"", content)
+            if count:
+                path.write_bytes(updated)
+                removed_count += count
+
+    if removed_count:
+        logger.info(f"Removed {removed_count} Scope = OnPrem declaration(s)")
+    return removed_count
+
+
+def _is_under_symlink(path: Path, root: Path) -> bool:
+    current = path
+    while current != root and current != current.parent:
+        if current.is_symlink():
+            return True
+        current = current.parent
+    return False
 
 
 def bootstrap_app_json(
@@ -120,7 +159,10 @@ def set_runtime_version(repo_path: Path, project_paths: list[str]) -> None:
         if app_json.get("runtime"):
             continue
 
-        platform: str = app_json.get("platform", "")
+        platform: object = app_json.get("platform")
+        if not isinstance(platform, str):
+            continue
+
         platform_major = _major_version(platform)
         if platform_major is None:
             continue

@@ -1,15 +1,7 @@
+using module ..\packages\bcbench-core\src\bcbench_core\powershell\Dataset.psm1
+
 # DatasetReader.psm1 - Module for reading BC-Bench dataset
 # Provides classes and functions to read and parse the bcbench.jsonl dataset
-
-class TestEntry {
-    [int]$codeunitID
-    [string[]]$functionName
-
-    TestEntry([PSObject]$jsonObject) {
-        $this.codeunitID = [int]$jsonObject.codeunitID
-        $this.functionName = $jsonObject.functionName
-    }
-}
 
 class ValidationResult {
     [string]$InstanceId

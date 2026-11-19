@@ -1,4 +1,5 @@
-using module .\BCBenchUtils.psm1
+using module ..\packages\bcbench-core\src\bcbench_core\powershell\BCBenchUtils.psm1
+using module .\BenchmarkUtils.psm1
 
 <#
 .SYNOPSIS
@@ -13,6 +14,8 @@ using module .\BCBenchUtils.psm1
     The dataset category used to resolve the dataset path (via Get-BCBenchDatasetPath).
 .PARAMETER DatasetPath
     Optional override for the dataset (.jsonl) path. Defaults to the category-specific path via Get-BCBenchDatasetPath.
+.PARAMETER Tier
+    Dataset tier: gold (default) or challenge.
 .PARAMETER Country
     BC artifact country (default: w1).
 .EXAMPLE
@@ -26,7 +29,10 @@ param(
     [string]$Category,
 
     [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category $Category),
+    [string]$Tier = "gold",
+
+    [Parameter(Mandatory = $false)]
+    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category $Category -Tier $Tier),
 
     [Parameter(Mandatory = $false)]
     [string]$Country = "w1"

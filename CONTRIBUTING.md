@@ -19,18 +19,21 @@ A very high-level overview of the repository structure:
 
 ```
 BC-Bench/
-├── src/bcbench/    # Evaluation harness — agent orchestration, build/test pipeline, results
-├── dataset/        # Benchmark dataset tasks
-├── scripts/        # Scripts for container setup & test execution; not needed for local development
-├── notebooks/      # Analysis and visualization of results
-├── evaluator/      # Braintrust scorer integration, used only when uploading result to Braintrust
-└── docs/           # GitHub Page for the leaderboard site
+├── src/bcbench/              # Evaluation harness — agent orchestration, build/test pipeline, results
+├── packages/bcbench-core/    # Reusable evaluation library consumed by src/bcbench (uv workspace member)
+├── dataset/                  # Benchmark dataset tasks
+├── scripts/                  # Scripts for container setup & test execution; not needed for local development
+├── notebooks/                # Analysis and visualization of results
+├── evaluator/                # Braintrust scorer integration, used only when uploading result to Braintrust
+└── docs/                     # GitHub Page for the leaderboard site
 ```
+
+The repository is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) with two Python projects: the `bcbench` application at the root and the `bcbench-core` library. `bcbench` depends on `bcbench-core`; never the reverse. The ruff baseline lives in `packages/bcbench-core/pyproject.toml` and the root config extends it with application-only settings. See [packages/bcbench-core/README.md](packages/bcbench-core/README.md) for the library boundary.
 
 ## Setup
 
 Prerequisites:
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) 0.12.19 or later (`uv self update`)
 - [GitHub CLI](https://cli.github.com/)
 - [GitHub Copilot CLI](https://github.com/github/copilot-cli)
 
@@ -46,7 +49,7 @@ cd BC-Bench
 uv python install
 
 # Install dependencies
-uv sync --all-groups
+uv sync --all-groups --all-extras
 
 # Install pre-commit hooks
 uv run pre-commit install
@@ -58,8 +61,8 @@ uv run bcbench --help
 # This is very fast, give it a go and see it live!
 uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
 
-# Run tests
-uv run pytest --cov=src/bcbench --cov-report=term-missing
+# Run tests (bcbench and bcbench-core)
+uv run pytest --cov --cov-report=term-missing
 
 # Lint and format
 uv run pre-commit run --all-files
@@ -88,6 +91,8 @@ The upstream workflows are wired for Microsoft's internal environment. To run th
 
 BC-Bench uses [semantic versioning](https://semver.org/) to track changes that may affect evaluation results. The version is stored in `pyproject.toml` and automatically embedded in all evaluation results.
 
+`benchmark_version` identifies the release and its default harness pins. Results separately record the actual harness as `agent_version` (Copilot/Claude CLI version or BC-ALAgents SHA), without changing `ExperimentConfiguration`. A one-off `engine-sha` override does not require a benchmark version bump because its results are never published; changing a released default pin still follows the policy below and belongs on a branch with an [experiment PR](EXPERIMENT.md#experiment-pr-template).
+
 ### When to Bump Versions
 
 | Change Type | Version Bump | Examples |
@@ -99,6 +104,8 @@ BC-Bench uses [semantic versioning](https://semver.org/) to track changes that m
 ### Version Compatibility
 
 Results from different benchmark versions **cannot be aggregated** together. When you run `bcbench result update`, the system will raise an error if you try to combine runs with different `benchmark_version` values.
+
+Different `agent_version` values also form separate aggregates; an unrecorded version does not match a known version.
 
 This ensures the leaderboard always compares apples-to-apples. When bumping versions:
 1. Update the version in `pyproject.toml`
@@ -133,12 +140,18 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 4. Run focused tests for the integration, then perform a test evaluation for tools exposed to the agent.
 5. Bump the benchmark version according to the Versioning Policy. Tool changes that may affect evaluation results normally require a minor bump.
 
+### Refresh BC sandbox artifacts
+
+Public `w1` sandbox URLs are pinned by version in [`scripts/BCBenchArtifactPins.json`](scripts/BCBenchArtifactPins.json), so we are more resilient to upstream changes. Manual dataset-validation runs use the saved pins. The scheduled run resolves the latest URLs, verifies them across the full bug-fix dataset, and pushes a pins-only branch for a manual PR only if every job succeeds. BC Insider artifacts remain dynamically resolved.
+
 ### Bump the BC PR Review engine
 
-1. Update the pinned `microsoft/BC-ALAgents` commit in `.github/workflows/pr-review-evaluation.yml`
+1. Update the pinned `microsoft/BC-ALAgents` commit in `.github/actions/install-agent-harnesses/action.yml`
 2. Run a test evaluation through the `pr-review` workflow
 3. Bump the BC-Bench version following the Versioning Policy
 4. Include the exact BC-ALAgents commit SHA in the BC-Bench release notes
+
+Comparison runs must use clean commits that can be fetched from the recorded remote. Local or dirty checkouts are for smoke tests only; a local SHA or content hash cannot recover their contents. Commit and push dependency changes before a full run.
 
 ### Create a new release
 

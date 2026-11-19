@@ -1,8 +1,8 @@
 """Dataset module for querying, validating and analyzing dataset entries."""
 
 from bcbench.dataset.codereview import ArticleId, CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
-from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, NL2ALEntry, RepoGroundedEntry, TestEntry, TestGenEntry
-from bcbench.dataset.extensibility_request import ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel
+from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, DataQueryEntry, NL2ALEntry, RepoGroundedEntry, TestGenEntry
+from bcbench.dataset.extensibility_request import ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel
 
 __all__ = [
     "ArticleId",
@@ -10,7 +10,7 @@ __all__ = [
     "BugFixEntry",
     "CodeReviewEntry",
     "CodeReviewEntryMetadata",
-    "ExtRequestAdvisorEntry",
+    "DataQueryEntry",
     "ExtRequestImplementEntry",
     "ExtRequestTriageEntry",
     "ManagedLabel",
@@ -18,6 +18,5 @@ __all__ = [
     "RepoGroundedEntry",
     "ReviewComment",
     "Severity",
-    "TestEntry",
     "TestGenEntry",
 ]
