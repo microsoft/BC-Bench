@@ -1,7 +1,7 @@
 import logging
 import random
 from pathlib import Path
-from typing import Annotated, cast, override
+from typing import Annotated, override
 
 import typer
 from bcbench_core.agent.experiment import ExperimentConfiguration
@@ -11,7 +11,7 @@ from bcbench_core.evaluation import evaluate_task
 from bcbench_core.exceptions import AgentError
 from bcbench_core.filesystem import prepare_run_dir
 
-from bcbench.agent import BCalBackendConfig, BCalHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
+from bcbench.agent import BCalBackendConfig, BCalHarness, BCalScenarioHarness, ClaudeHarness, CopilotHarness, PRReviewHarness
 from bcbench.cli_options import (
     AgentConfigPath,
     ClaudeCodeModel,
@@ -32,13 +32,21 @@ from bcbench.cli_options import (
     resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
+from bcbench.dataset import BaseDatasetEntry, BCalScenarioEntry
 from bcbench.dataset.codereview import CodeReviewEntry
-from bcbench.evaluate import CodeReviewPipeline, EvaluationPipeline, NL2ALPipeline
+from bcbench.evaluate import CodeReviewPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.github_actions import github_log_group
 from bcbench.paths import SHARED_CONFIG_FILE
-from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.results import (
+    BaseEvaluationResult,
+    BCalScenarioEvaluationResult,
+    CodeReviewResult,
+    ExecutionBasedEvaluationResult,
+    IndependentBuildResult,
+    JudgeBasedEvaluationResult,
+    TraceAssertionResult,
+)
 from bcbench.results.base import RESULT_FILE_SUFFIX
 from bcbench.types import AgentConfig, DatasetTier, EvaluationCategory, EvaluationContext, HarnessName
 
@@ -229,6 +237,7 @@ def evaluate_pr_review(
 @evaluate_app.command("bcal")
 def evaluate_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    category: EvaluationCategoryOption = EvaluationCategory.NL2AL,
     tier: TierOption = DatasetTier.GOLD,
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -241,10 +250,21 @@ def evaluate_bcal(
 
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
-    category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0])
+    compatible_categories = {
+        EvaluationCategory.NL2AL,
+        EvaluationCategory.BCAL_SCENARIO,
+        EvaluationCategory.BCAL_FEATURE,
+    }
+    if category not in compatible_categories:
+        raise typer.BadParameter(
+            f"BCal only supports categories: {', '.join(sorted(item.value for item in compatible_categories))}",
+            param_hint="--category",
+        )
+
+    entry = category.entry_class.load(category.dataset_path(tier), entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
-    harness = BCalHarness(BCalBackendConfig(command=llm_command, model=llm_model))
+    backend_config = BCalBackendConfig(command=llm_command, model=llm_model)
+    harness = BCalScenarioHarness(backend_config) if isinstance(entry, BCalScenarioEntry) else BCalHarness(backend_config)
 
     logger.info(f"Running evaluation on entry {entry_id} with BCal")
 
@@ -258,11 +278,15 @@ def evaluate_bcal(
         tier=tier,
     )
 
-    pipeline = NL2ALPipeline()
+    pipeline = category.pipeline(AgentConfig())
     try:
         pipeline.execute(context, harness)
     except AgentError as exc:
-        result = JudgeBasedEvaluationResult.create_failure(context, AgentResult(transcript=exc.transcript), output="", error_message=str(exc))
+        result = (
+            BCalScenarioEvaluationResult.create_harness_failure(context, AgentResult(transcript=exc.transcript), str(exc))
+            if isinstance(entry, BCalScenarioEntry)
+            else JudgeBasedEvaluationResult.create_failure(context, AgentResult(transcript=exc.transcript), output="", error_message=str(exc))
+        )
         pipeline.save_result(context, result)
         logger.exception("BCal execution failed for %s", entry.instance_id)
         raise typer.Exit(code=1) from exc
@@ -397,6 +421,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
                 scenarios = ["raw", "empty"]
+            case EvaluationCategory.BCAL_SCENARIO | EvaluationCategory.BCAL_FEATURE:
+                scenarios = ["bcal-success", "bcal-fail"]
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
                 scenarios = ["raw", "empty"]
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
@@ -423,6 +449,18 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = JudgeBasedEvaluationResult.create_raw(context, agent_result, output="MOCK_PATCH_CONTENT")
             case "empty":
                 result = JudgeBasedEvaluationResult.create_empty_output(context, agent_result)
+            case "bcal-success":
+                result = BCalScenarioEvaluationResult.create(
+                    context,
+                    agent_result,
+                    output="MOCK_BCAL_SCENARIO_OUTPUT",
+                    scenario_completed=True,
+                    independent_build=IndependentBuildResult(status="not_attempted", message="Mock evaluation"),
+                    trace_assertions=[TraceAssertionResult(assertion_id="mock", passed=True, message="Mock trace passed")],
+                    runtime_status=None,
+                )
+            case "bcal-fail":
+                result = BCalScenarioEvaluationResult.create_harness_failure(context, agent_result, "Mock BCal harness failure")
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

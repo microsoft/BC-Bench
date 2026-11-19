@@ -18,6 +18,7 @@ from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtim
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.evaluate.nl2al import NL2ALPipeline
 from bcbench.types import AgentConfig, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
@@ -131,11 +132,12 @@ def test_evaluate_bcal_records_model(tmp_path, llm_model, expected_model):
     with (
         patch.object(EvaluationCategory, "dataset_path", return_value=tmp_path / "nl2al.jsonl"),
         patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
-        patch.object(evaluate_commands, "NL2ALPipeline", return_value=Pipeline()),
+        patch.object(EvaluationCategory, "pipeline", return_value=Pipeline()),
         patch("bcbench.agent.bcal.agent.get_bcal_version", return_value="18.0.1.2-beta"),
     ):
         evaluate_commands.evaluate_bcal(
             entry_id=entry.instance_id,
+            category=EvaluationCategory.NL2AL,
             repo_path=tmp_path / "repo",
             output_dir=tmp_path / "results",
             run_id="bcal-run",
@@ -158,7 +160,7 @@ def test_evaluate_bcal_preserves_failure_transcript(tmp_path):
     with (
         patch.object(EvaluationCategory, "dataset_path", return_value=tmp_path / "nl2al.jsonl"),
         patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock) as entry_class,
-        patch.object(evaluate_commands.NL2ALPipeline, "execute", side_effect=error),
+        patch.object(NL2ALPipeline, "execute", side_effect=error),
         patch("bcbench.agent.bcal.agent.get_bcal_version", return_value="18.0.1.2-beta"),
     ):
         entry_class.return_value.load.return_value = [entry]

@@ -43,7 +43,8 @@ BC-Bench is open source, and you're welcome to fork and adapt it for your own us
 
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — fork setup, repo layout, versioning, day-to-day maintainer ops
 - **[EXPERIMENT.md](EXPERIMENT.md)** — run an experiment (toggle instructions / skills / agents / MCP / model) against an existing category
-- **[CATEGORIES.md](CATEGORIES.md)** — add a new evaluation category alongside the existing `bug-fix` / `test-generation` / `code-review` / `nl2al`
+- **[CATEGORIES.md](CATEGORIES.md)** — add a new evaluation category alongside the existing `bug-fix` / `test-generation` / `code-review` / `nl2al` / advanced BCal categories
+- **[docs/bcal-scenarios.md](docs/bcal-scenarios.md)** — run and author advanced multi-turn BCal scenario and feature evaluations
 
 ## Citation
 

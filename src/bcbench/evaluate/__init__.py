@@ -4,6 +4,7 @@ Transitional: the pipelines here are replaced by `bcbench.categories` and `bcben
 """
 
 from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.bcal_scenario import BCalScenarioPipeline
 from bcbench.evaluate.bugfix import BugFixPipeline
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.evaluate.dataquery import DataQueryPipeline
@@ -13,6 +14,7 @@ from bcbench.evaluate.nl2al import NL2ALPipeline
 from bcbench.evaluate.testgeneration import TestGenerationPipeline
 
 __all__ = [
+    "BCalScenarioPipeline",
     "BugFixPipeline",
     "CodeReviewPipeline",
     "DataQueryPipeline",
