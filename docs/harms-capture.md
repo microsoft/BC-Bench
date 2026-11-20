@@ -104,6 +104,10 @@ BC Python feed. Supply matching symbols, for example with
 Include the platform's `System.app`, not only the application `Extensions` folder.
 The downloader uses `-includePlatform`; copy from the complete artifact root with
 the helper above. An application-only cache can inspect pages but fail compilation.
+For a Customer Card smoke, use only System, Application, System Application,
+Business Foundation and Base Application packages from that artifact in the
+supplied symbol directory. Add other extensions only when the task needs them;
+loading every test/optional application makes native startup unnecessarily slow.
 Use an exact four-component BC version for symbol repeatability; a major/minor
 version selects the newest available/downloaded build. Private provenance records
 every symbol file's hash. BCal must already be installed from the selected existing
