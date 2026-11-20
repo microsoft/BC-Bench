@@ -16,7 +16,10 @@ type ArtifactType = Literal["sandbox", "onprem"]
 
 
 def resolve_artifact_version_root(version: str, artifacts_cache: Path = DEFAULT_ARTIFACTS_CACHE, artifact_type: ArtifactType = "sandbox") -> Path | None:
-    """Return the newest downloaded artifact folder matching a major.minor version, or None."""
+    """Return an exact downloaded version, or the newest matching revision."""
+    exact = artifacts_cache / artifact_type / version
+    if exact.is_dir():
+        return exact
     version_roots = sorted((artifacts_cache / artifact_type).glob(f"{version}.*"), key=lambda root: tuple(map(int, root.name.split("."))))
     return version_roots[-1] if version_roots else None
 

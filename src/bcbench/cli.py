@@ -2,7 +2,6 @@
 
 import io
 import sys
-from importlib import import_module
 from typing import Annotated
 
 import typer
@@ -12,6 +11,8 @@ from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.category import category_app
 from bcbench.commands.collect import collect_app
 from bcbench.commands.contamination import contamination_app
+from bcbench.commands.harms import harms_app
+from bcbench.commands.redteam import redteam_app
 from bcbench.commands.result import result_app
 from bcbench.config import get_config
 
@@ -38,36 +39,8 @@ app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(result_app, name="result")
 app.add_typer(category_app, name="category")
 app.add_typer(contamination_app, name="contamination")
-
-
-def _redteam_extra_installed() -> bool:
-    try:
-        import_module("azure.ai.evaluation.red_team")
-    except ImportError:
-        return False
-    return True
-
-
-def _add_redteam_app() -> None:
-    """Register `bcbench redteam`, whose azure-ai-evaluation[redteam] tree ships as an optional extra.
-
-    Importing `bcbench.commands.redteam` pulls that tree in, so probe for it first and otherwise
-    register a catch-all that names the missing extra instead of an opaque "no such command".
-    """
-    if not _redteam_extra_installed():
-
-        @app.command("redteam", context_settings={"ignore_unknown_options": True}, help="Red team BC-Bench agents (needs `uv sync --extra redteam`)")
-        def _missing_extra(args: Annotated[list[str] | None, typer.Argument(hidden=True)] = None) -> None:
-            raise typer.BadParameter("`bcbench redteam` needs the optional redteam extra. Install it with `uv sync --extra redteam`.")
-
-        return
-
-    from bcbench.commands.redteam import redteam_app
-
-    app.add_typer(redteam_app, name="redteam")
-
-
-_add_redteam_app()
+app.add_typer(harms_app, name="harms")
+app.add_typer(redteam_app, name="redteam")
 
 
 @app.callback()

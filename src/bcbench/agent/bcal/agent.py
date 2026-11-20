@@ -68,64 +68,21 @@ def get_bcal_version() -> str:
     return get_cli_version(shutil.which(_BCAL_TOOL), "BCal")
 
 
-def _process_output(output: str | bytes | None) -> str:
-    if isinstance(output, bytes):
-        return output.decode("utf-8", errors="replace").strip()
-    return (output or "").strip()
-
-
-def _trim_prompt_echo(stdout: str, query: str) -> str:
-    compact_query = "".join(query.split())
-    if not compact_query:
-        return stdout.strip()
-
-    compact_stdout_chars: list[str] = []
-    stdout_positions: list[int] = []
-    for position, character in enumerate(stdout):
-        if not character.isspace():
-            compact_stdout_chars.append(character)
-            stdout_positions.append(position)
-
-    compact_stdout = "".join(compact_stdout_chars)
-    seed_length = min(24, len(compact_query))
-    compact_start = compact_stdout.find(compact_query[:seed_length])
-    if compact_start < 0:
-        return stdout.strip()
-
-    matched_length = seed_length
-    while matched_length < len(compact_query) and compact_start + matched_length < len(compact_stdout):
-        if compact_query[matched_length] != compact_stdout[compact_start + matched_length]:
-            break
-        matched_length += 1
-
-    compact_end = compact_start + matched_length
-    if matched_length < len(compact_query):
-        if not compact_stdout.startswith("...", compact_end):
-            return stdout.strip()
-        compact_end += 3
-
-    start = stdout_positions[compact_start]
-    if stdout[:start].strip() not in ("", ">"):
-        return stdout.strip()
-
-    end = stdout_positions[compact_end - 1] + 1
-    if stdout[max(0, start - 2) : start] == "> ":
-        start -= 2
-    return f"{stdout[:start]}{stdout[end:]}".strip()
-
-
-def _bcal_cmd_args(entry: NL2ALEntry, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig, *mode_args: str) -> list[str]:
-    """Build the bcal argv shared by the nl2al agent run (scenario mode) and the red-team run (prompt mode).
-
-    Only the mode arguments and the paths differ between the two, so keeping one builder stops the flag
-    set from drifting when bcal's CLI changes.
-    """
+def _bcal_cmd_args(
+    page: str,
+    audience: str,
+    package_cache_path: Path,
+    export_folder: Path,
+    backend_config: BCalBackendConfig,
+    *mode_args: str,
+    executable: Path | None = None,
+) -> list[str]:
     return [
-        _resolve_bcal_executable(),
+        str(executable) if executable is not None else _resolve_bcal_executable(),
         f"--packagecachepath={package_cache_path}",
         *backend_config.cli_args(),
-        f"--audience={entry.audience}",
-        f"--page={entry.page}",
+        f"--audience={audience}",
+        f"--page={page}",
         f"--exportfolder={export_folder}",
         *mode_args,
     ]
@@ -148,6 +105,13 @@ def _read_transcript_after_failure(result_path: Path) -> dict[str, JsonValue] | 
     except AgentError:
         logger.warning("No usable BCal transcript after failure", exc_info=True)
         return None
+
+
+def _scenario_args(query: str, directory: Path) -> list[str]:
+    scenario_path = directory / "scenario.json"
+    scenario = {"schemaVersion": _SCENARIO_SCHEMA_VERSION, "steps": [{"id": "benchmark-prompt", "type": "user", "text": query}]}
+    scenario_path.write_text(json.dumps(scenario), encoding="utf-8")
+    return [f"--scenario={scenario_path}", f"--result={directory / 'result.json'}", "--include-evidence"]
 
 
 @dataclass(frozen=True)
@@ -180,11 +144,8 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
 
         # Only scenario mode writes a result file with the transcript; --scenario takes a file, not inline JSON
         with tempfile.TemporaryDirectory(prefix="bcbench-bcal-") as temp_dir:
-            scenario_path = Path(temp_dir) / "scenario.json"
             result_path = Path(temp_dir) / "result.json"
-            scenario = {"schemaVersion": _SCENARIO_SCHEMA_VERSION, "steps": [{"id": "benchmark-prompt", "type": "user", "text": entry.get_task()}]}
-            scenario_path.write_text(json.dumps(scenario), encoding="utf-8")
-            cmd_args = _bcal_cmd_args(entry, package_cache_path, export_folder, backend_config, f"--scenario={scenario_path}", f"--result={result_path}", "--include-evidence")
+            cmd_args = _bcal_cmd_args(entry.page, entry.audience, package_cache_path, export_folder, backend_config, *_scenario_args(entry.get_task(), Path(temp_dir)))
             logger.debug(f"bcal CLI command: {cmd_args}")
 
             try:
@@ -206,53 +167,53 @@ class BCalHarness(AgentHarness[NL2ALEntry, HarnessName]):
         return AgentResult(metrics=AgentMetrics(execution_time=execution_time), experiment=ExperimentConfiguration(), transcript=transcript)
 
 
+@dataclass(frozen=True)
+class BCalPromptResult:
+    exit_code: int
+    timed_out: bool
+    transcript: dict[str, JsonValue] | None
+
+
 def run_bcal_prompt(
-    entry: NL2ALEntry,
     query: str,
+    *,
+    page: str,
+    audience: str,
     package_cache_path: Path,
     export_folder: Path,
     backend_config: BCalBackendConfig,
+    executable: Path,
+    output: Path,
+    fixture: Path | None = None,
     timeout: int = 25 * 60,
-) -> str:
-    """Run bcal once for a raw prompt and return its output as text (used by red teaming).
-
-    BCal writes generated AL to the export folder and status/output to stdout. Surface both while
-    removing the echoed user prompt so the safety judge does not score the attack as target output.
-
-    Unlike `BCalHarness` this raises on timeout/non-zero exit instead of returning the text: a
-    red-team judge must never score bcal's own error output as if it were a harmless refusal.
-
-    Assumes symbols are already present under ``package_cache_path``.
-    """
+) -> BCalPromptResult:
+    """Keep process output private; callers must score structured assistant evidence, never stdout."""
     export_folder.mkdir(parents=True, exist_ok=True)
-    cmd_args = _bcal_cmd_args(entry, package_cache_path, export_folder, backend_config, f"--prompt={query}")
-
-    try:
-        result = subprocess.run(
-            cmd_args,
-            timeout=timeout,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=True,
-        )
-        stdout = result.stdout or ""
-    except subprocess.TimeoutExpired as exc:
-        details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
-        message = f"bcal CLI timed out after {timeout} seconds"
-        if details:
-            message = f"{message}\n{details}"
-        metrics = AgentMetrics(execution_time=timeout)
-        raise AgentTimeoutError(message, metrics=metrics, config=ExperimentConfiguration()) from None
-    except subprocess.CalledProcessError as exc:
-        details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
-        message = f"bcal CLI exited with status {exc.returncode}"
-        if details:
-            message = f"{message}\n{details}"
-        raise AgentError(message) from None
-
-    generated: str = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(export_folder.rglob("*.al")))
-    trimmed_stdout = _trim_prompt_echo(stdout, query)
-    sections: list[str] = [section for section in (generated, trimmed_stdout) if section.strip()]
-    return "\n\n".join(sections) if sections else "(bcal produced no output)"
+    # Scenario mode rejects harms fixtures; those use BCal's native structured log.
+    mode_args = [f"--prompt={query}", f"--log={output / 'runtime.jsonl'}", "--log-full", f"--harms-fixture={fixture}"] if fixture is not None else _scenario_args(query, output)
+    cmd_args = _bcal_cmd_args(
+        page,
+        audience,
+        package_cache_path,
+        export_folder,
+        backend_config,
+        *mode_args,
+        executable=executable,
+    )
+    (output / "command.json").write_text(json.dumps(cmd_args, ensure_ascii=False), encoding="utf-8")
+    started = time.monotonic()
+    timed_out = False
+    with (output / "stdout.txt").open("wb") as stdout, (output / "stderr.txt").open("wb") as stderr:
+        process = subprocess.Popen(cmd_args, cwd=output, stdout=stdout, stderr=stderr)
+        try:
+            exit_code = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # Terminate only this Windows invocation and its bridge children.
+            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], check=True, stdout=stderr, stderr=stderr)
+            exit_code = process.wait()
+            timed_out = True
+    (output / "process.json").write_text(json.dumps({"exit_code": exit_code, "timed_out": timed_out, "duration_seconds": time.monotonic() - started}), encoding="utf-8")
+    transcript = None
+    if fixture is None:
+        transcript = _read_transcript(output / "result.json") if exit_code == 0 and not timed_out else _read_transcript_after_failure(output / "result.json")
+    return BCalPromptResult(exit_code=exit_code, timed_out=timed_out, transcript=transcript)

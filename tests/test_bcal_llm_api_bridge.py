@@ -4,6 +4,7 @@ import io
 import json
 import sys
 import types
+from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
 
@@ -46,9 +47,11 @@ def fake_llm_api(monkeypatch):
     """Stub bc_eval.llm.llm_api and record what the bridge passes to create_llm_api_client."""
     calls: dict[str, Any] = {}
 
+    @dataclass
     class _Settings:
-        tenant_id = "tenant-x"
-        client_id = "client-y"
+        tenant_id: str = "tenant-x"
+        client_id: str = "client-y"
+        environment: str = "TEST"
 
         @classmethod
         def from_env(cls):
@@ -163,6 +166,65 @@ def test_main_sends_empty_routing_ticket_without_local_certificate(monkeypatch, 
     _run_main(monkeypatch, {"model": model, "messages": []})
 
     assert fake_llm_api["request"]["extra_headers"] == {"x-sticky-route-session-ticket": ""}
+
+
+@pytest.mark.parametrize("effort", ["none", "high"])
+def test_configured_bridge_preserves_explicit_effort_without_transport_capture(monkeypatch, fake_llm_api, tmp_path, effort):
+    @dataclass
+    class Settings:
+        tenant_id: str = "tenant"
+        client_id: str = "client"
+        environment: str = "TEST"
+        service_tier: str = "flex"
+
+        @classmethod
+        def from_env(cls):
+            return cls()
+
+    calls = []
+    settings = []
+    response = {"model": "served-model", "choices": [{"finish_reason": "stop"}]}
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return response
+
+    def create_client(**kwargs):
+        settings.append(kwargs["settings"])
+        return types.SimpleNamespace(chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=create)))
+
+    module = sys.modules["bc_eval.llm.llm_api"]
+    monkeypatch.setattr(module, "LlmApiSettings", Settings)
+    monkeypatch.setattr(
+        module,
+        "create_llm_api_client",
+        create_client,
+    )
+    monkeypatch.setattr(bc_eval_llm_api_bridge, "version", lambda _: "0.10.1")
+    monkeypatch.delenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, raising=False)
+    request = {"model": "test-model", "messages": [{"role": "user", "content": "Hello"}], "tools": [{"type": "function", "function": {"name": "sample"}}]}
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"model": "test-model", "bc_eval_version": "0.10.1", "environment": "PROD", "reasoning_effort": effort}), encoding="utf-8")
+    monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(buffer=BytesIO(json.dumps(request).encode())))
+    stdout = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", stdout)
+    assert bc_eval_llm_api_bridge.main(["--config", str(config)]) == 0
+    assert len(calls) == 1
+    assert calls[0]["reasoning_effort"] == effort
+    assert calls[0]["extra_headers"] == {"x-sticky-route-session-ticket": ""}
+    assert calls[0]["tools"] == request["tools"]
+    assert json.loads(stdout.getvalue()) == response
+    assert settings[0].environment == "PROD"
+    assert list(tmp_path.iterdir()) == [config]
+
+
+def test_configured_bridge_rejects_transport_version_before_request(monkeypatch, fake_llm_api, tmp_path):
+    config = tmp_path / "config.json"
+    config.write_text('{"bc_eval_version": "0.10.1"}', encoding="utf-8")
+    monkeypatch.setattr(bc_eval_llm_api_bridge, "version", lambda _: "0.6.1")
+    with pytest.raises(ValueError, match="selected transport"):
+        bc_eval_llm_api_bridge.main(["--config", str(config)])
+    assert not fake_llm_api
 
 
 @pytest.fixture
@@ -349,3 +411,18 @@ def test_luna_preserves_refusals(monkeypatch, luna_api):
     result = json.loads(_run_main(monkeypatch, {"model": "gpt-6-luna", "messages": []}))
 
     assert result["choices"][0]["message"]["content"] == "I cannot help with that."
+
+
+@pytest.mark.parametrize("effort", ["none", "high"])
+def test_configured_luna_preserves_explicit_reasoning(monkeypatch, luna_api, tmp_path, effort):
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"model": "gpt-6-luna", "bc_eval_version": "0.10.1", "environment": "PROD", "reasoning_effort": effort}), encoding="utf-8")
+    monkeypatch.setattr(bc_eval_llm_api_bridge, "version", lambda _: "0.10.1")
+    monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(buffer=BytesIO(b'{"model":"gpt-6-luna","messages":[]}')))
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+    assert bc_eval_llm_api_bridge.main(["--config", str(config)]) == 0
+
+    assert luna_api["responses_request"]["reasoning"]["effort"] == effort
+    assert luna_api["client"]["settings"].environment == "PROD"
+    assert "request" not in luna_api

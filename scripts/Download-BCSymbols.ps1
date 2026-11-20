@@ -18,21 +18,28 @@ using module .\BenchmarkUtils.psm1
     Dataset tier: gold (default) or challenge.
 .PARAMETER Country
     BC artifact country (default: w1).
+.PARAMETER Version
+    Explicit BC version for runs without a dataset entry.
 .EXAMPLE
     .\scripts\Download-BCSymbols.ps1 -Category bug-fix -InstanceId bug-fix__job-budget-report-1
 #>
+[CmdletBinding(DefaultParameterSetName = 'Dataset')]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Dataset')]
     [string]$InstanceId,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Dataset')]
     [string]$Category,
 
     [Parameter(Mandatory = $false)]
     [string]$Tier = "gold",
 
     [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category $Category -Tier $Tier),
+    [string]$DatasetPath,
+
+    [Parameter(Mandatory = $true, ParameterSetName = 'Version')]
+    [ValidatePattern('^\d+\.\d+(\.\d+\.\d+)?$')]
+    [string]$Version,
 
     [Parameter(Mandatory = $false)]
     [string]$Country = "w1"
@@ -40,8 +47,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-[string] $version = Get-BCBenchEntryVersion -InstanceId $InstanceId -Category $Category -DatasetPath $DatasetPath
-Write-Log "Resolved BC version $version for InstanceId $InstanceId" -Level Info
+if ($PSCmdlet.ParameterSetName -eq 'Dataset') {
+    if (-not $DatasetPath) { $DatasetPath = Get-BCBenchDatasetPath -Category $Category -Tier $Tier }
+    $Version = Get-BCBenchEntryVersion -InstanceId $InstanceId -Category $Category -DatasetPath $DatasetPath
+}
+Write-Log "Resolved BC version $Version" -Level Info
 
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
