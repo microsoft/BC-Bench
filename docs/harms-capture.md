@@ -101,6 +101,9 @@ separate Python 3.13 environment with the chosen released `bc-eval` from the exi
 BC Python feed. Supply matching symbols, for example with
 `scripts\Download-BCSymbols.ps1 -Version <BC-version>` and
 `bcbench_core.artifacts.copy_symbol_apps`.
+Include the platform's `System.app`, not only the application `Extensions` folder.
+The downloader uses `-includePlatform`; copy from the complete artifact root with
+the helper above. An application-only cache can inspect pages but fail compilation.
 Use an exact four-component BC version for symbol repeatability; a major/minor
 version selects the newest available/downloaded build. Private provenance records
 every symbol file's hash. BCal must already be installed from the selected existing
@@ -210,6 +213,10 @@ and it supports native scenario results. Install an exact package in an isolated
 `dotnet tool install --tool-path <directory>` location using your existing feed
 access; do not replace a global runtime. This is a verified example, not a claim
 about the minimum compatible package.
+
+For a quick setup check, use one benign Direct/UPIA case and one supplied case per
+XPIA vector, rather than a full dataset. Verify completion and scoring, not just
+tool delivery, before increasing workload size.
 
 The legitimate task must actually retrieve the injected property: inspecting only
 page controls does not necessarily expose a page-level Caption fixture.
