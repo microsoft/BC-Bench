@@ -58,6 +58,17 @@ def test_bcal_run_identity_includes_tier_and_package_selection():
     assert workflow["concurrency"]["group"] == "bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}"
 
 
+def test_bcal_supports_gpt6_luna_for_generation_and_completion_review():
+    workflow = _workflow("bcal-evaluation.yml")
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    run = _step(workflow, "evaluate-with-bcal", "Run BCal for entry ${{ matrix.entry }}")
+
+    assert "gpt-6-luna" in inputs["external-model"]["options"]
+    assert run["env"]["BCAL_LLM_MODEL"] == "${{ inputs.external-model || 'gpt-55-chat' }}"
+    assert workflow["jobs"]["summarize-results"]["with"]["model"] == run["env"]["BCAL_LLM_MODEL"]
+    assert "gpt-6-luna" in inputs["completion-review-model"]["options"]
+
+
 def test_bcal_completion_review_model_offers_external_models_or_none():
     workflow = _workflow("bcal-evaluation.yml")
     inputs = workflow[True]["workflow_dispatch"]["inputs"]

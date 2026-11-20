@@ -38,7 +38,7 @@ class TestCommitChanges:
         commit_changes(temp_git_repo, "setup")
 
         (temp_git_repo / "file.al").write_text("agent change")
-        diff = stage_and_get_diff(temp_git_repo)
+        diff = stage_and_get_diff(temp_git_repo, include=("*.al",))
 
         assert "agent change" in diff
         # The diff should be against the committed "setup change", not the original "original"
@@ -161,7 +161,7 @@ class TestStageAndGetDiff:
         (temp_git_repo / "test" / "file.al").write_text("modified test content")
 
         # Get diff - stages all *.al files
-        diff = stage_and_get_diff(temp_git_repo)
+        diff = stage_and_get_diff(temp_git_repo, include=("*.al",))
 
         # Verify both changes are in the diff
         assert "app/file.al" in diff
@@ -172,7 +172,7 @@ class TestStageAndGetDiff:
     def test_stage_and_get_diff_empty_raises_error(self, temp_git_repo):
         # Don't make any changes
         with pytest.raises(EmptyDiffError):
-            stage_and_get_diff(temp_git_repo)
+            stage_and_get_diff(temp_git_repo, include=("*.al",))
 
     @pytest.mark.parametrize("file_path", ["app.json", "app/app.json", "spec.docx", "app/spec.docx", "README.md", "app/README.md"])
     def test_stage_and_get_diff_includes_previously_staged_files_by_default(self, temp_git_repo, file_path):
@@ -180,7 +180,7 @@ class TestStageAndGetDiff:
         (temp_git_repo / file_path).write_text("staged content")
         subprocess.run(["git", "add", file_path], cwd=temp_git_repo, check=True, capture_output=True)
 
-        diff = stage_and_get_diff(temp_git_repo)
+        diff = stage_and_get_diff(temp_git_repo, include=("*.al",))
 
         assert "app/file.al" in diff
         assert file_path in diff
@@ -192,7 +192,7 @@ class TestStageAndGetDiff:
         (temp_git_repo / file_path).write_text("staged content")
         subprocess.run(["git", "add", file_path], cwd=temp_git_repo, check=True, capture_output=True)
 
-        diff = stage_and_get_diff(temp_git_repo, exclude=("**/app.json", "*.docx", "*.md"))
+        diff = stage_and_get_diff(temp_git_repo, include=("*.al",), exclude=("**/app.json", "*.docx", "*.md"))
 
         assert "app/file.al" in diff
         assert file_path not in diff
@@ -203,7 +203,7 @@ class TestStageAndGetDiff:
         subprocess.run(["git", "add", "app/app.json"], cwd=temp_git_repo, check=True, capture_output=True)
 
         with pytest.raises(EmptyDiffError):
-            stage_and_get_diff(temp_git_repo, exclude=("**/app.json", "*.docx", "*.md"))
+            stage_and_get_diff(temp_git_repo, include=("*.al",), exclude=("**/app.json", "*.docx", "*.md"))
 
     def test_stage_and_get_diff_uses_custom_exclude(self, temp_git_repo):
         (temp_git_repo / "app" / "file.al").write_text("modified app content")
@@ -211,7 +211,7 @@ class TestStageAndGetDiff:
         (temp_git_repo / "app" / "app.json").write_text("{}")
         subprocess.run(["git", "add", "app/app.json"], cwd=temp_git_repo, check=True, capture_output=True)
 
-        diff = stage_and_get_diff(temp_git_repo, exclude=("test/*",))
+        diff = stage_and_get_diff(temp_git_repo, include=("*.al",), exclude=("test/*",))
 
         assert "app/file.al" in diff
         assert "app/app.json" in diff
@@ -229,13 +229,25 @@ class TestStageAndGetDiff:
         subprocess.run(["git", "commit", "-m", "seed"], cwd=tmp_path, check=True, capture_output=True)
 
         with pytest.raises(EmptyDiffError):
-            stage_and_get_diff(tmp_path)
+            stage_and_get_diff(tmp_path, include=("*.al",))
+
+    def test_stage_and_get_diff_stages_every_included_pattern(self, temp_git_repo):
+        (temp_git_repo / "app" / "file.al").write_text("modified app content")
+        (temp_git_repo / "app" / "layout").mkdir()
+        (temp_git_repo / "app" / "layout" / "Report.rdlc").write_text("<Report/>")
+        (temp_git_repo / "app" / "Report.docx").write_text("binary")
+
+        diff = stage_and_get_diff(temp_git_repo, include=("*.al", "*.rdlc", "*.cs"))
+
+        assert "app/file.al" in diff
+        assert "app/layout/Report.rdlc" in diff
+        assert "Report.docx" not in diff
 
     def test_stage_and_get_diff_other_git_failure_propagates(self, tmp_path):
         # A git failure that is NOT "pathspec did not match" (here: not a git repo at all)
         # must surface as a real error, not be masked as an empty diff.
         with pytest.raises(subprocess.CalledProcessError):
-            stage_and_get_diff(tmp_path)
+            stage_and_get_diff(tmp_path, include=("*.al",))
 
 
 class TestCleanProjectPaths:

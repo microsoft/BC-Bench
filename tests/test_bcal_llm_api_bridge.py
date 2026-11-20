@@ -47,9 +47,11 @@ def fake_llm_api(monkeypatch):
     """Stub bc_eval.llm.llm_api and record what the bridge passes to create_llm_api_client."""
     calls: dict[str, Any] = {}
 
+    @dataclass
     class _Settings:
-        tenant_id = "tenant-x"
-        client_id = "client-y"
+        tenant_id: str = "tenant-x"
+        client_id: str = "client-y"
+        environment: str = "TEST"
 
         @classmethod
         def from_env(cls):
@@ -60,9 +62,14 @@ def fake_llm_api(monkeypatch):
             calls["request"] = kwargs
             return {"id": "completion-1", "choices": []}
 
+    class _Responses:
+        def create(self, **kwargs):
+            calls["responses_request"] = kwargs
+            return calls["responses_response"]
+
     def _create_llm_api_client(**kwargs):
         calls["client"] = kwargs
-        return types.SimpleNamespace(chat=types.SimpleNamespace(completions=_Completions()))
+        return types.SimpleNamespace(chat=types.SimpleNamespace(completions=_Completions()), responses=_Responses())
 
     modules = {name: types.ModuleType(name) for name in ("bc_eval", "bc_eval.llm", "bc_eval.llm.llm_api")}
     modules["bc_eval"].__path__ = []
@@ -218,3 +225,204 @@ def test_configured_bridge_rejects_transport_version_before_request(monkeypatch,
     with pytest.raises(ValueError, match="selected transport"):
         bc_eval_llm_api_bridge.main(["--config", str(config)])
     assert not fake_llm_api
+
+
+@pytest.fixture
+def luna_api(monkeypatch, fake_llm_api):
+    monkeypatch.delenv(bc_eval_llm_api_bridge._CERT_FILE_ENV, raising=False)
+    fake_llm_api["responses_response"] = {
+        "id": "resp-1",
+        "model": "gpt-6-luna",
+        "created_at": 123,
+        "status": "completed",
+        "output": [
+            {"id": "rs-1", "type": "reasoning", "summary": [], "encrypted_content": "opaque-reasoning"},
+            {"id": "fc-1", "type": "function_call", "call_id": "call-1", "name": "lookup", "arguments": '{"name":"Customer"}', "status": "completed"},
+            {"id": "fc-2", "type": "function_call", "call_id": "call-2", "name": "lookup", "arguments": '{"name":"Vendor"}', "status": "completed"},
+        ],
+        "usage": {
+            "input_tokens": 40,
+            "output_tokens": 25,
+            "total_tokens": 65,
+            "input_tokens_details": {"cached_tokens": 10},
+            "output_tokens_details": {"reasoning_tokens": 15},
+        },
+    }
+    return fake_llm_api
+
+
+def test_model_protocol_defaults_to_chat_and_explicitly_routes_luna_to_responses():
+    assert bc_eval_llm_api_bridge._protocol_for_model("gpt-6-luna") == "responses"
+    assert bc_eval_llm_api_bridge._protocol_for_model("gpt-55-chat") == "chat-completions"
+    assert bc_eval_llm_api_bridge._protocol_for_model("future-model") == "chat-completions"
+
+
+def test_luna_uses_responses_with_reasoning_and_non_strict_tools(monkeypatch, luna_api):
+    messages = [{"role": "system", "content": "Help with AL."}, {"role": "user", "content": "Look up Customer and Vendor."}]
+    function = {"name": "lookup", "description": "Look up an AL object.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}}}}
+
+    completion = json.loads(_run_main(monkeypatch, {"model": "gpt-6-luna", "messages": messages, "tools": [{"type": "function", "function": function}], "max_completion_tokens": 4096}))
+
+    assert "request" not in luna_api
+    assert luna_api["responses_request"] == {
+        "model": "gpt-6-luna",
+        "input": messages,
+        "tools": [{**function, "type": "function", "strict": False}],
+        "reasoning": {"effort": "medium", "context": "current_turn"},
+        "max_output_tokens": 4096,
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
+        "extra_headers": {"x-sticky-route-session-ticket": ""},
+    }
+    assert completion["choices"] == [
+        {
+            "index": 0,
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "content": None,
+                "provider_context": {
+                    "format": "bcbench.responses.v1",
+                    "model": "gpt-6-luna",
+                    "output": luna_api["responses_response"]["output"],
+                },
+                "tool_calls": [
+                    {"id": "call-1", "type": "function", "function": {"name": "lookup", "arguments": '{"name":"Customer"}'}},
+                    {"id": "call-2", "type": "function", "function": {"name": "lookup", "arguments": '{"name":"Vendor"}'}},
+                ],
+            },
+        }
+    ]
+    assert completion["usage"] == {
+        "prompt_tokens": 40,
+        "completion_tokens": 25,
+        "total_tokens": 65,
+        "prompt_tokens_details": {"cached_tokens": 10},
+        "completion_tokens_details": {"reasoning_tokens": 15},
+    }
+
+
+@pytest.mark.parametrize("trim_history", [False, True])
+def test_luna_replays_provider_context_and_parallel_calls_from_bcal_history(monkeypatch, luna_api, trim_history):
+    messages: list[dict[str, object]] = [{"role": "user", "content": "Look up Customer and Vendor."}]
+    completion = json.loads(_run_main(monkeypatch, {"model": "gpt-6-luna", "messages": messages}))
+    output = luna_api["responses_response"]["output"]
+    assistant = completion["choices"][0]["message"]
+    assistant["content"] = "Tool calls requested."
+    for call in assistant["tool_calls"]:
+        call["function"]["arguments"] = json.dumps(json.loads(call["function"]["arguments"]), indent=2)
+    messages = ([] if trim_history else messages) + [
+        assistant,
+        {"role": "tool", "tool_call_id": "call-1", "content": "Customer is a table."},
+        {"role": "tool", "tool_call_id": "call-2", "content": "Vendor is a table."},
+    ]
+    luna_api["responses_response"] = {
+        **luna_api["responses_response"],
+        "output": [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Both are tables."}]}],
+    }
+
+    result = json.loads(_run_main(monkeypatch, {"model": "gpt-6-luna", "messages": messages, "reasoning_effort": "high"}))
+
+    expected_prefix = [] if trim_history else messages[:1]
+    assert luna_api["responses_request"]["input"] == [
+        *expected_prefix,
+        *output,
+        {"type": "function_call_output", "call_id": "call-1", "output": "Customer is a table."},
+        {"type": "function_call_output", "call_id": "call-2", "output": "Vendor is a table."},
+    ]
+    assert luna_api["responses_request"]["reasoning"]["effort"] == "high"
+    assert result["choices"][0]["finish_reason"] == "stop"
+    assert result["choices"][0]["message"]["content"] == "Both are tables."
+    assert result["choices"][0]["message"]["provider_context"] == {
+        "format": "bcbench.responses.v1",
+        "model": "gpt-6-luna",
+        "output": luna_api["responses_response"]["output"],
+    }
+
+
+def test_luna_rejects_tool_call_history_without_provider_context(monkeypatch, luna_api):
+    message = {
+        "role": "assistant",
+        "content": "Tool calls requested.",
+        "tool_calls": [{"id": "call-1", "type": "function", "function": {"name": "lookup", "arguments": "{}"}}],
+    }
+
+    with pytest.raises(ValueError, match="requires provider_context"):
+        _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": [message]})
+
+    assert "responses_request" not in luna_api
+
+
+def test_luna_rejects_provider_context_for_another_model(monkeypatch, luna_api):
+    message = {
+        "role": "assistant",
+        "content": "Tool calls requested.",
+        "tool_calls": [],
+        "provider_context": {"format": "bcbench.responses.v1", "model": "other-model", "output": []},
+    }
+
+    with pytest.raises(ValueError, match="incompatible provider_context"):
+        _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": [message]})
+
+    assert "responses_request" not in luna_api
+
+
+def test_luna_rejects_provider_context_that_does_not_match_tool_calls(monkeypatch, luna_api):
+    message = {
+        "role": "assistant",
+        "content": "Tool calls requested.",
+        "tool_calls": [{"id": "different-call", "type": "function", "function": {"name": "lookup", "arguments": "{}"}}],
+        "provider_context": {
+            "format": "bcbench.responses.v1",
+            "model": "gpt-6-luna",
+            "output": luna_api["responses_response"]["output"],
+        },
+    }
+
+    with pytest.raises(ValueError, match="does not match"):
+        _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": [message]})
+
+
+@pytest.mark.parametrize(
+    ("status", "details"),
+    [
+        ("incomplete", {"reason": "max_output_tokens"}),
+        ("incomplete", {"reason": "content_filter"}),
+        ("failed", {"code": "server_error"}),
+    ],
+)
+def test_luna_does_not_execute_partial_tool_calls_or_hide_failed_responses(monkeypatch, luna_api, status, details):
+    luna_api["responses_response"].update(status=status, incomplete_details=details, error=details)
+
+    with pytest.raises(RuntimeError, match="did not complete"):
+        _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": []})
+
+
+def test_luna_rejects_missing_encrypted_reasoning(monkeypatch, luna_api):
+    del luna_api["responses_response"]["output"][0]["encrypted_content"]
+
+    with pytest.raises(RuntimeError, match="did not return encrypted reasoning"):
+        _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": []})
+
+
+def test_luna_preserves_refusals(monkeypatch, luna_api):
+    luna_api["responses_response"]["output"] = [{"type": "message", "content": [{"type": "refusal", "refusal": "I cannot help with that."}]}]
+
+    result = json.loads(_run_main(monkeypatch, {"model": "gpt-6-luna", "messages": []}))
+
+    assert result["choices"][0]["message"]["content"] == "I cannot help with that."
+
+
+@pytest.mark.parametrize("effort", ["none", "high"])
+def test_configured_luna_preserves_explicit_reasoning(monkeypatch, luna_api, tmp_path, effort):
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"model": "gpt-6-luna", "bc_eval_version": "0.10.1", "environment": "PROD", "reasoning_effort": effort}), encoding="utf-8")
+    monkeypatch.setattr(bc_eval_llm_api_bridge, "version", lambda _: "0.10.1")
+    monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(buffer=BytesIO(b'{"model":"gpt-6-luna","messages":[]}')))
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+    assert bc_eval_llm_api_bridge.main(["--config", str(config)]) == 0
+
+    assert luna_api["responses_request"]["reasoning"]["effort"] == effort
+    assert luna_api["client"]["settings"].environment == "PROD"
+    assert "request" not in luna_api

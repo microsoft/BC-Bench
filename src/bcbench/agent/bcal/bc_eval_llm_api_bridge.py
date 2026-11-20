@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
 
 _CERT_FILE_ENV = "LLM_API_CERTIFICATE_FILE"
+_RESPONSES_CONTEXT_FORMAT = "bcbench.responses.v1"
+_MODEL_PROTOCOL_OVERRIDES = {"gpt-6-luna": "responses"}
 
 # Separates the agent-under-test traffic from bc-eval's judge traffic (bc-eval's own agent host uses the same step).
 _TAXONOMY_INFERENCE_STEP = "HostAgent"
@@ -75,6 +77,133 @@ def _local_certificate_credential(tenant_id: str, client_id: str) -> TokenCreden
     )
 
 
+def _objects(value: object, name: str) -> list[dict[str, object]]:
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise TypeError(f"{name} must be an array of objects.")
+    return cast(list[dict[str, object]], value)
+
+
+def _protocol_for_model(model: str) -> str:
+    return _MODEL_PROTOCOL_OVERRIDES.get(model, "chat-completions")
+
+
+def _responses_input(messages: list[dict[str, object]], model: str) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    pending_calls: set[str] = set()
+    for message in messages:
+        role = message.get("role")
+        if role == "tool":
+            call_id = message.get("tool_call_id")
+            if not isinstance(call_id, str) or call_id not in pending_calls:
+                raise ValueError("Tool result has no matching Responses function call.")
+            pending_calls.remove(call_id)
+            items.append({"type": "function_call_output", "call_id": call_id, "output": message.get("content", "")})
+        elif role == "assistant":
+            context = message.get("provider_context")
+            if context is None:
+                if message.get("tool_calls"):
+                    raise ValueError("Responses tool-call history requires provider_context from a compatible BCal version.")
+                items.append({"role": role, "content": message.get("content", "")})
+                continue
+            if not isinstance(context, dict) or context.get("format") != _RESPONSES_CONTEXT_FORMAT or context.get("model") != model:
+                raise ValueError("Responses assistant history has incompatible provider_context.")
+            output = _objects(context.get("output"), "Provider output")
+            output_call_ids: set[str] = set()
+            for item in output:
+                if item.get("type") != "function_call":
+                    continue
+                call_id = item.get("call_id")
+                if not isinstance(call_id, str):
+                    raise TypeError("Responses function call IDs must be strings.")
+                output_call_ids.add(call_id)
+            calls = _objects(message.get("tool_calls") or [], "tool_calls")
+            if output_call_ids != {call["id"] for call in calls} or pending_calls:
+                raise ValueError("Responses provider_context does not match the assistant tool-call history.")
+            pending_calls.update(output_call_ids)
+            items.extend(output)
+        elif role in ("system", "developer", "user"):
+            items.append({"role": role, "content": message["content"]})
+        else:
+            raise ValueError(f"Unsupported BCal message role: {role!r}")
+    if pending_calls:
+        raise ValueError("Responses history is missing tool results.")
+    return items
+
+
+def _responses_kwargs(request: dict[str, object], model: str, messages: list[dict[str, object]]) -> dict[str, object]:
+    effort = request.get("reasoning_effort") or "medium"
+    tools = []
+    for tool in _objects(request.get("tools") or [], "tools"):
+        if tool.get("type") != "function":
+            raise ValueError("Only function tools are supported by the BCal Responses bridge.")
+        function = tool["function"]
+        if not isinstance(function, dict):
+            raise TypeError("A function tool requires a function object.")
+        # Responses otherwise enables strict schemas, unlike Chat Completions.
+        tools.append({**function, "type": "function", "strict": False})
+    return {
+        "model": model,
+        "input": _responses_input(messages, model),
+        "tools": tools,
+        "reasoning": {"effort": effort, "context": "current_turn"},
+        "max_output_tokens": request.get("max_completion_tokens", 16384),
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
+        "extra_headers": {"x-sticky-route-session-ticket": ""},
+    }
+
+
+def _responses_completion(response: dict[str, object], model: str) -> dict[str, object]:
+    if response.get("status") != "completed":
+        raise RuntimeError(f"LLM API Responses request did not complete: {response.get('status')}; {response.get('error') or response.get('incomplete_details')}")
+    text: list[str] = []
+    calls: list[dict[str, object]] = []
+    for item in _objects(response.get("output"), "Responses output"):
+        match item.get("type"):
+            case "reasoning":
+                if not item.get("encrypted_content"):
+                    raise RuntimeError("LLM API did not return encrypted reasoning for stateless replay.")
+            case "message":
+                for content in _objects(item.get("content"), "Response message content"):
+                    match content.get("type"):
+                        case "output_text":
+                            text.append(str(content["text"]))
+                        case "refusal":
+                            text.append(str(content["refusal"]))
+                        case _:
+                            raise ValueError(f"Unsupported Responses content type: {content.get('type')!r}")
+            case "function_call":
+                calls.append({"id": item["call_id"], "type": "function", "function": {"name": item["name"], "arguments": item["arguments"]}})
+            case _:
+                raise ValueError(f"Unsupported Responses output type: {item.get('type')!r}")
+    if not text and not calls:
+        raise RuntimeError("LLM API returned neither text nor tool calls.")
+    message: dict[str, object] = {
+        "role": "assistant",
+        "content": "".join(text) or None,
+        "provider_context": {"format": _RESPONSES_CONTEXT_FORMAT, "model": model, "output": response["output"]},
+    }
+    if calls:
+        message["tool_calls"] = calls
+    result: dict[str, object] = {
+        "id": response["id"],
+        "object": "chat.completion",
+        "created": response["created_at"],
+        "model": response["model"],
+        "choices": [{"index": 0, "finish_reason": "tool_calls" if calls else "stop", "message": message}],
+    }
+    usage = response.get("usage")
+    if isinstance(usage, dict):
+        result["usage"] = {
+            "prompt_tokens": usage["input_tokens"],
+            "completion_tokens": usage["output_tokens"],
+            "total_tokens": usage["total_tokens"],
+            "prompt_tokens_details": usage.get("input_tokens_details"),
+            "completion_tokens_details": usage.get("output_tokens_details"),
+        }
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path)
@@ -108,11 +237,17 @@ def main(argv: list[str] | None = None) -> int:
         if request.get("reasoning_effort") not in (None, config["reasoning_effort"]):
             raise ValueError("BCal reasoning effort conflicts with the explicit configuration.")
         settings = replace(settings, environment=config["environment"])
+        request["reasoning_effort"] = config["reasoning_effort"]
     client = create_llm_api_client(
         inference_step=_TAXONOMY_INFERENCE_STEP,
         settings=settings,
         credential=_local_certificate_credential(settings.tenant_id, settings.client_id),
     )
+    if _protocol_for_model(model) == "responses":
+        response = _to_jsonable(client.responses.create(**_responses_kwargs(request, model, _objects(messages, "messages"))))
+        json.dump(_responses_completion(response, model), sys.stdout)
+        return 0
+
     kwargs: dict[str, object] = {
         "model": model,
         "messages": messages,
