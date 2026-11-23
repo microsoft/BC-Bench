@@ -108,6 +108,25 @@ class TestApplyPatch:
         assert error.value.patch_name == "test patch"
         assert "file.al" in error.value.stderr
 
+    def test_intent_to_add_shows_created_files_in_diff_head_even_ignored_ones(self, tmp_path: Path):
+        init_repo(tmp_path)
+        (tmp_path / "file.al").write_text("original\n", newline="\n")
+        (tmp_path / ".gitignore").write_text("*.local.json\n", newline="\n")
+        commit_changes(tmp_path, "initial")
+        (tmp_path / "file.al").write_text("patched\n", newline="\n")
+        (tmp_path / "New.Codeunit.al").write_text("codeunit 50100 New {}\n", newline="\n")
+        (tmp_path / "settings.local.json").write_text("{}\n", newline="\n")
+        subprocess.run(["git", "add", "--intent-to-add", "--force", "--", "New.Codeunit.al", "settings.local.json"], cwd=tmp_path, check=True, capture_output=True)
+        diff = subprocess.run(["git", "diff"], cwd=tmp_path, capture_output=True, text=True, check=True).stdout
+        subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "clean", "-fdx"], cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / "unrelated.txt").write_text("not part of the patch\n", newline="\n")
+
+        apply_patch(tmp_path, diff, "review patch", intent_to_add=True)
+
+        changed = subprocess.run(["git", "diff", "HEAD", "--name-status"], cwd=tmp_path, capture_output=True, text=True, check=True).stdout.splitlines()
+        assert changed == ["A\tNew.Codeunit.al", "M\tfile.al", "A\tsettings.local.json"]
+
 
 class TestCleanRepo:
     def test_discards_modified_staged_and_untracked_files(self, tmp_path):
