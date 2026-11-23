@@ -1,5 +1,4 @@
 import logging
-import subprocess
 from pathlib import Path
 from typing import override
 
@@ -21,10 +20,6 @@ REVIEW_OUTPUT_FILE = "review.json"
 __all__ = ["CodeReviewPipeline"]
 
 
-def _patched_paths(patch: str) -> list[str]:
-    return [line[6:].strip() for line in patch.splitlines() if line.startswith("+++ b/")]
-
-
 class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     """Pipeline for code-review evaluation category.
 
@@ -38,17 +33,8 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         # Code-review base commits are pre-squash PR commits, so they might be missing from local dev setups.
         fetch_commit_if_missing(repo_path, entry.base_commit)
         setup_repo_prebuild(entry, repo_path)
-        apply_patch(repo_path, entry.patch, f"{entry.instance_id} review patch")
-        # Mark newly added files as intent-to-add so they appear in `git diff HEAD`;
-        # all dataset patches are new-file diffs, which are otherwise untracked and invisible to the agent.
-        if paths := _patched_paths(entry.patch):
-            subprocess.run(
-                ["git", "add", "-N", "--", *paths],
-                cwd=repo_path,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                check=True,
-            )
+        # Dataset patches are new-file diffs: intent-to-add keeps the files they create, ignored ones included, in `git diff HEAD`.
+        apply_patch(repo_path, entry.patch, f"{entry.instance_id} review patch", intent_to_add=True)
 
     @override
     def setup(self, context: EvaluationContext[CodeReviewEntry]) -> None:
