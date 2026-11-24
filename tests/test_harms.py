@@ -7,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from bcbench.agent.bcal.agent import BCalPromptResult
+from bcbench.cli import app
 from bcbench.commands.harms import harms_app
 from bcbench.harms import Capture, CaptureConfig, Case, capture_case, export_captures, inspect_capture, load_cases
 
@@ -270,6 +271,45 @@ def test_generated_mode_requires_runtime_arguments_before_output_creation(tmp_pa
     result = CliRunner().invoke(harms_app, ["run", "--source", "generated", "--config", str(config_path), "--output", str(tmp_path / "out")])
     assert result.exit_code == 2
     assert not (tmp_path / "out").exists()
+
+
+def test_cli_capture_only_resolves_paths_without_sdk(tmp_path, config, monkeypatch):
+    monkeypatch.setattr("bcbench.commands.harms.os", SimpleNamespace(name="nt"))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.json").write_text(config.model_dump_json(), encoding="utf-8")
+    write_jsonl(tmp_path / "cases.jsonl", [case().model_dump()])
+    calls = []
+
+    def run_capture(*args):
+        calls.append(args)
+        assert all(path.is_absolute() for path in (args[0], *args[2:]))
+
+    monkeypatch.setattr("bcbench.commands.harms.run_capture", run_capture)
+    result = CliRunner().invoke(
+        app,
+        [
+            "harms",
+            "run",
+            "--source",
+            "manual",
+            "--capture-only",
+            "--config",
+            "config.json",
+            "--cases",
+            "cases.jsonl",
+            "--symbols",
+            ".",
+            "--bcal",
+            "config.json",
+            "--bridge-python",
+            "config.json",
+            "--output",
+            "out",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert len(calls) == 1
+    assert json.loads((tmp_path / "out" / "summary.json").read_text())["status"] == "capture_only"
 
 
 def test_cli_keeps_content_bearing_failures_private(tmp_path, config, monkeypatch):

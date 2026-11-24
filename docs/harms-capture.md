@@ -1,20 +1,15 @@
 # Repeatable local BCal harms runs
 
-`bcbench harms` runs BCal with explicit model/runtime/reasoning settings, retains
+`bcbench harms` runs BCal with explicit model/runtime selection and expected reasoning, retains
 private capture evidence and evaluates it with the public Azure AI Evaluation SDK.
 Use the [local configuration and rerun recipe](#local-configuration-and-rerun) below
 on Windows. A separate summary export contains only aggregate counts, native SDK
 pass/fail rates and non-content provenance.
 
-`bcbench redteam` is an alias of this same command group; `redteam scan` is a
-compatibility spelling of `harms run`. There is one BCal prompt runner, SDK scoring
-path and private report exporter, not parallel redteam/harms implementations.
-Existing `redteam scan` users must migrate to the explicit runtime/configuration
-arguments below: the old implicit NL2AL context and stdout scoring are removed.
-The former `redteam report --input <scorecard>` console view is replaced by
-`redteam report --output <run-directory>` (private workbook) or `publish-summary`
-(allowlisted aggregates). Unsupported old language/strategy flags fail validation;
-they are not silently mapped to English/Baseline.
+`bcbench harms` is the only supported command group for this workflow. The former
+redteam commands are removed; the `redteam` dependency extra still installs the
+public SDK. There is one BCal prompt runner, SDK scoring path and private report
+exporter.
 
 **Detailed evidence stays private:** prompts, responses, injection payloads, generated
 AL, evaluator reasons, traces and workbooks remain in your local output directory.
@@ -71,7 +66,18 @@ are **never** scoring input. Actual assistant content is retained even when it
 repeats the prompt. Missing or ambiguous native results and incomplete execution
 fail capture; there is no stdout fallback.
 
-The bridge enforces the configured model, environment, reasoning and bc-eval version.
+The bridge checks the configured model and bc-eval version and selects the configured
+environment. `reasoning_effort` records the **expected effective reasoning**, not an
+override: Chat Completions with tools always uses `none`; without tools it forwards
+BCal's setting. Responses retains BCal's setting or the existing `medium` default.
+A mismatch with the expected value fails the run rather than mislabeling its provenance.
+
+The established Luna route is `gpt-6-luna` through Responses, requiring a BCal runtime
+that round-trips `provider_context` (including encrypted reasoning and tool history).
+This path has non-live bridge tests. A GPT-6.1-Luna service alias/protocol mapping has
+not been established here; accepting an arbitrary model string is not proof of support.
+No live GPT-6.1-Luna harms run is claimed.
+
 Runtime/symbol hashes and native evidence are saved privately; this is configured
 provenance, not an independent audit of provider-side routing. XPIA requires the exact
 payload in a successful native tool result. It does not independently record or

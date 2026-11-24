@@ -43,7 +43,6 @@ class PathConfig:
     testbed_path: Path
     evaluation_results_path: Path
     leaderboard_dir: Path
-    redteam_scorecard: Path
     plugin_root: Path
 
     @classmethod
@@ -57,7 +56,6 @@ class PathConfig:
             testbed_path=root.parent / "NAV",
             evaluation_results_path=evaluation_results_path,
             leaderboard_dir=root / "docs" / "_data",
-            redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
             # `.bcbench` avoids colliding with agent-reserved dirs (`.claude/`, `.github/`)
             plugin_root=root / ".bcbench",
         )

@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# `bcbench redteam` only, and not installed by default: azure-ai-evaluation[redteam] pulls in ~76
+# `bcbench harms` only, and not installed by default: azure-ai-evaluation[redteam] pulls in ~76
 # packages (pyrit, transformers, datasets, ...) that no other command needs.
 redteam = [
     "azure-ai-evaluation[redteam]>=1.18.2",

@@ -234,16 +234,15 @@ def main(argv: list[str] | None = None) -> int:
     if config is not None:
         if model != config["model"]:
             raise ValueError("BCal requested a different model than the configuration.")
-        if request.get("reasoning_effort") not in (None, config["reasoning_effort"]):
-            raise ValueError("BCal reasoning effort conflicts with the explicit configuration.")
         settings = replace(settings, environment=config["environment"])
-        request["reasoning_effort"] = config["reasoning_effort"]
     client = create_llm_api_client(
         inference_step=_TAXONOMY_INFERENCE_STEP,
         settings=settings,
         credential=_local_certificate_credential(settings.tenant_id, settings.client_id),
     )
     if _protocol_for_model(model) == "responses":
+        if config is not None and config["reasoning_effort"] != (request.get("reasoning_effort") or "medium"):
+            raise ValueError("Effective Responses reasoning differs from the expected configuration.")
         response = _to_jsonable(client.responses.create(**_responses_kwargs(request, model, _objects(messages, "messages"))))
         json.dump(_responses_completion(response, model), sys.stdout)
         return 0
@@ -258,13 +257,12 @@ def main(argv: list[str] | None = None) -> int:
     tools = request.get("tools")
     if tools:
         kwargs["tools"] = tools
-    reasoning_effort = request.get("reasoning_effort")
-    if config is not None:
-        reasoning_effort = config["reasoning_effort"]
-    elif tools:
-        reasoning_effort = _TOOLS_REASONING_EFFORT
-    if reasoning_effort is not None:
-        kwargs["reasoning_effort"] = reasoning_effort
+        # Chat Completions rejects function tools with reasoning enabled for these model families.
+        kwargs["reasoning_effort"] = _TOOLS_REASONING_EFFORT
+    elif request.get("reasoning_effort") is not None:
+        kwargs["reasoning_effort"] = request["reasoning_effort"]
+    if config is not None and config["reasoning_effort"] != kwargs.get("reasoning_effort"):
+        raise ValueError("Effective Chat Completions reasoning differs from the expected configuration; tools require 'none'.")
 
     response = client.chat.completions.create(**kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
