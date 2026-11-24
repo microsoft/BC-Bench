@@ -35,6 +35,15 @@ def test_copy_symbol_apps_into_custom_symbols_folder(cache_root: Path, tmp_path:
     assert (tmp_path / "project" / "symbols" / "System.app").is_file()
 
 
+def test_copy_symbol_apps_honors_exact_version(cache_root: Path, tmp_path: Path):
+    (_make_version(cache_root, "27.2.3.4") / "System.app").write_text("selected")
+    (_make_version(cache_root, "27.2.3.5") / "System.app").write_text("newer")
+
+    copy_symbol_apps(tmp_path / "project", "27.2.3.4", artifacts_cache=cache_root)
+
+    assert (tmp_path / "project" / ".alpackages" / "System.app").read_text() == "selected"
+
+
 @pytest.mark.parametrize(("older", "newer"), [("27.2.1.0", "27.2.10.5"), ("27.2.9.0", "27.2.10.0"), ("27.2.10.9", "27.2.10.10")])
 def test_resolve_artifact_version_root_picks_newest_revision(cache_root: Path, older: str, newer: str):
     _make_version(cache_root, older)

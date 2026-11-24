@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
+from dataclasses import replace
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, cast
 
@@ -201,7 +204,18 @@ def _responses_completion(response: dict[str, object], model: str) -> dict[str, 
     return result
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=Path)
+    args = parser.parse_args(argv or [])
+    config = None
+    if args.config:
+        config = json.loads(args.config.read_text(encoding="utf-8"))
+        if config["bc_eval_version"] != version("bc-eval"):
+            raise ValueError("Installed bc-eval differs from the selected transport version.")
+        if config["environment"] not in ("TEST", "PROD") or config["reasoning_effort"] not in ("none", "minimal", "low", "medium", "high", "xhigh"):
+            raise ValueError("Explicit environment and supported reasoning effort are required.")
+
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
     messages = request.get("messages")
@@ -217,12 +231,18 @@ def main() -> int:
         raise RuntimeError("bc-eval>=0.6.0 is required for the bcal LLM API bridge.") from exc
 
     settings = LlmApiSettings.from_env()
+    if config is not None:
+        if model != config["model"]:
+            raise ValueError("BCal requested a different model than the configuration.")
+        settings = replace(settings, environment=config["environment"])
     client = create_llm_api_client(
         inference_step=_TAXONOMY_INFERENCE_STEP,
         settings=settings,
         credential=_local_certificate_credential(settings.tenant_id, settings.client_id),
     )
     if _protocol_for_model(model) == "responses":
+        if config is not None and config["reasoning_effort"] != (request.get("reasoning_effort") or "medium"):
+            raise ValueError("Effective Responses reasoning differs from the expected configuration.")
         response = _to_jsonable(client.responses.create(**_responses_kwargs(request, model, _objects(messages, "messages"))))
         json.dump(_responses_completion(response, model), sys.stdout)
         return 0
@@ -239,10 +259,10 @@ def main() -> int:
         kwargs["tools"] = tools
         # Chat Completions rejects function tools with reasoning enabled for these model families.
         kwargs["reasoning_effort"] = _TOOLS_REASONING_EFFORT
-    else:
-        reasoning_effort = request.get("reasoning_effort")
-        if reasoning_effort is not None:
-            kwargs["reasoning_effort"] = reasoning_effort
+    elif request.get("reasoning_effort") is not None:
+        kwargs["reasoning_effort"] = request["reasoning_effort"]
+    if config is not None and config["reasoning_effort"] != kwargs.get("reasoning_effort"):
+        raise ValueError("Effective Chat Completions reasoning differs from the expected configuration; tools require 'none'.")
 
     response = client.chat.completions.create(**kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
@@ -250,4 +270,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

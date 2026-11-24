@@ -275,7 +275,10 @@ dependencies = [
 [package.optional-dependencies]
 redteam = [
     { name = "azure-ai-evaluation", extra = ["redteam"] },
+    { name = "azure-core" },
     { name = "azure-identity" },
+    { name = "openpyxl" },
+    { name = "pyrit" },
 ]
 
 [package.dev-dependencies]
@@ -297,13 +300,16 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "azure-ai-evaluation", extras = ["redteam"], marker = "extra == 'redteam'", specifier = ">=1.18.2" },
+    { name = "azure-core", marker = "extra == 'redteam'", specifier = ">=1.41.0" },
     { name = "azure-identity", marker = "extra == 'redteam'", specifier = ">=1.25.3" },
     { name = "bcbench-core", editable = "packages/bcbench-core" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "numpy", specifier = ">=2.3.5" },
+    { name = "openpyxl", marker = "extra == 'redteam'", specifier = ">=3.1.5" },
     { name = "packaging", specifier = ">=25.0" },
     { name = "pydantic", specifier = ">=2.0" },
+    { name = "pyrit", marker = "extra == 'redteam'", specifier = ">=0.11.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.0" },
