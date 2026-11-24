@@ -240,6 +240,22 @@ def test_luna_uses_responses_with_reasoning_and_non_strict_tools(monkeypatch, lu
     }
 
 
+def test_luna_uses_reasoning_effort_from_environment(monkeypatch, luna_api):
+    monkeypatch.setenv(bc_eval_llm_api_bridge._REASONING_EFFORT_ENV, "high")
+
+    _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": []})
+
+    assert luna_api["responses_request"]["reasoning"]["effort"] == "high"
+
+
+def test_luna_request_reasoning_effort_overrides_environment(monkeypatch, luna_api):
+    monkeypatch.setenv(bc_eval_llm_api_bridge._REASONING_EFFORT_ENV, "high")
+
+    _run_main(monkeypatch, {"model": "gpt-6-luna", "messages": [], "reasoning_effort": "low"})
+
+    assert luna_api["responses_request"]["reasoning"]["effort"] == "low"
+
+
 @pytest.mark.parametrize("trim_history", [False, True])
 def test_luna_replays_provider_context_and_parallel_calls_from_bcal_history(monkeypatch, luna_api, trim_history):
     messages: list[dict[str, object]] = [{"role": "user", "content": "Look up Customer and Vendor."}]

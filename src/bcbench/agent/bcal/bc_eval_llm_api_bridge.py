@@ -19,6 +19,7 @@ _MODEL_PROTOCOL_OVERRIDES = {"gpt-6-luna": "responses"}
 _TAXONOMY_INFERENCE_STEP = "HostAgent"
 
 _TOOLS_REASONING_EFFORT = "none"
+_REASONING_EFFORT_ENV = "BCAL_REASONING_EFFORT"
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -128,7 +129,7 @@ def _responses_input(messages: list[dict[str, object]], model: str) -> list[dict
 
 
 def _responses_kwargs(request: dict[str, object], model: str, messages: list[dict[str, object]]) -> dict[str, object]:
-    effort = request.get("reasoning_effort") or "medium"
+    effort = request.get("reasoning_effort") or os.environ.get(_REASONING_EFFORT_ENV) or "medium"
     tools = []
     for tool in _objects(request.get("tools") or [], "tools"):
         if tool.get("type") != "function":
