@@ -178,7 +178,7 @@ class TestSetupLogging:
             logging.getLogger(name).setLevel(level)
 
     def test_application_loggers_log_info_while_third_party_stays_at_warning(self, capsys):
-        setup_logging(app_logger="myapp", debug=False, github_actions=False)
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=False)
 
         logging.getLogger("myapp.evaluate").info("app info")
         logging.getLogger("bcbench_core.projects").info("core info")
@@ -192,7 +192,7 @@ class TestSetupLogging:
         assert "core debug" not in err
 
     def test_debug_enables_debug_for_application_loggers(self, capsys):
-        setup_logging(app_logger="myapp", debug=True, github_actions=False)
+        setup_logging(app_logger="myapp", debug=True, github_actions=False, azure_pipelines=False)
 
         logging.getLogger("myapp.evaluate").debug("app debug")
         logging.getLogger("bcbench_core.projects").debug("core debug")
@@ -202,7 +202,7 @@ class TestSetupLogging:
         assert "core debug" in err
 
     def test_github_actions_annotates_errors_without_duplicating_console_output(self, capsys):
-        setup_logging(app_logger="myapp", debug=False, github_actions=True)
+        setup_logging(app_logger="myapp", debug=False, github_actions=True, azure_pipelines=False)
 
         logging.getLogger("bcbench_core.projects").error("categorization failed")
 
@@ -211,8 +211,8 @@ class TestSetupLogging:
         assert "categorization failed" not in captured.err
 
     def test_repeated_setup_replaces_its_handlers_without_duplicating_output(self, capsys):
-        setup_logging(app_logger="myapp", debug=False, github_actions=True)
-        setup_logging(app_logger="myapp", debug=False, github_actions=False)
+        setup_logging(app_logger="myapp", debug=False, github_actions=True, azure_pipelines=False)
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=False)
 
         logging.getLogger("myapp").info("once")
         logging.getLogger("myapp").error("not annotated")
@@ -226,8 +226,25 @@ class TestSetupLogging:
         foreign = logging.StreamHandler(sys.stdout)
         logging.getLogger().addHandler(foreign)
 
-        setup_logging(app_logger="myapp", debug=False, github_actions=False)
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=False)
         logging.getLogger("myapp").warning("seen by both")
 
         assert foreign in logging.getLogger().handlers
         assert "seen by both" in capsys.readouterr().out
+
+    def test_azure_pipelines_neutralizes_logging_commands_in_messages_args_and_tracebacks(self, capsys):
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=True)
+
+        try:
+            _fail("###vso[task.complete]")
+        except ValueError:
+            logging.getLogger("myapp").exception("model said ##vso[task.setvariable variable=x]1 and %s", "##[group]")
+
+        err = capsys.readouterr().err
+        assert "#\u200b#vso[task.setvariable variable=x]1 and #\u200b#[group]" in err
+        assert "ValueError: #\u200b#\u200b#vso[task.complete]" in err
+        assert "##" not in err
+
+
+def _fail(message: str) -> None:
+    raise ValueError(message)
