@@ -157,12 +157,27 @@ class GitHubActionsSkipFilter(logging.Filter):
         return not getattr(record, "gh_actions_handled", False)
 
 
+class AzurePipelinesSafeFormatter(logging.Formatter):
+    """Formatter that breaks up "##" so logged text, such as model output, cannot run as an Azure Pipelines logging command (##vso[, ##[)."""
+
+    _ADJACENT_HASH: ClassVar[re.Pattern[str]] = re.compile(r"#(?=#)")
+
+    def __init__(self, inner: logging.Formatter) -> None:
+        super().__init__()
+        self._inner = inner
+
+    @override
+    def format(self, record: logging.LogRecord) -> str:
+        # Every adjacent pair, not each "##" match, so runs like "###vso[" keep no live "##" prefix
+        return self._ADJACENT_HASH.sub("#\u200b", self._inner.format(record))
+
+
 _CORE_LOGGER = __name__.partition(".")[0]
 _GITHUB_HANDLER_NAME = f"{_CORE_LOGGER}.github_actions"
 _CONSOLE_HANDLER_NAME = f"{_CORE_LOGGER}.console"
 
 
-def setup_logging(app_logger: str, debug: bool, github_actions: bool) -> None:
+def setup_logging(app_logger: str, debug: bool, github_actions: bool, azure_pipelines: bool) -> None:
     """Configure process-wide logging; call once from the application entry point.
 
     Calling again replaces the handlers installed by a previous call; other root handlers are kept.
@@ -171,6 +186,7 @@ def setup_logging(app_logger: str, debug: bool, github_actions: bool) -> None:
         app_logger: Top-level logger name of the application, usually its package name; bcbench-core's logger is always included.
         debug: If True, set application and bcbench-core loggers to DEBUG level, otherwise INFO.
         github_actions: If True, also emit warnings and errors as GitHub Actions annotations.
+        azure_pipelines: If True, neutralize Azure Pipelines logging commands in all output.
     """
     app_level = logging.DEBUG if debug else logging.INFO
 
@@ -189,17 +205,21 @@ def setup_logging(app_logger: str, debug: bool, github_actions: bool) -> None:
         github_handler = GitHubActionsHandler()
         github_handler.set_name(_GITHUB_HANDLER_NAME)
         github_handler.setLevel(logging.WARNING)  # Only warnings and errors
-        github_handler.setFormatter(logging.Formatter("%(message)s"))
+        github_handler.setFormatter(_output_formatter(logging.Formatter("%(message)s"), azure_pipelines))
         github_handler.addFilter(SensitiveDataFilter())
         root_logger.addHandler(github_handler)
 
     # Create console handler with colored formatter and sensitive data filter
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.set_name(_CONSOLE_HANDLER_NAME)
-    console_handler.setFormatter(ColoredFormatter())
+    console_handler.setFormatter(_output_formatter(ColoredFormatter(), azure_pipelines))
     console_handler.addFilter(SensitiveDataFilter())
     console_handler.addFilter(GitHubActionsSkipFilter())
     root_logger.addHandler(console_handler)
 
     for name in (app_logger, _CORE_LOGGER):
         logging.getLogger(name).setLevel(app_level)
+
+
+def _output_formatter(formatter: logging.Formatter, azure_pipelines: bool) -> logging.Formatter:
+    return AzurePipelinesSafeFormatter(formatter) if azure_pipelines else formatter
