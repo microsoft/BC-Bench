@@ -1,10 +1,17 @@
 # Team Namespace Mapping Configuration
 # Maps namespaces to team ownership for automated team assignment
-# Version: 1.0
+# Version: 1.1
+#
+# Each team has an internal key (Finance / SCM / Integration) and an explicit
+# `label` — the GitHub label that must be applied to the issue. Team labels are
+# namespaced under "Team: ". The key and the label are NOT interchangeable:
+# the Integration team's label is pluralised ("Team: Integrations"). Always emit
+# the `label` value verbatim; never construct it from the team key.
 
 team_namespace_mapping:
 
   Finance:
+    label: "Team: Finance"
     namespaces:
       - "AccountantPortal"
       - "Bank"
@@ -29,6 +36,7 @@ team_namespace_mapping:
     description: "Handles financial/accounting related code"
 
   SCM:
+    label: "Team: SCM"
     namespaces:
       - "Assembly"
       - "CRM"
@@ -49,12 +57,14 @@ team_namespace_mapping:
       - "Warehouse"
       - "WarehouseManagement"
       - "ProductionOrders"
+      - "QualityManagement"
       - "ServiceOrders"
     match_strategy: "iterative_fallback"
     case_sensitive: false
     description: "Handles supply chain, manufacturing, service, and related code"
 
   Integration:
+    label: "Team: Integrations"
     namespaces:
       - "AI"
       - "API"
@@ -69,6 +79,7 @@ team_namespace_mapping:
       - "EMail"
       - "Email"
       - "EServices"
+      - "ExternalStorage"
       - "ExternalServices"
       - "Foundation"
       - "Integration"
@@ -94,14 +105,15 @@ assignment_algorithm:
   step3: "Match each namespace against team namespace mappings (iterative fallback: remove Microsoft prefix, then try full, drop segment, repeat)"
   step4: "Count namespace matches per team"
   step5: "Assign team with highest match count"
-  step6: "If tie, sort alphabetically and select first team (Finance > Integration > SCM)"
-  step7: "If no matches found, mark as agent-not-processable"
+  step6: "If tie, sort team keys alphabetically and select first team (Finance > Integration > SCM)"
+  step7: "Emit the selected team's `label` value verbatim as TEAM_LABEL"
+  step8: "If no matches found, mark as agent-not-processable"
 
 # Tie-Breaker Rules
 tie_breaker:
   enabled: true
   strategy: "alphabetical"
-  order: ["Finance", "Integration", "SCM"]  # Alphabetical order
+  order: ["Finance", "Integration", "SCM"]  # Alphabetical order, by team key
   description: "When multiple teams have equal match counts, select team appearing first alphabetically"
 
 # Fallback Handling

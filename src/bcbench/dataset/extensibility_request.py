@@ -29,9 +29,9 @@ class ExtRequestImplementEntry(RepoGroundedEntry):
 
 
 type ManagedLabel = Literal[
-    "Finance",
-    "SCM",
-    "Integration",
+    "Team: Finance",
+    "Team: SCM",
+    "Team: Integrations",
     "event-request",
     "request-for-external",
     "enum-request",
@@ -63,6 +63,11 @@ class ExtRequestTriageEntry(RepoGroundedEntry):
 
     # LLM-judge checklist: expected labels_to_set, issue_state and advisory-comment substance.
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
+
+    @property
+    @override
+    def customization_profile(self) -> str:
+        return "microsoftInternal-NAV"
 
     @override
     def get_task(self) -> str:

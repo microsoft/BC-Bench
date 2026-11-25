@@ -84,8 +84,8 @@ event_request:
           description: "Expected execution frequency and potential impact assessment"
           mandatory: true
           validation_hints: ["performance", "frequency", "impact", "execution", "load"]
-          flexible_validation: true
-          validation_notes: |
+            flexible_validation: true
+            validation_notes: |
               A brief answer is sufficient for this requirement.
 
               The author should acknowledge expected frequency or impact, but the agent should not require a detailed performance analysis unless the request suggests a real performance risk.
@@ -99,8 +99,8 @@ event_request:
           description: "Confirmation of no sensitive data exposure or rationale if necessary"
           mandatory: true
           validation_hints: ["sensitive", "data", "security", "exposure", "private"]
-          flexible_validation: true
-          validation_notes: |
+            flexible_validation: true
+            validation_notes: |
               A short confirmation is sufficient for this requirement.
 
               The author should state whether sensitive data is involved, but the agent should not ask for extra detail unless the request appears to expose confidential, personal, or security-relevant information.
@@ -114,8 +114,8 @@ event_request:
           description: "Risks if multiple extensions subscribe and conflict mitigation"
           mandatory: true
           validation_hints: ["multi", "extension", "conflict", "subscribe", "risk"]
-          flexible_validation: true
-          validation_notes: |
+            flexible_validation: true
+            validation_notes: |
               A brief acknowledgement is sufficient for this requirement.
 
               The author should mention whether they see a conflict risk, but the agent should not be strict here unless the requested behavior clearly changes control flow or could create extension ordering conflicts.

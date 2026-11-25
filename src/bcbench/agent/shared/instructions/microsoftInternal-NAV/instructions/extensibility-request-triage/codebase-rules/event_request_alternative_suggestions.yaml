@@ -5,12 +5,12 @@ event_request_alternative_suggestions:
     - id: consecutive_events_not_allowed
       applies_to: ["event-request"]
       severity: "warning"
-      description: "Consecutive event calls (one directly after another) are not allowed"
+      description: "Consecutive event calls should be consolidated when practical"
       action: "suggest_alternative"
-      rejection_note: "Adding a new event directly adjacent to an existing event is not allowed. The existing event should be updated with additional parameters instead."
+      suggestion_note: "Prefer updating the existing event with additional parameters. If the author explains why separate events are required, evaluate the requested event on its own merits."
       guidance: |
-        **Note:** Two event calls placed consecutively (one directly after another with no meaningful code between them) are not acceptable.
-        Do **not** close the issue — instead, suggest updating the existing event with the additional parameters needed.
+        **Note:** Avoid two event calls placed consecutively (one directly after another with no meaningful code between them) when the existing event can reasonably support the scenario.
+        Suggest updating the existing event with the additional parameters needed. If the author provides a relevant technical reason why that alternative is unsuitable, accept the response and continue evaluating the requested event. Do not ask for an exception or repeat the suggestion.
 
         **Rationale:**
         - Consecutive events create unnecessary overhead (two event invocations instead of one)
@@ -24,13 +24,13 @@ event_request_alternative_suggestions:
         - New event requested immediately after an existing event (no code between)
         - Only whitespace, comments, or variable declarations between events
 
-        **Example - What was requested (consecutive events, not acceptable):**
+        **Example - What was requested (consecutive events, consolidation preferred):**
         ```al
         local procedure ProcessSalesOrder(var SalesHeader: Record "Sales Header")
         begin
             // Some processing code...
 
-            // ❌ NOT ALLOWED - Two events directly next to each other
+            // ⚠️ CONSIDER CONSOLIDATING - Two events directly next to each other
             OnBeforeProcessSalesOrderNewEvent(SalesHeader, CustomerNo);  // New event requested
             OnBeforeProcessSalesOrder(SalesHeader, IsHandled);           // Existing event
 
@@ -46,7 +46,7 @@ event_request_alternative_suggestions:
         begin
             // Some processing code...
 
-            // ✅ CORRECT - Existing event updated with new parameter
+            // ✅ PREFERRED - Existing event updated with new parameter
             OnBeforeProcessSalesOrder(SalesHeader, IsHandled, CustomerNo);  // Added CustomerNo parameter
 
             if not IsHandled then begin
@@ -196,6 +196,8 @@ event_request_alternative_suggestions:
       requires_confirmation: true
       warning_message: "The event signature has IncludeSender set to true. For codeunits, consider using 'this' keyword instead. For all object types, a detailed justification is required."
       guidance: |
+        Apply this rule only when the requester asks to set IncludeSender=true. Do not apply it when IncludeSender=true is already part of the existing event.
+
         This rule has two behaviors depending on the object type:
 
         ---

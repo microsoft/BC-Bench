@@ -8,7 +8,7 @@ comment_templates:
   # 1. Follow the template EXACTLY - do not add extra sections
   # 2. NEVER add "Analysis Summary", "Team Assignment", or similar metadata
   # 3. NEVER add "Correction Required" or explain differences from author's proposal
-  # 4. NEVER add footer like "This issue has been analyzed by Argus Agent"
+  # 4. NEVER add a footer naming the triage agent
   # 5. NEVER add "Thank you" messages or greetings
   # 6. Show ONLY what will be implemented - no explanations of WHY
   # 7. If request passed validation, just show the final implementation code
@@ -123,6 +123,22 @@ comment_templates:
       ---
 
       **File:** `{filename_only}`
+
+  approved_requester_implementation:
+    description: "Posted when a requester committed to implementing an approved extensibility request"
+    applies_to: ["all"]
+    template: |
+      ✅ **Analysis complete - ready for further processing**
+
+      ---
+
+      This request is approved for further processing. You can proceed with the implementation and open the corresponding pull request.
+
+      Please link this issue in the pull request description using `Fixes #{issue_number}` so it is tracked and closed when the pull request is merged.
+
+    placeholders:
+      issue_number:
+        description: "GitHub issue number without the # prefix"
 
   # =============================================================================
   # ALREADY IMPLEMENTED COMMENTS
@@ -428,19 +444,22 @@ comment_templates:
       If you still need this request, please create a new issue and include the required updated information.
 
   # =============================================================================
-  # BCAPPS REDIRECT COMMENT
+  # REQUESTER-CONFIRMED CLOSURE COMMENT
   # =============================================================================
 
-  bcapps:
-    description: "Posted when requested code lives in the BCApps contribution repo"
+  requester_confirmed_closure:
+    description: "Posted when the requester accepts an existing solution or confirms that the request is withdrawn or cancelled"
     applies_to: ["all"]
     template: |
-      Hi @{author_name},
+      Thanks for confirming!
 
-      Thank you for your extensibility request.
+      {closure_explanation}
 
-      The code you'd like to change is part of the **BCApps** repository. To have this change made, it needs to go through a contribution.
-      Please refer to the contribution guide for instructions on how to proceed: https://github.com/microsoft/BCApps/blob/main/CONTRIBUTING.md
+      Closing this issue because no additional extensibility change is needed.
+
+    placeholders:
+      closure_explanation:
+        description: "The actual closure reason. For an accepted solution, include its name and any known signature and file details. For a withdrawal or cancellation, acknowledge it directly."
 
 # =============================================================================
 # FORMATTING RULES
