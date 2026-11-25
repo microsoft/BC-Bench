@@ -1,0 +1,193 @@
+event_request_ishandled_alternative_suggestions:
+  description: "Alternative suggestion rules specific to event-request/ishandled subtype - check if existing functionality can satisfy the request"
+
+  rules:
+    - id: ishandled_replaceable_with_regular_event
+      applies_to: ["event-request-ishandled"]
+      severity: "suggestion"
+      description: "Suggest a regular after-event when base logic can safely run and its result can be adjusted"
+      action: "suggest_alternative"
+      requires_author_confirmation: true
+      guidance: |
+        When an IsHandled event is requested only to replace a result produced by small, contained
+        standard logic, suggest a regular event placed **after** that logic. Let the base logic run,
+        assign its result to a variable, and pass that variable by `var` so subscribers can adjust or
+        replace the result.
+
+        **Rationale:**
+        - IsHandled events allow subscribers to completely skip the base logic, which is a strong override
+        - For simple logic, it is better to let the base code run and allow subscribers to adjust the result afterward
+        - Regular after-events are simpler to subscribe to and less prone to misuse
+        - Avoids unnecessary complexity for extension developers
+
+        **Detection — when this suggestion applies:**
+        - The proposed `if not IsHandled then` block contains a small, cohesive calculation or lookup
+        - The base logic may include lightweight record reads such as `Get`, filter setup, `CalcFields`,
+          `CalcSums`, and calls used to calculate the result
+        - Executing the base logic first is acceptable for the author's scenario
+        - The logic has no writes, commits, external calls, or other side effects that must be prevented
+        - The result or output is available after the logic and can be passed by `var` to a regular event
+        - The author needs to adjust or replace the result, not suppress validation errors or prevent
+          the standard logic from executing
+
+        **Do not apply this suggestion when:**
+        - The subscriber must prevent a database write, commit, external call, or other side effect
+        - The subscriber must avoid an error or validation raised by the standard logic
+        - Running the base logic has a material performance cost that the subscriber must avoid
+        - The required behavior cannot be achieved by changing a result or output after the logic runs
+
+        **Suggested implementation shape:**
+        1. Execute the existing standard logic.
+        2. Store the calculated return value or output in a named variable.
+        3. Raise an `OnAfter...` event and pass that value as a `var` parameter.
+        4. Return or continue with the potentially adjusted value.
+
+        **Example 1 — IsHandled requested:**
+        ```al
+        local procedure GetFromBinContentQty(LocCode: Code[10]; FromBinCode: Code[20]; ItemNo: Code[20];
+            Variant: Code[20]; UoMCode: Code[10]; WhseItemTrackingLine: Record "Whse. Item Tracking Line"): Decimal
+        var
+            BinContent: Record "Bin Content";
+            Result: Decimal;
+            IsHandled: Boolean;
+        begin
+            IsHandled := false;
+            OnBeforeGetFromBinContentQty(LocCode, FromBinCode, ItemNo, Variant, UoMCode, WhseItemTrackingLine, Result, IsHandled);
+            if not IsHandled then begin
+                BinContent.Get(LocCode, FromBinCode, ItemNo, Variant, UoMCode);
+                BinContent.SetTrackingFilterFromWhseItemTrackingLine(WhseItemTrackingLine);
+                BinContent.CalcFields("Quantity (Base)");
+                Result := BinContent."Quantity (Base)";
+            end;
+            exit(Result);
+        end;
+        ```
+
+        **Suggested alternative — regular after-event:**
+        ```al
+        local procedure GetFromBinContentQty(LocCode: Code[10]; FromBinCode: Code[20]; ItemNo: Code[20];
+            Variant: Code[20]; UoMCode: Code[10]; WhseItemTrackingLine: Record "Whse. Item Tracking Line"): Decimal
+        var
+            BinContent: Record "Bin Content";
+            Result: Decimal;
+        begin
+            BinContent.Get(LocCode, FromBinCode, ItemNo, Variant, UoMCode);
+            BinContent.SetTrackingFilterFromWhseItemTrackingLine(WhseItemTrackingLine);
+            BinContent.CalcFields("Quantity (Base)");
+            Result := BinContent."Quantity (Base)";
+            OnAfterGetFromBinContentQty(LocCode, FromBinCode, ItemNo, Variant, UoMCode, WhseItemTrackingLine, Result);
+            exit(Result);
+        end;
+        ```
+
+        **Example 2 — IsHandled requested:**
+        ```al
+        local procedure UpdateToQtyToPick(QtyAvailableBase: Decimal; ToQtyPerUOM: Decimal;
+            var ToQtyToPick: Decimal; var ToQtyToPickBase: Decimal;
+            TotalQtyToPick: Decimal; TotalQtyToPickBase: Decimal)
+        var
+            IsHandled: Boolean;
+        begin
+            IsHandled := false;
+            OnUpdateToQtyToPickOnBeforeSetToQtyToPickBase(QtyAvailableBase, ToQtyPerUOM, ToQtyToPick,
+                ToQtyToPickBase, TotalQtyToPick, TotalQtyToPickBase, IsHandled);
+            if not IsHandled then begin
+                ToQtyToPickBase := QtyAvailableBase;
+                if ToQtyToPickBase > TotalQtyToPickBase then
+                    ToQtyToPickBase := TotalQtyToPickBase;
+            end;
+            ToQtyToPick := Round(ToQtyToPickBase / ToQtyPerUOM, UnitOfMeasureManagement.QtyRndPrecision());
+        end;
+        ```
+
+        **Suggested alternative — regular after-event:**
+        ```al
+        local procedure UpdateToQtyToPick(QtyAvailableBase: Decimal; ToQtyPerUOM: Decimal;
+            var ToQtyToPick: Decimal; var ToQtyToPickBase: Decimal;
+            TotalQtyToPick: Decimal; TotalQtyToPickBase: Decimal)
+        begin
+            ToQtyToPickBase := QtyAvailableBase;
+            if ToQtyToPickBase > TotalQtyToPickBase then
+                ToQtyToPickBase := TotalQtyToPickBase;
+
+            OnUpdateToQtyToPickOnAfterCalculateToQtyToPickBase(QtyAvailableBase, ToQtyPerUOM,
+                ToQtyToPick, ToQtyToPickBase, TotalQtyToPick, TotalQtyToPickBase);
+
+            ToQtyToPick := Round(ToQtyToPickBase / ToQtyPerUOM, UnitOfMeasureManagement.QtyRndPrecision());
+        end;
+        ```
+
+        **Example 3 — IsHandled requested before exit:**
+        ```al
+        WarehouseActivityLine.SetTrackingFilterFromWhseItemTrackingSetupIfNotBlank(WhseItemTrackingSetup);
+        OnCalcQtyAssignedToPickOnAfterSetFilters(WarehouseActivityLine, WhseItemTrackingSetup);
+        WarehouseActivityLine.CalcSums(WarehouseActivityLine."Qty. Outstanding (Base)");
+
+        IsHandled := false;
+        OnCalcQtyAssignedToPickOnBeforeExit(WarehouseActivityLine, WhseItemTrackingSetup, QtyAssignedToPick, IsHandled);
+        if IsHandled then
+            exit(QtyAssignedToPick);
+
+        exit(WarehouseActivityLine."Qty. Outstanding (Base)" + CalcBreakbulkOutstdQty(WarehouseActivityLine, WhseItemTrackingSetup));
+        ```
+
+        **Suggested alternative — regular after-event on the result:**
+        ```al
+        OnCalcQtyAssignedToPickOnAfterSetFilters(WarehouseActivityLine, WhseItemTrackingSetup);
+        WarehouseActivityLine.CalcSums(WarehouseActivityLine."Qty. Outstanding (Base)");
+
+        Result := WarehouseActivityLine."Qty. Outstanding (Base)" + CalcBreakbulkOutstdQty(WarehouseActivityLine, WhseItemTrackingSetup);
+        OnAfterCalcQtyAssignedToPick(WarehouseActivityLine, WhseItemTrackingSetup, Result);
+        exit(Result);
+        ```
+
+        **Key principle:** Let the base logic run, then allow subscribers to adjust the result via a
+        regular event — rather than letting subscribers skip the base logic entirely.
+
+        **Author confirmation required:**
+        Present the regular-event implementation to the author and ask whether adjusting the result
+        after the standard logic is sufficient.
+
+        - If the author agrees, proceed with the regular event.
+        - If the author disagrees, require a concrete explanation of why the standard logic must not
+          execute. The explanation should identify the error, side effect, performance cost, or other
+          behavior that cannot be addressed by the regular event.
+        - Do not approve the IsHandled design until that explanation is provided and evaluated.
+
+    - id: ishandled_large_code_block_extraction
+      applies_to: ["event-request/ishandled"]
+      severity: "warning"
+      description: "Large code blocks with IsHandled should be extracted to separate procedures"
+      action: "suggest_alternative"
+      rule: "When adding an IsHandled event that surrounds a larger block of code, consider extracting that code into a separate procedure and adding an OnBefore[ProcedureName] event with IsHandled."
+      guidance: |
+        **Recommended Practice:** When an IsHandled event would wrap a significant block of code (typically 5+ lines with related logic), the agent should evaluate whether extracting that code into a separate procedure would be a better approach.
+
+        **Rationale:**
+        - Improves code organization and readability
+        - Creates a clear, named operation that can be bypassed
+        - Makes the code's intent more explicit
+        - Easier for subscribers to understand what they're bypassing
+        - Better maintainability and testability
+        - Follows single responsibility principle
+
+        **Agent Analysis Required:**
+        Before suggesting extraction, the agent MUST verify:
+        1. **Code Cohesion:** Are the values/variables in the code block logically connected?
+        2. **Single Purpose:** Does the code block perform a single, identifiable operation?
+        3. **Meaningful Name:** Can a descriptive procedure name be assigned that clearly describes the operation?
+        4. **Parameter Set:** Can the required inputs/outputs be clearly defined as procedure parameters?
+
+        **When NOT to Extract:**
+        - Code block is very small (1-3 lines)
+        - Variables in the block are not logically related
+        - No meaningful procedure name can be derived
+        - Extraction would require passing too many unrelated parameters
+
+        **Decision Criteria for Agent:**
+        | Factor | Extract | Keep Inline |
+        |--------|---------|-------------|
+        | Lines of code | 5+ lines | 1-4 lines |
+        | Variables related | Yes, single purpose | No, mixed concerns |
+        | Meaningful name possible | Yes | No clear name |
+        | Parameter count | Reasonable (1-5) | Too many (6+) |

@@ -29,9 +29,9 @@ class ExtRequestImplementEntry(RepoGroundedEntry):
 
 
 type ManagedLabel = Literal[
-    "Finance",
-    "SCM",
-    "Integration",
+    "Team: Finance",
+    "Team: SCM",
+    "Team: Integrations",
     "event-request",
     "request-for-external",
     "enum-request",

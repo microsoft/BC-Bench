@@ -511,7 +511,7 @@ def create_ext_triage_entry(
         expected=expected
         if expected is not None
         else [
-            {"text": "The labels_to_set is exactly: SCM, event-request.", "level": "critical"},
+            {"text": "The labels_to_set is exactly: Team: SCM, event-request.", "level": "critical"},
             {"text": "The issue_state is open.", "level": "critical"},
             {"text": "The advisory comment confirms the event request is valid and will be routed to the SCM team.", "level": "expected"},
         ],

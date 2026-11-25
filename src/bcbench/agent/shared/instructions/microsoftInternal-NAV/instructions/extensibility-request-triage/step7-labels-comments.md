@@ -20,9 +20,14 @@ JSON only — nothing is posted, labelled, or closed on any server. A human revi
 | `FailureLabel: "agent-not-processable"` | `["agent-not-processable"]` | (none) | open |
 | Auto-reject (blocker) | `[]` | `rejected_request` | closed |
 | Already implemented | `[]` | `already_implemented` | closed |
-| `FailureLabel: "close"` and reason is stale/inactive/withdrawn | `["missing-info"]` | `stale_issue_closure` | closed |
+| `FailureLabel: "close"` and reason is stale/inactive | `["missing-info"]` | `stale_issue_closure` | closed |
+| `FailureLabel: "close"` and requester confirmed no new change is needed (accepted an existing solution or alternative, withdrew, or cancelled) | `[]` | `requester_confirmed_closure` | closed |
 | `FailureLabel: "close"` and any other rejection reason | `[]` | `rejected_request` | closed |
 | `FailureLabel: "do-nothing"` | (none) | (none) | (no change) |
+
+`TEAM_LABEL` already holds the fully namespaced label (e.g. `Team: Finance`). Emit it
+verbatim — do not strip or re-add the `Team: ` prefix. Set `labels_to_set` exactly as defined
+by the matching decision-table row; do not add, infer, rename, or substitute labels.
 
 Fill the chosen template from `TRIAGE_ROOT/comment-templates/comment_templates.yaml`
 (`TRIAGE_ROOT = .github/instructions/extensibility-request-triage`) using the workflow state
@@ -37,7 +42,7 @@ Produce **exactly** this object (the `Final_Output` the evaluation reads back):
 ```json
 {
   "Final_Output": {
-    "labels_to_set": ["Finance", "event-request"],
+    "labels_to_set": ["Team: Finance", "event-request"],
     "comment_to_post": "Hi, ...",
     "request_state": "open",
     "failureStep": "",

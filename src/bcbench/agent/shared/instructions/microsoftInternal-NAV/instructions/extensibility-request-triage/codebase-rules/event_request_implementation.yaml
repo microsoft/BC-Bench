@@ -157,28 +157,42 @@ event_request_implementation:
 
     - id: multiple_calls_same_event_location
       applies_to: ["event-request"]
-      severity: "warning"
-      description: "Multiple event calls requested for the same location require separate event publishers"
+      severity: "notice"
+      description: "The same conceptual hook at distinct action points requires separate event publishers"
       action: "internal_warning"
-      rule: "When a request asks for multiple event calls at the same location (e.g., same procedure/trigger), each call MUST have its own separate event publisher with a unique name."
+      rule: "When one conceptual hook is requested at multiple distinct action points in a procedure or trigger, each action point MUST have its own event publisher with a unique placement-based name and its own call at the exact requested anchor."
       guidance: |
-        **Mandatory Rule:** If a request includes multiple calls for the same event location, each call must be implemented as a separate event publisher with a distinct name.
+        **Mandatory Rule:** If the same subscriber context is requested at multiple distinct action
+        points, create a separate event for each point. Do not publish one event from semantically
+        different locations or move the calls to one shared location.
 
-        **Rationale:**
-        - Each event should have a single, clear purpose
-        - Separate events allow subscribers to choose which specific event to handle
-        - Improves code readability and maintainability
-        - Allows for better performance optimization (subscribers only listen to events they need)
-        - Provides clearer semantics for what each event represents
+        **Required Behavior:**
+        - Treat operations such as `Insert`, `Modify`, `Delete`, and `Validate` as distinct action points.
+        - Raise each event at its exact requested anchor.
+        - Name each event from its containing procedure or trigger, timing, and operation.
+        - Keep parameter contracts and publisher attributes consistent when both points need the
+          same subscriber context.
 
-        **Naming Convention for Separate Events:**
-        - Use descriptive suffixes that indicate the specific purpose
-        - Follow pattern: `On[Before/After][Operation][SpecificPurpose]`
-        - Examples:
-          - `OnBeforePostValidateCustomer`
-          - `OnBeforePostCheckInventory`
-          - `OnAfterInsertUpdateDimensions`
-          - `OnAfterInsertNotifyWarehouse`
+        **Example:**
+        ```al
+        if TempSalesLine.IsTemporaryUpdate then begin
+            TempSalesLine.Modify();
+            OnCreateLinesOnAfterModifyTempSalesLine(TempSalesLine, SalesHeader);
+        end else begin
+            TempSalesLine.Insert();
+            OnCreateLinesOnAfterInsertTempSalesLine(TempSalesLine, SalesHeader);
+        end;
+
+        [IntegrationEvent(false, false)]
+        local procedure OnCreateLinesOnAfterModifyTempSalesLine(var TempSalesLine: Record "Sales Line" temporary; SalesHeader: Record "Sales Header")
+        begin
+        end;
+
+        [IntegrationEvent(false, false)]
+        local procedure OnCreateLinesOnAfterInsertTempSalesLine(var TempSalesLine: Record "Sales Line" temporary; SalesHeader: Record "Sales Header")
+        begin
+        end;
+        ```
 
     - id: event_naming_convention
       applies_to: ["event-request"]

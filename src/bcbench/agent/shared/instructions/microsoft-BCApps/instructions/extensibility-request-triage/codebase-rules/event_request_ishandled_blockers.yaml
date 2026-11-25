@@ -1,0 +1,71 @@
+event_request_ishandled_blockers:
+  description: "Blocker rules specific to event-request/ishandled subtype - auto-reject scenarios for IsHandled events"
+
+  rules:
+    - id: ishandled_in_ondelete_trigger
+      applies_to: ["event-request/ishandled"]
+      severity: "blocking"
+      description: "IsHandled event at the beginning of OnDelete trigger"
+      action: "auto_reject"
+      warning_message: "IsHandled events at the beginning of OnDelete triggers are not allowed. Bypassing delete operations entirely can cause data inconsistency and orphaned records."
+      guidance: |
+        Instead of using an IsHandled event at the beginning of the OnDelete trigger, consider these alternatives:
+
+        **Recommended approaches:**
+        1. Use standard OnBeforeDelete event (without IsHandled) to add custom logic before deletion
+        2. Use OnAfterDelete event to handle post-deletion operations
+        3. If you need to prevent deletion conditionally, use TestField or Error statements before the delete operation
+
+        This approach:
+        - ✅ Allows extensions to add logic before/after deletion
+        - ✅ Maintains data consistency
+        - ✅ Prevents orphaned records
+        - ✅ Follows standard extensibility patterns
+
+    - id: ishandled_modification_to_existing_event
+      applies_to: ["event-request/ishandled"]
+      severity: "blocking"
+      description: "Request to add IsHandled pattern to an existing event"
+      action: "auto_reject"
+      warning_message: "Adding IsHandled pattern to existing events is not allowed. This fundamentally changes the purpose of the event and can break existing subscribers."
+      guidance: |
+        **⛔ BLOCKER: Cannot Add IsHandled to Existing Events**
+
+        When an author requests to add IsHandled functionality to an event that already exists in the codebase, this must be **automatically rejected**.
+
+        **Why This Is Not Allowed:** Changes the fundamental purpose and behavior of the existing event
+
+        **Detection Criteria:**
+        The agent must check if:
+        1. An event with the requested name already exists in the codebase
+        2. The request is to add IsHandled pattern to this existing event
+        3. The event doesn't currently support IsHandled functionality
+
+        **Agent Response Template:**
+        ```
+        ⛔ **Request Rejected: Cannot Add IsHandled to Existing Event**
+
+        The event '[EventName]' already exists without IsHandled functionality. Adding IsHandled to an existing event is not allowed as it changes the event's purpose.
+
+        **Recommended Alternatives:**
+        1. **Add a NEW event** with IsHandled before or after the existing event
+           - Example: OnBeforeDoSomething() with IsHandled, followed by the existing OnDoSomething()
+
+        2. **Use alternatives to IsHandled pattern:**
+           - Add parameters to influence behavior without bypassing
+           - Use conditional event triggering
+           - Refactor code to be more extensible
+
+        3. **Create a separate request** for one of the above alternatives
+
+        **Example:**
+        If you want to allow bypassing logic around the existing event, create a NEW event:
+        - Existing: `OnAfterCalculateTotal()`
+        - New: `OnBeforeCalculateTotal(var IsHandled: Boolean)` (raised before existing event)
+        ```
+
+        **Important Notes:**
+        - Even if the change seems "minor", it's still not allowed
+        - This rule applies to ALL existing events, regardless of age or usage
+        - The author should create a NEW request with an alternative approach
+        - Point the author to alternative suggestion rules for guidance on better patterns

@@ -1,0 +1,51 @@
+# Enum Request Specific Requirements Configuration
+# Defines ADDITIONAL requirements specific to enum-request type issues
+# NOTE: General requirements (title, description, meaningful justification) are defined in ea_config_general_requirements.yaml
+# Version: 1.0
+
+enum_request:
+  enabled: true
+  description: "Requests to add new enum values or create new enums - ADDITIONAL requirements beyond general ones"
+  detection_keywords: ["enum", "option", "option value", "enumextension"]
+  max_iterations: 3
+
+  subtypes:
+    new_enum:
+      enabled: true
+      description: "Request to create entirely new enum"
+
+      additional_requirements:
+        - id: enum_definition
+          name: "Enum Definition"
+          description: "Complete enum definition with all proposed values and captions"
+          mandatory: true
+          validation_hints: ["enum", "definition", "values", "caption", "ordinal"]
+
+        - id: usage_context
+          name: "Usage Context"
+          description: "Where and how the enum will be used (tables, pages, reports)"
+          mandatory: true
+          validation_hints: ["usage", "context", "table", "field", "page"]
+
+    extend_enum:
+      enabled: true
+      description: "Request to add values to existing enum"
+
+      additional_requirements:
+        - id: target_enum
+          name: "Target Enum"
+          description: "Exact enum name/ID and proposed new values with captions"
+          mandatory: true
+          validation_hints: ["enum", "name", "id", "value", "caption"]
+
+        - id: compatibility_check
+          name: "Compatibility Check"
+          description: "Confirmation that new values won't break existing functionality"
+          mandatory: true
+          validation_hints: ["compatibility", "existing", "functionality", "break", "impact"]
+
+# Validation Messages
+validation_messages:
+  insufficient_detail: "The provided information is insufficient for processing. Please add:"
+  #requirement_reference: "For more details, see our Extensible Enums documentation: {link}"
+  resubmit_after_update: "Please update the issue with the missing details. We'll automatically re-analyze once updated."
