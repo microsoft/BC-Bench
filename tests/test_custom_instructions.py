@@ -33,7 +33,7 @@ def test_every_category_entry_class_names_a_customization_profile():
 
 
 @pytest.mark.parametrize("repo", ["microsoftInternal/NAV", "microsoft/BCApps"])
-def test_triage_profile_installs_agent_and_referenced_files(repo: str, tmp_path: Path):
+def test_triage_entries_install_shared_agent_and_referenced_files(repo: str, tmp_path: Path):
     entry = ExtRequestTriageEntry.model_construct(repo=repo)
     profile_dir = instructions_profile_dir(entry.customization_profile)
     target_dir = tmp_path / ".github"

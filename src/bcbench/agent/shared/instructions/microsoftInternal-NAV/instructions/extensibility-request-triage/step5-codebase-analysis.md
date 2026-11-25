@@ -31,9 +31,11 @@ collect the following files in order, skipping any that do not exist, and assemb
 
 3. **Locate Each Target File (local search):** For each object in `OBJECT_LIST`, find its source file path under `CODE_ROOT`.
 
+  **Detect the source layout:** Check for `App\Layers` and `src\Layers` under `CODE_ROOT` and use whichever exists for layered source. If both exist, use the directory containing the requested target. Do not infer the layout from the shared profile's name or NAV-specific examples elsewhere. Targets can also live outside the layers directories, so keep the scoped filename-search fallback under `CODE_ROOT`.
+
   **Search order (keep searches scoped and cheap):**
   1. Derive `{ObjectNameCamelCase}.{ObjectType}.al` from the object name (remove spaces and special characters, apply CamelCase, append the object-type suffix — e.g. "Sales-Post" (Codeunit) → `SalesPost.Codeunit.al`, "Item Ledger Entry" (Table) → `ItemLedgerEntry.Table.al`).
-  2. `glob` by filename first, e.g. `glob("<CODE_ROOT>/**/SalesPost.Codeunit.al")`. Prefer matches under the W1 layer.
+  2. `glob` by filename first, e.g. `glob("<CODE_ROOT>/**/SalesPost.Codeunit.al")`. Prefer the explicitly requested country/localization; otherwise prefer matches under the W1 layer in the available source layout.
   3. If glob fails, run a single targeted `grep` by object name (NOT numeric ID) for the object declaration, e.g. `grep("codeunit .* \"Sales-Post\"", "<CODE_ROOT>/**/*.al")`.
   4. Do **not** search by numeric ID and do **not** run broad unscoped `**/*.al` content scans — these are slow. If the target still cannot be identified after glob + one grep, return `agent-not-processable` and stop.
 
@@ -67,6 +69,8 @@ collect the following files in order, skipping any that do not exist, and assemb
 **Success constraint:** Set `Success` to `true` only when the analysis is complete and no question, confirmation, clarification, or approval is required from the requester. If any requester response is needed, set `Success` to `false` and return the appropriate `FailureLabel` and `FailureReason`.
 
 **Return JSON:**
+Use the actual repository-relative `filePath` found in the checkout.
+
 ```json
 {
   "Success": true,
@@ -75,7 +79,7 @@ collect the following files in order, skipping any that do not exist, and assemb
       "objectType": "Codeunit",
       "objectName": "Sales-Post",
       "namespace": "Microsoft.Sales.Posting",
-      "filePath": "App/Layers/W1/BaseApp/Sales/Posting/SalesPost.Codeunit.al"
+      "filePath": "<actual repository-relative AL file path>"
     }
   ],
   "SUGGESTED_IMPLEMENTATION": "...",

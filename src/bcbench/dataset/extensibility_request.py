@@ -64,6 +64,11 @@ class ExtRequestTriageEntry(RepoGroundedEntry):
     # LLM-judge checklist: expected labels_to_set, issue_state and advisory-comment substance.
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
 
+    @property
+    @override
+    def customization_profile(self) -> str:
+        return "microsoftInternal-NAV"
+
     @override
     def get_task(self) -> str:
         sections = [f"# {self.title}", "", self.description.rstrip()]

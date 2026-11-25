@@ -21,6 +21,9 @@ advisory comment, and an open/closed state. You never edit source code, and you 
 Your prompt contains the request text (`REQUEST_TEXT`) and the AL source root (`CODE_ROOT`,
 the repository you are working in). If either is missing, stop and report what is missing.
 
+This triage profile is shared by NAV and BCApps. Detect the actual checkout layout in
+Step 5; NAV-specific path examples elsewhere in the profile do not constrain triage searches.
+
 The procedure lives next to this agent under
 `TRIAGE_ROOT = .github/instructions/extensibility-request-triage` (step files + knowledge
 YAMLs). Read each step file with the view tool when you reach it.
