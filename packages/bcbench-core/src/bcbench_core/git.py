@@ -106,11 +106,17 @@ def commit_changes(repo_path: Path, message: str, allow_empty: bool = False, no_
     logger.info("Changes committed")
 
 
+def _untracked_files(repo_path: Path) -> set[str]:
+    # Without exclude rules `--others` lists ignored files too; surrogateescape keeps any path's bytes
+    listed = subprocess.run(["git", "ls-files", "--others", "-z"], cwd=repo_path, capture_output=True, encoding="utf-8", errors="surrogateescape", check=True).stdout
+    return set(filter(None, listed.split("\0")))
+
+
 def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch", *, intent_to_add: bool = False) -> None:
     """Apply `patch_content` to the working tree.
 
     Args:
-        intent_to_add: Mark the files the patch creates as intent-to-add, ignored ones included, so `git diff HEAD` shows them.
+        intent_to_add: Mark the files the patch creates, ignored ones and rename targets included, as intent-to-add so `git diff HEAD` shows them.
     """
     logger.info(f"Applying {patch_name}")
 
@@ -119,8 +125,9 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch", 
         patch_file = f.name
 
     try:
+        untracked = _untracked_files(repo_path) if intent_to_add else set()
         subprocess.run(
-            ["git", "apply", "--whitespace=nowarn", "--ignore-whitespace", *(("--intent-to-add",) if intent_to_add else ()), patch_file],
+            ["git", "apply", "--whitespace=nowarn", "--ignore-whitespace", patch_file],
             cwd=repo_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -128,6 +135,18 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch", 
             text=True,
             check=True,
         )
+        # Not `git apply --intent-to-add`: before git 2.51 it drops every other entry from the index
+        if intent_to_add and (created := sorted(_untracked_files(repo_path) - untracked)):
+            subprocess.run(
+                ["git", "--literal-pathspecs", "add", "--intent-to-add", "--force", "--pathspec-from-file=-", "--pathspec-file-nul"],
+                cwd=repo_path,
+                input="\0".join(created),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                encoding="utf-8",
+                errors="surrogateescape",
+                check=True,
+            )
 
         logger.info(f"{patch_name.capitalize()} applied successfully")
     except subprocess.CalledProcessError as e:

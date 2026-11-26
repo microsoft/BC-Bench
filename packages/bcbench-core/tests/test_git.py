@@ -127,6 +127,25 @@ class TestApplyPatch:
         changed = subprocess.run(["git", "diff", "HEAD", "--name-status"], cwd=tmp_path, capture_output=True, text=True, check=True).stdout.splitlines()
         assert changed == ["A\tNew.Codeunit.al", "M\tfile.al", "A\tsettings.local.json"]
 
+    def test_intent_to_add_shows_a_rename_and_keeps_the_files_the_patch_leaves_alone(self, tmp_path: Path):
+        init_repo(tmp_path)
+        (tmp_path / "Old.Codeunit.al").write_text("codeunit 50100 Old {}\n" * 5, newline="\n")
+        (tmp_path / "Untouched.Codeunit.al").write_text("codeunit 50101 Untouched {}\n", newline="\n")
+        commit_changes(tmp_path, "initial")
+        # A target name that, read as a glob, would also match the untracked N.Codeunit.al
+        subprocess.run(["git", "mv", "Old.Codeunit.al", "[New].Codeunit.al"], cwd=tmp_path, check=True, capture_output=True)
+        diff = subprocess.run(["git", "diff", "--cached", "-M"], cwd=tmp_path, capture_output=True, text=True, check=True).stdout
+        subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "clean", "-fdx"], cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / "N.Codeunit.al").write_text("not part of the patch\n", newline="\n")
+
+        apply_patch(tmp_path, diff, "review patch", intent_to_add=True)
+
+        changed = subprocess.run(["git", "diff", "HEAD", "-M", "--name-status"], cwd=tmp_path, capture_output=True, text=True, check=True).stdout.splitlines()
+        assert changed == ["R100\tOld.Codeunit.al\t[New].Codeunit.al"]
+        tracked = subprocess.run(["git", "ls-files"], cwd=tmp_path, capture_output=True, text=True, check=True).stdout.splitlines()
+        assert tracked == ["Old.Codeunit.al", "Untouched.Codeunit.al", "[New].Codeunit.al"]
+
 
 class TestCleanRepo:
     def test_discards_modified_staged_and_untracked_files(self, tmp_path):
