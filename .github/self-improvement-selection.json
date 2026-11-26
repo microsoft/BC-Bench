@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "26365d6a41a96fac41df9dcc8339cb71241fcb1f",
+  "datasetHash": "40F87789093B7D383AE8F4406D8057AC4F15DFD7E86D72D1D3AE9FF599F1692E",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/10252#discussion_r3873927635"
+  ],
+  "entryIds": [
+    "synthetic__upgrade-alwayslogtable-removal-01"
+  ],
+  "newEntryIds": [
+    "synthetic__upgrade-alwayslogtable-removal-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__upgrade-alwayslogtable-removal-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/10252#discussion_r3873927635",
+          "purpose": "false_positive_guard",
+          "file": "src/Layers/W1/BaseApp/Finance/FinancialReports/FinancialReportAuditing.Codeunit.al",
+          "lineStart": 91,
+          "lineEnd": 104,
+          "rationale": "The review bot flagged removal of four table IDs from the OnAfterIsAlwaysLoggedTable allow-list as needing an upgrade tag, and the maintainer rejected this with a THUMBS_DOWN, replying that these are dynamic checks and do not require upgrade. Confirmed against Change Log Management's IsAlwaysLoggedTable: it recomputes the always-logged decision on every insert/modify/delete/rename call and never persists an AlwaysLogTable flag or setup record, so trimming this hard-coded in-code list changes only future auditing decisions, not stored per-company data or schema, and needs no migration or upgrade tag. expected_comments is intentionally empty so no upgrade-migration finding is required in this table-ID range; this is a false-positive guard by omission, not a proof that every possible finding on this hunk is wrong, and it does not assert any severity or recommendation repair beyond the specific upgrade-tag claim that was rejected."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "B30DC6AFD802F03B51CB47B7B075DDE5E158DB1D059894033B1BE6CCE2DFC70D",
+      "instanceId": "synthetic__upgrade-alwayslogtable-removal-01"
+    }
+  ]
+}
