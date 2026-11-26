@@ -106,7 +106,12 @@ def commit_changes(repo_path: Path, message: str, allow_empty: bool = False, no_
     logger.info("Changes committed")
 
 
-def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") -> None:
+def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch", *, intent_to_add: bool = False) -> None:
+    """Apply `patch_content` to the working tree.
+
+    Args:
+        intent_to_add: Mark the files the patch creates as intent-to-add, ignored ones included, so `git diff HEAD` shows them.
+    """
     logger.info(f"Applying {patch_name}")
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False, encoding="utf-8") as f:
@@ -115,7 +120,7 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
 
     try:
         subprocess.run(
-            ["git", "apply", "--whitespace=nowarn", "--ignore-whitespace", patch_file],
+            ["git", "apply", "--whitespace=nowarn", "--ignore-whitespace", *(("--intent-to-add",) if intent_to_add else ()), patch_file],
             cwd=repo_path,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
