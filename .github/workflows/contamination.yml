@@ -57,6 +57,7 @@ jobs:
     if: needs.get-entries.outputs.entries != '[]'
     permissions:
       contents: read
+      id-token: write
       copilot-requests: write
     strategy:
       fail-fast: false

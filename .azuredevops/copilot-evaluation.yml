@@ -89,6 +89,6 @@ extends:
           max_parallel: ${{ parameters.max_parallel }}
           # Keep in step with .github/actions/install-agent-harnesses/action.yml.
           copilot_version: 1.0.82
-          # Must match EvaluationCategory.requires_container and requires_repo (tests/test_azure_pipelines.py).
+          # Must match EvaluationCategory.requires_container and requires_repo.
           container: ${{ in(parameters.category, 'bug-fix', 'test-generation', 'data-query') }}
           skip_repo: ${{ in(parameters.category, 'data-query') }}
