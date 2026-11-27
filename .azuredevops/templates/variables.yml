@@ -1,0 +1,37 @@
+variables:
+# Shared with the BC-Evals eval pipelines: Linux runs orchestration and remote-repo categories,
+# Windows runs the categories that need a BC container.
+- name: eval_pool_linux
+  value: d365bc-agentpool-BC-Evals-Linux
+  readonly: true
+- name: eval_pool_windows
+  value: d365bc-agentpool-BC-Evals-Win
+  readonly: true
+# An exact release: Windows jobs install it from DynamicsSMBPackages, which needs one.
+- name: python_version
+  value: 3.13.17
+  readonly: true
+- name: uv_version
+  value: 0.12.19
+  readonly: true
+- name: powershell_version
+  value: 7.6.6
+  readonly: true
+- name: nuget_feed
+  value: https://pkgs.dev.azure.com/dynamicssmb2/_packaging/DynamicsSMBPackages/nuget/v3/index.json
+  readonly: true
+- name: python_feed
+  value: BC_PythonFeed
+  readonly: true
+# bcbench reads the run ID from GITHUB_RUN_ID (src/bcbench/cli_options.py).
+- name: GITHUB_RUN_ID
+  value: $(Build.BuildId)
+  readonly: true
+# The pool VMs' managed identity has no access to the eval resources; bc-eval must use the Azure CLI that AzureCLI@2 signs in.
+- name: AZURE_TOKEN_CREDENTIALS
+  value: AzureCliCredential
+  readonly: true
+- name: ResultsDir
+  value: $(Build.SourcesDirectory)/evaluation_results
+- name: RepoPath
+  value: $(Agent.TempDirectory)/testbed

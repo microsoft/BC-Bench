@@ -1,0 +1,94 @@
+# Evaluates GitHub Copilot CLI on one BC-Bench category: one entry per parallel job, then one job summarizes the run,
+# uploads its scores to Kusto through bc-eval, and pushes a leaderboard/<category>/<build ID> branch to merge.
+# Categories that need a BC container run on the Windows pool, the others on the Linux pool (shared with BC-Evals).
+trigger: none
+pr: none
+
+parameters:
+- name: category
+  displayName: Category
+  type: string
+  default: bug-fix
+  values:
+  - bug-fix
+  - test-generation
+  - code-review
+  - data-query
+  - extensibility-request-advisor
+  - extensibility-request-implement
+  - extensibility-request-triage
+- name: model
+  displayName: Copilot model
+  type: string
+  default: gpt-5.6-luna
+  values:
+  - claude-sonnet-5
+  - claude-opus-5
+  - gpt-5.6-sol
+  - gpt-5.6-terra
+  - gpt-5.6-luna
+  - gpt-5.3-codex
+  - mai-code-1.1-flash
+  - gemini-3.7-flash
+- name: test_run
+  displayName: Test run (a few random entries; nothing is published)
+  type: boolean
+  default: true
+- name: al_mcp
+  displayName: Enable AL MCP server
+  type: boolean
+  default: false
+- name: al_lsp
+  displayName: Enable AL LSP server
+  type: boolean
+  default: false
+- name: bc_mcp
+  displayName: Enable the Business Central MCP server
+  type: boolean
+  default: false
+- name: update_leaderboard
+  displayName: Push a leaderboard branch (full runs only)
+  type: boolean
+  default: true
+- name: max_parallel
+  displayName: Maximum entries running at the same time
+  type: number
+  default: 20
+
+variables:
+- template: /.azuredevops/templates/variables.yml@self
+
+resources:
+  repositories:
+  - repository: 1esPipelines
+    type: git
+    name: 1ESPipelineTemplates/1ESPipelineTemplates
+    ref: refs/tags/release
+  # Internal dataset repository, cloned by scripts/Setup-ContainerAndRepository.ps1 with the build identity's token.
+  # Jobs that clone it declare `uses`, which grants that token access without checking it out.
+  - repository: NAV
+    type: git
+    name: Dynamics SMB/NAV
+
+extends:
+  template: /.azuredevops/templates/pipeline.yml@self
+  parameters:
+    stages:
+    - stage: evaluate
+      displayName: Copilot ${{ parameters.model }} on ${{ parameters.category }}${{ iif(parameters.test_run, ' (test run)', '') }}
+      jobs:
+      - template: /.azuredevops/templates/copilot-evaluation-jobs.yml@self
+        parameters:
+          category: ${{ parameters.category }}
+          model: ${{ parameters.model }}
+          test_run: ${{ parameters.test_run }}
+          al_mcp: ${{ parameters.al_mcp }}
+          al_lsp: ${{ parameters.al_lsp }}
+          bc_mcp: ${{ parameters.bc_mcp }}
+          update_leaderboard: ${{ parameters.update_leaderboard }}
+          max_parallel: ${{ parameters.max_parallel }}
+          # Keep in step with .github/actions/install-agent-harnesses/action.yml.
+          copilot_version: 1.0.82
+          # Must match EvaluationCategory.requires_container and requires_repo.
+          container: ${{ in(parameters.category, 'bug-fix', 'test-generation', 'data-query') }}
+          skip_repo: ${{ in(parameters.category, 'data-query') }}

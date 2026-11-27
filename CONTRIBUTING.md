@@ -76,22 +76,15 @@ uv run pre-commit run --all-files
 
 Replace the dataset tasks with your own, you can keep the ones from `BCApps` as the repository is public. The tasks follow `<organization>__<repo>-<PR#number>`, the `<organization>/<repo>` by default points to GitHub repositories. If your tasks come from Azure DevOps, update the ADO branch in `scripts/BCBenchUtils.psm1` (currently hardcoded to `microsoftinternal`).
 
-### GitHub Actions
+### Pipelines
 
-The upstream workflows are wired for Microsoft's internal environment. To run them on your fork:
-
-- Replace self-hosted runner label `GitHub-BCBench` with the standard GitHub Action runners.
-- Remove or update GitHub environment `ado-read`, it is used to clone from Azure DevOps.
-- Set repository secrets:
-  - `COPILOT_PAT` — GitHub Copilot CLI tokens
-  - `ANTHROPIC_API_KEY` — Claude Code API Key
-- Remove the Braintrust / bc-eval upload in `.github/workflows/summarize-results.yml`.
+CI and the contamination probe are GitHub Actions workflows. Copilot evaluation and dataset validation are Azure DevOps pipelines in [`.azuredevops/`](.azuredevops/), wired for Microsoft's internal pools, Key Vault, and Kusto. On a fork, run evaluations locally with `bcbench evaluate`, or adapt those pipelines to your own agents and credentials.
 
 ## Versioning Policy
 
 BC-Bench uses [semantic versioning](https://semver.org/) to track changes that may affect evaluation results. The version is stored in `pyproject.toml` and automatically embedded in all evaluation results.
 
-`benchmark_version` identifies the release and its default harness pins. Results separately record the actual harness as `agent_version` (Copilot/Claude CLI version or BC-ALAgents SHA), without changing `ExperimentConfiguration`. A one-off `engine-sha` override does not require a benchmark version bump because its results are never published; changing a released default pin still follows the policy below and belongs on a branch with an [experiment PR](EXPERIMENT.md#experiment-pr-template).
+`benchmark_version` identifies the release and its default harness pins. Results separately record the actual harness as `agent_version` (Copilot/Claude CLI version or BC-ALAgents SHA), without changing `ExperimentConfiguration`. Changing a released default pin still follows the policy below and belongs on a branch with an [experiment PR](EXPERIMENT.md#experiment-pr-template).
 
 ### When to Bump Versions
 
@@ -123,7 +116,7 @@ Use the repository's [`update-agent-harness` skill](.github/skills/update-agent-
 
 The short maintainer checklist is:
 
-1. Find the current hardcoded CLI pin in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml).
+1. Find the current hardcoded CLI pin in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml); the Copilot CLI pin is repeated as `copilot_version` in [`.azuredevops/copilot-evaluation.yml`](.azuredevops/copilot-evaluation.yml).
 2. Review first-party release notes for every version between the current and target pins. Check BC-Bench's flags, authentication, non-interactive behavior, logs, and metrics parsing for breaking changes.
 3. Curate models for benchmark value. Do not add every available model: prefer models that represent a new frontier, provider, capability, or cost tier, and skip older or redundant models that add little comparative value.
 4. Keep model choices and defaults synchronized across `src/bcbench/cli_options.py`, evaluation workflows, command defaults, and judge configuration.
@@ -142,12 +135,12 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 
 ### Refresh BC sandbox artifacts
 
-Public `w1` sandbox URLs are pinned by version in [`scripts/BCBenchArtifactPins.json`](scripts/BCBenchArtifactPins.json), so we are more resilient to upstream changes. Manual dataset-validation runs use the saved pins. The scheduled run resolves the latest URLs, verifies them across the full bug-fix dataset, and pushes a pins-only branch for a manual PR only if every job succeeds. BC Insider artifacts remain dynamically resolved.
+Public `w1` sandbox URLs are pinned by version in [`scripts/BCBenchArtifactPins.json`](scripts/BCBenchArtifactPins.json), so we are more resilient to upstream changes. Manual runs of the [dataset validation pipeline](.azuredevops/dataset-validation.yml) use the saved pins. The scheduled run resolves the latest URLs, verifies them across the full bug-fix dataset, and pushes a pins-only branch for a manual PR only if every job succeeds. BC Insider artifacts remain dynamically resolved.
 
 ### Bump the BC PR Review engine
 
 1. Update the pinned `microsoft/BC-ALAgents` commit in `.github/actions/install-agent-harnesses/action.yml`
-2. Run a test evaluation through the `pr-review` workflow
+2. Run a test evaluation with `bcbench evaluate pr-review`
 3. Bump the BC-Bench version following the Versioning Policy
 4. Include the exact BC-ALAgents commit SHA in the BC-Bench release notes
 

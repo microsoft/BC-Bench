@@ -1,0 +1,26 @@
+# 1ES Pipeline Templates (https://aka.ms/1espt) wrapper, mirroring BC-Evals' .pipelines/common/1es-eval-pipeline.yml.
+# Publish artifacts through templateContext.outputs on each job: 1ES PT rejects plain publish steps.
+parameters:
+- name: stages
+  type: stageList
+
+extends:
+  template: v1/1ES.Unofficial.PipelineTemplate.yml@1esPipelines
+  parameters:
+    pool:
+      name: $(eval_pool_linux)
+      os: linux
+    settings:
+      networkIsolationPolicy: Permissive,CFSClean2
+    sdl:
+      # The source-scanning tools only run on Windows.
+      sourceAnalysisPool:
+        name: $(eval_pool_windows)
+        os: windows
+      policheck:
+        break: true
+      # The internal NAV repository is declared only so the build identity can clone dataset entries from it.
+      sourceRepositoriesToScan:
+        exclude:
+        - repository: NAV
+    stages: ${{ parameters.stages }}

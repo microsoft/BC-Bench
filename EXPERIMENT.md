@@ -74,9 +74,9 @@ Results record `ExperimentConfiguration.plugins` as `"<name>@<revision>"` / `"<n
 
 ### Comparing harness versions
 
-A harness-version experiment is a configuration experiment that changes a pin instead of `config.yaml`, so it follows the same process: a branch, the pin update, a BC-Bench version bump per the [versioning policy](CONTRIBUTING.md#versioning-policy), and a draft PR describing what is being evaluated. Harness pins live in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml). The version that actually ran is recorded on every result as `agent_version`, which keeps revisions in separate aggregates without changing `ExperimentConfiguration`.
+A harness-version experiment is a configuration experiment that changes a pin instead of `config.yaml`, so it follows the same process: a branch, the pin update, a BC-Bench version bump per the [versioning policy](CONTRIBUTING.md#versioning-policy), and a draft PR describing what is being evaluated. Harness pins live in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml), and the Copilot CLI pin also in [`.azuredevops/copilot-evaluation.yml`](.azuredevops/copilot-evaluation.yml). The version that actually ran is recorded on every result as `agent_version`, which keeps revisions in separate aggregates without changing `ExperimentConfiguration`.
 
-BC PR Review additionally exposes the engine revision as a workflow input for one-off comparisons — see [Code Review](docs/code-review.md) for that harness's specifics.
+See [Code Review](docs/code-review.md) for BC PR Review's engine revision.
 
 ### Encouraging plugin usage
 
@@ -116,11 +116,10 @@ This only generates a patch (no build/test) and finishes in a couple of minutes.
 
 ### 3. Test run (4 entries)
 
-Trigger the evaluation workflow from the **Actions** tab, selecting your experiment branch under *Use workflow from*:
+Queue the [Copilot evaluation pipeline](.azuredevops/copilot-evaluation.yml) in Azure DevOps on your experiment branch:
 
-- **Workflow:** `Evaluation with GitHub Copilot`, `Evaluation with Claude Code`, or `Evaluation with BC PR Review`
-- **`test-run`:** `true` (default — runs 4 entries, ~10 min)
-- **`model`**, **`category`**, **`al-mcp`**, **`al-lsp`**: as needed
+- **`Test run`:** checked (default — runs 4 entries)
+- **`Copilot model`**, **`Category`**, **AL MCP / AL LSP / BC MCP**: as needed
 
 This catches configuration mistakes cheaply. Do not skip it.
 
@@ -128,23 +127,19 @@ This catches configuration mistakes cheaply. Do not skip it.
 
 Once the test run passes, do one full-dataset run before committing to repeated runs:
 
-- **`test-run`:** `false`
-- **`repeat`:** `1`
+- **`Test run`:** unchecked
 
-Review the summary in the workflow log. If anything looks off (unexpected errors, scores far from prior baselines), investigate before spending more compute.
+Review the summary in the pipeline log. If anything looks off (unexpected errors, scores far from prior baselines), investigate before spending more compute.
 
 ### 5. Repeated full runs (typically 5)
 
-Agent runs are noisy, so a single number isn't trustworthy. For results you intend to publish or compare:
+Agent runs are noisy, so a single number isn't trustworthy. For results you intend to publish or compare, queue the full run 5 times.
 
-- **`test-run`:** `false`
-- **`repeat`:** `5` (runs the full dataset 5 times sequentially)
-
-Each run uploads artifacts and updates a `leaderboard/<category>/<run_id>` branch. Merge that branch to publish to the leaderboard.
+Each run publishes artifacts and pushes a `leaderboard/<category>/<build ID>` branch. Merge the branches to publish to the leaderboard.
 
 ### 6. Reviewing results
 
-- The `summarize-results` job prints per-run scores in the Actions log.
+- The summarize job prints per-run scores in the pipeline log.
 - Download artifacts locally.
 - For deeper analysis, see `notebooks/bug-fix/` and `notebooks/test-generation/`.
 

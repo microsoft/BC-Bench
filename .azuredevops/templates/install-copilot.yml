@@ -1,0 +1,31 @@
+# Installs the pinned GitHub Copilot CLI from BC_NpmFeed (an npmjs mirror).
+# Keep copilot_version in step with .github/actions/install-agent-harnesses/action.yml.
+parameters:
+- name: copilot_version
+  type: string
+
+steps:
+- task: UseNode@1
+  displayName: Install Node.js
+  inputs:
+    version: 24.x
+
+- task: npmAuthenticate@0
+  displayName: Authenticate npm with Azure Artifacts
+  inputs:
+    workingFile: $(Build.SourcesDirectory)/.azuredevops/.npmrc
+
+- task: PowerShell@2
+  displayName: Install GitHub Copilot CLI ${{ parameters.copilot_version }}
+  retryCountOnTaskFailure: 2
+  env:
+    # Global installs do not read a project-level .npmrc.
+    NPM_CONFIG_USERCONFIG: $(Build.SourcesDirectory)/.azuredevops/.npmrc
+  inputs:
+    pwsh: true
+    targetType: inline
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $PSNativeCommandUseErrorActionPreference = $true
+      npm install --global "@github/copilot@${{ parameters.copilot_version }}"
+      copilot --version

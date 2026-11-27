@@ -98,7 +98,7 @@ exclude = ["notebooks/"]
 all = "error"
 
 [tool.ty.analysis]
-# bc-eval is internal and installed only into a separate venv by bcal-evaluation.yml
+# bc-eval is internal and installed only by the evaluation pipeline (.azuredevops/)
 allowed-unresolved-imports = ["bc_eval.**"]
 
 [dependency-groups]

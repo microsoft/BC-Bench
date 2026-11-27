@@ -1,0 +1,237 @@
+# Jobs of .azuredevops/copilot-evaluation.yml.
+# Scoring runs only if every entry job succeeded, so incomplete runs are never published: re-run the failed jobs first.
+parameters:
+- name: category
+  type: string
+- name: model
+  type: string
+- name: test_run
+  type: boolean
+- name: al_mcp
+  type: boolean
+- name: al_lsp
+  type: boolean
+- name: bc_mcp
+  type: boolean
+- name: update_leaderboard
+  type: boolean
+- name: max_parallel
+  type: number
+- name: copilot_version
+  type: string
+# Whether the category needs a BC container, which runs on the Windows pool.
+- name: container
+  type: boolean
+- name: skip_repo
+  type: boolean
+
+jobs:
+- template: /.azuredevops/templates/list-entries-job.yml@self
+  parameters:
+    category: ${{ parameters.category }}
+    test_run: ${{ parameters.test_run }}
+
+- job: evaluate
+  displayName: Evaluate
+  dependsOn: list_entries
+  condition: and(succeeded(), ne(dependencies.list_entries.outputs['entries.count'], '0'))
+  timeoutInMinutes: 180
+  uses:
+    repositories:
+    - NAV
+  strategy:
+    matrix: $[ dependencies.list_entries.outputs['entries.matrix'] ]
+    maxParallel: ${{ parameters.max_parallel }}
+  ${{ if parameters.container }}:
+    pool:
+      name: $(eval_pool_windows)
+      os: windows
+  templateContext:
+    outputs:
+    - output: pipelineArtifact
+      displayName: Publish the entry's results
+      condition: succeeded()
+      targetPath: $(ResultsDir)
+      artifactName: results_$(EntryId)
+    # A failed attempt keeps its own name, so re-running the failed job can still publish results_<EntryId>.
+    - output: pipelineArtifact
+      displayName: Publish the failed attempt's results
+      condition: or(failed(), canceled())
+      targetPath: $(ResultsDir)
+      artifactName: results_$(EntryId)_failed_$(System.JobAttempt)
+  steps:
+  # Published even when the job fails before writing any results, and publishing a missing folder fails.
+  - ${{ if parameters.container }}:
+    - powershell: New-Item -ItemType Directory -Force -Path "$(ResultsDir)" | Out-Null
+      displayName: Create the results folder
+  - ${{ else }}:
+    - bash: mkdir -p "$(ResultsDir)"
+      displayName: Create the results folder
+
+  - template: /.azuredevops/templates/setup-environment.yml@self
+    parameters:
+      os: ${{ iif(parameters.container, 'windows', 'linux') }}
+
+  - template: /.azuredevops/templates/get-github-token.yml@self
+
+  - template: /.azuredevops/templates/setup-bc.yml@self
+    parameters:
+      category: ${{ parameters.category }}
+      skip_container: ${{ not(parameters.container) }}
+      skip_repo: ${{ parameters.skip_repo }}
+      bc_mcp: ${{ parameters.bc_mcp }}
+      github_token: $(CopilotFunctionalGithubToken)
+
+  - ${{ if or(parameters.al_mcp, parameters.al_lsp) }}:
+    # The AL tool targets .NET 8 for BC versions before 29.
+    - task: UseDotNet@2
+      displayName: Install .NET 8 runtime
+      inputs:
+        packageType: runtime
+        version: 8.x
+
+    - task: PowerShell@2
+      displayName: Install AL Tool
+      env:
+        ENTRY_ID: $(EntryId)
+      inputs:
+        pwsh: true
+        targetType: inline
+        workingDirectory: $(Build.SourcesDirectory)
+        script: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          Import-Module ./scripts/BenchmarkUtils.psm1 -Force -DisableNameChecking
+          $version = Get-BCBenchEntryVersion -InstanceId $env:ENTRY_ID -Category "${{ parameters.category }}"
+          $framework = if (([System.Version]$version).Major -lt 29) { '8.0' } else { '10.0' }
+          dotnet tool install --global Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta --framework "net$framework" --source $(nuget_feed)
+
+  - template: /.azuredevops/templates/install-copilot.yml@self
+    parameters:
+      copilot_version: ${{ parameters.copilot_version }}
+
+  - task: PowerShell@2
+    displayName: Run GitHub Copilot CLI on $(EntryId)
+    timeoutInMinutes: 120
+    env:
+      ENTRY_ID: $(EntryId)
+      COPILOT_GITHUB_TOKEN: $(CopilotFunctionalGithubToken)
+      GH_TOKEN: $(CopilotFunctionalGithubToken)
+      ${{ if parameters.container }}:
+        BC_SERVER_PASSWORD: $(BC_SERVER_PASSWORD)
+    inputs:
+      pwsh: true
+      targetType: inline
+      workingDirectory: $(Build.SourcesDirectory)
+      script: |
+        uv run bcbench evaluate copilot $env:ENTRY_ID `
+          --model "${{ parameters.model }}" `
+          --category "${{ parameters.category }}" `
+          --repo-path ([IO.Path]::GetFullPath("$(RepoPath)")) `
+          --output-dir "$(ResultsDir)" ${{ iif(parameters.al_mcp, '--al-mcp', '') }} ${{ iif(parameters.al_lsp, '--al-lsp', '') }} ${{ iif(parameters.bc_mcp, '--bc-mcp', '') }}
+        exit $LASTEXITCODE
+
+  - ${{ if parameters.container }}:
+    - template: /.azuredevops/templates/remove-bc-container.yml@self
+
+- job: summarize
+  displayName: ${{ iif(parameters.test_run, 'Summarize (test run, not published)', 'Summarize and publish') }}
+  dependsOn: evaluate
+  timeoutInMinutes: 30
+  variables:
+    SummaryDir: $(ResultsDir)/$(Build.BuildId)
+  templateContext:
+    outputs:
+    - output: pipelineArtifact
+      displayName: Publish the evaluation summary
+      condition: always()
+      targetPath: $(SummaryDir)
+      artifactName: summary_$(System.JobAttempt)
+  steps:
+  - checkout: self
+    # The leaderboard step pushes a branch with the pipeline's GitHub connection.
+    persistCredentials: true
+
+  - bash: mkdir -p "$(SummaryDir)"
+    displayName: Create the summary folder
+
+  - template: /.azuredevops/templates/setup-environment.yml@self
+
+  - task: DownloadPipelineArtifact@2
+    displayName: Download every entry's results
+    inputs:
+      buildType: current
+      itemPattern: "**/*.jsonl"
+      targetPath: $(Pipeline.Workspace)/entries
+
+  - bash: |
+      set -euo pipefail
+      # A retried entry leaves its failed attempt's artifact beside the successful one; only the successful attempt counts.
+      for artifact in "$(Pipeline.Workspace)"/entries/results_*/; do
+        case "$artifact" in *_failed_[0-9]*/) continue ;; esac
+        cp -R "$artifact". "$(ResultsDir)/"
+      done
+    displayName: Combine the entries' results
+
+  - task: PowerShell@2
+    displayName: Summarize results
+    inputs:
+      pwsh: true
+      targetType: inline
+      workingDirectory: $(Build.SourcesDirectory)
+      script: |
+        $ErrorActionPreference = 'Stop'
+        $PSNativeCommandUseErrorActionPreference = $true
+        $branch = $env:BUILD_SOURCEBRANCH -replace '^refs/heads/', ''
+        uv run bcbench result summarize --category "${{ parameters.category }}" --result-dir "$(ResultsDir)" --bceval-output bceval_results.jsonl --summary-output evaluation_summary.json --git-ref $branch
+
+  - task: AzureCLI@2
+    displayName: ${{ iif(parameters.test_run, 'Score with bc-eval (not uploaded)', 'Score with bc-eval and upload to Kusto') }}
+    env:
+      EVALUATION_AGENT: GitHub Copilot CLI
+      EVALUATION_MODEL: ${{ parameters.model }}
+      EVALUATION_TIER: gold
+    inputs:
+      azureSubscription: dynamicssmb2-Dynamics SMB-NavInfrastructure-Test
+      scriptType: bash
+      scriptLocation: inlineScript
+      workingDirectory: $(Build.SourcesDirectory)
+      inlineScript: |
+        set -euo pipefail
+        # bcbench writes step outputs in the GitHub Actions format.
+        export GITHUB_OUTPUT="$(mktemp)"
+        uv run bcbench category bceval-config --category "${{ parameters.category }}"
+        while IFS='=' read -r key value; do declare "bceval_${key}=${value}"; done < "$GITHUB_OUTPUT"
+        export JUDGE_MODEL="${bceval_judge_model:-}"
+
+        uv tool install bc-eval==0.11.1 --python 3.13 --index "$PIP_INDEX_URL"
+
+        branch="${BUILD_SOURCEBRANCH#refs/heads/}"
+        run_tags="${EVALUATION_AGENT},${EVALUATION_MODEL//./-},${branch//./-},tier-${EVALUATION_TIER}"
+        bceval metrics calculate \
+          --feature-name "BC-Bench" \
+          --eval-suite-name "${{ parameters.category }}" \
+          --eval-run-name "${EVALUATION_AGENT} (${EVALUATION_MODEL}) - #$(Build.BuildId)" \
+          --tags "$run_tags" \
+          --source "$(Build.SourceVersion)" \
+          --input-file "$(SummaryDir)/bceval_results.jsonl" \
+          --evaluator-definitions "$(Build.SourcesDirectory)/evaluator/scores.py" \
+          --evaluators "$bceval_evaluators" \
+          --core-score "$bceval_core_score" \
+          --metric-definitions "$(Build.SourcesDirectory)/evaluator/metrics.py" \
+          --metrics "bc_bench_metrics" ${{ iif(parameters.test_run, '', '--storage kusto') }}
+
+  - ${{ if and(not(parameters.test_run), parameters.update_leaderboard) }}:
+    - bash: |
+        set -euo pipefail
+        branch="leaderboard/${{ parameters.category }}/$(Build.BuildId)"
+        git config user.name "BC-Bench pipeline"
+        git config user.email "bc-bench-pipeline@users.noreply.github.com"
+        git fetch --no-tags origin main
+        git checkout -b "$branch" FETCH_HEAD
+        uv run bcbench result update "$(SummaryDir)/evaluation_summary.json"
+        git add "docs/_data/${{ parameters.category }}.json"
+        git commit -m "Update leaderboard: GitHub Copilot CLI (${{ parameters.model }}) - Build $(Build.BuildId)"
+        git push origin "$branch"
+        echo "Merge $branch to publish the run to the leaderboard."
+      displayName: Push a leaderboard branch

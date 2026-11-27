@@ -32,7 +32,7 @@ Use the existing implementations as examples: `bug-fix` and `test-generation` fo
 3. Add a result class under [src/bcbench/results/](src/bcbench/results/) and map it from `EvaluationCategory.result_class`.
 4. Add a pipeline under [src/bcbench/evaluate/](src/bcbench/evaluate/), or, for a category in [src/bcbench/categories/](src/bcbench/categories/), one module holding its entry, `bcbench_core.evaluation.Category` and definition.
 5. Add the prompt template to [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml).
-6. Add the category to workflow choice lists in [.github/workflows/](.github/workflows/), especially evaluation workflows and CI category selection.
+6. Add the category to the `category` values in [.azuredevops/copilot-evaluation.yml](.azuredevops/copilot-evaluation.yml) (and its container/repository routing there).
 7. Add docs, leaderboard data, notebooks, and tests for the category where relevant.
 
 ## Validation

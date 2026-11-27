@@ -1,0 +1,171 @@
+# Verifies that every bug-fix entry still builds and its tests still run in a BC container, catching regressions from
+# infrastructure changes. The weekly scheduled run also resolves the latest public BC artifact URLs, verifies the full
+# dataset against them, and pushes an artifacts/refresh-<build ID> branch with the new scripts/BCBenchArtifactPins.json
+# for a manual PR. Manual runs use the saved pins.
+trigger: none
+pr: none
+
+schedules:
+- cron: "0 0 * * 0"
+  displayName: Weekly validation with refreshed BC artifacts
+  branches:
+    include:
+    - main
+  always: true
+
+parameters:
+# Defaults apply to the scheduled run.
+- name: test_run
+  displayName: Test run (a few random entries)
+  type: boolean
+  default: false
+- name: modified_only
+  displayName: Only entries added or modified compared to main
+  type: boolean
+  default: false
+- name: max_parallel
+  displayName: Maximum entries running at the same time
+  type: number
+  default: 20
+
+variables:
+- template: /.azuredevops/templates/variables.yml@self
+
+resources:
+  repositories:
+  - repository: 1esPipelines
+    type: git
+    name: 1ESPipelineTemplates/1ESPipelineTemplates
+    ref: refs/tags/release
+  # Internal dataset repository, cloned by scripts/Setup-ContainerAndRepository.ps1 with the build identity's token.
+  # Jobs that clone it declare `uses`, which grants that token access without checking it out.
+  - repository: NAV
+    type: git
+    name: Dynamics SMB/NAV
+
+extends:
+  template: /.azuredevops/templates/pipeline.yml@self
+  parameters:
+    stages:
+    - stage: validate
+      displayName: Dataset validation${{ iif(parameters.test_run, ' (test run)', '') }}
+      jobs:
+      - template: /.azuredevops/templates/list-entries-job.yml@self
+        parameters:
+          category: bug-fix
+          test_run: ${{ parameters.test_run }}
+          modified_only: ${{ parameters.modified_only }}
+
+      - job: pins
+        displayName: Resolve the latest BC artifact URLs
+        condition: eq(variables['Build.Reason'], 'Schedule')
+        steps:
+        - template: /.azuredevops/templates/setup-environment.yml@self
+
+        - task: DownloadPackage@1
+          displayName: Download BcContainerHelper
+          inputs:
+            packageType: nuget
+            feed: /DynamicsSMBPackages
+            definition: BcContainerHelper
+            version: latest
+            downloadPath: $(Agent.TempDirectory)/BcContainerHelper
+
+        - task: PowerShell@2
+          name: refresh
+          displayName: Resolve the latest artifact URLs
+          inputs:
+            pwsh: true
+            targetType: inline
+            workingDirectory: $(Build.SourcesDirectory)
+            script: |
+              $ErrorActionPreference = 'Stop'
+              Import-Module "$(Agent.TempDirectory)/BcContainerHelper/BcContainerHelper.psd1" -Force -DisableNameChecking
+              Import-Module ./scripts/BenchmarkUtils.psm1 -Force -DisableNameChecking
+              $json = (Get-BCBenchLatestArtifactUrls | ConvertTo-Json -Depth 2) + "`n"
+              Write-Host $json
+              $pins = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+              Write-Host "##vso[task.setvariable variable=pins;isOutput=true]$pins"
+
+      - job: verify
+        displayName: Verify
+        dependsOn: [list_entries, pins]
+        condition: >-
+          and(not(canceled()),
+              eq(dependencies.list_entries.result, 'Succeeded'),
+              ne(dependencies.list_entries.outputs['entries.count'], '0'),
+              in(dependencies.pins.result, 'Succeeded', 'Skipped'))
+        timeoutInMinutes: 120
+        uses:
+          repositories:
+          - NAV
+        pool:
+          name: $(eval_pool_windows)
+          os: windows
+        strategy:
+          matrix: $[ dependencies.list_entries.outputs['entries.matrix'] ]
+          maxParallel: ${{ parameters.max_parallel }}
+        variables:
+          Pins: $[ dependencies.pins.outputs['refresh.pins'] ]
+        steps:
+        - template: /.azuredevops/templates/setup-environment.yml@self
+          parameters:
+            os: windows
+
+        - task: PowerShell@2
+          displayName: Use the refreshed artifact URLs
+          condition: and(succeeded(), eq(variables['Build.Reason'], 'Schedule'))
+          inputs:
+            pwsh: true
+            targetType: inline
+            workingDirectory: $(Build.SourcesDirectory)
+            script: '[IO.File]::WriteAllBytes((Join-Path scripts BCBenchArtifactPins.json), [Convert]::FromBase64String("$(Pins)"))'
+
+        - template: /.azuredevops/templates/get-github-token.yml@self
+
+        - template: /.azuredevops/templates/setup-bc.yml@self
+          parameters:
+            category: bug-fix
+            github_token: $(CopilotFunctionalGithubToken)
+
+        - task: PowerShell@2
+          displayName: Verify build and tests of $(EntryId)
+          timeoutInMinutes: 60
+          env:
+            ENTRY_ID: $(EntryId)
+            BC_SERVER_PASSWORD: $(BC_SERVER_PASSWORD)
+          inputs:
+            pwsh: true
+            targetType: inline
+            workingDirectory: $(Build.SourcesDirectory)
+            script: ./scripts/Verify-BuildAndTests.ps1 -InstanceId $env:ENTRY_ID -RepoPath ([IO.Path]::GetFullPath("$(RepoPath)"))
+
+        - template: /.azuredevops/templates/remove-bc-container.yml@self
+
+      - job: propose_pins
+        displayName: Push the verified artifact URLs
+        dependsOn: [pins, verify]
+        condition: and(succeeded(), eq(variables['Build.Reason'], 'Schedule'))
+        variables:
+          Pins: $[ dependencies.pins.outputs['refresh.pins'] ]
+        steps:
+        - checkout: self
+          persistCredentials: true
+
+        - bash: |
+            set -euo pipefail
+            path=scripts/BCBenchArtifactPins.json
+            echo "$(Pins)" | base64 --decode > "$path"
+            if git diff --quiet -- "$path"; then
+              echo "The pinned artifact URLs are already the latest."
+              exit 0
+            fi
+            branch="artifacts/refresh-$(Build.BuildId)-$(System.JobAttempt)"
+            git config user.name "BC-Bench pipeline"
+            git config user.email "bc-bench-pipeline@users.noreply.github.com"
+            git switch -c "$branch"
+            git add "$path"
+            git commit -m "Refresh pinned BC artifact URLs"
+            git push origin "$branch"
+            echo "Open a PR from $branch to update the pins."
+          displayName: Push a branch with the refreshed pins
