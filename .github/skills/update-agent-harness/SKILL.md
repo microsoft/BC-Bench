@@ -31,7 +31,7 @@ Use this table when the model set changes:
 - `.github/actions/install-agent-harnesses/action.yml`
 - `src/bcbench/agent/copilot/agent.py` and `src/bcbench/cli_options.py`
 - `packages/bcbench-core/src/bcbench_core/agent/copilot/` (CLI invocation and metrics parsing)
-- `.github/workflows/copilot-evaluation.yml`
+- `.azuredevops/copilot-evaluation.yml` (`copilot_version` and model choices)
 - `.github/workflows/contamination.yml`
 - Defaults under `src/bcbench/commands/` and `src/bcbench/config.py`
 - Copilot-focused tests under `tests/`

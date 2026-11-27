@@ -1,0 +1,12 @@
+# Removes the BC container setup-bc.yml created: pool VMs are reused, and the setup refuses an existing container.
+steps:
+- task: PowerShell@2
+  displayName: Remove BC container
+  condition: always()
+  inputs:
+    pwsh: true
+    targetType: inline
+    script: |
+      if (-not $env:BC_CONTAINER_NAME) { return }
+      Import-Module BcContainerHelper -DisableNameChecking
+      Remove-BcContainer -containerName $env:BC_CONTAINER_NAME

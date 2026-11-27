@@ -1,0 +1,9 @@
+# Fetches the github.com token (Copilot requests and public clones) from BC-Evals' Key Vault as $(CopilotFunctionalGithubToken).
+steps:
+- task: AzureKeyVault@2
+  displayName: Fetch GitHub token
+  inputs:
+    azureSubscription: dynamicssmb2-Dynamics SMB-NavInfrastructure-Test
+    KeyVaultName: bc-ai-eval-pipelines
+    SecretsFilter: CopilotFunctionalGithubToken
+    RunAsPreJob: false

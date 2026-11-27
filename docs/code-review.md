@@ -47,7 +47,7 @@ BC-ALAgents is the PR Review harness boundary. Its repo and default commit are p
 
 For a durable experiment, push the pipeline and/or BCQuality changes through a BC-ALAgents branch, update the action pin to that immutable commit, then run BC-Bench from a branch with a draft PR describing the experiment (see [EXPERIMENT.md](https://github.com/microsoft/BC-Bench/blob/main/EXPERIMENT.md)). This keeps the reproducible dependency chain BC-Bench -> BC-ALAgents -> BCQuality, and records why the revision was evaluated.
 
-The `pr-review` workflow also accepts an `engine-sha` input — a full 40-character BC-ALAgents commit SHA — as a **convenience** for a quick look at a revision without branching or re-pinning. It does not replace the process above: nothing records the intent behind the run, so an override is scored but never published to Braintrust/Kusto or the leaderboard. Blank keeps the default pin, requeued repeats retain the override, and the SHA that ran is recorded as `agent_version` on every result — read it from the job summary and run artifacts.
+For a quick look at a revision without branching or re-pinning, run `bcbench evaluate pr-review --engine-path <checkout>` locally. It does not replace the process above: nothing records the intent behind the run, so do not publish its results.
 
 Either way, hold everything else fixed: the benchmark version, the model, the Copilot CLI version the engine uses internally, and the configured minimum severity. Locally, `bcbench evaluate pr-review --engine-path <checkout>` requires a clean engine checkout and uses the configured severity; use `bcbench run pr-review` for dirty-checkout smoke tests or `--min-severity` overrides.
 

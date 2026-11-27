@@ -1,0 +1,50 @@
+# Lists a category's dataset entries as a job matrix (output entries.matrix, one EntryId per job) and their count (entries.count).
+parameters:
+- name: category
+  type: string
+- name: test_run
+  type: boolean
+  default: false
+- name: modified_only
+  type: boolean
+  default: false
+
+jobs:
+- job: list_entries
+  displayName: List entries
+  steps:
+  - checkout: self
+    ${{ if parameters.modified_only }}:
+      fetchDepth: 0
+
+  - template: /.azuredevops/templates/setup-environment.yml@self
+
+  - task: PowerShell@2
+    name: entries
+    displayName: List ${{ parameters.category }} entries
+    inputs:
+      pwsh: true
+      targetType: inline
+      workingDirectory: $(Build.SourcesDirectory)
+      script: |
+        $ErrorActionPreference = 'Stop'
+        $PSNativeCommandUseErrorActionPreference = $true
+        if ('${{ parameters.modified_only }}' -eq 'True') {
+          git fetch --no-tags origin main:refs/remotes/origin/main
+        }
+        # bcbench writes step outputs in the GitHub Actions format.
+        $env:GITHUB_OUTPUT = New-TemporaryFile
+        uv run bcbench dataset list --category "${{ parameters.category }}" --github-output entries ${{ iif(parameters.modified_only, '--modified-only', iif(parameters.test_run, '--test-run', '')) }}
+        $line = Get-Content $env:GITHUB_OUTPUT | Where-Object { $_.StartsWith('entries=') }
+        $ids = @($line.Substring('entries='.Length) | ConvertFrom-Json)
+
+        # Matrix keys name the jobs: letters, digits and underscores, at most 100 characters. The ordinal keeps them unique.
+        $matrix = [ordered]@{}
+        $n = 0
+        foreach ($id in $ids) {
+          $n++
+          $key = ('e{0:d3}_{1}' -f $n, ($id -replace '\W', '_'))
+          $matrix[$key.Substring(0, [Math]::Min(100, $key.Length))] = @{ EntryId = $id }
+        }
+        Write-Host "##vso[task.setvariable variable=matrix;isOutput=true]$($matrix | ConvertTo-Json -Compress)"
+        Write-Host "##vso[task.setvariable variable=count;isOutput=true]$($ids.Count)"

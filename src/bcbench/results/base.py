@@ -70,7 +70,7 @@ class BaseEvaluationResult(BaseModel):
         output_dir.mkdir(parents=True, exist_ok=True)
         with output_file.open("a", encoding="utf-8") as f:
             result_dict = self.model_dump(mode="json")
-            # Per-instance JSONL result files are uploaded as workflow artifacts and are the only inputs required by the summarize-results workflow.
+            # Per-instance JSONL result files are uploaded as workflow artifacts and are the only inputs required by the evaluation pipeline's summarize job.
             f.write(json.dumps(result_dict) + "\n")
 
         logger.info(f"Saved evaluation result for {self.instance_id} to {output_file}")

@@ -1,0 +1,70 @@
+# Creates the entry's BC container and clones its repository, through scripts/Setup-ContainerAndRepository.ps1.
+# Exports BC_CONTAINER_NAME, BC_SERVER_URL, BC_SERVER_INSTANCE, BC_SERVER_USERNAME, BC_COMPANY (and BC_MCP_URL) as variables,
+# and BC_SERVER_PASSWORD as a secret one: map it into the env of the steps that need it.
+parameters:
+- name: category
+  type: string
+- name: skip_container
+  type: boolean
+  default: false
+- name: skip_repo
+  type: boolean
+  default: false
+- name: bc_mcp
+  type: boolean
+  default: false
+# github.com token for cloning public GitHub repositories
+- name: github_token
+  type: string
+
+steps:
+- ${{ if not(parameters.skip_container) }}:
+  # The PowerShell Gallery is blocked: DynamicsSMBPackages mirrors it, and the task authenticates as the build identity.
+  - task: DownloadPackage@1
+    displayName: Download BcContainerHelper
+    inputs:
+      packageType: nuget
+      feed: /DynamicsSMBPackages
+      definition: BcContainerHelper
+      version: latest
+      downloadPath: $(Agent.TempDirectory)/Modules/BcContainerHelper
+
+  - powershell: Write-Host "##vso[task.setvariable variable=PSModulePath]$(Agent.TempDirectory)\Modules;$env:PSModulePath"
+    displayName: Put BcContainerHelper on PSModulePath
+
+- task: PowerShell@2
+  displayName: Set up ${{ iif(parameters.skip_container, 'repository', 'BC container and repository') }} for $(EntryId)
+  timeoutInMinutes: 40
+  env:
+    ENTRY_ID: $(EntryId)
+    # The build identity reads the internal Azure DevOps repositories.
+    ADO_TOKEN: $(System.AccessToken)
+    GITHUB_TOKEN: ${{ parameters.github_token }}
+  inputs:
+    pwsh: true
+    targetType: inline
+    workingDirectory: $(Build.SourcesDirectory)
+    script: |
+      $ErrorActionPreference = 'Stop'
+      if ('${{ parameters.skip_container }}' -ne 'True') {
+        # Short-lived, only used for the duration of the job.
+        $password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+        Write-Host "##vso[task.setvariable variable=BC_SERVER_PASSWORD;issecret=true]$password"
+        $env:BC_SERVER_PASSWORD = $password
+        $name = "bcbench-$($env:ENTRY_ID.Split('-')[1])"
+        $container = [ordered]@{ BC_CONTAINER_NAME = $name; BC_SERVER_URL = "http://$name"; BC_SERVER_INSTANCE = 'BC'; BC_SERVER_USERNAME = 'admin' }
+        foreach ($key in $container.Keys) {
+          Write-Host "##vso[task.setvariable variable=$key]$($container[$key])"
+          Set-Item "env:$key" $container[$key]
+        }
+      }
+
+      # The script exports variables in the GitHub Actions format.
+      $env:GITHUB_ENV = New-TemporaryFile
+      # Native separators: the folder is shared with the container.
+      $repoPath = [IO.Path]::GetFullPath("$(RepoPath)")
+      ./scripts/Setup-ContainerAndRepository.ps1 -InstanceId $env:ENTRY_ID -Category "${{ parameters.category }}" -RepoPath $repoPath ${{ iif(parameters.skip_container, '-SkipContainer', '') }} ${{ iif(parameters.skip_repo, '-SkipRepo', '') }} ${{ iif(parameters.bc_mcp, '-BcMcp', '') }}
+      Get-Content $env:GITHUB_ENV | ForEach-Object {
+        $key, $value = $_ -split '=', 2
+        Write-Host "##vso[task.setvariable variable=$key]$value"
+      }

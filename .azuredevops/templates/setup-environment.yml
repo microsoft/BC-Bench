@@ -1,0 +1,82 @@
+# Installs .NET 10, PowerShell 7, Python and uv, then syncs the bcbench environment.
+# The pool images have neither PowerShell 7 nor (on Windows) Python, so both come from DynamicsSMBPackages.
+parameters:
+- name: os
+  type: string
+  default: linux
+  values: [linux, windows]
+
+steps:
+- task: UseDotNet@2
+  displayName: Install .NET 10 SDK
+  inputs:
+    packageType: sdk
+    version: 10.x
+
+- task: NuGetAuthenticate@1
+  displayName: Authenticate .NET tool installs with Azure Artifacts
+
+- ${{ if eq(parameters.os, 'windows') }}:
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      dotnet tool install --global PowerShell --version $(powershell_version) --source $(nuget_feed)
+      if ($LASTEXITCODE -ne 0) { throw "PowerShell 7 install failed (exit code $LASTEXITCODE)." }
+      Write-Host "##vso[task.prependpath]$HOME\.dotnet\tools"
+    displayName: Install PowerShell 7
+    retryCountOnTaskFailure: 3
+
+  - task: DownloadPackage@1
+    displayName: Download Python $(python_version)
+    inputs:
+      packageType: nuget
+      feed: /DynamicsSMBPackages
+      definition: python
+      version: $(python_version)
+      downloadPath: $(Agent.TempDirectory)\python
+
+  - powershell: |
+      Write-Host "##vso[task.prependpath]$(Agent.TempDirectory)\python\tools\Scripts"
+      Write-Host "##vso[task.prependpath]$(Agent.TempDirectory)\python\tools"
+    displayName: Put Python on PATH
+- ${{ else }}:
+  - bash: |
+      set -euo pipefail
+      dotnet tool install --global PowerShell --version $(powershell_version) --source $(nuget_feed)
+      echo "##vso[task.prependpath]$HOME/.dotnet/tools"
+    displayName: Install PowerShell 7
+    retryCountOnTaskFailure: 3
+
+- task: PipAuthenticate@1
+  displayName: Authenticate pip with Azure Artifacts
+  inputs:
+    artifactFeeds: $(System.TeamProject)/$(python_feed)
+    onlyAddExtraIndex: false
+
+- task: PowerShell@2
+  displayName: Install uv and sync bcbench
+  inputs:
+    pwsh: true
+    targetType: inline
+    workingDirectory: $(Build.SourcesDirectory)
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $PSNativeCommandUseErrorActionPreference = $true
+      if ($IsWindows) {
+        python -m pip install "uv==$(uv_version)"
+        # Use the Python installed above rather than downloading one.
+        Write-Host "##vso[task.setvariable variable=UV_PYTHON_DOWNLOADS]never"
+        $env:UV_PYTHON_DOWNLOADS = 'never'
+      }
+      else {
+        # The agent isn't root: pip installs into the user scheme, whose scripts directory isn't on PATH.
+        python3 -m pip install --user "uv==$(uv_version)"
+        $bin = python3 -c "import os, sysconfig; print(sysconfig.get_path('scripts', f'{os.name}_user'))"
+        $env:PATH = "$bin$([IO.Path]::PathSeparator)$env:PATH"
+        Write-Host "##vso[task.prependpath]$bin"
+      }
+      # The proxy re-signs TLS; trust the system certificate store for downloads.
+      Write-Host "##vso[task.setvariable variable=UV_SYSTEM_CERTS]1"
+      $env:UV_SYSTEM_CERTS = '1'
+      uv --version
+      uv sync --frozen
+      Write-Host "##vso[task.setvariable variable=UV_NO_SYNC]1"
