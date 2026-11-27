@@ -5,7 +5,7 @@ import sys
 from typing import Annotated
 
 import typer
-from bcbench_core.logs import setup_logging
+from bcbench_core.logs import CIPlatform, setup_logging
 
 from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.category import category_app
@@ -47,7 +47,7 @@ def logging_callback(
 ) -> None:
     """Setup logging for all commands."""
     env = get_config().env
-    setup_logging(app_logger="bcbench", debug=verbose or env.runner_debug, github_actions=env.github_actions, azure_pipelines=False)
+    setup_logging(app_logger="bcbench", debug=verbose or env.runner_debug, ci=CIPlatform.GITHUB_ACTIONS if env.github_actions else None)
 
 
 if __name__ == "__main__":
