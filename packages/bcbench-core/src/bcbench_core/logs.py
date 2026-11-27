@@ -3,10 +3,9 @@
 import logging
 import re
 import sys
-from enum import StrEnum
 from typing import ClassVar, override
 
-__all__ = ["CIPlatform", "setup_logging"]
+__all__ = ["setup_logging"]
 
 
 class SensitiveDataFilter(logging.Filter):
@@ -122,43 +121,46 @@ class AzurePipelinesSafeFormatter(logging.Formatter):
         return self._ADJACENT_HASH.sub("#\u200b", self._inner.format(record))
 
 
-class CIPlatform(StrEnum):
-    GITHUB_ACTIONS = "github_actions"
-    AZURE_PIPELINES = "azure_pipelines"
-
-
 class CIAnnotationFormatter(logging.Formatter):
     """Formats warnings and errors as CI annotations and delegates other levels to the console formatter."""
 
-    _GITHUB_ESCAPES: ClassVar[dict[int, str]] = str.maketrans({"%": "%25", "\r": "%0D", "\n": "%0A"})
-    _AZURE_ESCAPES: ClassVar[dict[int, str]] = str.maketrans({"%": "%AZP25", "\r": "%0D", "\n": "%0A"})
-
-    def __init__(self, platform: CIPlatform, console: logging.Formatter) -> None:
+    def __init__(self, console: logging.Formatter) -> None:
         super().__init__()
-        self._platform = platform
         self._console = console
 
     @override
     def format(self, record: logging.LogRecord) -> str:
         if record.levelno < logging.WARNING:
             return self._console.format(record)
+        return self.annotate("error" if record.levelno >= logging.ERROR else "warning", record)
 
-        issue = "error" if record.levelno >= logging.ERROR else "warning"
-        match self._platform:
-            case CIPlatform.GITHUB_ACTIONS:
-                title = record.name.translate(self._GITHUB_ESCAPES)
-                message = logging.Formatter("%(message)s").format(record).translate(self._GITHUB_ESCAPES)
-                return f"::{issue} title={title}::{message}"
-            case CIPlatform.AZURE_PIPELINES:
-                body = AzurePipelinesSafeFormatter(logging.Formatter("%(name)s - %(message)s")).format(record)
-                return f"##vso[task.logissue type={issue}]{body.translate(self._AZURE_ESCAPES)}"
+    def annotate(self, issue: str, record: logging.LogRecord) -> str:
+        raise NotImplementedError
+
+
+class GitHubActionsFormatter(CIAnnotationFormatter):
+    _ESCAPES: ClassVar[dict[int, str]] = str.maketrans({"%": "%25", "\r": "%0D", "\n": "%0A"})
+
+    @override
+    def annotate(self, issue: str, record: logging.LogRecord) -> str:
+        message = logging.Formatter("%(message)s").format(record)
+        return f"::{issue} title={record.name.translate(self._ESCAPES)}::{message.translate(self._ESCAPES)}"
+
+
+class AzurePipelinesFormatter(CIAnnotationFormatter):
+    _ESCAPES: ClassVar[dict[int, str]] = str.maketrans({"%": "%AZP25", "\r": "%0D", "\n": "%0A"})
+
+    @override
+    def annotate(self, issue: str, record: logging.LogRecord) -> str:
+        body = AzurePipelinesSafeFormatter(logging.Formatter("%(name)s - %(message)s")).format(record)
+        return f"##vso[task.logissue type={issue}]{body.translate(self._ESCAPES)}"
 
 
 _CORE_LOGGER = __name__.partition(".")[0]
 _CONSOLE_HANDLER_NAME = f"{_CORE_LOGGER}.console"
 
 
-def setup_logging(app_logger: str, debug: bool, ci: CIPlatform | None) -> None:
+def setup_logging(app_logger: str, debug: bool, github_actions: bool, azure_pipelines: bool) -> None:
     """Configure process-wide logging; call once from the application entry point.
 
     Calling again replaces the handler installed by a previous call; other root handlers are kept.
@@ -167,9 +169,15 @@ def setup_logging(app_logger: str, debug: bool, ci: CIPlatform | None) -> None:
     Args:
         app_logger: Top-level logger name of the application, usually its package name; bcbench-core's logger is always included.
         debug: If True, set application and bcbench-core loggers to DEBUG level, otherwise INFO.
-        ci: CI platform the process runs on, or None locally. Warnings and errors become annotations on that platform;
-            on Azure Pipelines, logged text is also neutralized so it cannot run as a logging command.
+        github_actions: If True, emit warnings and errors as GitHub Actions annotations.
+        azure_pipelines: If True, emit warnings and errors as Azure Pipelines annotations and neutralize logging commands in all output.
+
+    Raises:
+        ValueError: If both github_actions and azure_pipelines are True.
     """
+    if github_actions and azure_pipelines:
+        raise ValueError("github_actions and azure_pipelines are mutually exclusive")
+
     app_level = logging.DEBUG if debug else logging.INFO
 
     # Configure root logger (for 3rd party libraries) to WARNING
@@ -183,7 +191,7 @@ def setup_logging(app_logger: str, debug: bool, ci: CIPlatform | None) -> None:
 
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.set_name(_CONSOLE_HANDLER_NAME)
-    console_handler.setFormatter(_console_formatter(ci))
+    console_handler.setFormatter(_console_formatter(github_actions, azure_pipelines))
     console_handler.addFilter(SensitiveDataFilter())
     root_logger.addHandler(console_handler)
 
@@ -191,11 +199,9 @@ def setup_logging(app_logger: str, debug: bool, ci: CIPlatform | None) -> None:
         logging.getLogger(name).setLevel(app_level)
 
 
-def _console_formatter(ci: CIPlatform | None) -> logging.Formatter:
-    match ci:
-        case None:
-            return ColoredFormatter()
-        case CIPlatform.GITHUB_ACTIONS:
-            return CIAnnotationFormatter(ci, ColoredFormatter())
-        case CIPlatform.AZURE_PIPELINES:
-            return CIAnnotationFormatter(ci, AzurePipelinesSafeFormatter(ColoredFormatter()))
+def _console_formatter(github_actions: bool, azure_pipelines: bool) -> logging.Formatter:
+    if github_actions:
+        return GitHubActionsFormatter(ColoredFormatter())
+    if azure_pipelines:
+        return AzurePipelinesFormatter(AzurePipelinesSafeFormatter(ColoredFormatter()))
+    return ColoredFormatter()
