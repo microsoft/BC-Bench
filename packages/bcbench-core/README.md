@@ -23,7 +23,7 @@ The import and environment rules are enforced by ruff (`banned-api` in [`pyproje
 
 ## Logging
 
-Modules log through `logging.getLogger(__name__)` and never configure logging on import. Applications call `bcbench_core.logs.setup_logging` once from their entry point. Applications running in Azure Pipelines pass `azure_pipelines=True`, so logged text such as model output cannot run as a `##vso[` logging command.
+Modules log through `logging.getLogger(__name__)` and never configure logging on import. Applications call `bcbench_core.logs.setup_logging` once from their entry point. Applications running in CI pass `github_actions=True` or `azure_pipelines=True` (not both), so warnings and errors become annotations; on Azure Pipelines, logged text such as model output also cannot run as a `##vso[` logging command. All log output, including annotations, goes to stderr, keeping stdout free for command results.
 
 ## Development
 

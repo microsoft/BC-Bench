@@ -106,57 +106,6 @@ class ColoredFormatter(logging.Formatter):
         return formatted
 
 
-class GitHubActionsHandler(logging.Handler):
-    """Handler that emits GitHub Actions workflow commands for warnings and errors.
-
-    This handler outputs annotations to GitHub Actions and marks records as handled
-    to prevent duplicate output from other handlers.
-    """
-
-    @override
-    def emit(self, record: logging.LogRecord) -> None:
-        """Emit a GitHub Actions annotation for warning and error level logs."""
-        try:
-            # Only emit annotations for warnings and errors
-            if record.levelno < logging.WARNING:
-                return
-
-            # Mark this record as handled by GitHub Actions to prevent duplicate output
-            record.gh_actions_handled = True
-
-            # Format the message
-            msg = self.format(record)
-
-            # Escape special characters for GitHub Actions
-            # Per GitHub docs: need to escape %, \r, \n
-            escape_table = str.maketrans({"%": "%25", "\r": "%0D", "\n": "%0A"})
-            msg = msg.translate(escape_table)
-
-            # Determine the command type
-            command = "error" if record.levelno >= logging.ERROR else "warning"
-
-            # Build the annotation command
-            # Format: ::warning file={name},line={line},title={title}::{message}
-            # Escape the logger name as well since it could contain special characters
-            title = record.name.translate(escape_table)
-            annotation = f"::{command} title={title}::{msg}"
-
-            # Output to stdout (GitHub Actions reads workflow commands from stdout)
-            print(annotation, flush=True)  # noqa: T201
-
-        except Exception:  # noqa: BLE001 - a logging handler must never propagate
-            self.handleError(record)
-
-
-class GitHubActionsSkipFilter(logging.Filter):
-    """Filter that skips records already handled by GitHubActionsHandler."""
-
-    @override
-    def filter(self, record: logging.LogRecord) -> bool:
-        """Return False if the record was already handled by GitHub Actions handler."""
-        return not getattr(record, "gh_actions_handled", False)
-
-
 class AzurePipelinesSafeFormatter(logging.Formatter):
     """Formatter that breaks up "##" so logged text, such as model output, cannot run as an Azure Pipelines logging command (##vso[, ##[)."""
 
@@ -172,22 +121,63 @@ class AzurePipelinesSafeFormatter(logging.Formatter):
         return self._ADJACENT_HASH.sub("#\u200b", self._inner.format(record))
 
 
+class CIAnnotationFormatter(logging.Formatter):
+    """Formats warnings and errors as CI annotations and delegates other levels to the console formatter."""
+
+    def __init__(self, console: logging.Formatter) -> None:
+        super().__init__()
+        self._console = console
+
+    @override
+    def format(self, record: logging.LogRecord) -> str:
+        if record.levelno < logging.WARNING:
+            return self._console.format(record)
+        return self.annotate("error" if record.levelno >= logging.ERROR else "warning", record)
+
+    def annotate(self, issue: str, record: logging.LogRecord) -> str:
+        raise NotImplementedError
+
+
+class GitHubActionsFormatter(CIAnnotationFormatter):
+    _ESCAPES: ClassVar[dict[int, str]] = str.maketrans({"%": "%25", "\r": "%0D", "\n": "%0A"})
+
+    @override
+    def annotate(self, issue: str, record: logging.LogRecord) -> str:
+        message = logging.Formatter("%(message)s").format(record)
+        return f"::{issue} title={record.name.translate(self._ESCAPES)}::{message.translate(self._ESCAPES)}"
+
+
+class AzurePipelinesFormatter(CIAnnotationFormatter):
+    _ESCAPES: ClassVar[dict[int, str]] = str.maketrans({"%": "%AZP25", "\r": "%0D", "\n": "%0A"})
+
+    @override
+    def annotate(self, issue: str, record: logging.LogRecord) -> str:
+        body = AzurePipelinesSafeFormatter(logging.Formatter("%(name)s - %(message)s")).format(record)
+        return f"##vso[task.logissue type={issue}]{body.translate(self._ESCAPES)}"
+
+
 _CORE_LOGGER = __name__.partition(".")[0]
-_GITHUB_HANDLER_NAME = f"{_CORE_LOGGER}.github_actions"
 _CONSOLE_HANDLER_NAME = f"{_CORE_LOGGER}.console"
 
 
 def setup_logging(app_logger: str, debug: bool, github_actions: bool, azure_pipelines: bool) -> None:
     """Configure process-wide logging; call once from the application entry point.
 
-    Calling again replaces the handlers installed by a previous call; other root handlers are kept.
+    Calling again replaces the handler installed by a previous call; other root handlers are kept.
+    All output, including CI annotations, goes to stderr so stdout stays free for command results.
 
     Args:
         app_logger: Top-level logger name of the application, usually its package name; bcbench-core's logger is always included.
         debug: If True, set application and bcbench-core loggers to DEBUG level, otherwise INFO.
-        github_actions: If True, also emit warnings and errors as GitHub Actions annotations.
-        azure_pipelines: If True, neutralize Azure Pipelines logging commands in all output.
+        github_actions: If True, emit warnings and errors as GitHub Actions annotations.
+        azure_pipelines: If True, emit warnings and errors as Azure Pipelines annotations and neutralize logging commands in all output.
+
+    Raises:
+        ValueError: If both github_actions and azure_pipelines are True.
     """
+    if github_actions and azure_pipelines:
+        raise ValueError("github_actions and azure_pipelines are mutually exclusive")
+
     app_level = logging.DEBUG if debug else logging.INFO
 
     # Configure root logger (for 3rd party libraries) to WARNING
@@ -195,31 +185,23 @@ def setup_logging(app_logger: str, debug: bool, github_actions: bool, azure_pipe
     root_logger.setLevel(logging.WARNING)
 
     for handler in root_logger.handlers[:]:
-        if handler.get_name() in {_GITHUB_HANDLER_NAME, _CONSOLE_HANDLER_NAME}:
+        if handler.get_name() == _CONSOLE_HANDLER_NAME:
             root_logger.removeHandler(handler)
             handler.close()
 
-    # Add GitHub Actions handler FIRST if running in GitHub Actions
-    # This ensures records are marked before the console handler sees them
-    if github_actions:
-        github_handler = GitHubActionsHandler()
-        github_handler.set_name(_GITHUB_HANDLER_NAME)
-        github_handler.setLevel(logging.WARNING)  # Only warnings and errors
-        github_handler.setFormatter(_output_formatter(logging.Formatter("%(message)s"), azure_pipelines))
-        github_handler.addFilter(SensitiveDataFilter())
-        root_logger.addHandler(github_handler)
-
-    # Create console handler with colored formatter and sensitive data filter
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.set_name(_CONSOLE_HANDLER_NAME)
-    console_handler.setFormatter(_output_formatter(ColoredFormatter(), azure_pipelines))
+    console_handler.setFormatter(_console_formatter(github_actions, azure_pipelines))
     console_handler.addFilter(SensitiveDataFilter())
-    console_handler.addFilter(GitHubActionsSkipFilter())
     root_logger.addHandler(console_handler)
 
     for name in (app_logger, _CORE_LOGGER):
         logging.getLogger(name).setLevel(app_level)
 
 
-def _output_formatter(formatter: logging.Formatter, azure_pipelines: bool) -> logging.Formatter:
-    return AzurePipelinesSafeFormatter(formatter) if azure_pipelines else formatter
+def _console_formatter(github_actions: bool, azure_pipelines: bool) -> logging.Formatter:
+    if github_actions:
+        return GitHubActionsFormatter(ColoredFormatter())
+    if azure_pipelines:
+        return AzurePipelinesFormatter(AzurePipelinesSafeFormatter(ColoredFormatter()))
+    return ColoredFormatter()
