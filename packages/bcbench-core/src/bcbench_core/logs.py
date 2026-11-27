@@ -122,7 +122,7 @@ class GitHubActionsHandler(logging.Handler):
                 return
 
             # Mark this record as handled by GitHub Actions to prevent duplicate output
-            record.gh_actions_handled = True
+            record.ci_annotation_handled = True
 
             # Format the message
             msg = self.format(record)
@@ -148,13 +148,29 @@ class GitHubActionsHandler(logging.Handler):
             self.handleError(record)
 
 
-class GitHubActionsSkipFilter(logging.Filter):
-    """Filter that skips records already handled by GitHubActionsHandler."""
+class AzurePipelinesHandler(logging.Handler):
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            if record.levelno < logging.WARNING:
+                return
+
+            msg: str = self.format(record)
+            escape_table = str.maketrans({"%": "%AZP25", "\r": "%0D", "\n": "%0A"})
+            msg = msg.translate(escape_table)
+            command = "error" if record.levelno >= logging.ERROR else "warning"
+            print(f"##vso[task.logissue type={command}]{msg}", flush=True)  # noqa: T201
+            record.ci_annotation_handled = True
+        except Exception:  # noqa: BLE001 - a logging handler must never propagate
+            self.handleError(record)
+
+
+class CIAnnotationSkipFilter(logging.Filter):
+    """Filter that skips records already emitted as CI annotations."""
 
     @override
     def filter(self, record: logging.LogRecord) -> bool:
-        """Return False if the record was already handled by GitHub Actions handler."""
-        return not getattr(record, "gh_actions_handled", False)
+        return not getattr(record, "ci_annotation_handled", False)
 
 
 class AzurePipelinesSafeFormatter(logging.Formatter):
@@ -174,6 +190,7 @@ class AzurePipelinesSafeFormatter(logging.Formatter):
 
 _CORE_LOGGER = __name__.partition(".")[0]
 _GITHUB_HANDLER_NAME = f"{_CORE_LOGGER}.github_actions"
+_AZURE_HANDLER_NAME = f"{_CORE_LOGGER}.azure_pipelines"
 _CONSOLE_HANDLER_NAME = f"{_CORE_LOGGER}.console"
 
 
@@ -186,7 +203,7 @@ def setup_logging(app_logger: str, debug: bool, github_actions: bool, azure_pipe
         app_logger: Top-level logger name of the application, usually its package name; bcbench-core's logger is always included.
         debug: If True, set application and bcbench-core loggers to DEBUG level, otherwise INFO.
         github_actions: If True, also emit warnings and errors as GitHub Actions annotations.
-        azure_pipelines: If True, neutralize Azure Pipelines logging commands in all output.
+        azure_pipelines: If True, emit warning/error annotations and neutralize embedded Azure Pipelines logging commands.
     """
     app_level = logging.DEBUG if debug else logging.INFO
 
@@ -195,7 +212,7 @@ def setup_logging(app_logger: str, debug: bool, github_actions: bool, azure_pipe
     root_logger.setLevel(logging.WARNING)
 
     for handler in root_logger.handlers[:]:
-        if handler.get_name() in {_GITHUB_HANDLER_NAME, _CONSOLE_HANDLER_NAME}:
+        if handler.get_name() in {_GITHUB_HANDLER_NAME, _AZURE_HANDLER_NAME, _CONSOLE_HANDLER_NAME}:
             root_logger.removeHandler(handler)
             handler.close()
 
@@ -209,12 +226,20 @@ def setup_logging(app_logger: str, debug: bool, github_actions: bool, azure_pipe
         github_handler.addFilter(SensitiveDataFilter())
         root_logger.addHandler(github_handler)
 
+    if azure_pipelines:
+        azure_handler = AzurePipelinesHandler()
+        azure_handler.set_name(_AZURE_HANDLER_NAME)
+        azure_handler.setLevel(logging.WARNING)
+        azure_handler.setFormatter(AzurePipelinesSafeFormatter(logging.Formatter("%(name)s - %(message)s")))
+        azure_handler.addFilter(SensitiveDataFilter())
+        root_logger.addHandler(azure_handler)
+
     # Create console handler with colored formatter and sensitive data filter
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.set_name(_CONSOLE_HANDLER_NAME)
     console_handler.setFormatter(_output_formatter(ColoredFormatter(), azure_pipelines))
     console_handler.addFilter(SensitiveDataFilter())
-    console_handler.addFilter(GitHubActionsSkipFilter())
+    console_handler.addFilter(CIAnnotationSkipFilter())
     root_logger.addHandler(console_handler)
 
     for name in (app_logger, _CORE_LOGGER):

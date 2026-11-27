@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from bcbench_core.logs import GitHubActionsHandler, GitHubActionsSkipFilter, SensitiveDataFilter, setup_logging
+from bcbench_core.logs import AzurePipelinesHandler, CIAnnotationSkipFilter, GitHubActionsHandler, SensitiveDataFilter, setup_logging
 
 
 class TestSensitiveDataFilter:
@@ -124,7 +124,7 @@ class TestGitHubActionsHandler:
 
     def test_marks_record_as_handled(self, handler, log_record, capsys):
         handler.emit(log_record)
-        assert getattr(log_record, "gh_actions_handled", False) is True
+        assert getattr(log_record, "ci_annotation_handled", False) is True
 
     def test_formatting_errors_do_not_propagate(self, handler, log_record, monkeypatch):
         monkeypatch.setattr(logging, "raiseExceptions", False)
@@ -134,10 +134,20 @@ class TestGitHubActionsHandler:
         handler.emit(log_record)
 
 
-class TestGitHubActionsSkipFilter:
+class TestAzurePipelinesHandler:
+    def test_formatting_errors_do_not_propagate_or_suppress_console_output(self, monkeypatch):
+        monkeypatch.setattr(logging, "raiseExceptions", False)
+        record = logging.LogRecord("test", logging.WARNING, "test.py", 1, "%s %s", ("only one",), None)
+
+        AzurePipelinesHandler().emit(record)
+
+        assert not getattr(record, "ci_annotation_handled", False)
+
+
+class TestCIAnnotationSkipFilter:
     @pytest.fixture
     def filter_instance(self):
-        return GitHubActionsSkipFilter()
+        return CIAnnotationSkipFilter()
 
     @pytest.fixture
     def log_record(self):
@@ -155,7 +165,7 @@ class TestGitHubActionsSkipFilter:
         assert filter_instance.filter(log_record) is True
 
     def test_skips_handled_records(self, filter_instance, log_record):
-        log_record.gh_actions_handled = True
+        log_record.ci_annotation_handled = True
         assert filter_instance.filter(log_record) is False
 
 
@@ -240,10 +250,71 @@ class TestSetupLogging:
         except ValueError:
             logging.getLogger("myapp").exception("model said ##vso[task.setvariable variable=x]1 and %s", "##[group]")
 
-        err = capsys.readouterr().err
-        assert "#\u200b#vso[task.setvariable variable=x]1 and #\u200b#[group]" in err
-        assert "ValueError: #\u200b#\u200b#vso[task.complete]" in err
-        assert "##" not in err
+        captured = capsys.readouterr()
+        assert captured.err == ""
+        assert captured.out.startswith("##vso[task.logissue type=error]myapp - ")
+        assert "#\u200b#vso[task.setvariable variable=x]1 and #\u200b#[group]" in captured.out
+        assert "ValueError: #\u200b#\u200b#vso[task.complete]" in captured.out
+        assert captured.out.count("##") == 1
+        assert len(captured.out.splitlines()) == 1
+
+    @pytest.mark.parametrize(
+        ("level", "command"),
+        [(logging.WARNING, "warning"), (logging.ERROR, "error"), (logging.CRITICAL, "error")],
+    )
+    def test_azure_pipelines_annotates_warnings_and_errors_without_duplicate_output(self, level, command, capsys):
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=True)
+
+        logging.getLogger("myapp").log(level, "problem")
+
+        captured = capsys.readouterr()
+        assert captured.out == f"##vso[task.logissue type={command}]myapp - problem\n"
+        assert captured.err == ""
+
+    def test_azure_pipelines_keeps_info_and_debug_as_console_output(self, capsys):
+        setup_logging(app_logger="myapp", debug=True, github_actions=False, azure_pipelines=True)
+
+        logging.getLogger("myapp").info("info ##[group]")
+        logging.getLogger("myapp").debug("debug")
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "info #\u200b#[group]" in captured.err
+        assert "debug" in captured.err
+
+    def test_azure_pipelines_escapes_multiline_messages_and_redacts_secrets(self, capsys):
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=True)
+
+        logging.getLogger("myapp").warning("100%% %%0A %%AZP25\r\n%s", "password=hunter2")
+
+        captured = capsys.readouterr()
+        assert captured.out == "##vso[task.logissue type=warning]myapp - 100%AZP25 %AZP250A %AZP25AZP25%0D%0Apassword=******\n"
+        assert captured.err == ""
+
+    def test_repeated_setup_removes_azure_annotations(self, capsys):
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=True)
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=True)
+        logging.getLogger("myapp").warning("once")
+
+        captured = capsys.readouterr()
+        assert captured.out.count("##vso[task.logissue") == 1
+        assert captured.err == ""
+
+        setup_logging(app_logger="myapp", debug=False, github_actions=False, azure_pipelines=False)
+        logging.getLogger("myapp").warning("console only")
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "console only" in captured.err
+
+    def test_both_ci_handlers_emit_annotations_without_console_duplicates(self, capsys):
+        setup_logging(app_logger="myapp", debug=False, github_actions=True, azure_pipelines=True)
+
+        logging.getLogger("myapp").warning("problem")
+
+        captured = capsys.readouterr()
+        assert captured.out == "::warning title=myapp::problem\n##vso[task.logissue type=warning]myapp - problem\n"
+        assert captured.err == ""
 
 
 def _fail(message: str) -> None:
